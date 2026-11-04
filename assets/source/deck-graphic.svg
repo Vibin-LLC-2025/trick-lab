@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- trick-lab deck bottom graphic (original artwork, 2026-11-04). Nose is at the right (+X).
+     2048 x 512 maps to the deck bottom 0.8065 x 0.2032 m (1 px = 0.394 mm). Only rects,
+     paths and circles: no fonts, no filters, no gradients, so resvg and a browser agree. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512" width="2048" height="512">
+  <rect width="2048" height="512" fill="#e0532c"/>
+  <!-- tail: three tally marks (count the rotations) -->
+  <g fill="#17181a">
+    <rect x="98" y="146" width="34" height="220"/>
+    <rect x="158" y="146" width="34" height="220"/>
+    <rect x="218" y="146" width="34" height="220"/>
+  </g>
+  <!-- word, pixel letters 5 x 7 cells of 26 px, x 280 to 1554 -->
+  <g fill="#17181a">
+    <path id="g-T-0" d="M280 165h130v26h-130zM332 191h26v26h-26zM332 217h26v26h-26zM332 243h26v26h-26zM332 269h26v26h-26zM332 295h26v26h-26zM332 321h26v26h-26z"/>
+    <path id="g-R-1" d="M436 165h104v26h-104zM436 191h26v26h-26zM540 191h26v26h-26zM436 217h26v26h-26zM540 217h26v26h-26zM436 243h104v26h-104zM436 269h26v26h-26zM488 269h26v26h-26zM436 295h26v26h-26zM514 295h26v26h-26zM436 321h26v26h-26zM540 321h26v26h-26z"/>
+    <path id="g-I-2" d="M592 165h130v26h-130zM644 191h26v26h-26zM644 217h26v26h-26zM644 243h26v26h-26zM644 269h26v26h-26zM644 295h26v26h-26zM592 321h130v26h-130z"/>
+    <path id="g-C-3" d="M774 165h104v26h-104zM748 191h26v26h-26zM748 217h26v26h-26zM748 243h26v26h-26zM748 269h26v26h-26zM748 295h26v26h-26zM774 321h104v26h-104z"/>
+    <path id="g-K-4" d="M904 165h26v26h-26zM1008 165h26v26h-26zM904 191h26v26h-26zM982 191h26v26h-26zM904 217h26v26h-26zM956 217h26v26h-26zM904 243h52v26h-52zM904 269h26v26h-26zM956 269h26v26h-26zM904 295h26v26h-26zM982 295h26v26h-26zM904 321h26v26h-26zM1008 321h26v26h-26z"/>
+    <path id="g-L-5" d="M1112 165h26v26h-26zM1112 191h26v26h-26zM1112 217h26v26h-26zM1112 243h26v26h-26zM1112 269h26v26h-26zM1112 295h26v26h-26zM1112 321h130v26h-130z"/>
+    <path id="g-A-6" d="M1294 165h78v26h-78zM1268 191h26v26h-26zM1372 191h26v26h-26zM1268 217h26v26h-26zM1372 217h26v26h-26zM1268 243h130v26h-130zM1268 269h26v26h-26zM1372 269h26v26h-26zM1268 295h26v26h-26zM1372 295h26v26h-26zM1268 321h26v26h-26zM1372 321h26v26h-26z"/>
+    <path id="g-B-7" d="M1424 165h104v26h-104zM1424 191h26v26h-26zM1528 191h26v26h-26zM1424 217h26v26h-26zM1528 217h26v26h-26zM1424 243h104v26h-104zM1424 269h26v26h-26zM1528 269h26v26h-26zM1424 295h26v26h-26zM1528 295h26v26h-26zM1424 321h104v26h-104z"/>
+  </g>
+  <!-- nose: cream disc with a chevron pointing to the nose -->
+  <circle cx="1770" cy="256" r="170" fill="#f3eadb"/>
+  <path fill="#17181a" d="M1705 160L1801 256L1705 352L1757 352L1853 256L1757 160Z"/>
+</svg>

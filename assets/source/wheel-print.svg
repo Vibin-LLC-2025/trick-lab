@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- trick-lab wheel print (original mark, 2026-11-04). Single colour, 64 x 64.
+     Optional: not used by the first GLB build (see docs/DESIGN.md, realistic board). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g fill="#9d9789">
+    <path fill-rule="evenodd" d="M32 4A28 28 0 1 1 32 60A28 28 0 1 1 32 4ZM32 10A22 22 0 1 0 32 54A22 22 0 1 0 32 10Z"/>
+    <path d="M24 18L38 32L24 46L31 46L45 32L31 18Z"/>
+  </g>
+</svg>

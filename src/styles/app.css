@@ -1,0 +1,1111 @@
+/* trick-lab application styles (2026-11-04)
+   Uses tokens from tokens.css. Every class in docs/BRIEF.md "Markup and class
+   contract" is styled here. Import order: tokens.css, then app.css.
+   Rule of the house: no state is color alone. Active presets get a left bar
+   and weight, the slow-motion toggle moves its knob, outcomes carry a glyph
+   and a border style, good/bad telemetry values carry a glyph and weight,
+   done objectives get a filled tick. */
+
+/* ---------- Base ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+/* One focus treatment for everything interactive. The ring sits 2px off the
+   element so it is judged against the page or card background, where
+   --color-focus meets 3:1 in both themes. Range inputs opt out below and
+   ring their thumb instead. */
+:focus-visible {
+  outline: var(--focus-ring) solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------- App shell ----------
+   Three columns: setup (left), stage (center), results (right). Each side
+   column scrolls on its own; the stage holds still. Below 960px everything
+   stacks under the stage. */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--col-setup) minmax(0, 1fr) var(--col-results);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "setup stage results";
+  height: 100vh;
+  height: 100dvh;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-bg);
+}
+
+.app__stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--scene-bg); /* equals the scene clear color, so resize gaps do not flash */
+  box-shadow: var(--shadow-sm);
+}
+
+.app__stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.app__setup,
+.app__results {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 2px; /* room for the focus ring on edge controls */
+}
+
+.app__setup {
+  grid-area: setup;
+}
+
+.app__results {
+  grid-area: results;
+}
+
+@media (max-width: 960px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "stage"
+      "setup"
+      "results";
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .app__stage {
+    aspect-ratio: 16 / 10;
+    min-height: 260px;
+  }
+
+  .app__setup,
+  .app__results {
+    overflow: visible;
+  }
+}
+
+/* ---------- Panel ---------- */
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--color-line);
+}
+
+/* The setup heading receives focus after reset (tabindex="-1"). */
+.panel__title[tabindex] {
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Presets ----------
+   Markup: <div class="presets" role="group" aria-label="Trick presets">
+     <button class="preset preset--active" aria-pressed="true">Kickflip <kbd class="preset__key">1</kbd></button>
+   Active = left bar, bold, tinted; aria-pressed="true" is styled the same so
+   the state cannot drift from the attribute. */
+
+.presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.preset {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.preset:hover {
+  background: var(--color-surface-2);
+}
+
+.preset:active {
+  transform: translateY(1px);
+}
+
+.preset--active,
+.preset[aria-pressed="true"] {
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+  font-weight: var(--weight-bold);
+}
+
+.preset__key {
+  flex: none;
+  min-width: 1.5em;
+  padding: 0 5px;
+  border: 1px solid var(--color-line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.preset--active .preset__key,
+.preset[aria-pressed="true"] .preset__key {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+/* ---------- Inputs (three sliders) ----------
+   Markup: <div class="inputs">
+     <div class="field">
+       <label class="field__label" for="pop">Pop</label>
+       <output class="field__value" for="pop">0.35<span class="field__unit">m</span></output>
+       <input class="field__range" id="pop" type="range" min="0.15" max="0.6" step="0.05" aria-valuetext="0.35 meters">
+     </div>
+   The label sits top-left, the value top-right, the slider spans below. */
+
+.inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label value"
+    "range range";
+  align-items: baseline;
+  row-gap: var(--space-2);
+  column-gap: var(--space-2);
+}
+
+.field__label {
+  grid-area: label;
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.field__value {
+  grid-area: value;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.field__unit {
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--color-muted);
+}
+
+.field__range {
+  grid-area: range;
+}
+
+/* ---------- Range inputs (shared) ----------
+   Chromium and Firefox need separate pseudo-elements. The track is a thin
+   bar in --color-line-strong (3:1 or better against bg and surface), the
+   thumb is a solid accent disc with a surface-colored border so it reads on
+   the track. Focus rings the thumb, not the whole input. */
+
+.field__range,
+.timeline__range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--range-thumb);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.field__range:focus-visible,
+.timeline__range:focus-visible {
+  outline: none; /* the thumb carries the ring (see below) */
+}
+
+/* Chromium track and thumb */
+.field__range::-webkit-slider-runnable-track,
+.timeline__range::-webkit-slider-runnable-track {
+  height: var(--range-track-h);
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+}
+
+.field__range::-webkit-slider-thumb,
+.timeline__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--range-thumb);
+  height: var(--range-thumb);
+  margin-top: calc((var(--range-track-h) - var(--range-thumb)) / 2);
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent), var(--shadow-sm);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.field__range:focus-visible::-webkit-slider-thumb,
+.timeline__range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 3px var(--color-surface), 0 0 0 6px var(--color-focus);
+}
+
+/* Firefox track, progress and thumb */
+.field__range::-moz-range-track,
+.timeline__range::-moz-range-track {
+  height: var(--range-track-h);
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+}
+
+.field__range::-moz-range-progress,
+.timeline__range::-moz-range-progress {
+  height: var(--range-track-h);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.field__range::-moz-range-thumb,
+.timeline__range::-moz-range-thumb {
+  width: calc(var(--range-thumb) - 4px); /* Firefox adds the border outside the box */
+  height: calc(var(--range-thumb) - 4px);
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent), var(--shadow-sm);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.field__range:focus-visible::-moz-range-thumb,
+.timeline__range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 3px var(--color-surface), 0 0 0 6px var(--color-focus);
+}
+
+.field__range:disabled,
+.timeline__range:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------- Playback and buttons ----------
+   Markup: <div class="playback">
+     <button class="btn btn--primary">Pop <kbd>Space</kbd></button>
+     <button class="toggle toggle--on" aria-pressed="true">Slow motion <span class="toggle__state">0.25x</span></button>
+     <button class="btn btn--danger">Reset</button>
+     <div class="timeline"> ... </div>
+   </div> */
+
+.playback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.playback > .timeline {
+  flex-basis: 100%;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.btn kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.btn:hover {
+  background: var(--color-surface-2);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn--primary {
+  min-height: 44px;
+  padding-inline: var(--space-5);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+}
+
+.btn--primary:hover {
+  background: var(--color-accent);
+  filter: brightness(1.08);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-accent);
+}
+
+.btn--ghost:hover {
+  background: var(--color-accent-bg);
+}
+
+.btn--danger {
+  background: transparent;
+  border-color: var(--color-bad);
+  color: var(--color-bad);
+}
+
+.btn--danger:hover {
+  background: var(--color-bad);
+  color: var(--color-bad-fg);
+}
+
+/* ---------- Toggle (button with aria-pressed) ----------
+   The track is ::before and the knob is ::after, so the button needs only
+   text. On state: knob moves right (position, not color alone), tinted
+   background, accent border, and any .toggle__state text goes bold. */
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.toggle::before {
+  content: "";
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line-strong);
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-line-strong);
+  transform: translate(3px, -50%);
+  transition: transform var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.toggle__state {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.toggle--on,
+.toggle[aria-pressed="true"] {
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+}
+
+.toggle--on::before,
+.toggle[aria-pressed="true"]::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.toggle--on::after,
+.toggle[aria-pressed="true"]::after {
+  background: var(--color-accent-fg);
+  transform: translate(21px, -50%);
+}
+
+.toggle--on .toggle__state,
+.toggle[aria-pressed="true"] .toggle__state {
+  color: var(--color-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* ---------- Timeline ----------
+   Markup: <div class="timeline">
+     <label class="timeline__label" for="timeline">Timeline <span>42% of flight</span></label>
+     <input class="timeline__range" id="timeline" type="range" min="0" max="100" step="1" aria-valuetext="42 percent of flight">
+   </div>
+   The timeline sits in its own inset well so it reads as a scrubber rather
+   than a fourth input. Tick marks at 0, 50 and 100 are drawn on the well. */
+
+.timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.timeline__label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.timeline__label > span {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.timeline__range::-webkit-slider-thumb {
+  border-radius: var(--radius-sm); /* square-ish thumb: a playhead, not a dial */
+}
+
+.timeline__range::-moz-range-thumb {
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Telemetry ----------
+   Markup: <dl class="telemetry">
+     <div class="telemetry__row"><dt class="telemetry__k">Airtime</dt><dd class="telemetry__v">0.53 s</dd></div>
+     <div class="telemetry__row"><dt class="telemetry__k">Outcome</dt><dd class="telemetry__v telemetry__v--good">landed</dd></div>
+   Good and bad values carry a glyph and weight as well as color. */
+
+.telemetry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.telemetry__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.telemetry__k {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.telemetry__v {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.telemetry__v--good {
+  color: var(--color-ok);
+  font-weight: var(--weight-bold);
+}
+
+.telemetry__v--good::before {
+  content: "\2713\00a0"; /* check mark, decorative */
+}
+
+.telemetry__v--bad {
+  color: var(--color-bad);
+  font-weight: var(--weight-bold);
+}
+
+.telemetry__v--bad::before {
+  content: "!\00a0";
+}
+
+/* ---------- Outcome card ----------
+   Markup: <div class="outcome outcome--landed" role="status">
+     <p class="outcome__name">Kickflip landed</p>
+     <p class="outcome__detail">365 deg flip, 0 deg shove, 0.53 s in the air.</p>
+   </div>
+   Landed: solid green left bar, tinted, check glyph. Bailed: dashed red
+   border, tinted, cross glyph. Idle (neither modifier): quiet dashed card. */
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-line-strong);
+  border-left: 5px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.outcome__name {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+}
+
+/* The glyph slot exists only when there is a glyph, so the idle title is not
+   indented (integration pass, 2026-11-04). */
+.outcome--landed .outcome__name::before,
+.outcome--bailed .outcome__name::before {
+  display: inline-block;
+  width: 1.2em;
+  font-family: var(--font-mono);
+}
+
+.outcome__detail {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.outcome--landed {
+  border-style: solid;
+  border-color: var(--color-ok);
+  background: var(--color-ok-bg);
+}
+
+.outcome--landed .outcome__name {
+  color: var(--color-ok);
+}
+
+.outcome--landed .outcome__name::before {
+  content: "\2713"; /* check mark */
+}
+
+.outcome--bailed {
+  border-style: dashed;
+  border-left-style: solid;
+  border-color: var(--color-bad);
+  background: var(--color-bad-bg);
+}
+
+.outcome--bailed .outcome__name {
+  color: var(--color-bad);
+}
+
+.outcome--bailed .outcome__name::before {
+  content: "\00d7"; /* multiplication sign, reads as a cross */
+}
+
+/* ---------- Objectives ----------
+   Markup: <li class="objective objective--done"><span class="objective__check" aria-hidden="true">✓</span><span class="objective__text">Land a kickflip</span><span class="visually-hidden">done</span></li>
+   The tick glyph is decorative; the done state is also in text. */
+
+.objectives {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.objective {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
+.objective__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  color: transparent; /* tick text present in the DOM, drawn only when done */
+  background: var(--color-surface);
+}
+
+.objective--done {
+  background: var(--color-ok-bg);
+}
+
+.objective--done .objective__check {
+  color: var(--color-ok-fg);
+  background: var(--color-ok);
+  border-color: var(--color-ok);
+}
+
+.objective--done .objective__text {
+  color: var(--color-muted);
+  font-weight: var(--weight-medium);
+}
+
+/* ---------- Event log ----------
+   Markup: <div class="eventlog"><table><thead>...</thead><tbody><tr class="eventlog__row"><td class="eventlog__t">1240</td><td class="eventlog__type">trick.popped</td><td>{...}</td></tr></tbody></table></div> */
+
+.eventlog {
+  display: block;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.eventlog table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.eventlog thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: var(--weight-semibold);
+  color: var(--color-muted);
+  background: var(--color-surface-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap; /* "t (ms)" wrapped and clipped in the 320px column (integration pass, 2026-11-04) */
+}
+
+.eventlog__row > * {
+  padding: 2px var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.eventlog__row > *:last-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+}
+
+.eventlog__t {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.eventlog__type {
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+
+/* Fallback if rows are rendered as list items instead of a table. */
+.eventlog > ol > .eventlog__row,
+.eventlog > .eventlog__row {
+  display: grid;
+  grid-template-columns: 64px 140px minmax(0, 1fr);
+}
+
+/* ---------- Perf badge ---------- */
+
+.perf-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: flex;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  color: #ebe8e1; /* 13.1 on the badge background, same in both themes */
+  background: rgba(18, 20, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.perf-badge[hidden] {
+  display: none;
+}
+
+/* ---------- Shortcuts dialog (native <dialog>) ----------
+   Markup: <dialog class="shortcuts"><h2>Keyboard shortcuts</h2><dl><dt><kbd>1</kbd> to <kbd>4</kbd></dt><dd>Apply preset</dd>...</dl><button class="btn">Close</button></dialog> */
+
+.shortcuts {
+  width: min(92vw, 460px);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line-strong);
+  border-top: 4px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+.shortcuts::backdrop {
+  background: rgba(18, 20, 22, 0.6);
+}
+
+.shortcuts h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-3);
+}
+
+.shortcuts dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.shortcuts dt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.shortcuts kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--color-line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.shortcuts dd {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* ---------- Utilities ---------- */
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Optional: view panel buttons (theme toggle, reset view) placed inside a
+   .panel__title and pushed to the right. */
+.theme-toggle,
+.view-panel__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--space-1);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ---------- Segmented control (View panel, "Board detail") ----------
+   Added 2026-11-04 for the realistic board. A native radio group dressed as a
+   segmented control, so arrow keys, form semantics and screen readers work
+   without script. Markup (class names are the contract, see docs/DESIGN.md,
+   "Realistic board"):
+     <fieldset class="segmented" aria-describedby="board-detail-hint">
+       <legend class="segmented__legend">Board detail</legend>
+       <div class="segmented__options">
+         <label class="segmented__option">
+           <input class="segmented__input" type="radio" name="board-detail" value="high" checked>
+           <span class="segmented__label">High</span>
+         </label>
+         <label class="segmented__option">
+           <input class="segmented__input" type="radio" name="board-detail" value="low">
+           <span class="segmented__label">Low</span>
+         </label>
+       </div>
+       <p class="segmented__hint" id="board-detail-hint">Low uses the simple board. Faster on Chromebooks.</p>
+     </fieldset>
+   The input stays in the DOM (visually hidden, still focusable); the label
+   draws the state and the focus ring. Checked = accent tint, accent border,
+   bold and a filled dot glyph, so the state is never color alone. */
+
+.segmented {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.segmented__legend {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.segmented__options {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.segmented__option {
+  position: relative;
+  display: inline-flex;
+  min-width: 72px;
+  cursor: pointer;
+}
+
+.segmented__option + .segmented__option {
+  border-left: 1px solid var(--color-line-strong);
+}
+
+.segmented__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* Dot glyph: hollow when idle, filled when checked (state is not color alone). */
+.segmented__label::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--color-line-strong);
+  background: transparent;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.segmented__option:hover .segmented__label {
+  background: var(--color-surface-2);
+}
+
+.segmented__input:checked + .segmented__label {
+  background: var(--color-accent-bg);
+  color: var(--color-text);
+  font-weight: var(--weight-bold);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.segmented__input:checked + .segmented__label::before {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* Focus ring on the label (the input is invisible), drawn inside the group
+   so the overflow clip never cuts it. --color-focus meets 3:1 on surface and
+   on accent-bg in both themes. */
+.segmented__input:focus-visible + .segmented__label {
+  outline: var(--focus-ring) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--focus-ring));
+  border-radius: var(--radius-sm);
+}
+
+.segmented__input:disabled + .segmented__label {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.segmented__hint {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
