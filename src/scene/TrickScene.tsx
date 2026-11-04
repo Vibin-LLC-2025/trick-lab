@@ -70,10 +70,12 @@ export default function TrickScene() {
     >
       {/* R3F defaults already give ACES filmic tone mapping and sRGB output (DESIGN.md). */}
       <color attach="background" args={[ART.clearColor[theme]]} />
-      <SceneEnvironment />
       <Lights />
-      <Pad />
-      <FlightDriver />
+      {/* The pad and board stay hidden until their shaders are compiled with the environment. */}
+      <SceneEnvironment>
+        <Pad />
+        <FlightDriver />
+      </SceneEnvironment>
       <SceneCamera />
       <InvalidateOnStoreChange />
       <PerfProbe />

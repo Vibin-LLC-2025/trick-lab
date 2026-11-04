@@ -81,6 +81,24 @@ Before this pass: `index` 244.17 / 76.99 KB, `TrickScene` 945.55 / 250.87 KB, CS
 1. **Pad lighter than the design intent.** With the environment map the pad renders `#959696` at environment intensity 0.40 (`#a2a4a4` at the design's 0.55), against an intended `#7b7a77`. It reads as grey concrete in both themes, which was the fix asked for, but it is lighter than designed. Reaching `#7b7a77` needs either intensity near 0.25 (below the design's range; metals get duller) or a darker pad colour. A design-agent call.
 2. **No Chromebook numbers.** Same as before.
 
+## Startup main thread (2026-11-04)
+
+Lighthouse 13.6.0, mobile preset (simulated 4x CPU), production build (`npm run build && npm run preview`), Apple M3, 4 runs each. Do not audit `npm run dev`: Vite serves unbundled modules and React's development build, which scored 55 to 60 on the same page.
+
+Cause: three compiles and links each shader program synchronously the first time it is used, and the first Canvas mount did all of it in one task: create the renderer, prefilter the RoomEnvironment PMREM (its own shaders), then draw the first frame (the scene's shaders). A CPU profile at a real 4x throttle put that mount task at 176 ms, 75 ms of it in `PMREMGenerator.fromScene`.
+
+Change: `SceneEnvironment` keeps the pad and board hidden, prefilters the PMREM in its own macrotask, then precompiles the scene with `renderer.compileAsync` (KHR_parallel_shader_compile, no blocking wait) in another, and only then shows them and calls `invalidate()` once. Compiling after `scene.environment` is set avoids compiling every material twice, since the envMap is part of the program.
+
+| Metric | Before | After |
+| --- | --- | --- |
+| Lighthouse performance score | 91 to 95 | 95 to 96 |
+| Total Blocking Time (Lighthouse) | 240 to 370 ms | 220 to 260 ms |
+| Longest task (Lighthouse, simulated) | 264 to 384 ms | 134 to 155 ms |
+| Canvas mount task (CDP profile, real 4x CPU) | 176 ms | 103 ms; PMREM 79 ms as its own task |
+| Draw calls and triangles after load, High | 11 and 13,952 | 11 and 13,952 (unchanged) |
+
+FCP and LCP (0.8 s or 1.4 s in both builds, the LCP element is a preset button) did not change beyond run-to-run noise. What is left: the renderer and context creation (about 29 ms at 4x) and the PMREM task. A prebaked environment would remove the PMREM task, but changes the look and needs an ADR.
+
 ## Measured, integration pass (2026-11-04, before the realistic board)
 
 Measured 2026-11-04 by the integration agent on a **desktop Chromium, not a Chromebook**: Windows 11, headless Chromium 156 driven by the global `playwright-cli` (session `tricklab`), NVIDIA RTX 3060 through ANGLE/D3D11, a display loop of about 100 Hz in headless mode (rAF interval 10 ms). Production build served by `vite preview`, viewport 1440 x 900, dark theme. `renderer.info` was read through `?debug`, which exposes the R3F state as `window.__trickLab` (nothing is attached without the query). "6x CPU" is Chrome DevTools Protocol CPU throttling (`Emulation.setCPUThrottlingRate`): a rough stand-in for a weak CPU that does nothing to model a weak GPU. Treat these numbers as the best case. A Chromebook run is still owed.
