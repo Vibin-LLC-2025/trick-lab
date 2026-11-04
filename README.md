@@ -4,6 +4,8 @@ A browser 3D physics lab about rotation during projectile flight, told through s
 
 Built on 2026-11-04 with React Three Fiber for low-end Chromebooks, accessibility first, with AI-assisted development. It is a demo, not a game engine.
 
+New here? `docs/REPO-GUIDE.md` maps the repo in plain language. What comes next, including the plan for Chromebooks and other low-end devices, is in `docs/ROADMAP.md`.
+
 ## Screenshots
 
 | | |
@@ -75,6 +77,8 @@ The skateboard is a real GLB built by a script, not JSX boxes. Honestly: it is p
 ## Performance
 
 Chromebook target. Under 20 draw calls, no shadows, one directional and one ambient light plus a one-time environment map, one mesh per material, no per-frame allocations, DPR capped at 1.5, low-power GPU hint, no MSAA. Measured on the production build (desktop Chromium with an RTX 3060, 2026-11-04, not a Chromebook): **11 draw calls and 13,952 triangles with the GLB board** (9 and 436 before, and again on Low); `gl.render` median 0.2 ms per frame during a trick (1.0 ms at 6x CPU throttle); **0 frames rendered in 10 idle seconds** after a landing; geometries and textures flat at 16 and 6 across 10 trick cycles and repeated Low/High toggles; heap 6.1 MB at load, 7.6 MB after 10 cycles. Full table in `docs/PERF-BUDGET.md`.
+
+Startup: three.js compiles every shader the first time it draws, so the 3D view's first frame used to freeze the page in one long task. It now warms up in separate tasks (lighting map, then shaders compiled in parallel with `compileAsync`) before the board appears, which roughly halved the longest task (Lighthouse mobile on the production build: 95 to 96). Audit `npm run build && npm run preview`, not the dev server. Next steps for low-end devices are in `docs/ROADMAP.md`.
 
 ## Testing
 
