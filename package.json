@@ -2,6 +2,19 @@
   "name": "trick-lab",
   "private": true,
   "version": "0.1.0",
+  "description": "A browser 3D physics lab about rotation in projectile flight, taught through skateboard flip tricks.",
+  "license": "MIT",
+  "homepage": "https://vibin-llc-2025.github.io/trick-lab/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vibin-LLC-2025/trick-lab.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vibin-LLC-2025/trick-lab/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

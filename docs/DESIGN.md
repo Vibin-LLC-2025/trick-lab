@@ -423,7 +423,7 @@ Detail preset (2026-11-05, ADR-38): from 35 degrees up and 25 degrees round from
 
 ### 8.3 Shoes
 
-One right shoe in `shoes.glb`, every number in `src/asset/shoeSpec.ts`. Size `0.285 x 0.105`, sole height `0.024` (equal to `FOOT` in `src/sim/feet.ts`). Construction pass (2026-11-05, ADR-39, written by the implementation agent (opus) from `output/research-2026-11-05/visual-realism.md` section 3, pending the design agent's own pass); the envelope, the colours and the three materials are unchanged, so it is the same shoe, built like one:
+One right shoe in `shoes.glb`, every number in `src/asset/shoeSpec.ts`. Size `0.285 x 0.105`, sole height `0.024` (equal to `FOOT` in `src/sim/feet.ts`). Construction pass (2026-11-05, ADR-39, written by the implementation agent (opus) from `docs/research/2026-11-05/visual-realism.md` section 3, pending the design agent's own pass); the envelope, the colours and the three materials are unchanged, so it is the same shoe, built like one:
 
 | Part | Shape | Colour (sRGB) |
 | --- | --- | --- |

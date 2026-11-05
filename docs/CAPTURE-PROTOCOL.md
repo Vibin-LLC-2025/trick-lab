@@ -1,6 +1,6 @@
 # Reference capture protocol (2026-11-05)
 
-Why this exists. The feet model (`src/sim/feet.ts`), the phased flight (`src/sim/flight.ts`, ADR-36) and the legs are built from coaching text and hand-fitted numbers. A source search on 2026-11-05 (`output/research-2026-11-05/data-sources.md`, 47 sources) found no public dataset, paper or mocap release with synchronized board and shoe trajectories for any of the app's tricks. The flick delay, each foot's release and catch time, the catch order, the free flip rate, the foot clearance and the knee flexion are all unmeasured in the literature as of that date. The fastest trustworthy way to get them is a small capture we control. This page is the plan for it, condensed from section 9 of that report.
+Why this exists. The feet model (`src/sim/feet.ts`), the phased flight (`src/sim/flight.ts`, ADR-36) and the legs are built from coaching text and hand-fitted numbers. A source search on 2026-11-05 (`docs/research/2026-11-05/data-sources.md`, 47 sources) found no public dataset, paper or mocap release with synchronized board and shoe trajectories for any of the app's tricks. The flick delay, each foot's release and catch time, the catch order, the free flip rate, the foot clearance and the knee flexion are all unmeasured in the literature as of that date. The fastest trustworthy way to get them is a small capture we control. This page is the plan for it, condensed from section 9 of that report.
 
 ## What the sim needs from it
 
