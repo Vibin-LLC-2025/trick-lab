@@ -59,15 +59,24 @@ they become the Low tier and High undoes them.
   degrees toward the nose with the heel over the heel-side edge as the flick
   rate rises to 2 rev/s; the back foot sits across the tail pocket and moves
   its toes toward the toe-side pocket as the scoop rises.
-- Flight phases (fractions of the airtime): pop (back foot presses the tail,
-  toes down, 0 to 0.12); scoop drag (back foot toward the heel side, 0 to
-  0.2, distance proportional to scoop); slide (front foot up the board, 0.02
-  to 0.22); flick (front foot off the heel-side edge, 0.12 to 0.32, distance
-  and toe dip proportional to flick); hover (both feet up to 0.12 m above
-  the board at mid-flight, on top of the board's own height); gather (both
-  feet over the bolts, 0.35 to 0.72); landing on the grip at 1. If the
-  flight does not land (the same tolerance rule as recognition), from 0.62
-  the feet step off to the heel side (+Z) and land on the pad.
+- Flight phases (fractions of the airtime; the ADR-20 numbers, re-timed to
+  the board's catch by ADR-36 on 2026-11-05): pop (back foot presses the
+  tail, heel up, 0 to 0.05, the tail strike); scoop (back foot behind the
+  heels, 0 to 0.08 to 0.12, distance proportional to scoop); slide (front
+  foot up the board on its outside edge, 0 to 0.16, shorter with flick);
+  flick (front foot forward, out and up off the heel-side corner of the
+  nose, 0.05 to 0.22, distance proportional to flick). The board starts to
+  roll as the front foot leaves it (0.06 to 0.16), spins free, and stops in
+  the catch (0.64 to 0.76; `PHASE` in flight.ts). Tuck: each foot rises from
+  its release (front at 0.22, back at the end of the pop or the scoop) to its
+  peak (0.40 front, 0.35 back; up to 0.12 m above the board, with flick and
+  scoop) and comes down to the board at its catch (front 0.73, back 0.76):
+  the stomp. Gather: x, z and yaw reach the bolts from 0.44 to each foot's
+  catch. Ride-down: in a landed trick the feet carry the board's last
+  settling in the catch and stand on the grip over the bolts from their
+  catch to the landing at 1. If the flight does not land (the same tolerance
+  rule as recognition), from 0.64 the feet step off to the heel side (+Z)
+  and land on the pad.
 - Clearance (ADR-29, 2026-11-04): the stance and the flight phases above are
   the rider's intent. On top of them each shoe rises straight up by the least
   amount that keeps its whole sole 2 mm above the board in the board's pose
@@ -75,8 +84,9 @@ they become the Low tier and High undoes them.
   rest the front sole bridges the concave on the rails (0.0198 m above the
   deck centre across the flat, not the old flat 0.0095) and the back sole
   rests on the tail kick, rolled by the kick's own slope (about -11 to -14
-  degrees) with the heel 4 degrees up (was 12). In the air the hover still
-  peaks at 0.12 m; where the spinning deck, its wheels or its rails would
+  degrees) with the heel 4 degrees up (was 12). In the air the tuck still
+  peaks at up to 0.12 m (after the catch of a landed trick the clearance
+  does no work, ADR-36); where the spinning deck, its wheels or its rails would
   reach a shoe, the shoe rides over them, so the board never passes through
   a foot. A bail aims at the pad and stands on the failed board where it lies
   under a shoe.

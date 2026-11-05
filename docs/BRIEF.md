@@ -46,7 +46,12 @@ Physics (pure, in `src/sim/flight.ts`, g = 9.81):
 - airtime T = 2 * sqrt(2 * h / g)       (h = pop height)
 - height y(t) = h * (1 - (2t/T - 1)^2)  (parabola, 0 <= t <= T)
 - rollTotal = flick * T * 360 deg, yawTotal = scoop * T * 360 deg
-- roll(t) = rollTotal * t / T, yaw(t) = yawTotal * t / T (constant rate)
+- roll(t) = rollTotal * R(t / T), yaw(t) = yawTotal * R(t / T), phased (ADR-36, 2026-11-05; was
+  rollTotal * t / T, a constant rate): R ramps up over 0.06 to 0.16 of T for the flip (0 to
+  0.10 for the shove), runs at a constant free rate (about 1.7 times the slider's rate,
+  shown as "Air spin"), and decays to 0 over the catch, 0.64 to 0.76 (`PHASE`); a landed
+  board is pressed onto its whole turn and half turn in the catch, a failed one ends at
+  its totals
 - pitch(t): nose up at pop, easing to level by 35 percent of T (was 18 deg about the deck centre; since 2026-11-04 the board pivots on its rear wheels until the tail strikes the pad at 32.5 deg, ADR-27),
   then level (cosmetic, not part of recognition)
 

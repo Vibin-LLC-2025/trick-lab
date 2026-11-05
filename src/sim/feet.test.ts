@@ -2,20 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { REST_Y, OUTLINE, TRUCK } from '../asset/spec';
 import {
   BOLTS_X,
+  CATCH,
   CUES,
   DECK_TOP,
   feetPoseAt,
   flickDistance,
   FOOT,
   hoverHeight,
+  LAND_Y,
   MOTION,
   motionCues,
   newFeetPose,
   PAD_Y,
   RAIL_Z,
+  releaseAt,
   scoopDistance,
   STANCE,
   TAIL_TOP,
+  tuckHeight,
+  tuckShape,
   writeFeetIntent,
   writeFeetPose,
   type CuePoint,
@@ -24,8 +29,8 @@ import {
   type Stance,
 } from './feet';
 import { CLEARANCE, footLift, glbDeckTop, halfWidth } from './boardVolume';
-import { computeFlight, poseAt, POP_RISE_BY, type Pose, type TrickInputs } from './flight';
-import { PRESETS, presetById, recognize } from './tricks';
+import { airtimeFor, computeFlight, PHASE, poseAt, POP_RISE_BY, type Pose, type TrickInputs } from './flight';
+import { PRESETS, presetById, recognize, snapInput } from './tricks';
 
 const REST: Pose = { y: 0, roll: 0, yaw: 0, pitch: 0 };
 /**
@@ -100,12 +105,15 @@ describe('stance from the inputs (no flight)', () => {
 });
 
 const at = (inputs: TrickInputs, u: number) => feetPoseAt(ollie, computeFlight(inputs), u);
+/** A progress after the flick and the pitch (LEVEL_BY 0.35) and before the gather, where the deck-frame feet hold still. */
+const LEVEL_AFTER = 0.36;
 const D2R = Math.PI / 180;
 /**
  * Both feet in the deck's own frame (x along the deck, y above its centre, z
- * across), goofy numbers in either stance: the board's pitch, rise and the
- * feet's hover taken out (ADR-27). Since the feet ride the deck through the
- * pop, motion "against the board" is measured here. It is the model's intent
+ * across), goofy numbers in either stance: the board's pitch, rise and each
+ * foot's tuck taken out (ADR-27; the tuck since ADR-36 replaced the shared
+ * sin^2 hover). Since the feet ride the deck through the pop, motion
+ * "against the board" is measured here. It is the model's intent
  * (writeFeetIntent): the clearance (ADR-29) only adds height on top of it.
  */
 const onDeck = (inputs: TrickInputs, u: number, stance: Stance = 'goofy') => {
@@ -116,13 +124,12 @@ const onDeck = (inputs: TrickInputs, u: number, stance: Stance = 'goofy') => {
   const k = stance === 'regular' ? -1 : 1;
   const c = Math.cos(pose.pitch * D2R);
   const sn = Math.sin(pose.pitch * D2R);
-  const rise = pose.y + hoverHeight(inputs) * Math.sin(Math.PI * u) ** 2;
-  const map = (f: FootPose) => {
+  const map = (f: FootPose, foot: 'front' | 'back') => {
     const x = k * f.x;
-    const y = f.y - rise;
+    const y = f.y - pose.y - tuckHeight(foot, inputs, u);
     return { x: k * (x * c + y * sn), y: -x * sn + y * c, z: f.z, yaw: f.yaw };
   };
-  return { front: map(feet.front), back: map(feet.back), pitch: pose.pitch };
+  return { front: map(feet.front, 'front'), back: map(feet.back, 'back'), pitch: pose.pitch };
 };
 /**
  * The front shoe's bank against the deck, degrees: its roll with the deck's
@@ -282,7 +289,7 @@ describe('flight', () => {
     }
     expect(p.front.z).toBeGreaterThan(RAIL_Z + 0.05);
     expect(p.back.z).toBeGreaterThan(RAIL_Z + 0.05);
-    // Still over the board until the bail starts.
+    // Still over the board until the bail starts (the catch's start since ADR-36).
     const before = feetPoseAt(ollie, flight, MOTION.bail.start);
     expect(before.front.z).toBeLessThan(RAIL_Z / 2);
   });
@@ -301,9 +308,15 @@ describe('flight', () => {
   // Since the clearance (ADR-29, 2026-11-04) the deck measure is the model's
   // intent (onDeck), and the 8 cm world bound holds for the cleared feet of a
   // landed trick too, which also ride up over the spinning board (the
-  // continuity of the lift itself is pinned below). A bail gets 12 cm: the
-  // hardest failed trick (3 and 3 rev/s) spins its board out from under a
-  // bailing foot, which then drops 11 cm in a percent (measured).
+  // continuity of the lift itself is pinned below). A bail got 12 cm: the
+  // hardest failed trick (3 and 3 rev/s) spun its board out from under a
+  // bailing foot, which then dropped 11 cm in a percent (measured).
+  // Re-measured on 2026-11-05 for ADR-36 (phased rotation, tuck, catch):
+  // against the deck the largest step is still the hardest scoop, 3.08 cm
+  // per percent (a landed 360 flip 2.39); in the world the largest is the
+  // pop itself, 7.2 cm for a landed kickflip and 6.6 cm for a bail, so the
+  // bail's 12 cm is tightened to the landed 8 cm: with the bail from the
+  // catch's start, no bailing foot drops off a board any more.
   it('never teleports: every foot moves less than 3.2 cm per percent of flight against the deck', () => {
     for (const inputs of [ollie, kickflip, shove, tre, { ...tre, pop: 0.15 }, { ...ollie, flick: 3, scoop: 3 }]) {
       const flight = computeFlight(inputs);
@@ -317,7 +330,7 @@ describe('flight', () => {
           expect(d).toBeLessThan(0.032);
           const w = world[foot];
           const v = prevWorld[foot];
-          expect(Math.hypot(w.x - v.x, w.y - v.y, w.z - v.z)).toBeLessThan(recognize(flight).landed ? 0.08 : 0.12);
+          expect(Math.hypot(w.x - v.x, w.y - v.y, w.z - v.z)).toBeLessThan(0.08);
         }
         prev = next;
         prevWorld = world;
@@ -494,6 +507,10 @@ describe('flight', () => {
     // airtime, so either ramp is over within one frame. At ten times the steps
     // the largest change of the lift is a tenth or less, so there is no step
     // left anywhere, only slopes.
+    // Re-measured on 2026-11-05 for ADR-36 (phased rotation, tuck, catch):
+    // 8.0 mm per 0.001 for a landed trick (was 8.6) and 10.8 mm for a bail
+    // (was 3.6 cm; the hardest is now a failed 3 and 3 rev/s at pop 0.5,
+    // at the end of its scoop), the bounds unchanged.
     it('lifts continuously: under 1 cm of height per 0.001 of progress (4 cm in a bail), no step left at ten times the resolution', () => {
       const out = newFeetPose();
       const aim = newFeetPose();
@@ -525,7 +542,7 @@ describe('flight', () => {
         const landed = recognize(flight).landed;
         for (const stance of ['goofy', 'regular'] as const) {
           const w = worst(2000, flight, stance);
-          expect(w.y).toBeLessThan(landed ? 0.01 : 0.04);
+          expect(w.y, `${JSON.stringify(inputs)} landed ${landed}`).toBeLessThan(landed ? 0.01 : 0.04);
           coarse = Math.max(coarse, w.lift);
         }
       }
@@ -539,6 +556,129 @@ describe('flight', () => {
       }
       expect(fine).toBeLessThan(coarse * 1.2);
     }, 120000);
+  });
+
+  // ADR-36 (2026-11-05): the feet are timed against the board's catch.
+  describe('tuck and catch (ADR-36)', () => {
+    /** Every landed preset, and the same tricks rescaled to land at pop 0.2 and 0.5. */
+    const landedCases: TrickInputs[] = PRESETS.map((p) => p.inputs);
+    for (const pop of [0.2, 0.5]) {
+      const k = airtimeFor(0.35) / airtimeFor(pop);
+      for (const { inputs } of PRESETS) {
+        const scaled = { pop, flick: snapInput('flick', inputs.flick * k), scoop: snapInput('scoop', inputs.scoop * k) };
+        if (computeFlight(scaled).landed) landedCases.push(scaled);
+      }
+    }
+    /**
+     * How far a sole is above the board under it, metres (the clearance rests
+     * it at CLEARANCE.margin): the lift a copy 0.2 m lower would need, taken
+     * back off. Board and shoe are raised 1 m together so the pad, which the
+     * lift also keeps the sole above, does not count.
+     */
+    const gapAbove = (f: FootPose, edge: 1 | -1, pose: Pose) =>
+      0.2 + CLEARANCE.margin - footLift({ ...f, y: f.y + 1 - 0.2 }, edge, { ...pose, y: pose.y + 1 });
+
+    it('times the catch: the front foot first, then the back as the board stops; the gather from no earlier than 0.2 before the catch', () => {
+      expect(CATCH.front).toBeCloseTo(PHASE.catch.end - 0.03, 12);
+      expect(CATCH.back).toBe(PHASE.catch.end);
+      expect(MOTION.gather.start).toBeGreaterThanOrEqual(PHASE.catch.start - 0.2 - 1e-12);
+      expect(MOTION.gather.front).toBe(CATCH.front);
+      expect(MOTION.gather.back).toBe(CATCH.back);
+      expect(MOTION.bail.start).toBe(PHASE.catch.start);
+      // A landed sole rests on the rails of the concave (about 0.021), above the old DECK_TOP aim and under 2 cm more.
+      for (const y of [LAND_Y.front.square, LAND_Y.front.half, LAND_Y.back.square, LAND_Y.back.half]) {
+        expect(y).toBeGreaterThan(DECK_TOP);
+        expect(y).toBeLessThan(DECK_TOP + 0.02);
+      }
+    });
+
+    it('tucks each foot from its release: a fast rise, a level top, and down to the board at its catch', () => {
+      for (const { inputs } of PRESETS) {
+        for (const [foot, peak, catchAt] of [
+          ['front', MOTION.tuck.frontPeak, CATCH.front],
+          ['back', MOTION.tuck.backPeak, CATCH.back],
+        ] as const) {
+          const release = releaseAt(foot, inputs);
+          expect(release).toBeLessThan(peak);
+          expect(tuckHeight(foot, inputs, release)).toBe(0);
+          expect(tuckHeight(foot, inputs, peak)).toBeCloseTo(hoverHeight(inputs), 12);
+          expect(tuckHeight(foot, inputs, catchAt)).toBe(0);
+          expect(tuckHeight(foot, inputs, 0.9)).toBe(0);
+          // Ease-out up, ease-in down: three quarters of the height in the first half of the rise, a quarter gone in the first half of the descent.
+          expect(tuckShape((release + peak) / 2, release, peak, catchAt)).toBeCloseTo(0.75, 12);
+          expect(tuckShape((peak + catchAt) / 2, release, peak, catchAt)).toBeCloseTo(0.75, 12);
+          let prev = 0;
+          for (let k = 0; k <= 100; k++) {
+            const t = tuckShape(release + ((peak - release) * k) / 100, release, peak, catchAt);
+            expect(t).toBeGreaterThanOrEqual(prev);
+            prev = t;
+          }
+        }
+      }
+      // The front foot leaves at the end of its flick; the back at the end of the pop, or of the scoop.
+      expect(releaseAt('front', kickflip)).toBe(MOTION.flick.end);
+      expect(releaseAt('back', kickflip)).toBe(MOTION.pop.end);
+      expect(releaseAt('back', shove)).toBeGreaterThan(MOTION.pop.end);
+    });
+
+    it('gathers to the catch, not on a fixed clock: the flick spot holds until the gather starts, the bolts by each foot\'s catch', () => {
+      // Against the deck the kickflip's front foot is still where its flick left it at the gather's start.
+      const held = onDeck(kickflip, LEVEL_AFTER).front;
+      const start = onDeck(kickflip, MOTION.gather.start).front;
+      expect(start.x).toBeCloseTo(held.x, 9);
+      expect(start.z).toBeCloseTo(held.z, 9);
+      expect(start.z).toBeGreaterThan(RAIL_Z);
+      // A kickflip has no shove, so the board's settling does not move x or the yaw: the front foot is on its bolts at its catch.
+      const front = at(kickflip, CATCH.front).front;
+      expect(front.x).toBeCloseTo(BOLTS_X, 9);
+      expect(front.yaw).toBeCloseTo(STANCE.front.yawAcross, 9);
+      // At the end of the catch the board is flat and square, and both feet stand on their bolts.
+      for (const { inputs } of PRESETS) {
+        const p = at(inputs, CATCH.back);
+        expect(p.front.x).toBeCloseTo(BOLTS_X, 9);
+        expect(p.back.x).toBeCloseTo(-BOLTS_X, 9);
+        expect(p.front.z).toBeCloseTo(0, 9);
+        expect(p.back.z).toBeCloseTo(0, 9);
+        expect(p.front.yaw).toBeCloseTo(STANCE.front.yawAcross, 9);
+        expect(p.back.yaw).toBeCloseTo(STANCE.front.yawAcross, 9);
+      }
+    });
+
+    it('puts the feet on the board after the catch: no lift and each sole within 3 mm of the deck, every landed trick', () => {
+      // Before ADR-36 the clearance held a kickflip's shoes 5 to 6.6 cm up on the spinning board from 0.6 to 0.9.
+      expect(landedCases.length).toBe(24);
+      const out = newFeetPose();
+      const aim = newFeetPose();
+      for (const inputs of landedCases) {
+        const flight = computeFlight(inputs);
+        expect(flight.landed).toBe(true);
+        for (const [foot, edge, from] of [
+          ['front', 1, CATCH.front],
+          ['back', -1, CATCH.back],
+        ] as const) {
+          for (let k = 0; k <= 50; k++) {
+            const u = from + ((1 - from) * k) / 50;
+            writeFeetPose(out, ollie, flight, u);
+            writeFeetIntent(aim, ollie, flight, u);
+            const why = `${JSON.stringify(inputs)} ${foot} at ${u}`;
+            expect(out[foot].y - aim[foot].y, why).toBeLessThan(0.003);
+            expect(gapAbove(out[foot], edge, poseAt(flight, u)), why).toBeLessThan(0.003);
+          }
+        }
+      }
+    });
+
+    // Not met by the spec as written (2026-11-05, ADR-36): the tuck's height
+    // is hoverHeight (7.65 cm at the presets), which does not clear a rolled
+    // board everywhere between the front foot's release (0.22) and the
+    // catch's start (0.64), so the clearance still lifts the shoes there.
+    // Measured at 0.0025 steps: back foot up to 3.75 cm (kickflip at 0.56;
+    // heelflip 3.7, hardflip 2.9, 360 flip 2.7, varial flip 1.2), front foot
+    // up to 2.5 cm (varial heelflip at 0.62, kickflip and hardflip 2.3; the
+    // shove-its about 2 mm at the release). The 360 flip's front foot and
+    // the shove-its' back feet are clear. Needs taller per-foot tucks from
+    // reference data (RESEARCH-FEET.md section 4 item 11).
+    it.todo('keeps the feet clear of the board by intent in the air: no lift between the front foot\'s release and the catch, every preset');
   });
 
   it('writes into the given object and returns it (no allocation per call)', () => {

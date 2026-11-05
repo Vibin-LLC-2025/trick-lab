@@ -1,6 +1,7 @@
 // Plain-language text for the announcer, aria-valuetext, readouts and the
 // scene description. Pure so the store and the UI phrase things the same way.
 import {
+  CATCH,
   flickDistance,
   FOOT,
   hoverHeight,
@@ -13,7 +14,7 @@ import {
   writeStance,
   type Stance,
 } from './feet';
-import { computeFlight, type Flight, type TrickInputs } from './flight';
+import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
 import {
   directionWord,
   FLIP_WORDS,
@@ -102,6 +103,21 @@ export const degReadout = (axis: 'flip' | 'shove', d: number) => ({
   value: `${Math.abs(deg(d))}°`,
   dir: axis === 'flip' ? flipDirection(d) : shoveDirection(d),
 });
+
+/**
+ * The board's spin in the air, between the ramp-up and the catch (ADR-36):
+ * "3.2 rev/s flip, 1.4 rev/s shove in the air". About 1.7 times the slider's
+ * rate, which is the turn per second of the whole airtime. An axis that shows
+ * as 0.0 is left out; null when both do (an ollie).
+ */
+export function spinReadout(flight: Pick<Flight, 'flipRate' | 'shoveRate'>): string | null {
+  const flip = flight.flipRate.toFixed(1);
+  const shove = flight.shoveRate.toFixed(1);
+  const parts: string[] = [];
+  if (Number(flip) !== 0) parts.push(`${flip} rev/s flip`);
+  if (Number(shove) !== 0) parts.push(`${shove} rev/s shove`);
+  return parts.length ? `${parts.join(', ')} in the air` : null;
+}
 
 /** "Heelflip landed. 365 degrees of heelflip, 0 degrees of shove, 0.53 seconds in the air." */
 export function describeResult(r: TrickResult): string {
@@ -201,7 +217,10 @@ const cm = (m: number) => `${Math.round(m * 100)} cm`;
  * flick reads "only 4 cm, it barely reaches the rail" and a trick that will
  * not land ends in a bail step. Takes the flight being shown, or before a pop
  * the flight the live inputs would make. Landing uses the flight's own
- * landing test (isLanded), never the recognized trick.
+ * landing test (isLanded), never the recognized trick. Timed by the flight's
+ * phases (PHASE, ADR-36): the feet are in the air from the flick's end to the
+ * catch, a landed trick's feet catch the board over PHASE.catch and press it
+ * flat, then ride it down; a bail steps off from the catch's start.
  */
 export function footSteps(s: { flight: Flight | null; pop: number; flick: number; scoop: number }): FootStep[] {
   const flight = s.flight ?? computeFlight({ pop: s.pop, flick: s.flick, scoop: s.scoop });
@@ -250,29 +269,39 @@ export function footSteps(s: { flight: Flight | null; pop: number; flick: number
     steps.push({ foot: 'front', text, start: M.flick.start, end: M.flick.end });
   }
   const hover = hoverHeight(i);
-  steps.push(
-    hover < 0.03
-      ? { foot: 'both', text: 'Both feet stay on the board as it levels out and rises with them.', start: M.flick.end, end: M.gather.end }
-      : { foot: 'both', text: `Both feet lift ${cm(hover)} clear while the board turns under them.`, start: M.flick.end, end: M.gather.end },
-  );
   const landed = isLanded(flight.rollTotal, flight.yawTotal);
+  const C = PHASE.catch;
+  // An ollie's feet never leave the board, so there is nothing to catch: they stay on it until the board stops turning.
+  const rides = hover < 0.03;
+  steps.push(
+    rides
+      ? { foot: 'both', text: 'Both feet stay on the board as it levels out and rises with them.', start: M.flick.end, end: landed ? C.end : C.start }
+      : { foot: 'both', text: `Both feet lift ${cm(hover)} clear while the board turns under them.`, start: M.flick.end, end: C.start },
+  );
+  if (landed && !rides) {
+    steps.push({
+      foot: 'both',
+      text: `Both feet catch the board at about ${Math.round(((C.start + C.end) / 2) * 100)} percent of the flight and press it flat.`,
+      start: C.start,
+      end: C.end,
+    });
+  }
   steps.push(
     landed
-      ? { foot: 'both', text: 'Both feet come back over the bolts and land on the grip.', start: M.gather.end, end: 1 }
+      ? { foot: 'both', text: 'Both feet ride the board down over the bolts and land on the grip.', start: CATCH.back, end: 1 }
       : { foot: 'both', text: 'The board does not come round in time: both feet step off to the heel side, a bail.', start: M.bail.start, end: 1 },
   );
   return steps;
 }
 
-/** Where the feet are during and after a flight. */
+/** Where the feet are during and after a flight: in the air, then (landed, from the catch's end, ADR-36) on the board riding it down. */
 function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done'; progress: number; flight: Flight | null }): string {
   if (!s.flight || s.status === 'idle') return '';
+  const landed = isLanded(s.flight.rollTotal, s.flight.yawTotal);
   if (s.status === 'done' && s.progress >= 1) {
-    return isLanded(s.flight.rollTotal, s.flight.yawTotal)
-      ? 'Feet landed on the bolts.'
-      : 'Feet stepped off to the heel side and landed on the pad: a bail.';
+    return landed ? 'Feet landed on the bolts.' : 'Feet stepped off to the heel side and landed on the pad: a bail.';
   }
-  return 'Feet in the air above the board.';
+  return landed && s.progress >= CATCH.back ? 'Feet on the board, riding it down.' : 'Feet in the air above the board.';
 }
 
 export function describeScene(s: {

@@ -11,10 +11,12 @@
 // back foot the left. The numbers are the regular-stance research
 // (docs/RESEARCH-FEET.md) mirrored across z = 0: every z and every yaw is
 // negated; descriptions relative to the rider (heel side, outside edge,
-// backside) are unchanged. The feet do not rotate with the board: after the
-// pop they are in the air above a spinning board and come down where the
-// bolts will be if the trick lands. A failed trick is a bail: the feet step
-// off to the heel side (+Z) and land on the pad.
+// backside) are unchanged. In the air the feet do not rotate with the board:
+// after the pop they tuck up above a spinning board, then come down onto it
+// in the catch (PHASE.catch in flight.ts, ADR-36), where the bolts are if the
+// trick lands, and ride it down with the board's last settling carried onto
+// them. A failed trick is a bail: the feet step off to the heel side (+Z) and
+// land on the pad.
 //
 // Regular stance (ADR-25, 2026-11-04) is a last step on top of the goofy
 // numbers: the camera stays on the heel side, the board turns 180 degrees on
@@ -23,8 +25,8 @@
 // (-X), toes still at the toe side (-Z); everything toward the heels still
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
-import { computeFlight, writePose, type Flight, type Pose, type TrickInputs } from './flight';
-import { isLanded } from './tricks';
+import { computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
+import { isLanded } from './landing';
 
 /**
  * Which foot leads (ADR-24, ADR-25). Goofy: right foot forward, nose at +X.
@@ -202,9 +204,33 @@ export const STANCE = {
 } as const;
 
 /**
+ * Where each foot lands, sole bottom above the deck centre: on the grip over
+ * the bolts, across the board (yaw yawAcross), resting on the rails of the
+ * concave the way the clearance (ADR-29) rests a sole, so a foot on the board
+ * after the catch needs no lift (ADR-36). `square` for a board that ends with
+ * its nose where it started, `half` for one turned half round (the front foot
+ * then stands over the tail's bolts). Computed once, at import.
+ */
+const landHeight = (x: number, edge: 1 | -1, yaw: number) =>
+  DECK_TOP + footLift({ x, y: DECK_TOP, z: 0, yaw: STANCE.front.yawAcross, pitch: 0, roll: 0 }, edge, { y: 0, roll: 0, yaw, pitch: 0 });
+export const LAND_Y = {
+  front: { square: landHeight(BOLTS_X, 1, 0), half: landHeight(BOLTS_X, 1, 180) },
+  back: { square: landHeight(-BOLTS_X, -1, 0), half: landHeight(-BOLTS_X, -1, 180) },
+} as const;
+
+/**
+ * When each foot is back on the board (ADR-36, 2026-11-05), fractions of the
+ * airtime: the front foot first, 0.03 before the catch ends (the sources put
+ * the front foot down first in a 360 flip and a shove-it), the back foot as
+ * the board stops turning. Starting values, to refit from reference data.
+ */
+export const CATCH = { front: PHASE.catch.end - 0.03, back: PHASE.catch.end } as const;
+
+/**
  * Motion numbers. Windows are fractions of the airtime; distances metres.
  * Ollie timing from the TU Delft video analysis (front foot at the nose by
- * 0.16); flick and scoop "almost immediately" after the pop.
+ * 0.16); flick and scoop "almost immediately" after the pop. Since ADR-36
+ * the gather, the tuck and the bail are timed against the board's catch.
  */
 export const MOTION = {
   /**
@@ -279,12 +305,28 @@ export const MOTION = {
    * (RESEARCH-FEET.md 1.6, (0, -0.3, +0.95) in its frame), the foot flat.
    */
   scoop:{ perRev: 0.1, max: 0.25, end: 0.08, endScoop: 0.04, dir: { x: 0, y: -0.3, z: 0.95 } },
-  /** Both feet gather over the bolts for the catch. */
-  gather: { start: 0.35, end: 0.75 },
-  /** Lift above the board at mid-flight: an ollie rides the board, flips and shoves clear it. */
+  /**
+   * Both feet gather over the bolts for the catch (ADR-36): x, z and yaw
+   * reach their landing values at each foot's catch (CATCH), from no earlier
+   * than 0.2 before the catch starts, so the feet do not line up over a board
+   * that is still upside down (was 0.35 to 0.75 for both feet).
+   */
+  gather: { start: PHASE.catch.start - 0.2, front: CATCH.front, back: CATCH.back },
+  /**
+   * The tuck's amplitude above the board: an ollie rides the board, flips
+   * and shoves clear it (hoverHeight). Peaks 12 cm for the hardest inputs.
+   */
   hover: { base: 0.01, perFactor: 0.07, max: 0.12 },
-  /** Bail: the feet step off to the heel side (+Z) from here to the landing. */
-  bail: { start: 0.62, frontZ: 0.26, backZ: 0.24 },
+  /**
+   * The tuck (ADR-36): each foot rises from its release (front: the end of
+   * the flick; back: the end of the pop, or of the scoop if any) to its peak
+   * here, fast at first (ease-out), then comes down slowly at first and fast
+   * at the end (ease-in) to reach the board at its catch: the stomp. The
+   * peaks are starting values (RESEARCH-FEET.md section 4 item 11).
+   */
+  tuck: { frontPeak: 0.4, backPeak: 0.35 },
+  /** Bail: the feet step off to the heel side (+Z) from the catch's start to the landing (was 0.62). */
+  bail: { start: PHASE.catch.start, frontZ: 0.26, backZ: 0.24 },
 } as const;
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
@@ -373,12 +415,45 @@ export const flickDistance = (inputs: TrickInputs) =>
 /** Scoop length in metres for these inputs (0.09 m for both pop shove-it presets): a magnitude, either direction. */
 export const scoopDistance = (inputs: TrickInputs) => Math.min(MOTION.scoop.max, MOTION.scoop.perRev * Math.abs(inputs.scoop));
 
-/** Lift above the board at mid-flight for these inputs. */
+/** Peak of the tuck above the board for these inputs, metres. */
 export const hoverHeight = (inputs: TrickInputs) =>
   Math.min(
     MOTION.hover.max,
     MOTION.hover.base + MOTION.hover.perFactor * Math.max(rateFactor(inputs.flick), rateFactor(inputs.scoop)),
   );
+
+/** When the back foot's scoop ends, a fraction of the airtime (0.08 with no scoop, up to 0.12). */
+const scoopEndAt = (inputs: TrickInputs) => MOTION.scoop.end + MOTION.scoop.endScoop * Math.min(1, rateFactor(inputs.scoop));
+
+/**
+ * When a foot leaves the board and its tuck starts (ADR-36): the front foot
+ * at the end of its flick, the back foot at the end of the pop, or of the
+ * scoop when there is one.
+ */
+export const releaseAt = (foot: 'front' | 'back', inputs: TrickInputs) =>
+  foot === 'front' ? MOTION.flick.end : inputs.scoop !== 0 ? scoopEndAt(inputs) : MOTION.pop.end;
+
+/**
+ * The tuck's shape, 0 to 1 (ADR-36): 0 up to `release`, an ease-out rise to
+ * 1 at `peak`, an ease-in descent to 0 at `catchAt`, then 0. Continuous, with
+ * a level top; the descent arrives at its steepest, which is the stomp.
+ */
+export function tuckShape(u: number, release: number, peak: number, catchAt: number): number {
+  if (u <= release || u >= catchAt) return 0;
+  if (u <= peak) {
+    const s = 1 - (u - release) / (peak - release);
+    return 1 - s * s;
+  }
+  const s = (u - peak) / (catchAt - peak);
+  return 1 - s * s;
+}
+
+/** How far a foot is tucked up above the board at progress u, metres (ADR-36). Allocation-free. */
+export const tuckHeight = (foot: 'front' | 'back', inputs: TrickInputs, u: number) =>
+  hoverHeight(inputs) *
+  (foot === 'front'
+    ? tuckShape(u, releaseAt('front', inputs), MOTION.tuck.frontPeak, CATCH.front)
+    : tuckShape(u, releaseAt('back', inputs), MOTION.tuck.backPeak, CATCH.back));
 
 /**
  * Unit flick direction for a scoop factor (a magnitude), written into `out`
@@ -481,19 +556,62 @@ export function writeFeetIntent(out: FeetPose, inputs: TrickInputs, flight: Flig
  * and rise (ADR-27): during the pop the deck tilts nose up about its centre
  * while it pivots on the tail, so the back shoe rides the tail down to the pad
  * and the front shoe rides the rising deck under it, and both soles tilt with
- * it. From LEVEL_BY the board is level and this is a plain lift.
+ * it. From LEVEL_BY the board is level and this is a plain lift, plus each
+ * foot's tuck (ADR-36). In a landed trick each foot then rides the board's
+ * last settling from the catch (rideCatch).
  */
 function writeFlightFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   writeDeckFeet(out, flight, u);
   const p = clamp01(u);
   writePose(board, flight, p);
-  const hover = hoverHeight(flight.inputs) * Math.sin(Math.PI * p) ** 2;
+  const i = flight.inputs;
   const t = board.pitch * D2R;
   const c = Math.cos(t);
   const sn = Math.sin(t);
-  rideDeck(out.front, c, sn, board.y + hover, board.pitch, 1);
-  rideDeck(out.back, c, sn, board.y + hover, board.pitch, -1);
+  rideDeck(out.front, c, sn, board.y + tuckHeight('front', i, p), board.pitch, 1);
+  rideDeck(out.back, c, sn, board.y + tuckHeight('back', i, p), board.pitch, -1);
+  if (isLanded(flight.rollTotal, flight.yawTotal)) {
+    rideCatch(out.front, flight, p, CATCH.front, 1);
+    rideCatch(out.back, flight, p, CATCH.back, -1);
+  }
   return out;
+}
+
+/**
+ * The catch (ADR-36): a landed board's roll and yaw settle onto the whole
+ * turn over PHASE.catch while the feet come down on it, so a foot on the grip
+ * moves with that last settling. The board's residual (its pose minus its
+ * target) is carried onto the foot, weighted from 0 at the catch's start to 1
+ * at this foot's catch, so nothing jumps: the foot's position turns about the
+ * board centre, roll about X then yaw about Y, and the sole tilts the way
+ * rideDeck tilts it for a pitch (for a shoe whose toe points along
+ * (cos yaw, 0, -sin yaw), a turn about world X is a pitch of roll * sin yaw
+ * and a turn about its own long axis of roll * cos yaw). With the board turned
+ * half round the residual roll is about -X in the rest frame. From
+ * PHASE.catch.end the residual is 0 and the foot sits where the model put it.
+ */
+function rideCatch(f: FootPose, flight: Flight, p: number, catchAt: number, edge: 1 | -1) {
+  const w = smooth(PHASE.catch.start, catchAt, p);
+  if (w === 0 || p >= PHASE.catch.end) return;
+  const half = Math.round(Math.abs(flight.yawTarget) / 180) % 2 === 1;
+  const roll = (board.roll - flight.rollTarget) * w * (half ? -1 : 1);
+  const yaw = (board.yaw - flight.yawTarget) * w;
+  const cr = Math.cos(roll * D2R);
+  const sr = Math.sin(roll * D2R);
+  const cy = Math.cos(yaw * D2R);
+  const sy = Math.sin(yaw * D2R);
+  const x = f.x;
+  const y = f.y - board.y;
+  const z = f.z;
+  const y1 = y * cr - z * sr;
+  const z1 = y * sr + z * cr;
+  f.x = x * cy + z1 * sy;
+  f.y = board.y + y1;
+  f.z = -x * sy + z1 * cy;
+  const own = f.yaw * D2R;
+  f.pitch += roll * Math.sin(own);
+  f.roll += roll * Math.cos(own) * edge;
+  f.yaw += yaw;
 }
 
 /**
@@ -528,8 +646,13 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const s = rateFactor(i.scoop);
   const M = MOTION;
   const landed = isLanded(flight.rollTotal, flight.yawTotal);
-  const gather = smooth(M.gather.start, M.gather.end, p);
+  const gatherFront = smooth(M.gather.start, M.gather.front, p);
+  const gatherBack = smooth(M.gather.start, M.gather.back, p);
   const bail = landed ? 0 : smooth(M.bail.start, 1, p);
+  // On the grip over the bolts, resting on the rails (LAND_Y), of a board that ends square or half round.
+  const half = landed && Math.round(Math.abs(flight.yawTarget) / 180) % 2 === 1;
+  const landFront = half ? LAND_Y.front.half : LAND_Y.front.square;
+  const landBack = half ? LAND_Y.back.half : LAND_Y.back.square;
 
   // Front foot: slide up the grip on the outside edge, then flick out of the
   // heel-side corner of the nose (forward, out and up), then gather. A
@@ -553,10 +676,10 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const fx = front.x + slide + dir.x * flick + pivot * (Math.cos(turned * D2R) - Math.cos(front.yaw * D2R));
   const fy = DECK_TOP + slide * S.lift + dir.y * flick;
   const fz = front.z + dir.z * flick - pivot * (Math.sin(turned * D2R) - Math.sin(front.yaw * D2R));
-  front.x = lerp(fx, BOLTS_X, gather);
-  front.z = lerp(lerp(fz, 0, gather), M.bail.frontZ, bail);
-  front.y = lerp(lerp(fy, DECK_TOP, gather), PAD_Y, bail);
-  front.yaw = lerp(turned, STANCE.front.yawAcross, gather);
+  front.x = lerp(fx, BOLTS_X, gatherFront);
+  front.z = lerp(lerp(fz, 0, gatherFront), M.bail.frontZ, bail);
+  front.y = lerp(lerp(fy, landFront, gatherFront), PAD_Y, bail);
+  front.yaw = lerp(turned, STANCE.front.yawAcross, gatherFront);
   front.roll = S.roll * bump(0, M.flick.end, p) * (1 - heel);
   // Heelflip: toes up, heel down through the kick (0 for a kickflip or an ollie).
   front.pitch = M.flick.heelPitch * heel * bump(M.flick.start, M.flick.end, p);
@@ -564,19 +687,19 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   // Back foot: pop (heel up, a small press), scoop behind the heels
   // (backside) or forward in front of the toes (frontside), gather.
   const back = out.back;
-  const scoopEnd = M.scoop.end + M.scoop.endScoop * Math.min(1, s);
+  const scoopEnd = scoopEndAt(i);
   const scoop = smooth(0, scoopEnd, p) * scoopDistance(i);
   const press = M.pop.press * bump(0, M.pop.end, p);
   const bx = back.x + M.scoop.dir.x * scoop;
   const by = TAIL_TOP - press + M.scoop.dir.y * scoop * (1 - smooth(scoopEnd, scoopEnd + 0.1, p));
   const bz = back.z + M.scoop.dir.z * sideOf(i.scoop) * scoop;
-  back.x = lerp(bx, -BOLTS_X, gather);
-  back.z = lerp(lerp(bz, 0, gather), M.bail.backZ, bail);
-  back.y = lerp(lerp(by, DECK_TOP, gather), PAD_Y, bail);
+  back.x = lerp(bx, -BOLTS_X, gatherBack);
+  back.z = lerp(lerp(bz, 0, gatherBack), M.bail.backZ, bail);
+  back.y = lerp(lerp(by, landBack, gatherBack), PAD_Y, bail);
   // From the stance's own tilt on the tail (writeStance), so progress 0 is the stance exactly.
-  back.pitch = lerp(back.pitch + M.pop.pitch * bump(0, M.pop.end, p), 0, gather);
-  back.roll = lerp(back.roll, 0, gather);
-  back.yaw = lerp(back.yaw, STANCE.front.yawAcross, gather);
+  back.pitch = lerp(back.pitch + M.pop.pitch * bump(0, M.pop.end, p), 0, gatherBack);
+  back.roll = lerp(back.roll, 0, gatherBack);
+  back.yaw = lerp(back.yaw, STANCE.front.yawAcross, gatherBack);
   return out;
 }
 

@@ -1,4 +1,4 @@
-import { degReadout, outcomeCard, seconds } from '../sim/format';
+import { degReadout, outcomeCard, seconds, spinReadout } from '../sim/format';
 import { useTrickStore } from '../store';
 
 const NONE = 'not yet';
@@ -53,10 +53,13 @@ function Row({ k, v, dir, bad }: { k: string; v: string | null; dir?: string; ba
 /**
  * The results headline (DESIGN.md 4 and 9): the outcome, then four numbers.
  * The trick name and the landed or bailed state are in the headline, so the
- * grid does not repeat them; the axis that missed is marked instead.
+ * grid does not repeat them; the axis that missed is marked instead. "Air
+ * spin" is the board's rate between the ramp-up and the catch (ADR-36), from
+ * the flight on screen, so it shows as soon as the board is popped.
  */
 export function Telemetry() {
   const r = useTrickStore((s) => s.result);
+  const flight = useTrickStore((s) => s.flight);
   const missed = r && !r.landed ? r.failedAxis : null;
 
   return (
@@ -70,6 +73,7 @@ export function Telemetry() {
         <Row k="Peak" v={r ? `${r.peak.toFixed(2)} m` : null} />
         <Row k="Flip" v={r ? degReadout('flip', r.rollTotal).value : null} dir={r ? degReadout('flip', r.rollTotal).dir : ''} bad={missed === 'flip'} />
         <Row k="Shove" v={r ? degReadout('shove', r.yawTotal).value : null} dir={r ? degReadout('shove', r.yawTotal).dir : ''} bad={missed === 'shove'} />
+        <Row k="Air spin" v={flight ? spinReadout(flight) : null} />
       </dl>
     </section>
   );

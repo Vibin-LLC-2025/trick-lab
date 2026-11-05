@@ -120,7 +120,8 @@ describe('trick lab UI', () => {
     expect(within(outcome).getByText('Varial heelflip landed')).toHaveClass('outcome__name');
     expect(within(outcome).getByText('365 deg heelflip, 173 deg frontside shove, 0.53 s in the air.')).toBeInTheDocument();
     const values = [...outcome.querySelectorAll('.telemetry__v')].map((v) => v.textContent);
-    expect(values).toEqual(['0.53 s', '0.35 m', '365° heelflip', '173° frontside']);
+    // The fifth row (ADR-36, 2026-11-05): the board's spin rate in the air, between the ramp-up and the catch.
+    expect(values).toEqual(['0.53 s', '0.35 m', '365° heelflip', '173° frontside', '3.2 rev/s flip, 1.4 rev/s shove in the air']);
     expect(within(outcome).getByText('frontside')).toHaveClass('telemetry__dir');
     expect(screen.getByRole('heading', { name: 'Objectives 1 of 8' })).toBeInTheDocument();
   });
@@ -137,6 +138,8 @@ describe('trick lab UI', () => {
     expect(useTrickStore.getState().status).toBe('playing');
     expect(announcer()).toHaveTextContent('Popped with pop 0.35 meters, kickflip flick 1.9 revolutions per second');
     expect(screen.getByText('In the air')).toBeInTheDocument();
+    // The air spin reads the flight from the pop (ADR-36); the totals wait for the landing.
+    expect(screen.getByText('Air spin').closest('.telemetry__row')).toHaveTextContent(/^Air spin3\.2 rev\/s flip in the air$/);
     expect(timeline()).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pop' })).toHaveAttribute('aria-disabled', 'true');
 

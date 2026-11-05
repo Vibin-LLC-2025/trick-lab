@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeFlight } from './flight';
+import { CATCH } from './feet';
+import { computeFlight, PHASE } from './flight';
 import {
   degReadout,
   describeFeet,
@@ -11,10 +12,11 @@ import {
   footSteps,
   inputDirection,
   outcomeCard,
+  spinReadout,
   STANCE_NOTE,
   valueText,
 } from './format';
-import { DEFAULT_INPUTS, recognize, resolveTrick } from './tricks';
+import { DEFAULT_INPUTS, PRESETS, recognize, resolveTrick } from './tricks';
 
 const withTotals = (rollTotal: number, yawTotal: number) =>
   recognize({ ...computeFlight(DEFAULT_INPUTS), rollTotal, yawTotal });
@@ -163,6 +165,9 @@ describe('feet in words', () => {
     const bailed = computeFlight({ pop: 0.15, flick: 1.9, scoop: 0 });
     expect(describeScene({ ...base, status: 'idle', progress: 0, flight: null })).toContain('Front foot just behind the front bolts, turned 42 degrees');
     expect(describeScene({ ...base, status: 'playing', progress: 0.4, flight: landed })).toContain('Feet in the air above the board.');
+    // After the catch (ADR-36) the feet are on the board, riding it down; a bail is not.
+    expect(describeScene({ ...base, status: 'paused', progress: PHASE.catch.end, flight: landed })).toContain('Feet on the board, riding it down.');
+    expect(describeScene({ ...base, status: 'paused', progress: 0.9, flight: bailed })).toContain('Feet in the air above the board.');
     expect(describeScene({ ...base, status: 'done', progress: 1, flight: landed })).toContain('Feet landed on the bolts.');
     expect(describeScene({ ...base, status: 'done', progress: 1, flight: bailed })).toContain('a bail.');
     expect(describeScene({ ...base, feetVisible: false, status: 'idle', progress: 0, flight: null })).not.toContain('foot');
@@ -239,14 +244,40 @@ describe('foot steps (DESIGN.md 8.5)', () => {
   const steps = (pop: number, flick: number, scoop: number) => footSteps({ flight: null, pop, flick, scoop });
   const texts = (pop: number, flick: number, scoop: number) => steps(pop, flick, scoop).map((x) => x.text);
 
-  it('scripts a kickflip in order: pop, slide, flick forward out and up, lift, land on the bolts', () => {
+  // Changed on purpose (2026-11-05, ADR-36): the lift now ends at the catch,
+  // a landed trick has a catch step, and the last step rides the board down
+  // (was "Both feet come back over the bolts and land on the grip.").
+  it('scripts a kickflip in order: pop, slide, flick forward out and up, lift, catch, ride it down onto the bolts', () => {
     expect(texts(0.35, 1.9, 0)).toEqual([
       'Back foot snaps the tail down off the ball of the foot: the pop.',
       'Front foot drags up the grip on its outside edge toward the nose, 10 cm.',
       'Front foot flicks forward, out and up off the heel-side corner of the nose, 19 cm.',
       'Both feet lift 8 cm clear while the board turns under them.',
-      'Both feet come back over the bolts and land on the grip.',
+      'Both feet catch the board at about 70 percent of the flight and press it flat.',
+      'Both feet ride the board down over the bolts and land on the grip.',
     ]);
+  });
+
+  it('times the steps by the flight phases: in the air to the catch, the catch, then down; a bail has no catch', () => {
+    for (const { inputs } of PRESETS) {
+      const s = steps(inputs.pop, inputs.flick, inputs.scoop);
+      const lift = s.find((x) => x.text.startsWith('Both feet lift'))!;
+      const caught = s.filter((x) => x.text.startsWith('Both feet catch the board'));
+      expect(caught).toHaveLength(1);
+      expect(lift.end).toBe(PHASE.catch.start);
+      expect(caught[0]!.start).toBe(PHASE.catch.start);
+      expect(caught[0]!.end).toBe(PHASE.catch.end);
+      expect(s.at(-1)!.start).toBe(CATCH.back);
+      expect(s.at(-1)!.end).toBe(1);
+      const bail = steps(0.15, inputs.flick, inputs.scoop);
+      expect(bail.some((x) => x.text.includes('catch'))).toBe(false);
+      expect(bail.at(-1)!.start).toBe(PHASE.catch.start);
+      expect(bail.find((x) => x.text.startsWith('Both feet lift'))!.end).toBe(PHASE.catch.start);
+    }
+    // An ollie's feet never leave the board, so there is nothing to catch: they ride it to the end of the catch, then land.
+    const ollie = steps(0.35, 0, 0);
+    expect(ollie.some((x) => x.text.includes('catch'))).toBe(false);
+    expect(ollie.find((x) => x.text.startsWith('Both feet stay'))!.end).toBe(PHASE.catch.end);
   });
 
   it('keeps an ollie on the board and adds the scoop for a shove-it', () => {
@@ -267,7 +298,8 @@ describe('foot steps (DESIGN.md 8.5)', () => {
       'Front foot slides up the grip toward the nose, 8 cm.',
       'Front foot kicks forward and out off the toe-side corner of the nose, heel last, 27 cm.',
       'Both feet lift 8 cm clear while the board turns under them.',
-      'Both feet come back over the bolts and land on the grip.',
+      'Both feet catch the board at about 70 percent of the flight and press it flat.',
+      'Both feet ride the board down over the bolts and land on the grip.',
     ]);
     expect(texts(0.35, -0.4, 0)).toContain('Front foot kicks off the toe-side corner of the nose, but only 6 cm: it barely reaches the rail.');
     expect(texts(0.15, -1.9, 0).at(-1)).toBe('The board does not come round in time: both feet step off to the heel side, a bail.');
@@ -291,5 +323,16 @@ describe('foot steps (DESIGN.md 8.5)', () => {
       expect(x.end).toBeLessThanOrEqual(1);
       expect(x.end).toBeGreaterThan(x.start);
     }
+  });
+});
+
+describe('spin in the air (ADR-36)', () => {
+  it('reads the free-phase rates, omitting an axis that does not turn', () => {
+    expect(spinReadout(computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 }))).toBe('3.2 rev/s flip in the air');
+    expect(spinReadout(computeFlight({ pop: 0.35, flick: 0, scoop: -0.9 }))).toBe('1.4 rev/s shove in the air');
+    expect(spinReadout(computeFlight({ pop: 0.35, flick: -1.9, scoop: -0.9 }))).toBe('3.2 rev/s flip, 1.4 rev/s shove in the air');
+    expect(spinReadout(computeFlight({ pop: 0.35, flick: 1.9, scoop: 1.9 }))).toBe('3.2 rev/s flip, 2.9 rev/s shove in the air');
+    expect(spinReadout(computeFlight({ pop: 0.35, flick: 0, scoop: 0 }))).toBeNull();
+    expect(spinReadout({ flipRate: 0.04, shoveRate: 0 })).toBeNull();
   });
 });

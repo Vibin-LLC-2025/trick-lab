@@ -1,10 +1,10 @@
 // Pure trick recognition, presets and objectives. No React, no three.
 import { computeFlight, type Flight, type TrickInputs } from './flight';
+import { isLanded, rollError as rollErrorOf, ROLL_TOLERANCE, turns, yawError as yawErrorOf, YAW_TOLERANCE } from './landing';
 
-/** A landing needs the flip within this many degrees of a whole revolution. */
-export const ROLL_TOLERANCE = 30;
-/** A landing needs the shove within this many degrees of a half turn. */
-export const YAW_TOLERANCE = 25;
+// The landing rule lives in landing.ts (ADR-36), so flight.ts can use it
+// without importing this file; re-exported so no other import changes.
+export { isLanded, rollError, ROLL_TOLERANCE, turns, yawError, YAW_TOLERANCE } from './landing';
 
 export type TrickId =
   | 'ollie'
@@ -123,23 +123,6 @@ export function nameFor(flips: number, halfShoves: number): { id: TrickId; name:
     }
   );
 }
-
-/**
- * Symmetric round to the nearest whole number of turns: Math.round sends -0.5
- * toward +infinity, so a heelflip would round differently from its kickflip
- * mirror. `+ 0` turns -0 into 0, so a naming key is never "-0,0".
- */
-const turns = (x: number) => Math.sign(x) * Math.round(Math.abs(x)) + 0;
-/** Signed error about the nearest whole revolution (flip) or half turn (shove). */
-const rollErrorOf = (rollTotal: number) => rollTotal - turns(rollTotal / 360) * 360;
-const yawErrorOf = (yawTotal: number) => yawTotal - turns(yawTotal / 180) * 180;
-
-/**
- * Whether a flight with these totals lands: both axes within tolerance.
- * Allocation-free, so the feet model (src/sim/feet.ts) can ask every frame.
- */
-export const isLanded = (rollTotal: number, yawTotal: number) =>
-  Math.abs(rollErrorOf(rollTotal)) <= ROLL_TOLERANCE && Math.abs(yawErrorOf(yawTotal)) <= YAW_TOLERANCE;
 
 /**
  * Whether a total fell short of its nearest whole turn (`step` 360 for the

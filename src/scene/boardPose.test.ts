@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Stance } from '../sim/feet';
-import { computeFlight, poseAt, type Pose } from '../sim/flight';
+import { computeFlight, PHASE, poseAt, rollAt, yawAt, type Pose } from '../sim/flight';
 import { presetById, type PresetId } from '../sim/tricks';
 import { boardMatrix } from '../sim/boardVolume';
 import { setBoardRotation } from './boardPose';
@@ -17,6 +17,26 @@ const apply = (pose: Pose, v: Vector3, stance: Stance) =>
   v.clone().applyQuaternion(new Quaternion().setFromEuler(setBoardRotation(new Euler(), pose, stance)));
 const rotated = (id: PresetId, u: number, v: Vector3, stance: Stance) =>
   apply(poseAt(computeFlight(presetById(id).inputs), u), v, stance);
+/**
+ * The progress at which a preset's board has done `fraction` of its total on
+ * one axis. Since ADR-36 (2026-11-05) the board no longer turns at a constant
+ * rate, so "a quarter turn" is no longer at u = 0.25: this inverts the
+ * phased profile (rollAt, yawAt) by bisection, before the catch, where it is
+ * total * R(u) and rises monotonically.
+ */
+const progressAt = (id: PresetId, axis: 'roll' | 'yaw', fraction: number) => {
+  const flight = computeFlight(presetById(id).inputs);
+  const at = axis === 'roll' ? rollAt : yawAt;
+  const want = Math.abs((axis === 'roll' ? flight.rollTotal : flight.yawTotal) * fraction);
+  let lo = 0;
+  let hi: number = PHASE.catch.start;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (Math.abs(at(flight, mid)) < want) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+};
 /** A board vector on the pad, before any trick. */
 const atRest = (v: Vector3, stance: Stance) => apply({ y: 0, roll: 0, yaw: 0, pitch: 0 }, v, stance);
 
@@ -37,18 +57,21 @@ describe('stance at rest', () => {
 });
 
 describe.each(['goofy', 'regular'] as const)('trick rotation direction (%s stance)', (stance) => {
+  // The progress values below were 0.25, 0.5 and 0.1 while the board turned
+  // at a constant rate; re-derived from R(u) for ADR-36 (2026-11-05), the
+  // same fractions of each turn and the same thresholds.
   it('a kickflip rolls the grip toward the heel side (+Z) first', () => {
-    const grip = rotated('kickflip', 0.25, GRIP, stance);
+    const grip = rotated('kickflip', progressAt('kickflip', 'roll', 0.25), GRIP, stance);
     expect(grip.z).toBeGreaterThan(0.9);
   });
 
   it('a kickflip has the graphic up at half the flight and the grip up at landing', () => {
-    expect(rotated('kickflip', 0.5, GRIP, stance).y).toBeLessThan(-0.95);
+    expect(rotated('kickflip', progressAt('kickflip', 'roll', 0.5), GRIP, stance).y).toBeLessThan(-0.95);
     expect(rotated('kickflip', 1, GRIP, stance).y).toBeGreaterThan(0.95);
   });
 
   it('a pop shove-it swings the tail toward the heels (+Z) first and ends turned half round, where the nose was', () => {
-    const tail = rotated('pop-shove-it', 0.25, TAIL, stance);
+    const tail = rotated('pop-shove-it', progressAt('pop-shove-it', 'yaw', 0.25), TAIL, stance);
     expect(tail.z).toBeGreaterThan(0.5);
     expect(turnSense(stance, tail)).toBe(SENSE[stance]);
     const noseAtRest = atRest(NOSE, stance);
@@ -57,18 +80,21 @@ describe.each(['goofy', 'regular'] as const)('trick rotation direction (%s stanc
   });
 
   it('varial and 360 flips use the same flip and shove directions as the base tricks', () => {
-    // The full pose at 10 percent, pop pitch included (ADR-32, 2026-11-04):
-    // the flip is about the pitched long axis, so the raised nose no longer
-    // swings the tail in Z and the directions read straight off the pose.
-    const level = (id: PresetId, v: Vector3) => rotated(id, 0.1, v, stance);
+    // The full pose, pop pitch included (ADR-32, 2026-11-04): the flip is
+    // about the pitched long axis, so the raised nose no longer swings the
+    // tail in Z and the directions read straight off the pose. Was at 10
+    // percent of the flight, when both axes had done a tenth of their turn
+    // there; since ADR-36 the shove ramps up before the flip, so the shove is
+    // read where it has done a tenth of its turn and the flip where it has.
+    const heelSide = (id: PresetId, u: number) =>
+      new Vector3().crossVectors(rotated(id, u, NOSE, stance), UP).multiplyScalar(SENSE[stance]).normalize();
     for (const id of ['varial-flip', '360-flip'] as const) {
-      const tail = level(id, TAIL);
-      expect(turnSense(stance, tail), id).toBe(SENSE[stance]);
+      const shoveAt = progressAt(id, 'yaw', 0.1);
+      expect(turnSense(stance, rotated(id, shoveAt, TAIL, stance)), id).toBe(SENSE[stance]);
+      expect(heelSide(id, shoveAt).z, id).toBeGreaterThan(0.7);
       // The flip axis follows the shove (YZX), so measure the grip against the board's yawed heel side.
-      const nose = level(id, NOSE);
-      const heel = new Vector3().crossVectors(nose, UP).multiplyScalar(SENSE[stance]).normalize();
-      expect(heel.z, id).toBeGreaterThan(0.7);
-      expect(level(id, GRIP).dot(heel), id).toBeGreaterThan(0.3);
+      const flipAt = progressAt(id, 'roll', 0.1);
+      expect(rotated(id, flipAt, GRIP, stance).dot(heelSide(id, flipAt)), id).toBeGreaterThan(0.3);
     }
   });
 });
