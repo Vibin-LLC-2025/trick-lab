@@ -1,7 +1,8 @@
 // The concrete ground, as numbers (realistic ground pass, 2026-11-04, ADR-31).
-// One texture tile is one slab bay of the old pad's size; the GLB is a large
-// plane whose UVs repeat that tile, so the resting board sits centred in a bay
-// and the slab grid runs off into the fog. Units are metres, sRGB hex colours.
+// A slab bay is the old pad's size; the GLB is a large plane whose UVs repeat
+// each map's tile of bays (one bay of relief, four of colour, nine of
+// roughness, ADR-40), so the resting board sits centred in a bay and the slab
+// grid runs off into the fog. Units are metres, sRGB hex colours.
 // Pure data: no three, no React. Read by groundTextures.ts, ground.ts, the
 // build script, the budget checker and src/scene/artDirection.ts.
 import { WHEEL } from './spec';
@@ -23,17 +24,44 @@ export const PLANE_BAYS = { x: 25, z: 33 } as const;
 export const PLANE = { x: BAY.x * PLANE_BAYS.x, z: BAY.z * PLANE_BAYS.z } as const;
 
 /**
- * Texture resolution. Colour and normal at 1024 (1.56 x 1.17 mm per texel,
- * about one screen pixel at the home view on a 1000 px tall stage); roughness
- * is low-frequency, so 512 is enough and saves bytes.
+ * The three maps, each a tile of `bays` slab bays (x by z), repeated over the
+ * plane by its own KHR_texture_transform (PLANE_BAYS / bays), so the bays no
+ * longer repeat one identical tile (ADR-40, 2026-11-05).
+ * - normal: one bay at 1024 (1.56 x 1.17 mm per texel): the joint, the
+ *   aggregate and the pits, the fine relief that has to stay sharp and that
+ *   nobody can tell apart from bay to bay.
+ * - color: four different bays, 2 x 2, at 1024 (3.1 x 2.3 mm per texel):
+ *   the fine grey detail of the normal map's bay, box filtered, plus per bay
+ *   its own tone, slab shade, cracks and stains; the mark and the wheel
+ *   marks are only in the bay under the board.
+ * - roughness: nine bays, 3 x 3, at 512 (9.4 x 7.0 mm): worn patches, joints
+ *   and a slab offset per bay.
+ * 2 and 3 have no common factor, so colour and roughness line up the same
+ * way only every 6 x 6 bays (9.6 x 7.2 m), most of what the fog leaves.
  */
 export const GROUND_TEXTURES = {
-  color: { file: 'concrete-color.png', width: 1024, height: 1024 },
-  normal: { file: 'concrete-normal.png', width: 1024, height: 1024 },
-  roughness: { file: 'concrete-roughness.png', width: 256, height: 256 },
+  color: { file: 'concrete-color.png', width: 1024, height: 1024, bays: [2, 2] as const },
+  normal: { file: 'concrete-normal.png', width: 1024, height: 1024, bays: [1, 1] as const },
+  roughness: { file: 'concrete-roughness.png', width: 512, height: 512, bays: [3, 3] as const },
 } as const;
 
 export type GroundTextureKey = keyof typeof GROUND_TEXTURES;
+
+/** The KHR_texture_transform scale of a map: how many of its tiles fit across the plane's UV range. */
+export const groundRepeat = (key: GroundTextureKey): [number, number] => {
+  const [bx, bz] = GROUND_TEXTURES[key].bays;
+  return [PLANE_BAYS.x / bx, PLANE_BAYS.z / bz];
+};
+
+/**
+ * The bay of a map's tile that lies under the origin (the resting board):
+ * the plane's centre (UV 0.5) is at tile coordinate 0.5 * PLANE_BAYS / bays.
+ */
+export const originBay = (key: GroundTextureKey): [number, number] => {
+  const [bx, bz] = GROUND_TEXTURES[key].bays;
+  const f = (t: number) => t - Math.floor(t);
+  return [Math.floor(f((0.5 * PLANE_BAYS.x) / bx) * bx), Math.floor(f((0.5 * PLANE_BAYS.z) / bz) * bz)];
+};
 
 /**
  * Base colour. The colour map is one grey channel (like the medium grip):
@@ -49,14 +77,27 @@ export const CONCRETE = {
   tone: { cell: 0.4, octaves: 3, amplitude: 9 },
   /** Mid mottling. */
   mottle: { cell: 0.05, octaves: 2, amplitude: 4 },
-  /** Fine grain: smooth noise a couple of texels across, so the PNG predicts it well. */
-  grain: { cell: 0.0035, amplitude: 2.5 },
-  /** Exposed aggregate: specks lighter or darker than the paste, slightly proud, a little smoother. */
-  aggregate: { count: 9000, radius: [0.0008, 0.0026] as const, levels: 14, height: 0.00005, proudAbove: 0.002, roughness: -0.08 },
-  /** Shallow pits (air voids): darker, rougher, sunk. */
+  /**
+   * Fine grain: smooth noise a few colour texels across, so the PNG predicts
+   * it (12 mm since the colour texel is 3.1 mm, ADR-40: at 3.5 mm it was
+   * per-texel noise and 154 KB of the colour map).
+   */
+  grain: { cell: 0.012, amplitude: 2.5 },
+  /** Exposed aggregate: specks lighter or darker than the paste, the larger ones slightly proud. */
+  aggregate: { count: 9000, radius: [0.0008, 0.0026] as const, levels: 14, height: 0.00005, proudAbove: 0.002 },
+  /** Shallow pits (air voids): darker and sunk. */
   pits: { count: 1400, radius: [0.0006, 0.0018] as const, depth: 0.0006, levels: -18 },
-  /** Hairline cracks: seeded random walks from a few starting points. */
-  cracks: { count: 5, length: [0.18, 0.5] as const, step: 0.003, wander: 0.35, depth: 0.0004, width: 0.0012, levels: -16 },
+  /**
+   * Hairline cracks, colour only (the normal map is shared by every bay):
+   * per bay of the colour tile `perBay[0]` to `perBay[1]` seeded random
+   * walks. Thinner than a colour texel, so each is drawn a texel wide at the
+   * same total darkness (levels times width over the texel).
+   */
+  cracks: { perBay: [0, 4] as const, length: [0.18, 0.55] as const, step: 0.003, wander: 0.35, width: 0.0012, levels: -16 },
+  /** Per bay of the colour tile: each slab poured on its own day, a shade lighter or darker. */
+  slab: { levels: 5 },
+  /** Per bay of the colour tile: up to `max` soft dark stains (rubber, oil, water), radius in metres. */
+  stains: { max: 2, radius: [0.07, 0.22] as const, levels: [-4, -9] as const },
 } as const;
 
 /**
@@ -67,7 +108,8 @@ export const JOINT = { width: 0.012, depth: 0.004, shoulder: 0.003, levels: -42,
 
 /**
  * The worn painted centre mark, where the pad's mark mesh was: 0.9 x 0.02 m
- * along X at the bay centre. Faint (it lifts the grey by at most `levels`),
+ * along X at the centre of the bay under the board (only that bay of the
+ * colour and roughness tiles, so one bay in four shows it). Faint (it lifts the grey by at most `levels`),
  * thinned to `kept` where the wear noise is below `wear.below`, its edges
  * ragged by up to `edge` metres, a little smoother than the concrete.
  */
@@ -83,14 +125,16 @@ export const MARK = {
 /**
  * Roughness (glTF metallicRoughness green; the map is one grey channel, so
  * metalness reads the same value times a metallic factor of 0). Concrete is
- * matte; worn patches (and the area around the bay centre, where boards
- * roll) are a little smoother, dust specks rougher.
+ * matte; worn patches (and the area around the centre of the bay under the
+ * board, where boards roll) are a little smoother. Each bay of the 3 x 3
+ * tile is offset by up to `slab`. (The 3,000 dust specks of the one-bay
+ * map were 1 to 3 mm, below this map's 9 mm texel, so they went.)
  */
 export const ROUGHNESS = {
   base: 0.93,
   worn: { cell: 0.22, octaves: 2, below: 0.45, to: 0.78 },
   centre: { radius: [0.5, 0.35] as const, by: 0.06 },
-  dust: { count: 3000, radius: [0.001, 0.003] as const, to: 1.0 },
+  slab: 0.03,
 } as const;
 
 /**

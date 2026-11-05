@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, type BufferGeometry } from 'three';
+import { Box3, Vector3, type BufferGeometry } from 'three';
 import { boardTriangles, buildBoard } from './board';
-import { buildBoltHead, buildBolts, buildWheel } from './hardware';
-import { BUDGET, BUDGETS, HARDWARE_DETAIL, OUTLINE, PARTS, REST_Y, TRUCK, WHEEL, WHEEL_HIGH_BAND_KINDS } from './spec';
+import { midSurface, surfaceNormal } from './deck';
+import { boltSeat, buildBoltHead, buildBolts, buildWheel } from './hardware';
+import { BUDGET, BUDGETS, DECK, HARDWARE_DETAIL, OUTLINE, PARTS, REST_Y, TRUCK, WHEEL, WHEEL_HIGH_BAND_KINDS } from './spec';
 
 const board = buildBoard();
 const box = (g: BufferGeometry) => {
@@ -24,7 +25,7 @@ describe('board assembly (DESIGN.md 7.1 to 7.5)', () => {
     const tris = boardTriangles(board);
     const total = Object.values(tris).reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(BUDGET.triangles);
-    // The design's target band is 11,000 to 13,000; the rounded boxes and the 20th deck ring put it a little over.
+    // The design's target band is 11,000 to 13,000; the 20th deck ring and the lofted hangers (ADR-40) put it a little over.
     expect(total).toBeGreaterThan(11000);
     expect(total).toBeLessThan(15000);
     expect(tris.Wheels).toBe(4 * WHEEL.radialSegments * (WHEEL.profile.length - 1) * 2);
@@ -60,6 +61,53 @@ describe('board assembly (DESIGN.md 7.1 to 7.5)', () => {
     expect(xs[3]! - xs[2]!).toBeCloseTo(0.054, 6);
     const zs = [...new Set(centres.map(([, z]) => Math.round(z * 1e4) / 1e4))].sort((a, b) => a - b);
     expect(zs[1]! - zs[0]!).toBeCloseTo(0.041, 6);
+  });
+
+  it('seats the countersunk bolt heads on the grip along the local deck normal, rim 0.15 mm and top 0.7 mm proud (ADR-40)', () => {
+    for (const level of ['medium', 'high'] as const) {
+      const det = HARDWARE_DETAIL[level];
+      for (const sx of [1, -1])
+        for (const x of TRUCK.bolts.x)
+          for (const z of [TRUCK.bolts.z, -TRUCK.bolts.z]) {
+            const { origin, normal } = boltSeat(sx * x, z);
+            // The seat is the grip's top straight above the plan point.
+            const nrm = surfaceNormal(sx * x, z);
+            expect(origin[1]).toBeCloseTo(midSurface(sx * x, z) + DECK.thickness / 2 / nrm[1], 12);
+            expect(normal).toEqual(nrm);
+            // The concave tilts the heads off vertical across the deck, and they follow it.
+            expect(Math.abs(normal[2])).toBeGreaterThan(0.03);
+            const o = new Vector3(...origin), n = new Vector3(...normal), v = new Vector3();
+            const p = buildBoltHead(sx * x, z, det).getAttribute('position');
+            let top = -Infinity;
+            for (let i = 0; i < p.count; i++) {
+              v.fromBufferAttribute(p, i).sub(o);
+              const h = v.dot(n);
+              const r = v.addScaledVector(n, -h).length();
+              top = Math.max(top, h);
+              expect(r).toBeLessThanOrEqual(TRUCK.bolts.radius + 1e-7);
+              // At the rim the head is at most the rim height proud of the grip.
+              if (r > TRUCK.bolts.radius - 1e-7) expect(h).toBeLessThanOrEqual(TRUCK.bolts.rim + 1e-7);
+            }
+            expect(top).toBeCloseTo(TRUCK.bolts.top, 7);
+          }
+    }
+  });
+
+  it('darkens only the bolt heads in the steel group, with a vertex colour', () => {
+    const steel = board.parts.Truck_Steel;
+    const c = steel.getAttribute('color');
+    const p = steel.getAttribute('position');
+    let dark = 0;
+    for (let i = 0; i < c.count; i++) {
+      const isDark = c.getX(i) < 0.5;
+      // Dark vertices are the bolt heads: on top of the deck, every other steel part is under it.
+      expect(isDark).toBe(p.getY(i) > 0);
+      if (isDark) {
+        dark++;
+        expect([c.getX(i), c.getY(i), c.getZ(i)].map((n) => Number(n.toFixed(6)))).toEqual([...TRUCK.bolts.tint]);
+      } else expect([c.getX(i), c.getY(i), c.getZ(i)]).toEqual([1, 1, 1]);
+    }
+    expect(dark).toBeGreaterThan(8 * HARDWARE_DETAIL.medium.bolt);
   });
 
   it('keeps the axle (0.203 m end to end) inside the deck width and the wheels clear of the deck', () => {
@@ -144,20 +192,30 @@ describe('high-detail board (quality tiers, 2026-11-04)', () => {
     expect([...WHEEL_HIGH_BAND_KINDS].reverse()).toEqual(WHEEL_HIGH_BAND_KINDS);
   });
 
-  it('gives each bolt head a round socket that stays inside the head', () => {
-    const head = buildBoltHead(0.181, 0.0205, det);
-    const b = box(head);
-    expect(b.max.y - b.min.y).toBeCloseTo(TRUCK.bolts.height, 6);
-    expect(b.max.x - b.min.x).toBeCloseTo(2 * TRUCK.bolts.radius, 4);
-    // Socket floor vertices sit below the head's top face, inside the socket radius.
+  it('gives each countersunk head a hex socket whose floor stays above the grip', () => {
+    const x = 0.181, z = 0.0205;
+    const head = buildBoltHead(x, z, det);
+    const { origin, normal } = boltSeat(x, z);
+    const o = new Vector3(...origin), n = new Vector3(...normal);
     const p = head.getAttribute('position');
-    let floor = 0;
+    const v = new Vector3();
+    // Floor vertices: at the floor height along the normal, inside the hexagon's corner radius.
+    const floorAngles = new Set<number>();
     for (let i = 0; i < p.count; i++) {
-      const r = Math.hypot(p.getX(i) - 0.181, p.getZ(i) - 0.0205);
-      const y = p.getY(i) - TRUCK.bolts.base;
-      if (Math.abs(y - (TRUCK.bolts.height - det.boltSocket!.depth)) < 1e-7 && r <= det.boltSocket!.radius + 1e-7) floor++;
+      v.fromBufferAttribute(p, i).sub(o);
+      const h = v.dot(n);
+      const r = v.addScaledVector(n, -h).length();
+      if (Math.abs(h - det.boltHex!.floor) < 1e-7 && r > 1e-6) {
+        expect(r).toBeGreaterThanOrEqual(det.boltHex!.apothem - 1e-7);
+        expect(r).toBeLessThanOrEqual(det.boltHex!.apothem / Math.cos(Math.PI / 6) + 1e-7);
+        if (Math.abs(r - det.boltHex!.apothem / Math.cos(Math.PI / 6)) < 1e-7) floorAngles.add(Math.round(Math.atan2(v.x, v.z) * 1e4));
+      }
     }
-    expect(floor).toBeGreaterThan(0);
+    // Six corners, and the floor is above the grip (the deck would hide a socket sunk into it).
+    expect(floorAngles.size).toBe(6);
+    expect(det.boltHex!.floor).toBeGreaterThan(0);
+    expect(det.boltHex!.floor).toBeLessThan(TRUCK.bolts.top);
+    expect(det.bolt % 6).toBe(0);
     expect(buildBolts(det)).toHaveLength(8);
   });
 

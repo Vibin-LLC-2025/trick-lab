@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3, type BufferGeometry } from 'three';
 import { buildBoard } from './board';
-import { buildTruck, cylinderOnAxis } from './hardware';
+import { buildHangerBody, buildTruck, cylinderOnAxis, hangerSection } from './hardware';
 import { HARDWARE_DETAIL, TRUCK, type DetailLevel, type V3 } from './spec';
 
 /** Triangles with less area than this (m^2) have no reliable winding and are skipped. */
@@ -150,5 +150,54 @@ describe('truck winding (both trucks, both detail levels)', () => {
       expect(w.checked, node).toBeGreaterThan(0);
       expect(w.againstNormals, node).toBe(0);
     }
+  });
+});
+
+describe('hanger (truck pass, ADR-40)', () => {
+  const levels = Object.keys(HARDWARE_DETAIL) as DetailLevel[];
+  const A = TRUCK.axleHousing;
+  const topAt = (az: number, ring: number) => {
+    const radii = hangerSection(az, ring);
+    return Math.max(...radii.map((r, k) => r * Math.sin((k / ring) * Math.PI * 2)));
+  };
+
+  it('is tall at the yoke and tapers to the axle ends, with the bottom on the axle line', () => {
+    const H = TRUCK.hanger;
+    const ring = 40;
+    const tops = [0, H.yokeZ, H.blendZ, (H.blendZ + H.endZ) / 2, H.endZ].map((z) => topAt(z, ring));
+    for (let i = 1; i < tops.length; i++) expect(tops[i]!, `top at station ${i}`).toBeLessThan(tops[i - 1]! + 1e-9);
+    // The yoke reaches up to the bushing seat; the bar end is barely above the axle bulge.
+    expect(tops[0]! - tops[4]!).toBeGreaterThan(0.015);
+    expect(tops[4]!).toBeLessThan(TRUCK.axleBulge.radius);
+    // Straight down from the axle centre the section is the axle circle, tapering with the bar.
+    const down = Math.round((3 * ring) / 4);
+    expect(hangerSection(0, ring)[down]!).toBeCloseTo(H.axleRadius[0], 9);
+    expect(hangerSection(H.endZ, ring)[down]!).toBeCloseTo(H.axleRadius[1], 9);
+  });
+
+  it.each(levels)('%s: stays inside the hanger envelope that clearance.test.ts and boardVolume.ts read', (level) => {
+    for (const side of [1, -1] as const) {
+      const t = buildTruck(side, HARDWARE_DETAIL[level]);
+      for (const g of [...t.aluminium, ...t.bushing]) {
+        g.computeBoundingBox();
+        const b = g.boundingBox!;
+        expect(b.min.y).toBeGreaterThanOrEqual(A.center[1] - A.size[1] / 2 - 1e-7);
+        expect(b.max.y).toBeLessThanOrEqual(TRUCK.deckBottom + 1e-7);
+        expect(Math.max(-b.min.z, b.max.z)).toBeLessThanOrEqual(A.size[2] / 2 + 1e-7);
+      }
+      const body = buildHangerBody(side, HARDWARE_DETAIL[level]);
+      body.computeBoundingBox();
+      expect(body.boundingBox!.max.z).toBeCloseTo(TRUCK.hanger.endZ, 6);
+    }
+  });
+
+  it('puts the pivot cup insert in the bushing group, its lip below the aluminium socket', () => {
+    const t = buildTruck(1);
+    expect(t.bushing).toHaveLength(3);
+    const insert = t.bushing[2]!;
+    const radii = radiiAt(insert, TRUCK.pivotCup.center, TRUCK.pivotAxis, TRUCK.pivotCup.insert.from);
+    expect([...radii]).toEqual([Math.round(TRUCK.pivotCup.insert.radius * 1e7) / 1e7]);
+    expect(TRUCK.pivotCup.insert.from).toBeLessThan(TRUCK.pivotCup.socket.from);
+    expect(TRUCK.pivotCup.insert.radius).toBeLessThan(TRUCK.pivotCup.socket.radius);
   });
 });

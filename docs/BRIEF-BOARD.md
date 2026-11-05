@@ -22,8 +22,11 @@ not an artist pipeline from Blender.
 
 - Deck: 8.0 in wide (0.2032), 31.75 in long (0.8065). Popsicle outline,
   both ends rounded (nose slightly longer and a touch steeper than tail).
-  Wheelbase (inner truck holes) 14.25 in (0.362). Nose about 7.0 in
-  (0.178), tail about 6.5 in (0.165), measured from the inner bolt holes.
+  Wheelbase (inner truck holes) 14.25 in (0.362). Nose about 6.9 in
+  (0.1745), tail about 6.4 in (0.162), measured from the outer bolt holes
+  to the tips (corrected 2026-11-05: this line said "about 7.0 and 6.5 in
+  from the inner holes", which would be 0.2285 and 0.216; the mesh did not
+  change).
   Medium concave about 0.012 m deep across the width. Kicks rise in a smooth
   curve (no visible segments) to about 20 deg at the nose and 19 deg at the
   tail. Seven-ply maple, total thickness about 0.0115, rounded edges, the
