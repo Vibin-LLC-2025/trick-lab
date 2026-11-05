@@ -342,8 +342,73 @@ export const ART = {
     arrows: { first: 0.04, every: 0.08, minSpeed: 0.12, radius: 0.012, length: 0.032, radialSegments: 8 },
   },
   feet: {
-    sole: { color: '#e9e5db', roughness: 0.85, height: FOOT.soleHeight, length: FOOT.length, width: FOOT.width },
+    /**
+     * The primitive sole (ADR-39): the shoe's own footprint outline (src/asset
+     * shoe.ts, centred across so it spans the 0.105 width either way the shoe
+     * is mirrored) extruded to the sole height, with a `bevel` round its
+     * bottom edge and the foxing set back by `step.inset` above `step.at`.
+     */
+    sole: {
+      color: '#e9e5db',
+      roughness: 0.85,
+      height: FOOT.soleHeight,
+      length: FOOT.length,
+      width: FOOT.width,
+      intervals: 8,
+      bevel: 0.0015,
+      step: { at: 0.006, inset: 0.0012 },
+    },
+    /**
+     * The primitive upper's envelope (clearance.test.ts reads it): the
+     * silhouette below stays inside a box `height` tall over the sole, set
+     * `lengthInset` back from the toe (twice that short of the tip) and
+     * `widthInset` in from each side, plus the whole footprint up to the GLB
+     * toe cap height (0.034 above the sole).
+     */
     upper: { color: '#23262c', roughness: 0.9, height: 0.07, lengthInset: 0.02, widthInset: 0.012 },
+    /**
+     * The primitive upper's silhouette (ADR-39, Low and Medium): a coarse loft
+     * of superellipse arches over the footprint, `inset` in from the sole's
+     * top edge and tucked `tuck` into it. `height` is the arch above the sole
+     * top along the shoe (t 0 heel, 1 toe): a heel counter at the back, a
+     * collar notch over the ankle, the instep, the toe. `valley` sinks the
+     * top over the ankle opening and the tongue, `valleyWidth` its half angle.
+     */
+    silhouette: {
+      stations: 22,
+      sectionPoints: 14,
+      inset: 0.002,
+      tuck: 0.002,
+      height: [
+        [0, 0.044],
+        [0.05, 0.052],
+        [0.11, 0.05],
+        [0.24, 0.04],
+        [0.36, 0.046],
+        [0.46, 0.049],
+        [0.66, 0.041],
+        [0.8, 0.032],
+        [0.92, 0.021],
+        [1, 0.004],
+      ] as readonly (readonly [number, number])[],
+      exponent: [
+        [0, 3.0],
+        [0.15, 3.0],
+        [0.5, 2.3],
+        [1, 2.7],
+      ] as readonly (readonly [number, number])[],
+      valley: [
+        [0, 0],
+        [0.07, 0],
+        [0.13, 0.024],
+        [0.3, 0.022],
+        [0.42, 0.012],
+        [0.62, 0.004],
+        [0.68, 0],
+        [1, 0],
+      ] as readonly (readonly [number, number])[],
+      valleyWidth: 0.75,
+    },
   },
   /**
    * The rider's legs (ADR-37, 2026-11-05, DESIGN.md 8.8): art direction by

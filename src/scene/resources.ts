@@ -4,6 +4,8 @@
 // disposed resource on next use, so a remount is safe.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
+import { FOOTPRINT } from '../asset/shoeSpec';
 import { LEG } from '../sim/legs';
 import { ART } from './artDirection';
 
@@ -240,17 +242,87 @@ const footPathMaterial = () =>
       }`,
   });
 /**
- * One primitive shoe (right foot; the left is mirrored by the Feet component):
- * a sole slab with its bottom at y = 0 and an upper box on top, toe at +X.
- * Two geometries so sole and upper keep their own material.
+ * The primitive shoe (ADR-39; right foot, the left is mirrored by the Feet
+ * component; Low, Medium and the High fallback): the GLB shoe's footprint,
+ * centred across, as a light procedural silhouette. Toe at +X, sole bottom
+ * on y = 0. Two geometries so sole and upper keep their own material: two
+ * draw calls per shoe, as the slab and box were.
  */
-const shoeSole = mergedBoxes([{ size: [FT.sole.length, FT.sole.height, FT.sole.width], at: [0, FT.sole.height / 2, 0] }]);
-const shoeUpper = mergedBoxes([
-  {
-    size: [FT.sole.length - FT.upper.lengthInset * 2, FT.upper.height, FT.sole.width - FT.upper.widthInset * 2],
-    at: [-FT.upper.lengthInset, FT.sole.height + FT.upper.height / 2, 0],
-  },
-]);
+const SL = FT.silhouette;
+/** Footprint half width at x on one side, inset by d, shifted so the outline spans the width symmetrically. */
+const SHIFT = (FOOTPRINT.toe.lateral - FOOTPRINT.toe.medial) / 2;
+type P3 = [number, number, number];
+
+/** One closed outline ring at inset d and height y: lateral side heel to toe, medial back. */
+function shoeRing(d: number, y: number): P3[] {
+  const xs = footRingXs(d, FT.sole.intervals);
+  const n = xs.length;
+  const lateral = xs.map((x): P3 => [x, y, footHalfWidth(x, 'lateral', d) - SHIFT]);
+  const medial = xs
+    .slice(1, n - 1)
+    .reverse()
+    .map((x): P3 => [x, y, -footHalfWidth(x, 'medial', d) - SHIFT]);
+  return [...lateral, ...medial];
+}
+
+/** A flat cap over a ring (a fan from its centre), facing `up` (+1) or down (-1). */
+function ringCap(ring: P3[], up: 1 | -1) {
+  const cx = ring.reduce((s, p) => s + p[0], 0) / ring.length;
+  const cz = ring.reduce((s, p) => s + p[2], 0) / ring.length;
+  const centre: P3 = [cx, ring[0]![1], cz];
+  const rows = [ring.map((p) => ({ position: p })), ring.map(() => ({ position: centre }))];
+  return loftFacing(rows, { r: 0, p: 0, out: [0, up, 0] }, { closed: true }).geometry;
+}
+
+function primitiveSole() {
+  const B = FT.sole.bevel;
+  const S = FT.sole.step;
+  const H = FT.sole.height;
+  const rings = [shoeRing(B, 0), shoeRing(0, B), shoeRing(0, S.at), shoeRing(S.inset, S.at + S.inset), shoeRing(S.inset, H)];
+  const wall = loftFacing(
+    rings.map((r) => r.map((p) => ({ position: p }))),
+    { r: 2, p: Math.floor(rings[2]!.length / 4), out: [0, 0, 1] },
+    { closed: true },
+  ).geometry;
+  // The wall is one smooth surface; the caps keep their own normals, so the top and bottom edges stay crisp.
+  return mergedParts([wall, ringCap(rings[0]!, -1), ringCap(rings[rings.length - 1]!, 1)]);
+}
+
+function primitiveUpper() {
+  const N = SL.stations;
+  const M = SL.sectionPoints;
+  const base = FT.sole.height - SL.tuck;
+  const rows = Array.from({ length: N + 1 }, (_, i) => {
+    const t = (1 - Math.cos((Math.PI * i) / N)) / 2;
+    const x = -FT.sole.length / 2 + t * FT.sole.length;
+    const wl = footHalfWidth(x, 'lateral', SL.inset);
+    const wm = footHalfWidth(x, 'medial', SL.inset);
+    const a = (wl + wm) / 2;
+    const zc = (wl - wm) / 2 - SHIFT;
+    const h = lerpProfile(SL.height, t) + SL.tuck;
+    const p = lerpProfile(SL.exponent, t);
+    const valley = lerpProfile(SL.valley, t);
+    return Array.from({ length: M }, (_, j) => {
+      const phi = Math.PI * (1 - j / (M - 1));
+      const c = Math.cos(phi);
+      let y = base + h * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(c), p)), 1 / p);
+      const u = Math.abs(phi - Math.PI / 2) / SL.valleyWidth;
+      if (u < 1) y -= valley * (1 - u * u) ** 2;
+      return { position: [x, y, zc + a * c] as P3 };
+    });
+  });
+  const mid = Math.floor(N / 2);
+  return loftFacing(rows, { r: mid, p: Math.floor(M / 2), out: [0, 1, 0] }).geometry;
+}
+
+function mergedParts(parts: THREE.BufferGeometry[]) {
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((g) => g.dispose());
+  return merged;
+}
+
+const shoeSole = primitiveSole();
+const shoeUpper = primitiveUpper();
 
 const LG = ART.legs;
 

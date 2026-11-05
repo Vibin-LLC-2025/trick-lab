@@ -7,7 +7,7 @@ import { shoesFromModel } from './sceneTier';
 
 const ShoesModel = lazy(() => import('./ShoesModel').then((m) => ({ default: m.ShoesModel })));
 
-/** The primitive shoe: sole slab and upper box (Low, Medium, and the fallback on High). Two draw calls. */
+/** The primitive shoe: the footprint sole and the silhouette upper (Low, Medium, and the fallback on High; ADR-39). Two draw calls. */
 export function ShoePrimitive() {
   return (
     <group>
