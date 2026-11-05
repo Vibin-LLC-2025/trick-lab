@@ -20,7 +20,7 @@ import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURE
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES } from '../../src/asset/shoeSpec';
-import { solePixels, upperPixels } from '../../src/asset/shoeTextures';
+import { solePixels, upperPixels, upperTint } from '../../src/asset/shoeTextures';
 import {
   GRIP_NORMAL_SCALE,
   MATERIALS,
@@ -97,6 +97,8 @@ interface AssetSpec {
     normalMap?: { key: string; scale: number };
     /** glTF metallicRoughnessTexture (green is roughness, blue metalness). */
     roughnessMap?: string;
+    /** Render both faces (the shoe upper: its inside shows through the opening). */
+    doubleSided?: boolean;
   }[];
   parts: { node: string; material: string; geometry: BufferGeometry }[];
   droppedTriangles: number;
@@ -167,22 +169,25 @@ function boardSpec(level: DetailLevel): AssetSpec {
 function shoeSpec(): AssetSpec {
   const shoe = buildShoe();
   const T = SHOE_TEXTURES;
+  const upper = upperPixels();
   return {
     rootName: 'Shoe',
     extras: { units: 'metres', foot: 'right', source: 'procedural, scripts/build-board.ts', design: 'src/asset/shoeSpec.ts' },
     textures: [
       { key: 'sole', file: T.sole.file, png: png(solePixels()), wrap: T.sole.wrap },
-      { key: 'upper', file: T.upper.file, png: png(upperPixels()), wrap: T.upper.wrap },
+      { key: 'upper', file: T.upper.file, png: encodePng(upper.width, upper.height, 1, upper.grey), wrap: T.upper.wrap },
     ],
     materials: (Object.keys(SHOE_MATERIALS) as (keyof typeof SHOE_MATERIALS)[]).map((key) => {
       const M = SHOE_MATERIALS[key];
       return {
         key,
         name: M.name,
-        baseColor: linearFactor(M.color),
+        // The upper is a grey map tinted by the base colour factor (like the medium grip).
+        baseColor: key === 'upper' ? upperTint() : linearFactor(M.color),
         roughness: M.roughness,
         metalness: M.metalness,
         map: 'map' in M ? M.map : undefined,
+        doubleSided: 'doubleSided' in M ? M.doubleSided : undefined,
       };
     }),
     parts: SHOE_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: shoe.parts[p.node] })),
@@ -256,6 +261,7 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
   const materials = new Map<string, Material>();
   for (const M of spec.materials) {
     const m = doc.createMaterial(M.name).setBaseColorFactor(M.baseColor).setRoughnessFactor(M.roughness).setMetallicFactor(M.metalness);
+    if (M.doubleSided) m.setDoubleSided(true);
     if (M.map) {
       m.setBaseColorTexture(textures.get(M.map)!);
       configure(m.getBaseColorTextureInfo()!, M.map);

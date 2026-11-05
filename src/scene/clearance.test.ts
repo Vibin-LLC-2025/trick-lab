@@ -14,6 +14,7 @@ import { computeFlight, writePose, type Pose, type TrickInputs } from '../sim/fl
 import { PRESETS } from '../sim/tricks';
 import { ART } from './artDirection';
 import { setBoardRotation } from './boardPose';
+import { geo } from './resources';
 
 const HT = DECK.thickness / 2;
 const PB = ART.board;
@@ -230,5 +231,24 @@ describe('feet clear the board (ADR-29)', () => {
         expect(belowPad).toBeLessThan(1e-6);
       }
     }
+  });
+});
+
+describe('the shoe the clearance checks is the shoe the scene draws (ADR-38)', () => {
+  it('keeps every vertex of the primitive silhouette inside the sole and upper boxes above', () => {
+    const p = new Vector3();
+    const outside: string[] = [];
+    for (const [name, g] of [
+      ['sole', geo.shoeSole],
+      ['upper', geo.shoeUpper],
+    ] as const) {
+      const pos = g.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        p.fromBufferAttribute(pos, i);
+        // A negative tolerance counts points on a box face as inside.
+        if (!insideShoe(p, -1e-6)) outside.push(`${name} (${p.x.toFixed(4)}, ${p.y.toFixed(4)}, ${p.z.toFixed(4)})`);
+      }
+    }
+    expect(outside.slice(0, 5)).toEqual([]);
   });
 });
