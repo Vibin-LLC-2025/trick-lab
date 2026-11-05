@@ -4,6 +4,7 @@
 // disposed resource on next use, so a remount is safe.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { LEG } from '../sim/legs';
 import { ART } from './artDirection';
 
 type Box = { size: readonly [number, number, number]; at: readonly [number, number, number]; rotZ?: number };
@@ -173,9 +174,106 @@ const shoeUpper = mergedBoxes([
   },
 ]);
 
+const LG = ART.legs;
+
+/** A point of a leg segment's profile: radius at y along the segment, its colour and alpha. */
+type ProfilePoint = { r: number; y: number; color: string; alpha: number };
+
+/** A cap's quarter circle from the axis (y0 - r) out to radius r at y0 (`dir` -1), or from r at y0 to the axis at y0 + r (`dir` +1). */
+function cap(r: number, y0: number, dir: 1 | -1, color: string, alpha: number): ProfilePoint[] {
+  const n = LG.capSegments;
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const a = (Math.PI / 2) * (dir < 0 ? i / n - 1 : i / n);
+    return { r: r * Math.cos(a), y: y0 + r * Math.sin(a), color, alpha };
+  });
+}
+
+/**
+ * One rigid leg segment for the skinned leg meshes (ADR-37): a tapered
+ * capsule turned about +Y from the profile (y 0 at the proximal joint,
+ * increasing toward the distal one), every vertex weighted 1 to `bone`, the
+ * colour (and alpha, with `alpha`) from its profile point. Built once.
+ */
+function legSegment(profile: ProfilePoint[], bone: number, alpha: boolean) {
+  const g = new THREE.LatheGeometry(
+    profile.map((p) => new THREE.Vector2(p.r, p.y)),
+    LG.radialSegments,
+  );
+  const count = g.attributes.position!.count;
+  const size = alpha ? 4 : 3;
+  const colors = new Float32Array(count * size);
+  const skinIndex = new Uint16Array(count * 4);
+  const skinWeight = new Float32Array(count * 4);
+  const c = new THREE.Color();
+  for (let v = 0; v < count; v++) {
+    // LatheGeometry writes the profile once per radial step, in order.
+    const p = profile[v % profile.length]!;
+    c.set(p.color);
+    colors[v * size] = c.r;
+    colors[v * size + 1] = c.g;
+    colors[v * size + 2] = c.b;
+    if (alpha) colors[v * size + 3] = p.alpha;
+    skinIndex[v * 4] = bone;
+    skinWeight[v * 4] = 1;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, size));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
+  g.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+  return g;
+}
+
+/** The shank, knee (y 0) to ankle (y LEG.shank): trouser to the hem, then sock into the shoe. */
+function shankProfile(): ProfilePoint[] {
+  const S = LG.shank;
+  const L = LEG.shank;
+  const hem = L - LG.hemAbove;
+  return [
+    ...cap(S.knee, 0, -1, LG.trouser, 1),
+    { r: S.calf, y: S.calfAt * L, color: LG.trouser, alpha: 1 },
+    { r: S.hem, y: hem, color: LG.trouser, alpha: 1 },
+    // The hem: a step in to the sock at the same height.
+    { r: S.sock, y: hem, color: LG.sock, alpha: 1 },
+    { r: S.ankle, y: L, color: LG.sock, alpha: 1 },
+    ...cap(S.ankle, L, 1, LG.sock, 1).slice(1),
+  ];
+}
+
+/** The thigh, hip (y 0) to knee (y LEG.thigh), clear at the hip and opaque toward the knee. */
+function thighProfile(): ProfilePoint[] {
+  const T = LG.thigh;
+  const L = LEG.thigh;
+  const alpha = (y: number) => THREE.MathUtils.smoothstep(y, LG.fade.from * L, LG.fade.to * L);
+  const mid = [0.12, 0.3, 0.5, 0.75].map((k) => ({
+    r: THREE.MathUtils.lerp(T.hip, T.knee, k),
+    y: k * L,
+    color: LG.trouser,
+    alpha: alpha(k * L),
+  }));
+  return [...cap(T.hip, 0, -1, LG.trouser, 0), ...mid, ...cap(T.knee, L, 1, LG.trouser, 1)];
+}
+
+/** Bone order in the leg skeleton (Legs.tsx): front thigh, front shank, back thigh, back shank. */
+export const LEG_BONES = { frontThigh: 0, frontShank: 1, backThigh: 2, backShank: 3 } as const;
+
+function mergedLegs(parts: THREE.BufferGeometry[]) {
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((g) => g.dispose());
+  return merged;
+}
+
 export const geo = {
   shoeSole,
   shoeUpper,
+  /** Both shanks, opaque, one draw call (plus one shadow draw on High). */
+  legsSolid: mergedLegs([
+    legSegment(shankProfile(), LEG_BONES.frontShank, false),
+    legSegment(shankProfile(), LEG_BONES.backShank, false),
+  ]),
+  /** Both thighs, fading toward the hips, one draw call, no shadow. */
+  legsFade: mergedLegs([
+    legSegment(thighProfile(), LEG_BONES.frontThigh, true),
+    legSegment(thighProfile(), LEG_BONES.backThigh, true),
+  ]),
   deckWood: mergedBoxes(deckSegments(D.thickness, D.width, 0, 0)),
   deckGrip: mergedBoxes(deckSegments(D.skin.thickness, skinWidth, D.skin.inset * 2, skinOffset)),
   deckGraphic: mergedBoxes(deckSegments(D.skin.thickness, skinWidth, D.skin.inset * 2, -skinOffset)),
@@ -201,6 +299,11 @@ export const mat = {
   ground: std(G.color, G.roughness),
   shoeSole: std(FT.sole.color, FT.sole.roughness),
   shoeUpper: std(FT.upper.color, FT.upper.roughness),
+  // The legs (ADR-37): white times the vertex colours (trouser and sock).
+  legsSolid: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness }),
+  // The thighs: vertex alpha fades them toward the hips. No depth write, so a
+  // faded thigh never hides the board, the shoes or the other leg behind it.
+  legsFade: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness, transparent: true, depthWrite: false }),
   // uProgress is mutated by FlightDriver; never swapped.
   footPath: footPathMaterial(),
   // Opacity is mutated by FlightDriver as the board rises; never swapped.

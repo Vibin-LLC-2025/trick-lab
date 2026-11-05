@@ -346,6 +346,26 @@ describe('quality and feet (ui slice)', () => {
     localStorage.clear();
   });
 
+  it('shows the legs by default; hiding them persists and announces it, without logging (ADR-37)', () => {
+    localStorage.clear();
+    const store = makeStore();
+    expect(store.getState().legsVisible).toBe(true);
+    store.getState().toggleLegs();
+    expect(store.getState().legsVisible).toBe(false);
+    expect(localStorage.getItem('trick-lab.legs')).toBe('off');
+    expect(said(store)).toBe('Legs hidden.');
+    store.getState().toggleLegs();
+    expect(store.getState().legsVisible).toBe(true);
+    expect(localStorage.getItem('trick-lab.legs')).toBe('on');
+    expect(said(store)).toBe('Legs shown.');
+    expect(store.getState().events).toEqual([]);
+    localStorage.setItem('trick-lab.legs', 'off');
+    expect(makeStore().getState().legsVisible).toBe(false);
+    localStorage.setItem('trick-lab.legs', 'nonsense');
+    expect(makeStore().getState().legsVisible).toBe(true);
+    localStorage.clear();
+  });
+
   it('hides the foot trails by default; showing them persists and announces it, without logging', () => {
     localStorage.clear();
     const store = makeStore();
@@ -397,9 +417,11 @@ describe('quality and feet (ui slice)', () => {
     const store = makeStore();
     store.getState().setQuality('low');
     store.getState().toggleFeet();
+    store.getState().toggleLegs();
     store.getState().resetSession();
     expect(store.getState().quality).toBe('low');
     expect(store.getState().feetVisible).toBe(false);
+    expect(store.getState().legsVisible).toBe(false);
     localStorage.clear();
   });
 

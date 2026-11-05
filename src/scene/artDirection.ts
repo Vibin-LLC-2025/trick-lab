@@ -273,6 +273,36 @@ export const ART = {
     upper: { color: '#23262c', roughness: 0.9, height: 0.07, lengthInset: 0.02, widthInset: 0.012 },
   },
   /**
+   * The rider's legs (ADR-37, 2026-11-05, DESIGN.md 8.8): art direction by
+   * the implementation agent (opus), pending the design agent's own entry in
+   * DESIGN.md. Tapered capsules along each segment, lengths from LEG in
+   * src/sim/legs.ts. Dark grey trousers, slightly baggy (radii in metres, a
+   * thigh about 0.55 m round plus ease, a knee 0.38 m), and a light sock
+   * between the trouser hem and the shoe collar (the collar is about 1.4 cm
+   * above the ankle joint, the hem `hemAbove` above it, so about 3 cm of sock
+   * shows). The shank's knee end is narrower than the thigh's, so the thigh's
+   * knee cap covers it (equal radii z-fought in the browser, 2026-11-05). One
+   * roughness for both, vertex colours for the two cloths.
+   * `fade`: the thighs dissolve toward the hips (vertex alpha, baked), from
+   * opaque at `to` of the thigh's length from the hip to clear at `from`, so
+   * the legs never end in a severed cap where the torso would be. Tuned in
+   * the browser (2026-11-05): from 0.12 to 0.75 the rider view, which looks
+   * down the thigh from behind the hips, showed the faded tube flaring
+   * toward the camera as streaks beside each knee; from 0.35 to 0.85 only
+   * the knee end reads there, and the side view keeps the lower thigh.
+   */
+  legs: {
+    trouser: '#3b3e44',
+    sock: '#d9d5cb',
+    roughness: 0.95,
+    thigh: { hip: 0.085, knee: 0.062 },
+    shank: { knee: 0.054, calf: 0.056, calfAt: 0.3, hem: 0.054, sock: 0.036, ankle: 0.034 },
+    hemAbove: 0.045,
+    fade: { from: 0.35, to: 0.85 },
+    radialSegments: 16,
+    capSegments: 4,
+  },
+  /**
    * Medium and Low ground shadow (DESIGN.md 2, art pass 2026-11-04). Was a
    * 0.36 m disc, which from the rider's view 60 degrees up read as a big dark
    * circle. Now an elliptical footprint the size of the board (half extents

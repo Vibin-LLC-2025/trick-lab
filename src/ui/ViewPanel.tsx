@@ -117,8 +117,8 @@ function Toggle({
 }
 
 /**
- * Camera and shortcuts in the header, then what the scene shows (feet,
- * trails, motion cues), the theme and the perf badge as switches, then
+ * Camera and shortcuts in the header, then what the scene shows (feet, legs
+ * while the feet are shown, trails, motion cues), the theme and the perf badge as switches, then
  * stance and quality (DESIGN.md 9). Each is also reachable without a pointer.
  */
 export function ViewPanel() {
@@ -130,6 +130,8 @@ export function ViewPanel() {
   const setShortcutsOpen = useTrickStore((s) => s.setShortcutsOpen);
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const toggleFeet = useTrickStore((s) => s.toggleFeet);
+  const legsVisible = useTrickStore((s) => s.legsVisible);
+  const toggleLegs = useTrickStore((s) => s.toggleLegs);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const toggleFootPaths = useTrickStore((s) => s.toggleFootPaths);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
@@ -158,6 +160,8 @@ export function ViewPanel() {
       </div>
       <div className="view-panel__toggles">
         <Toggle label="Feet" name="Show feet" pressed={feetVisible} onClick={toggleFeet} />
+        {/* The legs stand in the shoes (ADR-37): no feet, nothing to show, so no switch. */}
+        {feetVisible && <Toggle label="Legs" name="Show legs" pressed={legsVisible} onClick={toggleLegs} />}
         <Toggle label="Foot trails" name="Show foot trails" pressed={footPathsVisible} onClick={toggleFootPaths} />
         <Toggle label="Motion cues" name="Show motion cues" pressed={motionCuesVisible} onClick={toggleMotionCues} />
         <Toggle label="Light theme" pressed={theme === 'light'} keys="t" onClick={toggleTheme} />

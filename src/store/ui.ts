@@ -9,6 +9,8 @@ export const QUALITY_KEY = 'trick-lab.quality';
 /** The pre-tier setting (ADR-15); read once so an earlier "Low" choice survives the upgrade. */
 export const LEGACY_DETAIL_KEY = 'trick-lab.board-detail';
 export const FEET_KEY = 'trick-lab.feet';
+/** The rider's legs (ADR-37). */
+export const LEGS_KEY = 'trick-lab.legs';
 /** Foot trails (the identifier still says paths; see types.ts). */
 export const PATHS_KEY = 'trick-lab.foot-trails';
 export const STANCE_KEY = 'trick-lab.stance';
@@ -58,6 +60,8 @@ export function readQuality(): { quality: Quality; qualityAuto: boolean } {
 }
 
 export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
+/** Legs are on until the student switches them off (ADR-37). */
+export const readLegsVisible = (): boolean => read(LEGS_KEY) !== 'off';
 /** Foot trails are off until the student switches them on. */
 export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 /** Motion cues are on until the student switches them off (ADR-26). */
@@ -99,6 +103,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     boardAssetFailed: false,
     sceneUnavailable: false,
     feetVisible: readFeetVisible(),
+    legsVisible: readLegsVisible(),
     footPathsVisible: readFootPathsVisible(),
     stance: readStance(),
     motionCuesVisible: readMotionCuesVisible(),
@@ -133,6 +138,12 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       save(FEET_KEY, feetVisible ? 'on' : 'off');
       set({ feetVisible });
       get().announce(feetVisible ? 'Feet shown.' : 'Feet hidden.');
+    },
+    toggleLegs: () => {
+      const legsVisible = !get().legsVisible;
+      save(LEGS_KEY, legsVisible ? 'on' : 'off');
+      set({ legsVisible });
+      get().announce(legsVisible ? 'Legs shown.' : 'Legs hidden.');
     },
 
     toggleFootPaths: () => {

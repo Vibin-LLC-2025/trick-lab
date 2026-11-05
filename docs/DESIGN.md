@@ -489,6 +489,20 @@ Fade: full before the pop; with a trick in the air they fade out over the first 
 
 Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no new geometry. A heelflip's front arrow bends away from the camera, off the toe-side corner of the nose; a frontside scoop's arc sweeps toward the toe side, still on the nose side of the back shoe so the shoe does not hide it, by the same length as the backside one (9 cm for the frontside shove-it preset). A hardflip shows the kickflip front arrow with the frontside arc.
 
+### 8.8 Legs (2026-11-05, ADR-37)
+
+Written by the implementation agent (opus) for the legs, pending the design agent's own pass; `ART.legs` in artDirection.ts is sourced from here. (8.6 is the Stance control, so the legs take the next free number.)
+
+The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Shown by default with the feet; the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
+
+| Part | Shape | Colour (sRGB) |
+| --- | --- | --- |
+| Thigh | Tapered capsule, hip radius 0.085 to knee 0.062 (slightly baggy trousers); opaque from the knee to 0.85 of its length, clear from 0.35 toward the hip (vertex alpha, no depth write) | trouser `#3b3e44` |
+| Shank | Tapered capsule, knee 0.054 (inside the thigh's knee cap), calf 0.056 at 0.3 of its length, hem 0.054 | trouser `#3b3e44` |
+| Sock | From the hem, 4.5 cm above the ankle joint, a step in to 0.036, 0.034 at the ankle, capped inside the shoe (about 3 cm shows above the collar) | sock `#d9d5cb` |
+
+One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are the rider's (`LEG` in src/sim/legs.ts: thigh 0.43, shank 0.42). Two draw calls for both legs on every tier; on High the shanks cast shadows like the shoes and the thighs do not. From the rider's view the thighs point toward the camera and stay behind the knees, so the board and the shoes stay readable at the catch; the low side view shows the crouch, the tuck, the reach for the catch and the bent knees at the landing. `#scene-description` adds one sentence after the feet: "Legs crouched, knees bent, ready to pop.", "Knees tucked up in the air.", "Legs reach down to catch the board." (a bail: "Legs reach down beside the board."), "Knees bent, absorbing the landing.".
+
 ## 9. UI redesign (2026-11-04)
 
 Written by the design agent (ADR-28). The owner found the columns bulky, without hierarchy, and full of template tells, such as a Foot motion step drawn as a card with a yellow left border. This pass keeps every control, accessible name, announcement and the token palette, and changes how the columns look and are grouped. The `--scene-bg` values are unchanged.

@@ -174,6 +174,26 @@ describe('feet in words', () => {
   });
 });
 
+// ADR-37 (2026-11-05): one sentence about the legs, only with the feet.
+describe('the legs in the scene description', () => {
+  const base = { pop: 0.35, flick: 1.9, scoop: 0, result: null, feetVisible: true };
+  const landed = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });
+
+  it('says crouched, tucked, catching and absorbing after the feet', () => {
+    const idle = describeScene({ ...base, status: 'idle', progress: 0, flight: null });
+    expect(idle).toContain('Legs crouched, knees bent, ready to pop.');
+    expect(idle.indexOf('Legs crouched')).toBeGreaterThan(idle.indexOf('Front foot'));
+    expect(describeScene({ ...base, status: 'playing', progress: 0.4, flight: landed })).toContain('Knees tucked up in the air.');
+    expect(describeScene({ ...base, status: 'paused', progress: 0.7, flight: landed })).toContain('Legs reach down to catch the board.');
+    expect(describeScene({ ...base, status: 'done', progress: 1, flight: landed })).toContain('Knees bent, absorbing the landing.');
+  });
+
+  it('says nothing about legs when they or the feet are hidden', () => {
+    expect(describeScene({ ...base, legsVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
+    expect(describeScene({ ...base, feetVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
+  });
+});
+
 describe('the last trick in the scene description (audit fix, 2026-11-04)', () => {
   const base = { pop: 0.35, flick: 1.9, scoop: 0, feetVisible: true };
   const flight = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });

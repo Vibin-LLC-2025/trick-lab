@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { MathUtils, type Group, type Mesh } from 'three';
+import { MathUtils, Vector3, type Bone, type Group, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
+import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
@@ -10,6 +11,7 @@ import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
 import { newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
+import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
 import { geo, mat } from './resources';
 
@@ -38,14 +40,29 @@ function applyFoot(g: Group | null, f: FootPose, edge: 1 | -1) {
   g.rotation.set(f.roll * edge * D2R, f.yaw * D2R, f.pitch * D2R, 'YZX');
 }
 
+/** A leg bone's own axis, and the segment direction written into a reused vector (no allocation). */
+const BONE_AXIS = new Vector3(0, 1, 0);
+const segmentDir = new Vector3();
+
 /**
- * The only per-frame writer of the board and feet poses. While playing, the
- * flight clock (flightClock.ts) advances the store's live playhead by the
+ * Applies a leg segment (board rest frame, src/sim/legs.ts) to its bone: the
+ * proximal joint, and the bone's +Y turned onto the segment's direction. The
+ * capsule is round, so the twist about its own axis is left to
+ * setFromUnitVectors.
+ */
+function applySegment(b: Bone, s: Segment) {
+  b.position.set(s.x, REST_Y + s.y, s.z);
+  b.quaternion.setFromUnitVectors(BONE_AXIS, segmentDir.set(s.dx, s.dy, s.dz));
+}
+
+/**
+ * The only per-frame writer of the board, feet and leg poses. While playing,
+ * the flight clock (flightClock.ts) advances the store's live playhead by the
  * frame delta, every frame and without allocating; this callback writes the
  * poses into refs (no React state per frame), applies them to the Board
- * group, the two shoe groups, the ground shadow, the foot paths' playhead and
- * the motion cues' fade, and commits progress to the store at most 10 times a
- * second for the timeline. When progress reaches 1 it calls `land()`, which
+ * group, the two shoe groups, the four leg bones (ADR-37), the ground shadow,
+ * the foot paths' playhead and the motion cues' fade, and commits progress
+ * to the store at most 10 times a second for the timeline. When progress reaches 1 it calls `land()`, which
  * resolves the trick and sends the Canvas back to demand mode. When not
  * playing (idle, paused, done, scrubbing) it poses everything from the
  * store's progress on demand frames; the feet follow the live inputs while
@@ -60,8 +77,11 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const shadow = useRef<Mesh>(null);
   const pose = useRef<Pose>({ y: 0, roll: 0, yaw: 0, pitch: 0 });
   const feet = useRef<FeetPose>(newFeetPose());
+  const legs = useRef<LegRig>(null);
+  const legsPose = useRef<LegsPose>(newLegsPose());
   const clock = useRef(newFlightClock());
   const feetVisible = useTrickStore((s) => s.feetVisible);
+  const legsVisible = useTrickStore((s) => s.legsVisible);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
 
@@ -91,6 +111,15 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const regular = s.stance === 'regular';
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
+      // The legs (ADR-37) reach the shoes just posed; mounted only with the feet.
+      const rig = legs.current;
+      if (rig) {
+        const l = writeLegsPose(legsPose.current, f, s.flight, c.progress, s, s.stance);
+        applySegment(rig.frontThigh, l.front.thigh);
+        applySegment(rig.frontShank, l.front.shank);
+        applySegment(rig.backThigh, l.back.thigh);
+        applySegment(rig.backShank, l.back.shank);
+      }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
     pathProgress.value = s.flight ? c.progress : 0;
@@ -125,6 +154,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         {motionCuesVisible && <MotionCues />}
       </Board>
       {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
+      {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
       {footPathsVisible && <FootPaths />}
     </>
   );

@@ -15,6 +15,7 @@ import {
   type Stance,
 } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
+import { describeLegs } from './legs';
 import {
   directionWord,
   FLIP_WORDS,
@@ -313,6 +314,8 @@ export function describeScene(s: {
   flick: number;
   scoop: number;
   feetVisible?: boolean;
+  /** Shown when left out, and only with the feet (ADR-37). */
+  legsVisible?: boolean;
   /** Goofy when left out (ADR-25). */
   stance?: Stance;
 }): string {
@@ -327,8 +330,9 @@ export function describeScene(s: {
             : `Skateboard frozen at ${Math.round(s.progress * 100)} percent of the flight.`
           : 'Skateboard resting flat on a concrete pad, grip side up.';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
+  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
   const last = s.result ? `Last trick: ${describeResult(s.result)}` : s.flight ? 'Waiting for this trick to land.' : 'No trick popped yet.';
-  return `${board}${feet} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
+  return `${board}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

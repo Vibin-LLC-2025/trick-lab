@@ -110,6 +110,8 @@ export interface UiSlice {
   sceneUnavailable: boolean;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
+  /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs, default on. Not logged, not exported. */
+  legsVisible: boolean;
   /** Foot trails: the route of each shoe through the trick, with arrowheads (DESIGN.md 8.5). Persisted under trick-lab.foot-trails, default off. Not logged. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   footPathsVisible: boolean;
   /** Which foot leads (ADR-25). Persisted under trick-lab.stance, default goofy. Not logged, not reset, not exported. */
@@ -123,6 +125,8 @@ export interface UiSlice {
   resetView: () => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
+  /** Shows or hides the legs, persisted and announced. */
+  toggleLegs: () => void;
   /** Shows or hides the foot trails. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   toggleFootPaths: () => void;
   /** Switches goofy and regular, persisted and announced; a no-op if unchanged. */
