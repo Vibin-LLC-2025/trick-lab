@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import { isStance } from '../sim/feet';
 import { inFlight } from './playback';
 import { detectQuality, isQuality } from './quality';
-import type { Quality, Stance, Theme, TrickState, UiSlice } from './types';
+import type { CameraView, Quality, Stance, Theme, TrickState, UiSlice } from './types';
 
 export const THEME_KEY = 'trick-lab.theme';
 export const QUALITY_KEY = 'trick-lab.quality';
@@ -15,6 +15,8 @@ export const LEGS_KEY = 'trick-lab.legs';
 export const PATHS_KEY = 'trick-lab.foot-trails';
 export const STANCE_KEY = 'trick-lab.stance';
 export const CUES_KEY = 'trick-lab.motion-cues';
+/** The camera preset (ADR-38). */
+export const CAMERA_VIEW_KEY = 'trick-lab.camera-view';
 
 /** index.html applies the saved theme before first paint; the store starts from what it set. */
 function readTheme(): Theme {
@@ -72,6 +74,19 @@ export const readStance = (): Stance => {
   return isStance(saved) ? saved : 'goofy';
 };
 
+export const CAMERA_VIEWS: readonly CameraView[] = ['rider', 'detail'];
+export const isCameraView = (v: unknown): v is CameraView => CAMERA_VIEWS.includes(v as CameraView);
+/** The rider's view unless the detail view was saved (ADR-38). */
+export const readCameraView = (): CameraView => {
+  const saved = read(CAMERA_VIEW_KEY);
+  return isCameraView(saved) ? saved : 'rider';
+};
+
+export const CAMERA_VIEW_ANNOUNCEMENT: Record<CameraView, string> = {
+  rider: "Rider's view: looking down from above the heels.",
+  detail: 'Detail view: low three-quarter view from the heel side.',
+};
+
 export const STANCE_ANNOUNCEMENT: Record<Stance, string> = {
   goofy: 'Goofy stance: right foot forward, nose on the right.',
   regular: 'Regular stance: left foot forward, nose on the left.',
@@ -99,6 +114,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     announcement: { message: '', nonce: 0 },
     focusRequest: null,
     viewResetNonce: 0,
+    cameraView: readCameraView(),
     ...readQuality(),
     boardAssetFailed: false,
     sceneUnavailable: false,
@@ -126,6 +142,12 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     resetView: () => {
       set((s) => ({ viewResetNonce: s.viewResetNonce + 1 }));
       get().announce('Camera view reset.');
+    },
+    setCameraView: (cameraView) => {
+      if (get().cameraView === cameraView) return;
+      save(CAMERA_VIEW_KEY, cameraView);
+      set({ cameraView });
+      get().announce(CAMERA_VIEW_ANNOUNCEMENT[cameraView]);
     },
     setQuality: (quality) => {
       if (get().quality === quality && !get().qualityAuto) return;

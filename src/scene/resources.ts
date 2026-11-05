@@ -80,26 +80,30 @@ function groundPlane() {
 
 const S = ART.shadow;
 
+/** Instances in the ground shadow mesh (ADR-38): board soft, board contact, front foot, back foot. */
+export const SHADOW_INSTANCES = 4;
+
 /**
- * Medium and Low ground shadow (DESIGN.md 2): a flat ellipse the size of the
- * board, long axis X, in the pad plane. A centre vertex and two rings: alpha 1
- * out to `core` of the radius, 0 at the rim, so the edge is soft. White
- * vertex colours with alpha; the material carries the colour and FlightDriver
- * the overall opacity.
+ * Medium and Low ground shadows (ADR-38, DESIGN.md 2): one unit soft disc in
+ * the pad plane, scaled per instance into each footprint (FlightDriver writes
+ * the instance matrices). A centre vertex and two rings: `aAlpha` 1 out to
+ * `core` of the radius, 0 at the rim, so the edge is soft. `aOpacity` is
+ * per instance, written by FlightDriver every frame (four numbers, no
+ * allocation); the material carries the colour.
  */
 function shadowFootprint() {
   const n = S.segments;
   const pos = new Float32Array((1 + 2 * n) * 3);
-  const col = new Float32Array((1 + 2 * n) * 4).fill(1);
+  const alpha = new Float32Array(1 + 2 * n).fill(1);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
-    const x = Math.cos(a) * S.halfLength;
-    const z = Math.sin(a) * S.halfWidth;
+    const x = Math.cos(a);
+    const z = Math.sin(a);
     const inner = 1 + i;
     const outer = 1 + n + i;
     pos.set([x * S.core, 0, z * S.core], inner * 3);
     pos.set([x, 0, z], outer * 3);
-    col[outer * 4 + 3] = 0;
+    alpha[outer] = 0;
   }
   const index: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -110,10 +114,84 @@ function shadowFootprint() {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+  g.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1));
+  const opacity = new THREE.InstancedBufferAttribute(new Float32Array(SHADOW_INSTANCES), 1);
+  opacity.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('aOpacity', opacity);
+  // Which instances are feet (2 and 3): their fragments draw only what they add over the board.
+  g.setAttribute('aFoot', new THREE.InstancedBufferAttribute(new Float32Array([0, 0, 1, 1]), 1));
   g.setIndex(index);
   return g;
 }
+
+/**
+ * The ground shadows' material: the shadow colour at the vertex alpha times
+ * the instance's opacity. Same blending as the old MeshBasicMaterial
+ * (transparent, no depth write), tone mapped and converted to the output
+ * colour space like it; no fog (the shadows stay under the board, well
+ * inside ART.fog.near).
+ * The union (ADR-38): a foot's fragment evaluates the board's soft and
+ * contact ellipses at its ground point (uniforms FlightDriver writes each
+ * frame: centre x z and cos, sin of the yaw; both half extents; both
+ * opacities) and draws only (foot - board) / (1 - board), so blended over the
+ * board the pad shows max(board, foot), never the two stacked.
+ * groundShadow.ts mirrors this for the tests (footDrawnAlpha).
+ */
+const shadowMaterial = () =>
+  new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(S.color) },
+      uCore: { value: S.core },
+      uBoard: { value: new THREE.Vector4(0, 0, 1, 0) },
+      uBoardSize: { value: new THREE.Vector4(S.halfLength, S.halfWidth, S.halfLength, S.halfWidth) },
+      uBoardOpacity: { value: new THREE.Vector2(0, 0) },
+    },
+    transparent: true,
+    depthWrite: false,
+    vertexShader: /* glsl */ `
+      attribute float aAlpha;
+      attribute float aOpacity;
+      attribute float aFoot;
+      varying float vAlpha;
+      varying float vFoot;
+      varying vec2 vGround;
+      void main() {
+        vAlpha = aAlpha * aOpacity;
+        vFoot = aFoot;
+        vec4 p = vec4(position, 1.0);
+        #ifdef USE_INSTANCING
+          p = instanceMatrix * p;
+        #endif
+        vGround = (modelMatrix * p).xz;
+        gl_Position = projectionMatrix * modelViewMatrix * p;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uCore;
+      uniform vec4 uBoard;
+      uniform vec4 uBoardSize;
+      uniform vec2 uBoardOpacity;
+      varying float vAlpha;
+      varying float vFoot;
+      varying vec2 vGround;
+      float disc(float r) {
+        return r <= uCore ? 1.0 : clamp((1.0 - r) / (1.0 - uCore), 0.0, 1.0);
+      }
+      void main() {
+        float a = vAlpha;
+        if (vFoot > 0.5) {
+          vec2 d = vGround - uBoard.xy;
+          vec2 l = vec2(d.x * uBoard.z - d.y * uBoard.w, d.x * uBoard.w + d.y * uBoard.z);
+          float soft = uBoardOpacity.x * disc(length(l / uBoardSize.xy));
+          float contact = uBoardOpacity.y * disc(length(l / uBoardSize.zw));
+          float b = 1.0 - (1.0 - soft) * (1.0 - contact);
+          a = max(a - b, 0.0) / max(1.0 - b, 1e-4);
+        }
+        gl_FragColor = vec4(uColor, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
 
 const FT = ART.feet;
 const FP = ART.footPaths;
@@ -306,14 +384,8 @@ export const mat = {
   legsFade: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness, transparent: true, depthWrite: false }),
   // uProgress is mutated by FlightDriver; never swapped.
   footPath: footPathMaterial(),
-  // Opacity is mutated by FlightDriver as the board rises; never swapped.
-  shadow: new THREE.MeshBasicMaterial({
-    color: S.color,
-    vertexColors: true,
-    transparent: true,
-    opacity: S.opacity.ground,
-    depthWrite: false,
-  }),
+  // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.
+  shadow: shadowMaterial(),
   // Motion cues (motionCueGeometry.ts, DESIGN.md 8.7): vertex colour per
   // foot, unlit and not tone mapped so they match the trails and the legend.
   // Pulled toward the camera in depth so they never z-fight the grip; no depth

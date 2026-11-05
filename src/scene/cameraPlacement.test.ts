@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Vector3 } from 'three';
 import { createTrickStore } from '../store';
 import { ART } from './artDirection';
@@ -83,5 +83,82 @@ describe('camera placement (ADR-18, ADR-23)', () => {
     expect(takeReset(t, 4)).toBe(false);
     expect(takeReset(t, 5)).toBe(true);
     expect(takeReset(t, 5)).toBe(false);
+  });
+
+  it('takeReset also reports each new preset once, and a mount starts at the rider view (ADR-38)', () => {
+    const t = newResetTracker(4);
+    expect(takeReset(t, 4, 'rider')).toBe(false);
+    expect(takeReset(t, 4, 'detail')).toBe(true);
+    expect(takeReset(t, 4, 'detail')).toBe(false);
+    expect(takeReset(t, 4)).toBe(false);
+    expect(takeReset(t, 5)).toBe(true);
+  });
+});
+
+describe('camera presets (ADR-38)', () => {
+  // The preset is persisted; each test starts from a fresh store and storage.
+  beforeEach(() => localStorage.clear());
+  const PRESET = {
+    rider: { target: TARGET, home: HOME },
+    detail: { target: new Vector3(...C.views.detail.target), home: new Vector3(...C.views.detail.position) },
+  };
+  const dir = (p: { target: Vector3; home: Vector3 }) => p.home.clone().sub(p.target).normalize();
+
+  /** SceneCamera's effect with the preset from the real store, as FitAndReset runs it. */
+  function mountWithView(store = createTrickStore(() => 0)) {
+    const camera = new PerspectiveCamera(C.fov, 1.5, C.near, C.far);
+    // The Canvas builds its camera at the rider's view whatever the preset.
+    camera.position.copy(HOME);
+    const controlsTarget = TARGET.clone();
+    const resets = newResetTracker(store.getState().viewResetNonce);
+    const run = (distance: number) => {
+      const view = store.getState().cameraView;
+      const P = PRESET[view];
+      placeCamera(camera, controlsTarget, { ...P, distance }, takeReset(resets, store.getState().viewResetNonce, view));
+    };
+    const along = (p: { target: Vector3; home: Vector3 }) => camera.position.clone().sub(p.target).normalize().angleTo(dir(p));
+    return { store, camera, controlsTarget, run, along };
+  }
+
+  it('choosing the detail preset snaps to it, with its target; a resize then keeps an orbit', () => {
+    const { store, camera, controlsTarget, run, along } = mountWithView();
+    run(2.5);
+    expect(along(PRESET.rider)).toBeCloseTo(0, 9);
+    store.getState().setCameraView('detail');
+    run(2.9);
+    expect(along(PRESET.detail)).toBeCloseTo(0, 9);
+    expect(camera.position.distanceTo(PRESET.detail.target)).toBeCloseTo(2.9, 9);
+    expect(controlsTarget.equals(PRESET.detail.target)).toBe(true);
+    orbit(camera);
+    const orbited = camera.position.clone().sub(PRESET.detail.target).normalize();
+    run(3.2);
+    expect(camera.position.clone().sub(PRESET.detail.target).normalize().angleTo(orbited)).toBeCloseTo(0, 9);
+  });
+
+  it('Reset view returns to the chosen preset, not to the rider view', () => {
+    const { store, camera, run, along } = mountWithView();
+    store.getState().setCameraView('detail');
+    run(2.9);
+    orbit(camera);
+    expect(along(PRESET.detail)).toBeGreaterThan(0.3);
+    store.getState().resetView();
+    run(2.9);
+    expect(along(PRESET.detail)).toBeCloseTo(0, 9);
+    // And back to the rider preset by choosing it.
+    store.getState().setCameraView('rider');
+    run(2.4);
+    expect(along(PRESET.rider)).toBeCloseTo(0, 9);
+  });
+
+  it('a camera mounted with the detail preset saved snaps to it once, then keeps an orbit', () => {
+    const store = createTrickStore(() => 0);
+    store.getState().setCameraView('detail');
+    const { camera, run, along } = mountWithView(store);
+    run(2.9);
+    expect(along(PRESET.detail)).toBeCloseTo(0, 9);
+    orbit(camera);
+    const orbited = camera.position.clone().sub(PRESET.detail.target).normalize();
+    run(2.9);
+    expect(camera.position.clone().sub(PRESET.detail.target).normalize().angleTo(orbited)).toBeCloseTo(0, 9);
   });
 });

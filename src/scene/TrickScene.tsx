@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Canvas, useThree, type RootState } from '@react-three/fiber';
-import { PCFSoftShadowMap, type DirectionalLight } from 'three';
+import { PCFShadowMap, type DirectionalLight } from 'three';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
+import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
@@ -22,9 +23,17 @@ function InvalidateOnStoreChange() {
   return null;
 }
 
+/**
+ * The key light's shadow camera, fitted once to every caster and its shadow
+ * on the pad as the light sees them (ADR-38, cameraFit.ts). The light never
+ * moves, so this is a constant.
+ */
+const SHADOW_CAMERA = shadowFrustum(ART.lights.directional.position, ART.lights.directional.target, ART.shadowMap.casters, ART.shadowMap.pad);
+
 function Lights({ shadows }: { shadows: boolean }) {
   const L = ART.lights;
   const S = ART.shadowMap;
+  const F = SHADOW_CAMERA;
   const [sun, setSun] = useState<DirectionalLight | null>(null);
   return (
     <>
@@ -39,12 +48,13 @@ function Lights({ shadows }: { shadows: boolean }) {
         shadow-mapSize={[S.size, S.size]}
         shadow-bias={S.bias}
         shadow-normalBias={S.normalBias}
-        shadow-camera-left={-S.bounds}
-        shadow-camera-right={S.bounds}
-        shadow-camera-top={S.bounds}
-        shadow-camera-bottom={-S.bounds}
-        shadow-camera-near={S.near}
-        shadow-camera-far={S.far}
+        shadow-radius={S.radius}
+        shadow-camera-left={F.left}
+        shadow-camera-right={F.right}
+        shadow-camera-top={F.top}
+        shadow-camera-bottom={F.bottom}
+        shadow-camera-near={F.near}
+        shadow-camera-far={F.far}
       />
       {/* The light's target must be in the scene graph for its matrix to update. */}
       {sun && <primitive object={sun.target} position={[...L.directional.target]} />}
@@ -88,7 +98,8 @@ export default function TrickScene() {
       aria-hidden="true"
       dpr={[...Q.dpr]}
       frameloop={playing ? 'always' : 'demand'}
-      shadows={Q.shadows ? { type: PCFSoftShadowMap } : false}
+      // PCF, not the deprecated PCFSoft (ADR-38); softness is ART.shadowMap.radius.
+      shadows={Q.shadows ? { type: PCFShadowMap } : false}
       // R3F 9 passes the renderer options to the constructor and then applies
       // them as properties, so toneMappingExposure takes effect (checked in the
       // browser by the integration pass, 2026-11-04).

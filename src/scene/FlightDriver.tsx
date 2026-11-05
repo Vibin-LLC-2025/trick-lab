@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { MathUtils, Vector3, type Bone, type Group, type Mesh } from 'three';
+import { Matrix4, MathUtils, Vector3, type Bone, type Vector2, type Vector4, type Group, type InstancedBufferAttribute, type InstancedMesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
@@ -9,11 +9,12 @@ import { ART } from './artDirection';
 import { Board } from './Board';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
+import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
 import { newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
-import { geo, mat } from './resources';
+import { geo, mat, SHADOW_INSTANCES } from './resources';
 
 const S = ART.shadow;
 const CUES = ART.motionCues;
@@ -23,6 +24,29 @@ const D2R = MathUtils.DEG2RAD;
 const head = useTrickStore.playhead;
 /** The foot paths' playhead, a shared uniform (resources.ts). */
 const pathProgress = mat.footPath.uniforms.uProgress!;
+/** The ground shadows' per-instance opacity (resources.ts, ADR-38). */
+const shadowOpacity = geo.shadow.getAttribute('aOpacity') as InstancedBufferAttribute;
+
+/** Reused for every ground shadow instance (no allocation). */
+const footprintMatrix = new Matrix4();
+const footprintScale = new Vector3();
+
+/** Writes one footprint (groundShadow.ts) into instance `i`: the unit disc turned, stretched and placed on the pad. */
+function applyFootprint(mesh: InstancedMesh, i: number, f: Footprint) {
+  footprintMatrix.makeRotationY(f.yaw);
+  footprintMatrix.scale(footprintScale.set(f.halfLength, 1, f.halfWidth));
+  footprintMatrix.setPosition(f.x, S.y, f.z);
+  mesh.setMatrixAt(i, footprintMatrix);
+  shadowOpacity.setX(i, f.opacity);
+}
+
+/** The board's two footprints for the feet's union in the shadow shader (resources.ts); the uniform objects are mutated, never replaced. */
+const shadowUniforms = mat.shadow.uniforms;
+function applyBoardUniforms(board: Footprint, contact: Footprint) {
+  (shadowUniforms.uBoard!.value as Vector4).set(board.x, board.z, Math.cos(board.yaw), Math.sin(board.yaw));
+  (shadowUniforms.uBoardSize!.value as Vector4).set(board.halfLength, board.halfWidth, contact.halfLength, contact.halfWidth);
+  (shadowUniforms.uBoardOpacity!.value as Vector2).set(board.opacity, contact.opacity);
+}
 
 /**
  * Applies a foot pose (board rest frame, src/sim/feet.ts) to a shoe group.
@@ -60,7 +84,7 @@ function applySegment(b: Bone, s: Segment) {
  * the flight clock (flightClock.ts) advances the store's live playhead by the
  * frame delta, every frame and without allocating; this callback writes the
  * poses into refs (no React state per frame), applies them to the Board
- * group, the two shoe groups, the four leg bones (ADR-37), the ground shadow,
+ * group, the two shoe groups, the four leg bones (ADR-37), the ground shadows (ADR-38),
  * the foot paths' playhead and the motion cues' fade, and commits progress
  * to the store at most 10 times a second for the timeline. When progress reaches 1 it calls `land()`, which
  * resolves the trick and sends the Canvas back to demand mode. When not
@@ -74,7 +98,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const board = useRef<Group>(null);
   const front = useRef<Group>(null);
   const back = useRef<Group>(null);
-  const shadow = useRef<Mesh>(null);
+  const shadow = useRef<InstancedMesh>(null);
+  const ground = useRef(newGroundShadows());
   const pose = useRef<Pose>({ y: 0, roll: 0, yaw: 0, pitch: 0 });
   const feet = useRef<FeetPose>(newFeetPose());
   const legs = useRef<LegRig>(null);
@@ -105,7 +130,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // Hidden feet cost nothing: the feet model and its clearance against the
     // board's volume run only while a shoe group is mounted. Turned on
     // mid-flight, the shoes are posed from the next frame.
-    if (front.current || back.current) {
+    const feetShown = front.current !== null || back.current !== null;
+    if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
       const f = writeFeetPose(feet.current, s, s.flight, c.progress, s.stance);
       const regular = s.stance === 'regular';
@@ -130,26 +156,31 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     mat.motionCues.opacity = CUES.opacity * (s.flight ? 1 - MathUtils.smoothstep(c.progress, 0, CUES.fadeBy) : 1);
     // Fully faded, skip the draw call (three skips a mesh whose material is not visible).
     mat.motionCues.visible = mat.motionCues.opacity > 0;
-    const disc = shadow.current;
-    if (disc && g) {
-      const k = Math.min(1, p.y / S.topHeight);
-      const size = MathUtils.lerp(S.scale.ground, S.scale.top, k);
-      // The footprint follows the board's yaw, shortens as the nose comes up
-      // and narrows as the board rolls onto its edge (no allocation).
-      disc.rotation.y = g.rotation.y;
-      disc.scale.set(
-        size * Math.abs(Math.cos(p.pitch * D2R)),
-        1,
-        size * MathUtils.lerp(S.edgeWidth, 1, Math.abs(Math.cos(p.roll * D2R))),
-      );
-      mat.shadow.opacity = MathUtils.lerp(S.opacity.ground, S.opacity.top, k);
+    // Medium and Low (ADR-38): the board's soft and contact shadows and,
+    // with the feet shown, one footprint per shoe, projected along the key
+    // light. Four instances of one mesh, one draw call; written on every
+    // rendered frame, so a scrub moves them too.
+    const sh = shadow.current;
+    if (sh && g) {
+      const gs = writeGroundShadows(ground.current, p, g.rotation.y, feetShown ? feet.current : null);
+      applyFootprint(sh, 0, gs.board);
+      applyFootprint(sh, 1, gs.contact);
+      applyFootprint(sh, 2, gs.front);
+      applyFootprint(sh, 3, gs.back);
+      applyBoardUniforms(gs.board, gs.contact);
+      sh.count = feetShown ? SHADOW_INSTANCES : 2;
+      sh.instanceMatrix.needsUpdate = true;
+      shadowOpacity.needsUpdate = true;
     }
   });
 
   return (
     <>
-      {/* The flat disc stands in for shadows on Medium and Low (DESIGN.md 2); High has real ones (ADR-19). */}
-      {!shadows && <mesh ref={shadow} geometry={geo.shadow} material={mat.shadow} position={[0, S.y, 0]} renderOrder={1} />}
+      {/* Projected footprints stand in for shadows on Medium and Low (ADR-38); High has real ones (ADR-19). */}
+      {/* Not frustum culled: the instances move, and three would keep the bounds of the first frame. */}
+      {!shadows && (
+        <instancedMesh ref={shadow} args={[geo.shadow, mat.shadow, SHADOW_INSTANCES]} renderOrder={1} frustumCulled={false} />
+      )}
       <Board ref={board} shadows={shadows}>
         {motionCuesVisible && <MotionCues />}
       </Board>

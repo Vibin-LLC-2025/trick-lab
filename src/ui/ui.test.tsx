@@ -389,6 +389,54 @@ describe('quality control', () => {
   });
 });
 
+describe('camera preset control (ADR-38)', () => {
+  const group = () => screen.getByRole('group', { name: 'Camera' });
+  const radio = (name: 'Rider' | 'Detail') => within(group()).getByRole('radio', { name });
+
+  it('is a named radio group with a hint, Rider first and checked by default, before Stance', async () => {
+    await setup();
+    expect(group()).toHaveAccessibleDescription(
+      'Rider: looking down from above your heels. Detail: low and to the side, to see the deck, trucks and soles.',
+    );
+    const radios = within(group()).getAllByRole('radio');
+    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(['rider', 'detail']);
+    expect(radio('Rider')).toBeChecked();
+    const stance = screen.getByRole('group', { name: 'Stance' });
+    expect(group().compareDocumentPosition(stance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('Tab reaches the checked option and an arrow key switches it, persisted, announced, not logged; Reset view keeps it', async () => {
+    const user = await setup();
+    act(() => screen.getByRole('button', { name: 'Perf badge' }).focus());
+    await user.tab();
+    expect(radio('Rider')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(radio('Detail')).toBeChecked();
+    expect(radio('Detail')).toHaveFocus();
+    expect(useTrickStore.getState().cameraView).toBe('detail');
+    expect(localStorage.getItem('trick-lab.camera-view')).toBe('detail');
+    expect(announcer()).toHaveTextContent('Detail view: low three-quarter view from the heel side.');
+    // Space keeps its native meaning on a radio: no pop.
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().status).toBe('idle');
+    // Reset view returns the camera to the chosen preset; the choice stays.
+    await user.click(screen.getByRole('button', { name: 'Reset view' }));
+    expect(radio('Detail')).toBeChecked();
+    expect(announcer()).toHaveTextContent('Camera view reset.');
+    radio('Detail').focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(radio('Rider')).toBeChecked();
+    expect(announcer()).toHaveTextContent("Rider's view: looking down from above the heels.");
+    expect(useTrickStore.getState().events).toEqual([]);
+  });
+
+  it('clicking a label selects its option', async () => {
+    const user = await setup();
+    await user.click(screen.getByText('Detail'));
+    expect(radio('Detail')).toBeChecked();
+  });
+});
+
 describe('stance control (ADR-25)', () => {
   const group = () => screen.getByRole('group', { name: 'Stance' });
   const radio = (name: 'Goofy' | 'Regular') => within(group()).getByRole('radio', { name });
@@ -406,8 +454,11 @@ describe('stance control (ADR-25)', () => {
 
   it('Tab reaches the checked option and an arrow key switches it, persisted, announced, described, not logged', async () => {
     const user = await setup();
-    // The View switches come first; the last one is the perf badge.
+    // The View switches come first; the last one is the perf badge. Changed
+    // on purpose with ADR-38 (2026-11-05): the Camera group now sits between
+    // the switches and Stance, so the second Tab reaches Goofy.
     act(() => screen.getByRole('button', { name: 'Perf badge' }).focus());
+    await user.tab();
     await user.tab();
     expect(radio('Goofy')).toHaveFocus();
     await user.keyboard('{ArrowRight}');

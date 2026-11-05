@@ -78,12 +78,57 @@ export const ART = {
     roughness: ROUGHNESS.base,
   },
   /**
-   * Real shadows on High (ADR-19): the key light casts, the board and shoes
-   * cast, the pad receives. The orthographic shadow camera is a box around the
-   * flight volume (the pad corners do not need shadows). Off, the flat disc
-   * below stands in as before.
+   * Real shadows on High (ADR-19): the key light casts, the board, the shoes
+   * and the shanks cast, the pad receives. Off, the projected footprints
+   * below stand in.
+   * Shadow pass (2026-11-05, ADR-38): `PCFShadowMap` (PCFSoft is deprecated
+   * since r182 and r187 substituted PCF with a warning anyway), filtered with
+   * `radius` texels of three's 5-tap Vogel disc. The orthographic camera is no
+   * longer a fixed +-1.0 m box with near 1 and far 12: TrickScene fits it to
+   * `casters` seen from the key light (shadowFrustum in cameraFit.ts), the
+   * boxes that hold every caster at every preset at pops up to 0.6 m in both
+   * stances (tested in cameraFit.test.ts against the sim: the board's spin
+   * circle and top, the soles up to 0.595 m from the centre, the shanks'
+   * knees up to 1.343 m), plus where those casters' shadows land on the pad,
+   * plus `pad`. The fitted frustum is 1.54 x 1.68 m and 1.76 m deep (near
+   * 4.70, far 6.46; texels of 0.82 mm), where the old one was 2 x 2 m and
+   * 11 m deep (texels of 0.98 mm, and 11 times the depth per bias unit).
+   * `normalBias` was 0.015 m, thicker than the 11.5 mm deck. Trialled in the
+   * browser (2026-11-05, High, kickflip, telephoto crops of the rear wheels
+   * and the front sole at rest, the deck edge-on at 25 percent from above
+   * and from low on the heel side, the catch at 73 percent and the landing;
+   * normal bias 0.015, 0.003, 0.002, 0.001 and 0, depth bias scaled with it):
+   * only the pad receives shadows here (the board, shoes and shanks cast,
+   * nothing else receives), and the pad faces the near-vertical key, so no
+   * value from 0 to 0.003 showed acne. 0.015 did not visibly detach the
+   * wheels either (in flight the casters are far above the pad, and at rest
+   * the wheel hides its own contact), but it eroded the silhouettes near
+   * contact: the shoe's shadow on the pad at rest is a few pixels smaller
+   * at a 14 degree field of view. 0.002 is the middle of the range asked
+   * for, two texels plus the 3-texel PCF kernel's slope on the pad (about
+   * 0.7 mm), with a depth `bias` of -0.0002 (0.35 mm over the fitted depth).
+   * `radius` 3 at 0.82 mm texels gives a penumbra of about 2.5 mm, a little
+   * softer than the old one (r187 had substituted PCF at radius 1 for the
+   * PCFSoft request, about 1 mm).
    */
-  shadowMap: { size: 2048, bounds: 1.0, near: 1.0, far: 12.0, bias: -0.0004, normalBias: 0.015 },
+  shadowMap: {
+    size: 2048,
+    radius: 3,
+    bias: -0.0002,
+    normalBias: 0.002,
+    /**
+     * Every shadow caster's extent, metres, as boxes (min and max corners).
+     * Below 1 m: the board's spin circle (|z| to 0.42) and the soles, which
+     * reach |x| 0.595 at the highest pops. Above: only the knees, |x| to
+     * 0.354 and z from -0.388 to -0.075 (the rider faces -Z), up to 1.343 m.
+     */
+    casters: [
+      { min: v(-0.6, 0, -0.43), max: v(0.6, 1.0, 0.43) },
+      { min: v(-0.37, 1.0, -0.4), max: v(0.37, 1.36, 0) },
+    ],
+    /** Margin around the fitted frustum on each side, metres (covers the PCF kernel). */
+    pad: 0.03,
+  },
   /**
    * Retuned for the realistic board (design pass, 2026-11-04): a one-time
    * environment PMREM (`environment.intensity`, applied as
@@ -179,6 +224,34 @@ export const ART = {
      * twice as large on screen as when the whole pad had to fit (ADR-11).
      */
     fit: { margin: 0.06, reach: OUTLINE.noseTip + 0.01, bottom: 0, top: REST_Y + 0.6 + 0.13 },
+    /**
+     * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
+     * persisted (`cameraView` in the ui slice). Only each `position`'s
+     * direction from its `target` matters: the ADR-18 fit sets the distance,
+     * and "Reset view" returns to the chosen preset.
+     * - `rider`, the default: the teaching home view above (ADR-23).
+     * - `detail`: a low three-quarter view from the heel side for judging
+     *   the deck's thickness, the trucks and the soles' separation from the
+     *   grip. 35 degrees above the horizon (polar 55 degrees, inside the
+     *   orbit limits) and 25 degrees round from the heel side toward +X, the
+     *   goofy nose (the camera never moves with the stance, ADR-25). The
+     *   audit's low side view, (0.25, 0.32, 1.55) to (0, 0.25, 0), was the
+     *   starting point; at its 2.5 degrees the board was a thin line and the
+     *   shadow invisible, so the elevation came up to the 30 to 40 asked for.
+     *   The target is 5 cm lower than the rider view's, nearer the deck at
+     *   rest; the fit still frames the board's whole flight (cameraFit.test.ts).
+     */
+    views: {
+      rider: { position: v(0, 0.3 + 2.6 * Math.sin(Math.PI / 3), 2.6 * Math.cos(Math.PI / 3)), target: v(0, 0.3, 0) },
+      detail: {
+        position: v(
+          2 * Math.cos((35 * Math.PI) / 180) * Math.sin((25 * Math.PI) / 180),
+          0.25 + 2 * Math.sin((35 * Math.PI) / 180),
+          2 * Math.cos((35 * Math.PI) / 180) * Math.cos((25 * Math.PI) / 180),
+        ),
+        target: v(0, 0.25, 0),
+      },
+    },
   },
   /**
    * Rotation direction (ADR-10, made goofy by ADR-24 on 2026-11-04). The
@@ -311,6 +384,35 @@ export const ART = {
    * shortens it as the nose comes up, narrows it as the board rolls onto its
    * edge, and scales and fades it with height. The rim is transparent, so the
    * opacity numbers are a little above the old disc's to keep the core as dark.
+   * Shadow pass (2026-11-05, ADR-38): the footprints are projected along the
+   * key light's ray instead of sitting at x z 0, the same direction High's
+   * shadow map uses (groundShadow.ts: a point (x, y, z) lands on the pad at
+   * (x - y dx/dy, 0, z - y dz/dy) for the light-to-scene direction d). One
+   * instanced mesh, one draw call, one unit soft disc (alpha 1 inside `core`
+   * of the radius, 0 at the rim), four instances: the board's soft shadow,
+   * its contact shadow, and one footprint per shoe (the last two only while
+   * the feet are shown). Each instance carries its own opacity.
+   * - board: an ellipse the board's size that turns with its yaw, shortens
+   *   as the nose comes up and narrows on edge (as before), and with height
+   *   fades and broadens by `spread` (it used to shrink to 0.8, which is not
+   *   how a penumbra grows).
+   * - contact: a darker, tighter copy that is gone by `contact.height` of lift.
+   * - feet: a footprint per sole, FOOT-sized times `foot.scale`, turned by
+   *   the shoe's yaw, fading and broadening with the sole's height above the
+   *   pad, darker near the pad (a bail).
+   * Union: where a foot's footprint overlaps the board's, the board already
+   * shades the pad there, and two transparent layers would stack into a dark
+   * island. The fragment shader (resources.ts) evaluates the board's two
+   * components at each pixel of a foot and draws only what the foot adds
+   * over them, so the result is max(board, foot): one shadow, in one call.
+   * Tuned in the browser (2026-11-05, Low, dark theme, rider view, kickflip,
+   * darkest shadow pixel against the lit pad in the stage screenshots): the
+   * old disc measured 0.32 at 40 percent of the flight (0.34 m up). A first
+   * try, soft 0.34 to 0.16 over contact 0.26, matched the old core at rest
+   * but measured 0.235 in the air, lighter than before as well as broader.
+   * Now soft 0.40 to 0.20 over contact 0.20: 0.52 at rest by the numbers
+   * (the old core was 0.50), and measured 0.28 at 40 percent and 0.30 at 70
+   * (the old disc 0.32 and 0.35), over a larger, softer footprint.
    */
   shadow: {
     halfLength: 0.42,
@@ -319,8 +421,17 @@ export const ART = {
     core: 0.55,
     y: 0.002,
     color: '#0e0f10',
-    opacity: { ground: 0.5, top: 0.2 },
-    scale: { ground: 1.0, top: 0.8 },
+    opacity: { ground: 0.4, top: 0.2 },
+    /** Metres added to both half extents at `topHeight`, linear in height. */
+    spread: 0.07,
+    contact: { opacity: 0.2, scale: 0.88, height: 0.05 },
+    foot: {
+      scale: 1.05,
+      opacity: { ground: 0.3, top: 0.14 },
+      /** Extra opacity with the sole on the pad, gone by `contact.height`. */
+      contact: 0.12,
+      spread: 0.05,
+    },
     /** Width kept by a board on its edge (roll 90): deck to wheel bottom over the deck width, about. */
     edgeWidth: 0.5,
     /** Height at which the "top" values apply (the highest pop). */

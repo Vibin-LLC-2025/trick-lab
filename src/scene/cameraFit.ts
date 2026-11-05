@@ -63,3 +63,65 @@ export function framingPoints(flight: { reach: number; bottom: number; top: numb
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push([sx * flight.reach, y, sz * flight.reach]);
   return pts;
 }
+
+/** An axis-aligned box by its min and max corners. */
+export interface Box3 {
+  min: Vec3;
+  max: Vec3;
+}
+
+/** The eight corners of a box. */
+export function boxCorners({ min, max }: Box3): Vec3[] {
+  const pts: Vec3[] = [];
+  for (const x of [min[0], max[0]]) for (const y of [min[1], max[1]]) for (const z of [min[2], max[2]]) pts.push([x, y, z]);
+  return pts;
+}
+
+/** Where a point lands on the pad (y 0) along a light-to-scene direction `d` (d.y < 0). */
+export const projectToGround = (p: Vec3, d: Vec3): Vec3 => [p[0] - (p[1] * d[0]) / d[1], 0, p[2] - (p[1] * d[2]) / d[1]];
+
+export interface ShadowFrustum {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  near: number;
+  far: number;
+}
+
+/**
+ * The tightest orthographic shadow camera (ADR-38) for a directional light at
+ * `light` aimed at `target`, in the frame three's DirectionalLightShadow uses
+ * (the camera at the light, lookAt the target, up +Y): it holds every corner
+ * of the caster boxes and the point where each corner's shadow reaches the
+ * pad, so a caster anywhere in a box draws its whole shadow. `pad` is added on
+ * every side (the PCF kernel, and depth for the bias).
+ */
+export function shadowFrustum(light: Vec3, target: Vec3, boxes: readonly Box3[], pad: number): ShadowFrustum {
+  const f = normalize(sub(target, light));
+  const r = normalize(cross(f, [0, 1, 0]));
+  const u = cross(r, f);
+  const corners = boxes.flatMap(boxCorners);
+  const points = [...corners, ...corners.map((c) => projectToGround(c, f))];
+  const out = { left: Infinity, right: -Infinity, top: -Infinity, bottom: Infinity, near: Infinity, far: -Infinity };
+  for (const p of points) {
+    const v = sub(p, light);
+    const x = dot(v, r);
+    const y = dot(v, u);
+    const z = dot(v, f);
+    out.left = Math.min(out.left, x);
+    out.right = Math.max(out.right, x);
+    out.bottom = Math.min(out.bottom, y);
+    out.top = Math.max(out.top, y);
+    out.near = Math.min(out.near, z);
+    out.far = Math.max(out.far, z);
+  }
+  return {
+    left: out.left - pad,
+    right: out.right + pad,
+    bottom: out.bottom - pad,
+    top: out.top + pad,
+    near: Math.max(0.01, out.near - pad),
+    far: out.far + pad,
+  };
+}

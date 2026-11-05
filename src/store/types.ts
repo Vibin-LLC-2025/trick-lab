@@ -33,6 +33,12 @@ export type Theme = 'dark' | 'light';
  * board, the Chromebook fallback.
  */
 export type Quality = 'high' | 'medium' | 'low';
+/**
+ * Fixed camera preset (ADR-38). Rider: the teaching home view from above the
+ * heels (ADR-23), the default. Detail: a low three-quarter view from the heel
+ * side. Numbers in ART.camera.views.
+ */
+export type CameraView = 'rider' | 'detail';
 
 export interface InputsSlice extends TrickInputs {
   /** Preset last applied, cleared as soon as a slider moves. */
@@ -100,6 +106,8 @@ export interface UiSlice {
   focusRequest: (FocusTarget & { nonce: number }) | null;
   /** Increments when the student asks to reset the camera. */
   viewResetNonce: number;
+  /** The camera preset that SceneCamera places and "Reset view" returns to (ADR-38). Persisted under trick-lab.camera-view, default rider. Not logged, not reset, not exported. */
+  cameraView: CameraView;
   /** Persisted under trick-lab.quality. Not logged: the event contract has no UI events. */
   quality: Quality;
   /** True while the tier is the device's auto-pick, false once the student chose one. */
@@ -123,6 +131,8 @@ export interface UiSlice {
   toggleTheme: () => void;
   setReducedMotion: (reduced: boolean) => void;
   resetView: () => void;
+  /** Moves the camera to a preset, persisted and announced; a no-op if unchanged. */
+  setCameraView: (view: CameraView) => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
   /** Shows or hides the legs, persisted and announced. */

@@ -31,7 +31,7 @@ Units are metres. The pad top surface is y = 0. Origin is the centre of the pad,
 | Clear color, dark theme | `#1e2124` (equals `--scene-bg` under `:root[data-theme="dark"]`) |
 | Clear color, light theme | `#d7d3cb` (equals `--scene-bg` under `:root`) |
 | Fog | linear `Fog` to the clear color per theme, near `5.5`, far `15` (ground pass, 2026-11-04, ADR-31; was none). See section 10 |
-| Shadows | none on Medium and Low (a flat footprint stands in, see below); real shadows on High (ADR-19) |
+| Shadows | none on Medium and Low (projected footprints stand in, see below, ADR-38); real shadows on High (ADR-19): `PCFShadowMap`, radius 3, map fitted to the casters (8.1) |
 
 `artDirection.ts` should export `clearColor: { light: '#d7d3cb', dark: '#1e2124' }` and the theme test reads the computed `--scene-bg` for each theme and compares.
 
@@ -63,6 +63,7 @@ Moved on 2026-11-04 (art pass after the rider's-view camera, ADR-23): at `[2.5, 
 | `enableDamping` | `false` (damping needs a continuous loop; the app runs `frameloop="demand"`) |
 | `enableZoom` | `true` |
 | Stage fit | the camera backs off along its view direction until the board's flight volume at a 0.6 m pop fits the stage with a 6 percent margin (`scene/cameraFit.ts`, ADR-18, which replaced the whole-pad fit of ADR-11); zoom-out may pass `maxDistance` up to 1.25 times the fit. See 8.2 |
+| Presets (2026-11-05, ADR-38) | `rider` (the rows above, the default) and `detail`: 35 degrees above the horizon, 25 degrees round from the heel side toward +X, target `[0, 0.25, 0]` (position `[0.692, 1.397, 1.485]` before the fit, `[0.84, 1.64, 1.80]` after it at 1600 x 1000). Chosen in the View panel (8.9); "Reset view" returns to the chosen one |
 | Reduced motion | no easing in either mode; "Reset view" snaps |
 
 The default view is the rider's own view (2026-11-04, ADR-23): 60 degrees above the horizon, straight over the heel side, looking down at the deck and the feet as if standing on the board. The deck runs left to right with the nose on the right and the near rail's wheels just showing under it, and the whole flight arc (peak 0.6 m) rises against the pad. The fitted distance is about 2.27 m on desktop stages, so the 0.81 m board at rest fills a little over half the stage width at 1600 x 1000. It was a 3/4 view about 27 degrees up from the toe side and in front of the nose, which showed the board at a slant and the feet from the side.
@@ -101,20 +102,20 @@ If the implementer uses a six-material array on one box, the index order for `Bo
 
 ### Ground shadow footprint (Medium and Low, instead of real shadows)
 
-Was a 0.36 m disc (24 segments, opacity 0.35 to 0.16, scale 1.0 to 0.72), which from the rider's view 60 degrees up read as a big dark circle around the board. Since 2026-11-04 it is a soft footprint the size of the board.
+Was a 0.36 m disc (24 segments, opacity 0.35 to 0.16, scale 1.0 to 0.72), which from the rider's view 60 degrees up read as a big dark circle around the board. From 2026-11-04 it was a soft footprint the size of the board at x z 0, opacity 0.5 to 0.2, scale 1.0 to 0.8. Since 2026-11-05 (ADR-38) the footprints are projected along the key light, so they fall where High's shadow falls, and each shoe has one.
 
 | Property | Value |
 | --- | --- |
-| Geometry | ellipse, half extents `0.42` along the board and `0.13` across, 40 segments, flat on the pad at y `0.002`: full strength inside `0.55` of the radius, fading to transparent at the rim (vertex alpha) |
+| Geometry | one unit soft disc (40 segments, full strength inside `0.55` of the radius, transparent at the rim), drawn as one `InstancedMesh` of four instances on the pad at y `0.002`: board soft, board contact, front shoe, back shoe (the shoes only while the feet are shown). One draw call |
 | Color | `#0e0f10` |
-| Material | `meshBasicMaterial`, `vertexColors` (alpha), `transparent`, `depthWrite false` |
-| Opacity at height 0 | `0.5` (the core; the soft rim makes it read lighter than the old disc's 0.35) |
-| Opacity at height 0.6 m | `0.2` (linear in height) |
-| Scale at height 0 | `1.0` |
-| Scale at height 0.6 m | `0.8` (linear in height) |
-| Turn | the board's yaw (FlightDriver copies the board group's `rotation.y` every frame) |
-| Shape in flight | length times `abs(cos pitch)` (shorter as the nose comes up); width times `lerp(0.5, 1, abs(cos roll))` (narrower on the board's edge) |
-| Position | under the deck centre, X and Z fixed |
+| Material | `ShaderMaterial` (`mat.shadow`): vertex alpha times a per-instance opacity, `transparent`, `depthWrite false`, tone mapped, no fog |
+| Projection | a source point `(x, y, z)` lands at `(x - y dx/dy, 0, z - y dz/dy)`, `d` the key light's direction from `[0.9, 6.0, -1.2]` to `[0, 0.3, 0]`: 0.16 m toward -X and 0.21 m toward the viewer per metre of height. Board: the deck centre. Shoes: the sole centre |
+| Board, soft | half extents `0.42` x `0.13`, plus `0.07` on both at 0.6 m; opacity `0.40` at rest to `0.20` at 0.6 m (linear in height) |
+| Board, contact | the soft ellipse times `0.88`, opacity `0.20` at rest, gone by `0.05` m of lift (smoothstep) |
+| Board shape in flight | turns with the board's yaw; length times `abs(cos pitch)`; width times `lerp(0.5, 1, abs(cos roll))` |
+| Shoes | half extents `FOOT` (0.285 x 0.105) / 2 times `1.05`, plus `0.05` at 0.6 m of sole height; turned by the shoe's yaw; opacity `0.30` to `0.14`, plus `0.12` with the sole on the pad (gone by 0.05 m) |
+| Union | where a shoe's footprint overlaps the board's, the shader draws only what it adds, so the pad shows the darker of the two, never both stacked |
+| Measured (Low, rider view, darkest pixel against the lit pad) | 0.28 at 40 percent of a kickflip and 0.30 at 70 (the 2026-11-04 footprint: 0.32 and 0.35); about 0.52 at rest by the numbers |
 
 Under reduced motion the footprint is pose-driven like everything else, so it needs no special case.
 
@@ -387,17 +388,19 @@ Written by the lead's agent (fable) for the quality pass, per `docs/BRIEF-FEET.m
 
 | Tier | antialias | dpr | shadows | anisotropy | powerPreference | Board | Shoes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| High | true (MSAA) | `[1, 2]` | PCF soft, 2048 px map | 16 | `high-performance` | `board-high.glb` | `shoes.glb` |
-| Medium | true | `[1, 1.5]` | none (soft footprint) | 4 | `low-power` | `board.glb` | primitive |
-| Low | false | `[1, 1.5]` | none (soft footprint) | 1 | `low-power` | primitive | primitive |
+| High | true (MSAA) | `[1, 2]` | PCF (radius 3), 2048 px map | 16 | `high-performance` | `board-high.glb` | `shoes.glb` |
+| Medium | true | `[1, 1.5]` | none (projected footprints) | 4 | `low-power` | `board.glb` | primitive |
+| Low | false | `[1, 1.5]` | none (projected footprints) | 1 | `low-power` | primitive | primitive |
 
-Shadow map (`ART.shadowMap`): orthographic bounds +-1.0 m around the key light's target, near 1.0, far 12.0, bias -0.0004, normal bias 0.015. The key, ambient and environment numbers in 7.6 are unchanged; the shadow adds the contact under the wheels that the disc only suggested. The pad's centre mark now floats 1.5 mm above the slab (`mark.y` 0.0025) so it no longer z-fights.
+Shadow map (`ART.shadowMap`, since 2026-11-05, ADR-38): `PCFShadowMap` (was a PCFSoft request, which r187 replaced by PCF at radius 1), radius 3 texels, 2048 px. The orthographic camera is fitted to two caster boxes, `[-0.6, 0, -0.43]` to `[0.6, 1.0, 0.43]` and `[-0.37, 1.0, -0.4]` to `[0.37, 1.36, 0]`, and to where their shadows reach the pad, plus 0.03 m: left -0.768, right 0.768, bottom -0.787, top 0.889, near 4.70, far 6.46 (texels of 0.82 mm). Bias -0.0002, normal bias 0.002 (was +-1.0 m, near 1.0, far 12.0, bias -0.0004, normal bias 0.015). The key, ambient and environment numbers in 7.6 are unchanged; the shadow adds the contact under the wheels that the disc only suggested. The pad's centre mark now floats 1.5 mm above the slab (`mark.y` 0.0025) so it no longer z-fights.
 
 ### 8.2 Camera framing (`ART.camera.fit`, ADR-18)
 
 Fit box: `reach` 0.4195 (nose tip plus 1 cm), `bottom` 0 (the pad surface under the board), `top` 0.81425 (rest height plus a 0.6 m pop plus the 0.13 m half extent). Margin 6 percent. `minDistance` 1.0 m. The pad is no longer part of the fit.
 
 Rider's view (2026-11-04, ADR-23): the home direction is from `[0, 2.552, 1.3]` to `[0, 0.3, 0]`, 60 degrees up over the heel side. From there the box's depth in Z is its height on screen, so on stages wider than about 0.89 the height binds and the distance is 2.27 m whatever the aspect (2.31 m on the 1600 x 1000 stage from the old 3/4 view); on the 1024 x 768 stage (aspect 0.49) the width binds at 3.43 m (was 4.19 m). The fit box and margin did not change; a 0.6 m 360 flip at its peak stays in frame at both sizes.
+
+Detail preset (2026-11-05, ADR-38): from 35 degrees up and 25 degrees round from the heel side toward the goofy nose, aimed at `[0, 0.25, 0]`, the same fit box and margin give 2.43 m on the 1600 x 1000 stage. The deck edge, both trucks and the soles' gap to the grip read, and the shadow stays in frame.
 
 ### 8.3 Shoes
 
@@ -502,6 +505,10 @@ The rider's lower legs come out of the shoe collars and the thighs dissolve towa
 | Sock | From the hem, 4.5 cm above the ankle joint, a step in to 0.036, 0.034 at the ankle, capped inside the shoe (about 3 cm shows above the collar) | sock `#d9d5cb` |
 
 One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are the rider's (`LEG` in src/sim/legs.ts: thigh 0.43, shank 0.42). Two draw calls for both legs on every tier; on High the shanks cast shadows like the shoes and the thighs do not. From the rider's view the thighs point toward the camera and stay behind the knees, so the board and the shoes stay readable at the catch; the low side view shows the crouch, the tuck, the reach for the catch and the bent knees at the landing. `#scene-description` adds one sentence after the feet: "Legs crouched, knees bent, ready to pop.", "Knees tucked up in the air.", "Legs reach down to catch the board." (a bail: "Legs reach down beside the board."), "Knees bent, absorbing the landing.".
+
+### 8.9 Camera control (2026-11-05, ADR-38)
+
+Written by the implementation agent (opus), pending the design agent's own pass. The segmented control from 8.6 with two options and the group name "Camera", in the View panel above Stance. Rider is the default; the choice is persisted under `trick-lab.camera-view`, never logged, not cleared by Reset and not in the export. No keyboard shortcut. Same markup as 8.6 with `name="camera"`, values `rider` and `detail`, labels "Rider" and "Detail", and the hint `#camera-hint`: "Rider: looking down from above your heels. Detail: low and to the side, to see the deck, trucks and soles." No new CSS. Announcements: "Rider's view: looking down from above the heels." and "Detail view: low three-quarter view from the heel side.". Choosing an option moves the camera at once (no easing); "Reset view" returns to the checked preset.
 
 ## 9. UI redesign (2026-11-04)
 

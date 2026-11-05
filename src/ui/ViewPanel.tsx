@@ -1,4 +1,43 @@
-import { effectiveQuality, useTrickStore, type Quality, type Stance } from '../store';
+import { effectiveQuality, useTrickStore, type CameraView, type Quality, type Stance } from '../store';
+
+const CAMERA_OPTIONS: { value: CameraView; label: string }[] = [
+  { value: 'rider', label: 'Rider' },
+  { value: 'detail', label: 'Detail' },
+];
+
+/**
+ * "Camera" (ADR-38): the same native radio group as Stance and Quality, two
+ * fixed presets. Rider is the teaching home view (ADR-23) and the default;
+ * Detail is a low three-quarter view from the heel side. "Reset view" goes
+ * back to the checked one. No keyboard shortcut.
+ */
+function CameraControl() {
+  const view = useTrickStore((s) => s.cameraView);
+  const setCameraView = useTrickStore((s) => s.setCameraView);
+  return (
+    <fieldset className="segmented" aria-describedby="camera-hint">
+      <legend className="segmented__legend">Camera</legend>
+      <div className="segmented__options">
+        {CAMERA_OPTIONS.map((o) => (
+          <label key={o.value} className="segmented__option">
+            <input
+              className="segmented__input"
+              type="radio"
+              name="camera"
+              value={o.value}
+              checked={view === o.value}
+              onChange={() => setCameraView(o.value)}
+            />
+            <span className="segmented__label">{o.label}</span>
+          </label>
+        ))}
+      </div>
+      <p className="segmented__hint" id="camera-hint">
+        Rider: looking down from above your heels. Detail: low and to the side, to see the deck, trucks and soles.
+      </p>
+    </fieldset>
+  );
+}
 
 const STANCE_OPTIONS: { value: Stance; label: string }[] = [
   { value: 'goofy', label: 'Goofy' },
@@ -119,7 +158,7 @@ function Toggle({
 /**
  * Camera and shortcuts in the header, then what the scene shows (feet, legs
  * while the feet are shown, trails, motion cues), the theme and the perf badge as switches, then
- * stance and quality (DESIGN.md 9). Each is also reachable without a pointer.
+ * the camera preset (ADR-38), stance and quality (DESIGN.md 9). Each is also reachable without a pointer.
  */
 export function ViewPanel() {
   const theme = useTrickStore((s) => s.theme);
@@ -167,6 +206,7 @@ export function ViewPanel() {
         <Toggle label="Light theme" pressed={theme === 'light'} keys="t" onClick={toggleTheme} />
         <Toggle label="Perf badge" pressed={perfVisible} keys="p" onClick={togglePerf} />
       </div>
+      <CameraControl />
       <StanceControl />
       <QualityControl />
     </section>

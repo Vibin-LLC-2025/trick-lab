@@ -476,6 +476,43 @@ describe('quality and feet (ui slice)', () => {
     }
   });
 
+  it('starts in the rider view; switching the camera preset persists, announces, logs nothing and no-ops when unchanged (ADR-38)', () => {
+    localStorage.clear();
+    const store = makeStore();
+    expect(store.getState().cameraView).toBe('rider');
+    store.getState().setCameraView('rider');
+    expect(store.getState().announcement.nonce).toBe(0);
+    expect(localStorage.getItem('trick-lab.camera-view')).toBeNull();
+    store.getState().setCameraView('detail');
+    expect(store.getState().cameraView).toBe('detail');
+    expect(localStorage.getItem('trick-lab.camera-view')).toBe('detail');
+    expect(said(store)).toBe('Detail view: low three-quarter view from the heel side.');
+    // Reset view keeps the preset: SceneCamera returns to it (cameraPlacement.test.ts).
+    store.getState().resetView();
+    expect(store.getState().cameraView).toBe('detail');
+    store.getState().setCameraView('rider');
+    expect(localStorage.getItem('trick-lab.camera-view')).toBe('rider');
+    expect(said(store)).toBe("Rider's view: looking down from above the heels.");
+    expect(store.getState().events).toEqual([]);
+    localStorage.clear();
+  });
+
+  it('keeps a saved camera preset across a fresh store and a session reset, out of the export, and ignores nonsense', () => {
+    localStorage.clear();
+    const store = makeStore();
+    store.getState().setCameraView('detail');
+    expect(makeStore().getState().cameraView).toBe('detail');
+    store.getState().resetSession();
+    expect(store.getState().cameraView).toBe('detail');
+    const exported = JSON.stringify(buildExport(store.getState(), new Date('2026-11-05T12:00:00Z')));
+    expect(exported).not.toContain('cameraView');
+    expect(exported).not.toContain('detail');
+    expect(types(store)).toEqual(['session.reset']);
+    localStorage.setItem('trick-lab.camera-view', 'drone');
+    expect(makeStore().getState().cameraView).toBe('rider');
+    localStorage.clear();
+  });
+
   it('records a failed model load once, without logging', () => {
     const store = makeStore();
     store.getState().setBoardAssetFailed();

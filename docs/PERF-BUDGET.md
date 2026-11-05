@@ -215,3 +215,19 @@ The pad was three draw calls (slab, edge lines, mark) and is now one on every ti
 1. **11 MB more texture memory on Medium.** The three ground maps upload as RGBA8 with mips. Medium is the mid-range laptop tier; if that is too much, Medium could take a 512 px colour and normal map (a second ground file) or KTX2 (ADR-14).
 2. **Still no Chromebook numbers.** Low gained nothing but a cheaper ground (one call instead of three), so the earlier Low measurements stand as the best estimate.
 3. **The bay tile repeats.** Every bay has the same cracks and mark. Fog hides it in low orbits; from a high orbit the pattern shows.
+
+## Shadow and camera pass (2026-11-05): fitted PCF, projected footprints, detail preset
+
+ADR-38. Measured by the implementation agent (opus) on the same desktop as above, **not a Chromebook**: headless Chromium through the global `playwright-cli` (session `render`), Vite dev server, viewport 1600 x 1000, DPR 1, kickflip preset with feet, legs, foot trails and motion cues on; `renderer.info.render` read through `?debug` after the landing. "Before" is HEAD (61079eb) served from a scratch checkout on the same machine.
+
+| Measurement | High | Medium | Low |
+| --- | --- | --- | --- |
+| Draw calls after the landing (budget) | **31** (40) | **16** (20) | **14** (20) |
+| Same before this pass | 31 | 16 | 14 |
+| Draw calls at rest, cues showing (before and after) | 32 | 17 | 15 |
+| Same from the detail camera preset | 31 landed, 32 at rest | 16, 17 | 14, 15 |
+| Triangles after the landing | 127,354 (unchanged) | 18,690 (18,330 before) | 5,174 (4,814 before) |
+| Frames rendered in 1.5 s after the landing | 0 | 0 | 0 |
+| Console errors | none | none | none |
+
+The two shoe footprints and the contact shadow are instances of the board's shadow mesh, so Medium and Low gain triangles (four 120-triangle discs instead of one) but no call. Per frame FlightDriver writes four instance matrices, four opacities and three uniform vectors (no allocation). On High the shadow pass is unchanged in calls; the map now covers 1.54 x 1.68 m instead of 2 x 2 m and 1.76 m of depth instead of 11 m, and `PCFShadowMap` with radius 3 is the same five comparison taps r187 already ran when it substituted PCF for the deprecated PCFSoft request (that warning is gone). The detail preset costs nothing at steady state.

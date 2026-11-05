@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { PerspectiveCamera, Vector3 } from 'three';
+import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
+import { FOOT, newFeetPose, writeFeetPose } from '../sim/feet';
+import { computeFlight, writePose } from '../sim/flight';
+import { newLegsPose, writeLegsPose } from '../sim/legs';
+import { PRESETS } from '../sim/tricks';
 import { ART } from './artDirection';
-import { fitDistance, framingPoints } from './cameraFit';
+import { boxCorners, fitDistance, framingPoints, projectToGround, shadowFrustum } from './cameraFit';
 
 const C = ART.camera;
 const POINTS = framingPoints(C.fit);
@@ -79,5 +83,144 @@ describe('camera fit (ADR-18)', () => {
     cam.updateMatrixWorld();
     const right = new Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
     expect(right.x).toBeCloseTo(1, 6);
+  });
+});
+
+describe('camera presets (ADR-38)', () => {
+  const D = C.views.detail;
+
+  it('keeps the rider preset equal to the home view', () => {
+    expect(C.views.rider.position).toEqual(C.position);
+    expect(C.views.rider.target).toEqual(C.target);
+  });
+
+  it('puts the detail view low and three-quarter on the heel side: 30 to 40 degrees up, inside the orbit limits', () => {
+    const back = new Vector3(...D.position).sub(new Vector3(...D.target));
+    expect(back.z).toBeGreaterThan(0);
+    const polar = Math.acos(back.y / back.length());
+    expect(polar).toBeGreaterThanOrEqual(C.minPolarAngle);
+    expect(polar).toBeLessThanOrEqual(C.maxPolarAngle);
+    const elevation = 90 - (polar * 180) / Math.PI;
+    expect(elevation).toBeGreaterThanOrEqual(30);
+    expect(elevation).toBeLessThanOrEqual(40);
+    // Three-quarter: turned off the heel-side axis, not square to it and not end on.
+    const azimuth = (Math.atan2(back.x, back.z) * 180) / Math.PI;
+    expect(Math.abs(azimuth)).toBeGreaterThanOrEqual(15);
+    expect(Math.abs(azimuth)).toBeLessThanOrEqual(45);
+  });
+
+  it.each([
+    ['1440 x 900', 784 / 876],
+    ['1024 x 768', 368 / 744],
+    ['stacked 16:10', 16 / 10],
+  ])('frames the board, its shadow and the highest pop from the detail view at %s (ADR-18)', (_name, aspect) => {
+    const d = fitDistance({ from: D.position, target: D.target, fov: C.fov, aspect, points: POINTS, margin: C.fit.margin });
+    const target = new Vector3(...D.target);
+    const cam = new PerspectiveCamera(C.fov, aspect, C.near, C.far);
+    cam.position.set(...D.position).sub(target).setLength(Math.max(C.minDistance, d)).add(target);
+    cam.lookAt(target);
+    cam.updateMatrixWorld();
+    for (const p of POINTS) {
+      const v = new Vector3(...p).project(cam);
+      expect(Math.abs(v.x)).toBeLessThanOrEqual(1 - C.fit.margin + 1e-6);
+      expect(Math.abs(v.y)).toBeLessThanOrEqual(1 - C.fit.margin + 1e-6);
+      expect(v.z).toBeLessThan(1);
+    }
+  });
+});
+
+describe('the High shadow camera (ADR-38)', () => {
+  const S = ART.shadowMap;
+  const L = ART.lights.directional;
+  const F = shadowFrustum(L.position, L.target, S.casters, S.pad);
+  const lightDir = new Vector3(...L.target).sub(new Vector3(...L.position)).normalize();
+  const AROUND = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const;
+
+  /** The same camera three's DirectionalLightShadow builds: at the light, looking at the target, with these bounds. */
+  function shadowCamera() {
+    const cam = new OrthographicCamera(F.left, F.right, F.top, F.bottom, F.near, F.far);
+    cam.position.set(...L.position);
+    cam.lookAt(new Vector3(...L.target));
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+    return cam;
+  }
+
+  /** Every caster the sim can put in the air: the board's reach, the soles, the shank joints, at every preset and pop in both stances. */
+  function casterPoints() {
+    const pts: Vector3[] = [];
+    const feet = newFeetPose();
+    const legs = newLegsPose();
+    const restY = ART.board.restY;
+    const r = ART.legs.shank.calf;
+    const sole = Math.hypot(FOOT.length / 2, FOOT.width / 2);
+    const cases = PRESETS.flatMap((p) => [0.15, 0.35, 0.6].map((pop) => ({ ...p.inputs, pop })));
+    for (const inputs of cases) {
+      const flight = computeFlight(inputs);
+      for (const stance of ['goofy', 'regular'] as const) {
+        for (let i = 0; i <= 100; i++) {
+          const u = i / 100;
+          const pose = writePose({ y: 0, roll: 0, yaw: 0, pitch: 0 }, flight, u);
+          // The board's spin circle at its height, plus its farthest reach off the long axis (ART.camera.fit).
+          for (const [sx, sz] of AROUND) pts.push(new Vector3(sx * C.fit.reach, restY + pose.y + 0.13, sz * C.fit.reach));
+          const f = writeFeetPose(feet, inputs, flight, u, stance);
+          const l = writeLegsPose(legs, f, flight, u, inputs, stance);
+          // Each sole's corners whatever its yaw, up to the top of the shoe.
+          for (const foot of [f.front, f.back])
+            for (const [sx, sz] of AROUND) pts.push(new Vector3(foot.x + sx * sole, restY + foot.y + 0.11, foot.z + sz * sole));
+          // The shanks (the casting part of the legs, ADR-37): knee and ankle plus the calf radius.
+          for (const leg of [l.front, l.back])
+            for (const q of [leg.knee, leg.ankle])
+              for (const [sx, sz] of AROUND) pts.push(new Vector3(q.x + sx * r, restY + q.y + r, q.z + sz * r));
+        }
+      }
+    }
+    return pts;
+  }
+
+  it('the caster boxes hold every board, sole and shank point the sim produces', () => {
+    const inside = (p: Vector3, b: (typeof S.casters)[number]) =>
+      p.x >= b.min[0] && p.x <= b.max[0] && p.y >= b.min[1] - 1e-9 && p.y <= b.max[1] && p.z >= b.min[2] && p.z <= b.max[2];
+    let top = 0;
+    for (const p of casterPoints()) {
+      expect(S.casters.some((b) => inside(p, b)), `${p.x.toFixed(3)} ${p.y.toFixed(3)} ${p.z.toFixed(3)}`).toBe(true);
+      top = Math.max(top, p.y);
+    }
+    // And they are not loose: the top is the knees at the highest pop, within 2 cm.
+    expect(top).toBeGreaterThan(Math.max(...S.casters.map((b) => b.max[1])) - 0.02);
+  });
+
+  it('holds every caster and the place its shadow lands on the pad, through a real three camera', () => {
+    const cam = shadowCamera();
+    const ground = (p: Vector3) => p.clone().addScaledVector(lightDir, -p.y / lightDir.y);
+    for (const c of S.casters.flatMap(boxCorners)) {
+      const p = new Vector3(...c);
+      for (const q of [p, ground(p)]) {
+        const v = q.project(cam);
+        expect(Math.abs(v.x)).toBeLessThan(1);
+        expect(Math.abs(v.y)).toBeLessThan(1);
+        expect(Math.abs(v.z)).toBeLessThan(1);
+      }
+    }
+    // The pure projection agrees with the ray.
+    const top = new Vector3(0.3, 1.2, -0.2);
+    const [gx, gy, gz] = projectToGround([top.x, top.y, top.z], [lightDir.x, lightDir.y, lightDir.z]);
+    expect(new Vector3(gx, gy, gz).distanceTo(ground(top))).toBeLessThan(1e-9);
+  });
+
+  it('is tighter than the old fixed box: smaller across and far shallower', () => {
+    // Was +-1.0 m across, near 1 and far 12 (2026-11-04).
+    expect(F.right - F.left).toBeLessThan(2);
+    expect(F.top - F.bottom).toBeLessThan(2);
+    expect(F.far - F.near).toBeLessThan(3);
+    // A texel of the 2048 map is under a millimetre, so 1 to 3 mm of normal bias is a few texels, not 15 mm.
+    expect(Math.max(F.right - F.left, F.top - F.bottom) / S.size).toBeLessThan(0.001);
+    expect(S.normalBias).toBeGreaterThanOrEqual(0.001);
+    expect(S.normalBias).toBeLessThanOrEqual(0.003);
   });
 });

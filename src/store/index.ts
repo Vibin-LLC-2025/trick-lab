@@ -11,7 +11,7 @@ export { animates } from './playback';
 export { effectiveQuality } from './quality';
 export { liveProgress, type Playhead } from './playhead';
 
-export type { TrickState, TrickEvent, EventType, FocusTarget, Theme, Quality, Stance, PlaybackStatus, PlaybackRate } from './types';
+export type { TrickState, TrickEvent, EventType, FocusTarget, Theme, Quality, Stance, CameraView, PlaybackStatus, PlaybackRate } from './types';
 
 /**
  * Factory so tests can inject a deterministic clock and get an isolated store.
