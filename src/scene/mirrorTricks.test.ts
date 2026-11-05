@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Stance } from '../sim/feet';
-import { computeFlight, PHASE, poseAt, rollAt, yawAt, type Pose } from '../sim/flight';
+import { computeFlight, PHASE, poseAt, rollAt, yawAt, type Pose, type TrickInputs } from '../sim/flight';
 import { presetById, type PresetId } from '../sim/tricks';
 import { setBoardRotation } from './boardPose';
 
@@ -16,8 +16,11 @@ const UP = new Vector3(0, 1, 0);
 
 const apply = (pose: Pose, v: Vector3, stance: Stance) =>
   v.clone().applyQuaternion(new Quaternion().setFromEuler(setBoardRotation(new Euler(), pose, stance)));
+/** A preset, or inputs that are not one (the kickflip with a frontside scoop, the hardflip preset until ADR-41). */
+type Case = PresetId | TrickInputs;
+const inputsOf = (c: Case) => (typeof c === 'string' ? presetById(c).inputs : c);
 /** The full pose, pop pitch included: since ADR-32 the flip is about the pitched long axis, so the pitch no longer swings the tail in Z. */
-const level = (id: PresetId, u: number, v: Vector3, stance: Stance) => apply(poseAt(computeFlight(presetById(id).inputs), u), v, stance);
+const level = (id: Case, u: number, v: Vector3, stance: Stance) => apply(poseAt(computeFlight(inputsOf(id)), u), v, stance);
 /**
  * The progress at which a preset's board has done `fraction` of its total on
  * one axis. Since ADR-36 (2026-11-05) the board no longer turns at a constant
@@ -25,8 +28,8 @@ const level = (id: PresetId, u: number, v: Vector3, stance: Stance) => apply(pos
  * phased profile (rollAt, yawAt) by bisection, before the catch, where it is
  * total * R(u) and rises monotonically.
  */
-const progressAt = (id: PresetId, axis: 'roll' | 'yaw', fraction: number) => {
-  const flight = computeFlight(presetById(id).inputs);
+const progressAt = (id: Case, axis: 'roll' | 'yaw', fraction: number) => {
+  const flight = computeFlight(inputsOf(id));
   const at = axis === 'roll' ? rollAt : yawAt;
   const want = Math.abs((axis === 'roll' ? flight.rollTotal : flight.yawTotal) * fraction);
   let lo = 0;
@@ -63,21 +66,21 @@ describe.each(['goofy', 'regular'] as const)('mirror tricks on the board (%s sta
     expect(level('frontside-pop-shove-it', 1, TAIL, stance).dot(atRest(NOSE, stance))).toBeGreaterThan(0.95);
   });
 
-  it('the varial heelflip and the hardflip compose a flip and a shove direction each', () => {
-    const cases = [
-      ['varial-heelflip', -1, -1],
-      ['hardflip', 1, -1],
-    ] as const;
+  it('the varial heelflip and a kickflip with a frontside scoop compose a flip and a shove direction each', () => {
+    const cases: [string, Case, number, number][] = [
+      ['varial heelflip', 'varial-heelflip', -1, -1],
+      ['kickflip with a frontside scoop', { pop: 0.35, flick: 1.9, scoop: -0.9 }, 1, -1],
+    ];
     // Each axis where it has done a tenth of its turn (was both at u = 0.1, see above).
-    const heelSide = (id: PresetId, u: number) =>
+    const heelSide = (id: Case, u: number) =>
       new Vector3().crossVectors(level(id, u, NOSE, stance), UP).multiplyScalar(BACKSIDE[stance]).normalize();
-    for (const [id, flip, shove] of cases) {
+    for (const [label, id, flip, shove] of cases) {
       const shoveAt = progressAt(id, 'yaw', 0.1);
-      expect(turnSense(stance, level(id, shoveAt, TAIL, stance)), id).toBe(shove * BACKSIDE[stance]);
-      expect(heelSide(id, shoveAt).z, id).toBeGreaterThan(0.7);
+      expect(turnSense(stance, level(id, shoveAt, TAIL, stance)), label).toBe(shove * BACKSIDE[stance]);
+      expect(heelSide(id, shoveAt).z, label).toBeGreaterThan(0.7);
       // The flip axis follows the shove (YZX): measure the grip against the board's own heel side.
       const flipAt = progressAt(id, 'roll', 0.1);
-      expect(Math.sign(level(id, flipAt, GRIP, stance).dot(heelSide(id, flipAt))), id).toBe(flip);
+      expect(Math.sign(level(id, flipAt, GRIP, stance).dot(heelSide(id, flipAt))), label).toBe(flip);
     }
   });
 });

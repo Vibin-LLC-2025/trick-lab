@@ -65,8 +65,8 @@ describe('presets', () => {
     expect(r.landed).toBe(true);
   });
 
-  it('keys 1 to 8 map to the presets in order', () => {
-    expect(PRESETS.map((p) => p.key)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+  it('keys 1 to 7 map to the presets in order (the hardflip was 7 until ADR-41)', () => {
+    expect(PRESETS.map((p) => p.key)).toEqual(['1', '2', '3', '4', '5', '6', '7']);
     expect(PRESETS.map((p) => [p.label, p.inputs.flick, p.inputs.scoop])).toEqual([
       ['Kickflip', 1.9, 0],
       ['Heelflip', -1.9, 0],
@@ -74,7 +74,6 @@ describe('presets', () => {
       ['Frontside shove-it', 0, -0.9],
       ['Varial flip', 1.9, 0.9],
       ['Varial heelflip', -1.9, -0.9],
-      ['Hardflip', 1.9, -0.9],
       ['360 flip', 1.9, 1.9],
     ]);
     expect(OBJECTIVES.map((o) => o.label)).toEqual([
@@ -84,7 +83,6 @@ describe('presets', () => {
       'Land a frontside shove-it',
       'Land a varial flip',
       'Land a varial heelflip',
-      'Land a hardflip',
       'Land a 360 flip',
     ]);
   });
@@ -102,11 +100,12 @@ describe('naming table', () => {
     [0, 2, '360-shove-it', '360 shove-it'],
     [0, -2, 'frontside-360-shove-it', 'Frontside 360 shove-it'],
     [1, 1, 'varial-flip', 'Varial flip'],
-    [1, -1, 'hardflip', 'Hardflip'],
+    // ADR-41 (2026-11-05): no longer named the hardflip and the 360 hardflip.
+    [1, -1, 'unnamed', 'Unnamed (1 kickflip, 1 frontside half shove)'],
     [-1, -1, 'varial-heelflip', 'Varial heelflip'],
     [-1, 1, 'inward-heelflip', 'Inward heelflip'],
     [1, 2, '360-flip', '360 flip'],
-    [1, -2, '360-hardflip', '360 hardflip'],
+    [1, -2, 'unnamed', 'Unnamed (1 kickflip, 2 frontside half shoves)'],
     [-1, -2, 'laser-flip', 'Laser flip'],
     [-1, 2, '360-inward-heelflip', '360 inward heelflip'],
     [2, 2, 'double-tre', 'Double tre'],
@@ -123,11 +122,11 @@ describe('naming table', () => {
 
   it('names the signed flight: negative flick is a heelflip, negative scoop frontside', () => {
     expect(recognize(withTotals(-365, 0)).id).toBe('heelflip');
-    expect(recognize(withTotals(365, -173)).id).toBe('hardflip');
+    expect(recognize(withTotals(365, -173)).name).toBe('Unnamed (1 kickflip, 1 frontside half shove)');
     expect(recognize(withTotals(-365, 173)).id).toBe('inward-heelflip');
     expect(recognize(withTotals(-365, -365)).id).toBe('laser-flip');
     expect(resolveTrick({ pop: 0.35, flick: -1.9, scoop: 1.9 }).id).toBe('360-inward-heelflip');
-    expect(resolveTrick({ pop: 0.35, flick: 1.9, scoop: -1.9 }).id).toBe('360-hardflip');
+    expect(resolveTrick({ pop: 0.35, flick: 1.9, scoop: -1.9 }).name).toBe('Unnamed (1 kickflip, 2 frontside half shoves)');
     expect(resolveTrick({ pop: 0.35, flick: 0, scoop: -1.9 }).id).toBe('frontside-360-shove-it');
     expect(resolveTrick({ pop: 0.35, flick: -3, scoop: 0 }).id).toBe('double-heelflip');
   });
@@ -225,12 +224,17 @@ describe('objectives', () => {
 
   it('a landed mirror trick completes its own objective, not the original', () => {
     expect(newlyCompleted(resolveTrick(presetById('heelflip').inputs), ['kickflip'])).toEqual(['heelflip']);
-    expect(newlyCompleted(resolveTrick(presetById('hardflip').inputs), [])).toEqual(['hardflip']);
+    expect(newlyCompleted(resolveTrick(presetById('frontside-pop-shove-it').inputs), ['pop-shove-it'])).toEqual(['frontside-pop-shove-it']);
     // An inward heelflip is not a preset: it lands but completes nothing.
     const inward = resolveTrick({ pop: 0.35, flick: -1.9, scoop: 0.9 });
     expect(inward.id).toBe('inward-heelflip');
     expect(inward.landed).toBe(true);
     expect(newlyCompleted(inward, [])).toEqual([]);
+    // Nor does the kickflip with a frontside scoop, the hardflip preset until ADR-41: it still lands, unnamed.
+    const kickFs = resolveTrick({ pop: 0.35, flick: 1.9, scoop: -0.9 });
+    expect(kickFs.id).toBe('unnamed');
+    expect(kickFs.landed).toBe(true);
+    expect(newlyCompleted(kickFs, [])).toEqual([]);
   });
 
   it('a bail or a non-preset trick completes nothing', () => {

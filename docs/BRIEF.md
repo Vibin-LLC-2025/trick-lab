@@ -29,7 +29,8 @@ The two rate sliders are centred on 0. Each shows the magnitude and the
 direction ("1.9 rev/s heelflip", "0.9 rev/s frontside", "0.0 rev/s"), and
 aria-valuetext says "1.9 revolutions per second, heelflip".
 
-Eight trick presets (buttons, also keys 1 to 8; four until 2026-11-04) set
+Seven trick presets (buttons, also keys 1 to 7; four until 2026-11-04, eight
+until 2026-11-05, when ADR-41 removed the hardflip) set
 the sliders to values that land the trick with the default pop 0.35 m:
 
 1. Kickflip (flick 1.9, scoop 0): 1 full flip (roll 360 deg about the board's long axis), no shove
@@ -38,8 +39,7 @@ the sliders to values that land the trick with the default pop 0.35 m:
 4. Frontside shove-it (flick 0, scoop -0.9): frontside half shove (yaw -180)
 5. Varial flip (flick 1.9, scoop 0.9): kickflip + backside half shove
 6. Varial heelflip (flick -1.9, scoop -0.9): heelflip + frontside half shove
-7. Hardflip (flick 1.9, scoop -0.9): kickflip + frontside half shove
-8. 360 flip, tre flip (flick 1.9, scoop 1.9): kickflip + backside full shove
+7. 360 flip, tre flip (flick 1.9, scoop 1.9): kickflip + backside full shove
 
 Physics (pure, in `src/sim/flight.ts`, g = 9.81):
 
@@ -65,11 +65,11 @@ Recognition (pure, in `src/sim/tricks.ts`):
 - name by signed (flips, halfShoves): (0,0) ollie; (1,0) kickflip; (-1,0)
   heelflip; (2,0) double kickflip; (-2,0) double heelflip; (0,1) pop
   shove-it; (0,-1) frontside pop shove-it; (0,2) 360 shove-it; (0,-2)
-  frontside 360 shove-it; (1,1) varial flip; (1,-1) hardflip; (-1,-1)
-  varial heelflip; (-1,1) inward heelflip; (1,2) 360 flip; (1,-2) 360
-  hardflip; (-1,-2) laser flip; (-1,2) 360 inward heelflip; (2,2) double
-  tre; anything else "Unnamed" with direction words, for example
-  "Unnamed (2 heelflips, 1 frontside half shove)"
+  frontside 360 shove-it; (1,1) varial flip; (-1,-1) varial heelflip;
+  (-1,1) inward heelflip; (1,2) 360 flip; (-1,-2) laser flip; (-1,2) 360
+  inward heelflip; (2,2) double tre; anything else "Unnamed" with direction
+  words, for example "Unnamed (2 heelflips, 1 frontside half shove)" or
+  "Unnamed (1 kickflip, 1 frontside half shove)" (the hardflip until ADR-41)
 - if not landed: outcome is "under-rotated" when the failing axis fell short
   of its nearest whole turn in its own direction of rotation, "over-rotated"
   when it went past (a magnitude test, so it reads the same for a heelflip
@@ -100,8 +100,7 @@ Assessment objectives (checklist, scored on the fly):
 4. Land a frontside shove-it.
 5. Land a varial flip.
 6. Land a varial heelflip.
-7. Land a hardflip.
-8. Land a 360 flip.
+7. Land a 360 flip.
 Bonus text (not an objective): land any preset at pop 0.20 m or lower by
 raising flick/scoop yourself.
 
@@ -146,7 +145,7 @@ Reset clears inputs to defaults and board pose, keeps the log.
 - Layout: canvas fills the stage; left column "setup" (presets, inputs,
   playback); right column "results" (telemetry, objectives, event log).
   Columns stack under the stage below 960 px.
-- Keyboard: Tab order presets, sliders, playback, results. 1 to 8 apply
+- Keyboard: Tab order presets, sliders, playback, results. 1 to 7 apply
   presets, Space pops (unless focus is in a slider or button, where Space
   keeps its native meaning), s toggles slow motion, r resets, p toggles the
   perf badge, ? opens shortcuts, t toggles theme.

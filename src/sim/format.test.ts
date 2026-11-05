@@ -279,7 +279,8 @@ describe('foot steps (DESIGN.md 8.5)', () => {
   });
 
   it('times the steps by the flight phases: in the air to the catch, the catch, then down; a bail has no catch', () => {
-    for (const { inputs } of PRESETS) {
+    // The presets, and the kickflip with a frontside scoop (the hardflip preset until ADR-41), still on the sliders.
+    for (const { inputs } of [...PRESETS, { inputs: { pop: 0.35, flick: 1.9, scoop: -0.9 } }]) {
       const s = steps(inputs.pop, inputs.flick, inputs.scoop);
       const lift = s.find((x) => x.text.startsWith('Both feet lift'))!;
       const caught = s.filter((x) => x.text.startsWith('Both feet catch the board'));
@@ -325,7 +326,7 @@ describe('foot steps (DESIGN.md 8.5)', () => {
     expect(texts(0.15, -1.9, 0).at(-1)).toBe('The board does not come round in time: both feet step off to the heel side, a bail.');
   });
 
-  it('scripts the frontside scoop forward in front of the toes, and composes a hardflip', () => {
+  it('scripts the frontside scoop forward in front of the toes, and composes it with a kickflip (the hardflip until ADR-41)', () => {
     expect(texts(0.35, 0, -0.9)).toContain('Back foot slices the tail forward in front of the toes, 9 cm toward the toe side.');
     expect(texts(0.35, 0, -3)).toContain('Back foot slices the tail forward in front of the toes, 25 cm toward the toe side, as hard as it goes.');
     const hard = texts(0.35, 1.9, -0.9);

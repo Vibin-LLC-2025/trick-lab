@@ -13,7 +13,7 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 ## Features
 
 - **Physics you can see.** Airtime, height, flip and shove come from a small, pure, unit-tested model. Change one slider and the result changes for a visible reason.
-- **Real trick recognition.** 17 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Eight presets, eight objectives, scored as you go.
+- **Real trick recognition.** 15 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Seven presets, seven objectives, scored as you go.
 - **A rider, not a floating board.** Shoes and legs follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails.
 - **Accessible first.** Every action has a keyboard shortcut and a DOM control, a live region describes each pop and outcome in plain language, and reduced motion turns playback into a scrubbable timeline.
 - **Built for slow hardware too.** Three quality tiers, picked for the device: High adds shadow maps, MSAA and detailed models, Low is sized for a Chromebook, under 20 draw calls. The renderer draws nothing while idle.
@@ -38,7 +38,7 @@ npm run dev
 
 Then open the local URL Vite prints. Press `1` for the kickflip preset and `Space` to pop.
 
-**Keys:** `1` to `8` presets (kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, hardflip, 360 flip), `Space` pop, `s` slow motion, `[` and `]` slower and faster (also mid-trick), `r` reset, `t` theme, `p` perf badge, `?` all shortcuts.
+**Keys:** `1` to `7` presets (kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip), `Space` pop, `s` slow motion, `[` and `]` slower and faster (also mid-trick), `r` reset, `t` theme, `p` perf badge, `?` all shortcuts.
 
 | Command | What it does |
 | --- | --- |
@@ -54,7 +54,7 @@ New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in pla
 
 The rest of this README is the technical detail: the architecture, the asset pipeline, the physics and its simplifications, accessibility, performance, testing and how it was built with AI agents.
 
-The trick names follow the sign of each input (ADR-30): flick positive is the kickflip direction and negative the heelflip, scoop positive is backside and negative frontside. That gives kickflip, heelflip, double kickflip, double heelflip, pop shove-it, frontside pop shove-it, 360 shove-it, frontside 360 shove-it, varial flip, varial heelflip, hardflip, inward heelflip, 360 flip, 360 hardflip, laser flip, 360 inward heelflip and double tre.
+The trick names follow the sign of each input (ADR-30): flick positive is the kickflip direction and negative the heelflip, scoop positive is backside and negative frontside. That gives kickflip, heelflip, double kickflip, double heelflip, pop shove-it, frontside pop shove-it, 360 shove-it, frontside 360 shove-it, varial flip, varial heelflip, inward heelflip, 360 flip, laser flip, 360 inward heelflip and double tre. There is no hardflip: the public sources do not agree on how one moves closely enough to build it without guessing, so it was removed (ADR-41, `docs/research/2026-11-05/hardflip.md`); a kickflip with a frontside scoop reads "Unnamed (1 kickflip, 1 frontside half shove)".
 
 
 ## Architecture

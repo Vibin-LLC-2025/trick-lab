@@ -65,7 +65,7 @@ describe('pop and resolve', () => {
     expect(s.events[2]!.payload).toMatchObject({ trick: 'kickflip', landed: true, rollTotal: 365.4, airtime: 0.534 });
     expect(said(store)).toBe(
       'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
-        'Objective complete: Land a kickflip. 1 of 8 objectives done.',
+        'Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
   });
 
@@ -112,16 +112,16 @@ describe('pop and resolve', () => {
     expect(said(store)).toMatch(/^Popped with pop 0\.35 meters.*Pop shove-it landed\. 0 degrees of flip, 173 degrees of backside shove/);
   });
 
-  it('all eight presets complete all eight objectives', () => {
+  it('all seven presets complete all seven objectives', () => {
     const store = makeStore();
-    const ids = ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it', 'varial-flip', 'varial-heelflip', 'hardflip', '360-flip'] as const;
+    const ids = ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it', 'varial-flip', 'varial-heelflip', '360-flip'] as const;
     for (const id of ids) {
       store.getState().applyPreset(id);
       store.getState().popTrick();
       store.getState().land();
     }
     expect(store.getState().completed).toEqual([...ids]);
-    expect(said(store)).toMatch(/8 of 8 objectives done\.$/);
+    expect(said(store)).toMatch(/7 of 7 objectives done\.$/);
   });
 
   it('a mirror preset applies signed inputs, logs them and announces the directions (ADR-30)', () => {
@@ -139,7 +139,7 @@ describe('pop and resolve', () => {
     expect(store.getState().events.find((e) => e.type === 'trick.resolved')!.payload).toMatchObject({ rollTotal: -365.4, yawTotal: -173.1 });
     expect(said(store)).toBe(
       'Varial heelflip landed. 365 degrees of heelflip, 173 degrees of frontside shove, 0.53 seconds in the air. ' +
-        'Objective complete: Land a varial heelflip. 1 of 8 objectives done.',
+        'Objective complete: Land a varial heelflip. 1 of 7 objectives done.',
     );
   });
 
@@ -632,7 +632,7 @@ describe('motion turned off mid-flight (ADR-6)', () => {
     expect(s.result?.id).toBe('kickflip');
     expect(said(store)).toBe(
       'Reduced motion on: the board goes straight to its landing. Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
-        'Objective complete: Land a kickflip. 1 of 8 objectives done.',
+        'Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
     const nonce = s.announcement.nonce;
     // Repeating the preference, or the driver's late land(), resolves nothing again.
@@ -711,7 +711,7 @@ describe('scene unavailable (SceneBoundary)', () => {
     store.getState().popTrick();
     expect(store.getState().status).toBe('done');
     expect(store.getState().completed).toEqual(['kickflip']);
-    expect(said(store)).toMatch(/^Popped with .*Kickflip landed\..*1 of 8 objectives done\.$/);
+    expect(said(store)).toMatch(/^Popped with .*Kickflip landed\..*1 of 7 objectives done\.$/);
     store.getState().scrub(0.4);
     expect(store.getState().progress).toBe(0.4);
     store.getState().resetSession();

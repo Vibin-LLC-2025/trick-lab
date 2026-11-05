@@ -37,7 +37,7 @@ Published anchors to check the capture against (from the same report): kickflip 
 1. Weigh the complete board, the deck, one truck and one wheel. Measure the deck.
 2. Calibrate both cameras in the recording mode, then fire the sync signal.
 3. Record flat ground, stationary first, then rolling slowly. Note the stance, the shoes and the surface.
-4. Order: ollie, kickflip, 360 flip (three contrasting contact patterns). Then heelflip, backside and frontside pop shove-it, varial flip, hardflip. Doubles if the rider has them.
+4. Order: ollie, kickflip, 360 flip (three contrasting contact patterns). Then heelflip, backside and frontside pop shove-it, varial flip, hardflip (removed from the app by ADR-41 for lack of data: capture both styles, vertical through the legs and flat frontside-shove, and label which). Doubles if the rider has them.
 5. Three clean makes per trick, kept separately from the bails (keep the bails too: they are the bail model's reference).
 6. Keep every original file. Never work from a retimed or re-encoded export.
 

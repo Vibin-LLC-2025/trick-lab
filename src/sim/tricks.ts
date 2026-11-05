@@ -17,11 +17,9 @@ export type TrickId =
   | '360-shove-it'
   | 'frontside-360-shove-it'
   | 'varial-flip'
-  | 'hardflip'
   | 'varial-heelflip'
   | 'inward-heelflip'
   | '360-flip'
-  | '360-hardflip'
   | 'laser-flip'
   | '360-inward-heelflip'
   | 'double-tre'
@@ -34,7 +32,6 @@ export type PresetId =
   | 'frontside-pop-shove-it'
   | 'varial-flip'
   | 'varial-heelflip'
-  | 'hardflip'
   | '360-flip';
 
 export type Outcome = 'landed' | 'under-rotated' | 'over-rotated';
@@ -71,7 +68,10 @@ export interface TrickResult {
  * are kickflips, negative heelflips; positive half shoves are backside,
  * negative frontside. A flip and a shove that turn the same way are the
  * varials (kickflip with backside, heelflip with frontside); the opposite
- * pairs are the hardflips and the inward heelflips.
+ * pairs are the inward heelflips. A kickflip with a frontside shove (1,-1)
+ * and (1,-2) is unnamed since ADR-41 (2026-11-05): the hardflip and the 360
+ * hardflip were removed because the public sources do not pin down either
+ * the board's path or the feet (docs/research/2026-11-05/hardflip.md).
  */
 const NAMED: Record<string, { id: TrickId; name: string }> = {
   '0,0': { id: 'ollie', name: 'Ollie' },
@@ -84,11 +84,9 @@ const NAMED: Record<string, { id: TrickId; name: string }> = {
   '0,2': { id: '360-shove-it', name: '360 shove-it' },
   '0,-2': { id: 'frontside-360-shove-it', name: 'Frontside 360 shove-it' },
   '1,1': { id: 'varial-flip', name: 'Varial flip' },
-  '1,-1': { id: 'hardflip', name: 'Hardflip' },
   '-1,-1': { id: 'varial-heelflip', name: 'Varial heelflip' },
   '-1,1': { id: 'inward-heelflip', name: 'Inward heelflip' },
   '1,2': { id: '360-flip', name: '360 flip' },
-  '1,-2': { id: '360-hardflip', name: '360 hardflip' },
   '-1,-2': { id: 'laser-flip', name: 'Laser flip' },
   '-1,2': { id: '360-inward-heelflip', name: '360 inward heelflip' },
   '2,2': { id: 'double-tre', name: 'Double tre' },
@@ -195,13 +193,14 @@ export function snapInput(key: InputKey, value: number): number {
 export interface Preset {
   id: PresetId;
   label: string;
-  key: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8';
+  key: '1' | '2' | '3' | '4' | '5' | '6' | '7';
   inputs: TrickInputs;
 }
 
 // Values from docs/BRIEF.md, verified in tricks.test.ts: each lands at pop
 // 0.35 m (T = 0.534 s) and bails at pop 0.15 m (T = 0.350 s). See ADR-5; the
-// mirror tricks (a negative flick or scoop) are ADR-30.
+// mirror tricks (a negative flick or scoop) are ADR-30. The hardflip (key 7
+// until 2026-11-05) was removed in ADR-41; the 360 flip moved from 8 to 7.
 export const PRESETS: readonly Preset[] = [
   { id: 'kickflip', label: 'Kickflip', key: '1', inputs: { pop: 0.35, flick: 1.9, scoop: 0 } },
   { id: 'heelflip', label: 'Heelflip', key: '2', inputs: { pop: 0.35, flick: -1.9, scoop: 0 } },
@@ -209,8 +208,7 @@ export const PRESETS: readonly Preset[] = [
   { id: 'frontside-pop-shove-it', label: 'Frontside shove-it', key: '4', inputs: { pop: 0.35, flick: 0, scoop: -0.9 } },
   { id: 'varial-flip', label: 'Varial flip', key: '5', inputs: { pop: 0.35, flick: 1.9, scoop: 0.9 } },
   { id: 'varial-heelflip', label: 'Varial heelflip', key: '6', inputs: { pop: 0.35, flick: -1.9, scoop: -0.9 } },
-  { id: 'hardflip', label: 'Hardflip', key: '7', inputs: { pop: 0.35, flick: 1.9, scoop: -0.9 } },
-  { id: '360-flip', label: '360 flip', key: '8', inputs: { pop: 0.35, flick: 1.9, scoop: 1.9 } },
+  { id: '360-flip', label: '360 flip', key: '7', inputs: { pop: 0.35, flick: 1.9, scoop: 1.9 } },
 ];
 
 export const presetById = (id: PresetId): Preset => PRESETS.find((p) => p.id === id)!;

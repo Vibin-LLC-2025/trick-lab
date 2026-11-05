@@ -3,8 +3,8 @@ import { useTrickStore } from '../store';
 
 const SHORTCUTS: [string[], string][] = [
   [['Tab'], 'Move through presets, sliders, playback and results'],
-  // One key cap for the range (an en-dash, as for any numeric range) so the eight keys do not widen the key column.
-  [['1–8'], 'Apply presets 1 to 8, in order: kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, hardflip, 360 flip'],
+  // One key cap for the range (an en-dash, as for any numeric range) so the seven keys do not widen the key column.
+  [['1–7'], 'Apply presets 1 to 7, in order: kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip'],
   [['Space'], 'Pop (when focus is not on a slider or button, where Space keeps its usual job)'],
   [['←', '→'], 'Move the focused slider; on the timeline, 1 percent'],
   [['Page Up', 'Page Down'], 'On the timeline, 10 percent'],

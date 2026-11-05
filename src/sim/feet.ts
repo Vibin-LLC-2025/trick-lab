@@ -145,11 +145,13 @@ export const STANCE = {
      */
     zFrontside: -0.04,
     /**
-     * Hardflip (ADR-35, 2026-11-04): with a frontside scoop AND a kickflip
-     * the toes point a little more toward the nose, per unit of frontside
-     * factor times kickflip factor (48 to about 37 degrees at the preset),
-     * as the hardflip is coached ("like a kickflip, angled a bit more toward
-     * the nose"; est., see RESEARCH-FEET.md item 16). A frontside shove-it
+     * Kickflip with a frontside scoop (ADR-35, 2026-11-04): the toes point
+     * a little more toward the nose, per unit of frontside factor times
+     * kickflip factor (48 to about 37 degrees at flick 1.9, scoop -0.9),
+     * written for the hardflip from memory (est., RESEARCH-FEET.md item 16).
+     * ADR-41 (2026-11-05) removed the hardflip's name and preset; the
+     * sources disagree on this angle, and it is kept unchanged so the
+     * combination still on the sliders does not move. A frontside shove-it
      * alone and the heelflip side are untouched.
      */
     yawFrontside: -25,
@@ -274,11 +276,14 @@ export const MOTION = {
     varial: { x: 0.8, y: 0.3, z: 0.52 },
     tre: { x: 0.35, y: 0.35, z: 0.87 },
     /**
-     * Hardflip lean (ADR-35): a kickflip with a frontside scoop kicks
+     * Frontside lean (ADR-35): a kickflip with a frontside scoop kicks
      * straight forward off the nose rather than out to the side, reached at
-     * `varialAt` and held for harder scoops (a 360 hardflip kicks forward
-     * too; there is no frontside counterpart of the tre lean). The heelflip
-     * side keeps the varial lean, z negated, pending its own evidence.
+     * `varialAt` and held for harder scoops (no frontside counterpart of the
+     * tre lean). Named for the hardflip, which ADR-41 (2026-11-05) removed:
+     * most coaching sources flick it sideways and up instead
+     * (docs/research/2026-11-05/hardflip.md), so this is unverified, kept
+     * unchanged until reference data. The heelflip side keeps the varial
+     * lean, z negated, pending its own evidence.
      */
     hardflip: { x: 0.9, y: 0.3, z: 0.3 },
     /** Scoop factor where the varial lean peaks and where the full 360 flip lean is reached. */
@@ -459,7 +464,7 @@ export const tuckHeight = (foot: 'front' | 'back', inputs: TrickInputs, u: numbe
  * Unit flick direction for a scoop factor (a magnitude), written into `out`
  * (x, y, z): the kickflip direction, leaning forward toward a varial and out
  * toward a 360 flip; with a frontside scoop (`frontside`) the kickflip leans
- * straight forward instead, the hardflip (ADR-35). `side` -1 is the heelflip
+ * straight forward instead (ADR-35, unverified, ADR-41). `side` -1 is the heelflip
  * (ADR-30, ADR-34): the heel's kick direction with the backside leans
  * whichever way the scoop turns, off the toe-side corner, z negated.
  * Allocation-free: only constant vectors are picked.

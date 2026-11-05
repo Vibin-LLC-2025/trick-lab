@@ -95,17 +95,21 @@ describe('trick lab UI', () => {
     expect(useTrickStore.getState().scoop).toBe(0.9);
   });
 
-  it('keys 1 to 8 apply the eight presets in order; the objectives start at 0 of 8', async () => {
+  it('keys 1 to 7 apply the seven presets in order; the objectives start at 0 of 7', async () => {
     const user = await setup();
-    expect(screen.getByRole('heading', { name: 'Objectives 0 of 8' })).toBeInTheDocument();
-    expect(within(screen.getByRole('group', { name: 'Trick presets' })).getAllByRole('button')).toHaveLength(8);
-    const labels = ['Kickflip', 'Heelflip', 'Pop shove-it', 'Frontside shove-it', 'Varial flip', 'Varial heelflip', 'Hardflip', '360 flip'];
+    expect(screen.getByRole('heading', { name: 'Objectives 0 of 7' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Trick presets' })).getAllByRole('button')).toHaveLength(7);
+    const labels = ['Kickflip', 'Heelflip', 'Pop shove-it', 'Frontside shove-it', 'Varial flip', 'Varial heelflip', '360 flip'];
     for (const [i, label] of labels.entries()) {
       await user.keyboard(String(i + 1));
       expect(presetButton(label)).toHaveAttribute('aria-pressed', 'true');
       expect(presetButton(label)).toHaveAttribute('aria-keyshortcuts', String(i + 1));
       expect(announcer()).toHaveTextContent(`${label} preset applied`);
     }
+    // 8 was the 360 flip until ADR-41 (2026-11-05) removed the hardflip; it is no shortcut now.
+    await user.keyboard('8');
+    expect(presetButton('360 flip')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('slider', { name: /^Scoop/ })).toHaveValue('1.9');
     await user.keyboard('2');
     expect(screen.getByRole('slider', { name: /^Flick/ })).toHaveValue('-1.9');
     expect(screen.getByRole('slider', { name: /^Scoop/ })).toHaveValue('0');
@@ -123,7 +127,7 @@ describe('trick lab UI', () => {
     // The fifth row (ADR-36, 2026-11-05): the board's spin rate in the air, between the ramp-up and the catch.
     expect(values).toEqual(['0.53 s', '0.35 m', '365° heelflip', '173° frontside', '3.2 rev/s flip, 1.4 rev/s shove in the air']);
     expect(within(outcome).getByText('frontside')).toHaveClass('telemetry__dir');
-    expect(screen.getByRole('heading', { name: 'Objectives 1 of 8' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Objectives 1 of 7' })).toBeInTheDocument();
   });
 
   it('key 1 applies the kickflip preset, Space pops, and landing scores the objective', async () => {
@@ -145,11 +149,11 @@ describe('trick lab UI', () => {
 
     landNow();
     expect(announcer()).toHaveTextContent(
-      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 8 objectives done.',
+      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
     expect(screen.getByText('Kickflip landed')).toBeInTheDocument();
     expect(screen.getByText('365 deg kickflip, 0 deg shove, 0.53 s in the air.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Objectives 1 of 8' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Objectives 1 of 7' })).toBeInTheDocument();
     expect(document.querySelectorAll('.objective--done')).toHaveLength(1);
     // The outcome headline names the trick; the strip below gives the numbers and marks no axis.
     const outcome = screen.getByRole('region', { name: 'Outcome' });
@@ -171,7 +175,7 @@ describe('trick lab UI', () => {
 
   it('a low pop is not landed and says which axis and by how much', async () => {
     const user = await setup();
-    await user.keyboard('8');
+    await user.keyboard('7');
     fireEvent.change(screen.getByRole('slider', { name: /^Pop/ }), { target: { value: '0.15' } });
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     landNow();

@@ -45,6 +45,10 @@ const ollie: TrickInputs = { pop: 0.35, flick: 0, scoop: 0 };
 const kickflip = presetById('kickflip').inputs;
 const shove = presetById('pop-shove-it').inputs;
 const tre = presetById('360-flip').inputs;
+/** The kickflip with a frontside scoop: the hardflip preset until ADR-41 (2026-11-05), still on the sliders. */
+const KICKFLIP_FRONTSIDE: TrickInputs = { pop: 0.35, flick: 1.9, scoop: -0.9 };
+/** Every preset plus that combination, so the sweeps cover all they did before ADR-41. */
+const CASES = [...PRESETS, { id: 'kickflip-frontside', inputs: KICKFLIP_FRONTSIDE }] as const;
 
 describe('frame constants agree with the asset', () => {
   it('pins the pad level, the rail and the bolts to src/asset/spec.ts', () => {
@@ -250,7 +254,7 @@ describe('flight', () => {
     expect(scoopDistance({ ...tre, scoop: 3 })).toBe(MOTION.scoop.max);
   });
 
-  it.each(PRESETS)('lands $id on the bolts, on the grip', ({ inputs }) => {
+  it.each(CASES)('lands $id on the bolts, on the grip', ({ inputs }) => {
     const flight = computeFlight(inputs);
     expect(recognize(flight).landed).toBe(true);
     const p = feetPoseAt(ollie, flight, 1);
@@ -463,7 +467,7 @@ describe('flight', () => {
 
   // ADR-29 (2026-11-04): the clearance against the board's volume.
   describe('clearance', () => {
-    const sweep: TrickInputs[] = [ollie, ...PRESETS.map((p) => p.inputs)];
+    const sweep: TrickInputs[] = [ollie, ...CASES.map((p) => p.inputs)];
     for (const pop of [0.15, 0.5]) for (const flick of [0, 1.5, 3]) for (const scoop of [0, 1.5, 3]) sweep.push({ pop, flick, scoop });
 
     it("only ever adds height: x, z, yaw, pitch and roll are the model's own", () => {
@@ -485,7 +489,7 @@ describe('flight', () => {
     });
 
     it('stands every preset on the board at rest, and starts each flight from that stance', () => {
-      for (const { inputs } of PRESETS) {
+      for (const { inputs } of CASES) {
         const rest = feetPoseAt(inputs, null, 0);
         expect(restsOnBoard(rest.front, 1, REST)).toBe(true);
         expect(restsOnBoard(rest.back, -1, REST)).toBe(true);
@@ -561,10 +565,10 @@ describe('flight', () => {
   // ADR-36 (2026-11-05): the feet are timed against the board's catch.
   describe('tuck and catch (ADR-36)', () => {
     /** Every landed preset, and the same tricks rescaled to land at pop 0.2 and 0.5. */
-    const landedCases: TrickInputs[] = PRESETS.map((p) => p.inputs);
+    const landedCases: TrickInputs[] = CASES.map((p) => p.inputs);
     for (const pop of [0.2, 0.5]) {
       const k = airtimeFor(0.35) / airtimeFor(pop);
-      for (const { inputs } of PRESETS) {
+      for (const { inputs } of CASES) {
         const scaled = { pop, flick: snapInput('flick', inputs.flick * k), scoop: snapInput('scoop', inputs.scoop * k) };
         if (computeFlight(scaled).landed) landedCases.push(scaled);
       }
@@ -593,7 +597,7 @@ describe('flight', () => {
     });
 
     it('tucks each foot from its release: a fast rise, a level top, and down to the board at its catch', () => {
-      for (const { inputs } of PRESETS) {
+      for (const { inputs } of CASES) {
         for (const [foot, peak, catchAt] of [
           ['front', MOTION.tuck.frontPeak, CATCH.front],
           ['back', MOTION.tuck.backPeak, CATCH.back],
@@ -633,7 +637,7 @@ describe('flight', () => {
       expect(front.x).toBeCloseTo(BOLTS_X, 9);
       expect(front.yaw).toBeCloseTo(STANCE.front.yawAcross, 9);
       // At the end of the catch the board is flat and square, and both feet stand on their bolts.
-      for (const { inputs } of PRESETS) {
+      for (const { inputs } of CASES) {
         const p = at(inputs, CATCH.back);
         expect(p.front.x).toBeCloseTo(BOLTS_X, 9);
         expect(p.back.x).toBeCloseTo(-BOLTS_X, 9);
@@ -673,8 +677,9 @@ describe('flight', () => {
     // board everywhere between the front foot's release (0.22) and the
     // catch's start (0.64), so the clearance still lifts the shoes there.
     // Measured at 0.0025 steps: back foot up to 3.75 cm (kickflip at 0.56;
-    // heelflip 3.7, hardflip 2.9, 360 flip 2.7, varial flip 1.2), front foot
-    // up to 2.5 cm (varial heelflip at 0.62, kickflip and hardflip 2.3; the
+    // heelflip 3.7, kickflip with a frontside scoop 2.9, 360 flip 2.7, varial
+    // flip 1.2), front foot up to 2.5 cm (varial heelflip at 0.62, kickflip and
+    // kickflip with a frontside scoop 2.3; the
     // shove-its about 2 mm at the release). The 360 flip's front foot and
     // the shove-its' back feet are clear. Needs taller per-foot tucks from
     // reference data (RESEARCH-FEET.md section 4 item 11).
@@ -798,7 +803,7 @@ describe('motion cues', () => {
 describe('mirror tricks: heelflip and frontside scoop', () => {
   const heel = presetById('heelflip').inputs;
   const fs = presetById('frontside-pop-shove-it').inputs;
-  const hard = presetById('hardflip').inputs;
+  const hard = KICKFLIP_FRONTSIDE;
   const varialHeel = presetById('varial-heelflip').inputs;
   const inward: TrickInputs = { pop: 0.35, flick: -1.9, scoop: 0.9 };
   const last = (pts: CuePoint[]) => pts[pts.length - 1]!;
@@ -932,8 +937,8 @@ describe('mirror tricks: heelflip and frontside scoop', () => {
     for (const u of [0.06, 0.1]) expect(own(fs, u) - intent(fs).back.pitch).toBeCloseTo(own(shove, u) - intent(shove).back.pitch, 0);
   });
 
-  it('composes the hardflip and the inward heelflip from the two', () => {
-    // Hardflip: kickflip front foot (+Z, mostly forward since ADR-35), frontside back foot (-Z).
+  it('composes a kickflip with a frontside scoop and the inward heelflip from the two', () => {
+    // Kickflip with a frontside scoop (the hardflip until ADR-41): kickflip front foot (+Z, mostly forward since ADR-35), frontside back foot (-Z).
     expect(flickMove(hard).z).toBeGreaterThan(0.02);
     expect(flickMove(hard).x).toBeGreaterThan(0.1);
     expect(scoopMove(hard)).toBeLessThan(-0.05);
@@ -945,7 +950,7 @@ describe('mirror tricks: heelflip and frontside scoop', () => {
     expect(scoopMove(varialHeel)).toBeLessThan(-0.05);
   });
 
-  it('kicks the hardflip straight forward off the nose, toes a little more toward it, with no change to the frontside shove-it or the heelflip side (ADR-35)', () => {
+  it('kicks a kickflip with a frontside scoop straight forward off the nose, toes a little more toward it, with no change to the frontside shove-it or the heelflip side (ADR-35, unchanged by ADR-41)', () => {
     const va = flickMove(presetById('varial-flip').inputs);
     const hd = flickMove(hard);
     // More forward than sideways against the varial flip's lean; still toward the heel side.
@@ -954,17 +959,17 @@ describe('mirror tricks: heelflip and frontside scoop', () => {
     // Stance: toes turned toward the nose only when a kickflip meets a frontside scoop.
     expect(intent(hard).front.yaw).toBeCloseTo(intent(presetById('varial-flip').inputs).front.yaw + STANCE.front.yawFrontside * 0.45 * 0.95, 9);
     expect(intent(fs).front.yaw).toBeCloseTo(intent(shove).front.yaw, 9);
-    // The heelflip side keeps the backside leans, mirrored: a varial heelflip's kick is not the hardflip's.
+    // The heelflip side keeps the backside leans, mirrored: a varial heelflip's kick is not the forward one.
     const vh = flickMove(varialHeel);
     expect(vh.z).toBeLessThan(-0.05);
     expect(Math.abs(vh.x / vh.z)).toBeLessThan(hd.x / hd.z);
-    // Continuous through scoop 0 and held past the varial point for a 360 hardflip.
+    // Continuous through scoop 0 and held past the varial point for a harder frontside scoop.
     const plus = flickMove({ ...kickflip, scoop: 0.01 });
     const minus = flickMove({ ...kickflip, scoop: -0.01 });
     expect(Math.hypot(plus.x - minus.x, plus.z - minus.z)).toBeLessThan(0.003);
     const hard360 = flickMove({ ...kickflip, scoop: -1.9 });
     expect(hard360.x / hard360.z).toBeGreaterThan(va.x / va.z * 1.5);
-    // Both stances: the regular hardflip is the mirror along X.
+    // Both stances: regular is the mirror along X.
     const g = feetPoseAt(ollie, computeFlight(hard), 0.15, 'goofy').front;
     const r = feetPoseAt(ollie, computeFlight(hard), 0.15, 'regular').front;
     expect(r.x).toBeCloseTo(-g.x, 9);

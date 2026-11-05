@@ -26,8 +26,14 @@ function pose(out: LegsPose, inputs: TrickInputs, flight: Flight | null, u: numb
   return writeLegsPose(out, f, flight, u, inputs, stance);
 }
 
-/** Every preset at the three pops the lab teaches with (lands at 0.35, bails at 0.15, the highest 0.6). */
-const CASES: TrickInputs[] = PRESETS.flatMap((p) => [0.15, 0.35, 0.6].map((pop) => ({ ...p.inputs, pop })));
+/**
+ * Every preset, plus the kickflip with a frontside scoop (the hardflip preset
+ * until ADR-41, 2026-11-05, still on the sliders), at the three pops the lab
+ * teaches with (lands at 0.35, bails at 0.15, the highest 0.6).
+ */
+const KICKFLIP_FRONTSIDE: TrickInputs = { pop: 0.35, flick: 1.9, scoop: -0.9 };
+const SWEPT: TrickInputs[] = [...PRESETS.map((p) => p.inputs), KICKFLIP_FRONTSIDE];
+const CASES: TrickInputs[] = SWEPT.flatMap((inputs) => [0.15, 0.35, 0.6].map((pop) => ({ ...inputs, pop })));
 /** The input that drives the reach clamp hardest (a sweep of the whole input range, 2026-11-05). */
 const REACH: TrickInputs = { pop: 0.6, flick: 2, scoop: -3 };
 
@@ -205,7 +211,7 @@ describe('leg lengths and the IK (ADR-37)', () => {
 });
 
 describe('the rider crouches, jumps and absorbs (ADR-37)', () => {
-  const landed = PRESETS.map((p) => p.inputs);
+  const landed = SWEPT;
 
   it('crouches at progress 0 over the stance, the same pose as before the pop', () => {
     const idle = newLegsPose();
@@ -253,7 +259,8 @@ describe('the rider crouches, jumps and absorbs (ADR-37)', () => {
     expect(least).toBeGreaterThan(0.05);
   });
 
-  // Measured 2026-11-05 for the eight presets at pop 0.35: 85 to 92 degrees
+  // Measured 2026-11-05 for the eight presets of then (now the seven and
+  // the kickflip with a frontside scoop) at pop 0.35: 85 to 92 degrees
   // in the crouch, 64 to 66 at the catch (the legs reach down for the board),
   // 84 at the landing (the absorb), held after it.
   it('reaches for the catch with bent knees, then bends further to absorb the landing', () => {
