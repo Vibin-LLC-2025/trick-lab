@@ -16,7 +16,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import type { BufferGeometry } from 'three';
 import { buildBoard, triangleCount } from '../../src/asset/board';
 import { buildGround } from '../../src/asset/ground';
-import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS } from '../../src/asset/groundSpec';
+import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS, groundRepeat } from '../../src/asset/groundSpec';
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES } from '../../src/asset/shoeSpec';
@@ -37,11 +37,13 @@ import {
   gripGrey,
   gripHigh,
   gripTint,
+  greyFromField,
   hexToRgb,
   normalMapFromHeight,
   plyPixels,
   plyPixelsHigh,
   wheelPixels,
+  wearDeckBottom,
   wheelPixelsHigh,
   type Pixels,
 } from '../../src/asset/textures';
@@ -60,7 +62,7 @@ const linearFactor = (hex: string): [number, number, number, number] => {
 const png = (p: Pixels) => encodePng(p.width, p.height, 3, p.rgb);
 
 /** Rasterize the design's SVG at the texture size and drop the alpha (the field is opaque). */
-function deckBottomPng(T: { width: number; height: number }): Uint8Array {
+function deckGraphic(T: { width: number; height: number }): Pixels {
   const svg = readFileSync(GRAPHIC_SVG, 'utf8');
   const img = new Resvg(svg, { fitTo: { mode: 'width', value: T.width } }).render();
   if (img.width !== T.width || img.height !== T.height) throw new Error(`deck graphic rasterized at ${img.width} x ${img.height}`);
@@ -71,7 +73,12 @@ function deckBottomPng(T: { width: number; height: number }): Uint8Array {
     rgb[j + 1] = rgba[i + 1]!;
     rgb[j + 2] = rgba[i + 2]!;
   }
-  return encodePng(T.width, T.height, 3, rgb);
+  return { width: T.width, height: T.height, rgb };
+}
+
+/** The graphic with the deck wear baked over it (ADR-38), and the wear's roughness field. */
+function wornDeckBottom(T: { width: number; height: number }) {
+  return wearDeckBottom(deckGraphic(T));
 }
 
 export interface BuildReport {
@@ -113,13 +120,15 @@ function boardSpec(level: DetailLevel): AssetSpec {
     const grip = gripGrey();
     textures.push(
       { key: 'grip', file: T.grip.file, png: encodePng(grip.width, grip.height, 1, grip.grey), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
-      { key: 'deckBottom', file: T.deckBottom.file, png: deckBottomPng(T.deckBottom), wrap: T.deckBottom.wrap },
+      { key: 'deckBottom', file: T.deckBottom.file, png: png(wornDeckBottom(T.deckBottom).color), wrap: T.deckBottom.wrap },
       { key: 'ply', file: T.ply.file, png: png(plyPixels()), wrap: T.ply.wrap },
       { key: 'wheel', file: T.wheel.file, png: png(wheelPixels()), wrap: T.wheel.wrap },
     );
   } else {
     const T = TEXTURES_HIGH;
     const grip = gripHigh();
+    const deck = wornDeckBottom(T.deckBottom);
+    const rough = greyFromField(deck.roughness, T.deckBottom.width, T.deckBottom.height, T.deckRoughness.width, T.deckRoughness.height);
     textures.push(
       { key: 'grip', file: T.grip.file, png: png(grip.color), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
       {
@@ -129,7 +138,8 @@ function boardSpec(level: DetailLevel): AssetSpec {
         wrap: T.gripNormal.wrap,
         repeat: deckRepeat(T.gripNormal.tile),
       },
-      { key: 'deckBottom', file: T.deckBottom.file, png: deckBottomPng(T.deckBottom), wrap: T.deckBottom.wrap },
+      { key: 'deckBottom', file: T.deckBottom.file, png: png(deck.color), wrap: T.deckBottom.wrap },
+      { key: 'deckRoughness', file: T.deckRoughness.file, png: encodePng(rough.width, rough.height, 1, rough.grey), wrap: T.deckRoughness.wrap },
       { key: 'ply', file: T.ply.file, png: png(plyPixelsHigh()), wrap: T.ply.wrap },
       { key: 'wheel', file: T.wheel.file, png: png(wheelPixelsHigh()), wrap: T.wheel.wrap },
     );
@@ -141,10 +151,12 @@ function boardSpec(level: DetailLevel): AssetSpec {
       name: M.name,
       // The medium grip is a grey map tinted by the base colour factor; the high grip is RGB.
       baseColor: key === 'grip' && level === 'medium' ? gripTint() : linearFactor(M.color),
-      roughness: M.roughness,
+      // The high graphic's roughness is the wear map's (glTF multiplies it by this factor).
+      roughness: key === 'graphic' && level === 'high' ? 1 : M.roughness,
       metalness: M.metalness,
       map: 'map' in M ? M.map : undefined,
       normalMap: key === 'grip' && level === 'high' ? { key: 'gripNormal', scale: GRIP_NORMAL_SCALE } : undefined,
+      roughnessMap: key === 'graphic' && level === 'high' ? 'deckRoughness' : undefined,
     };
   });
   return {
@@ -190,10 +202,13 @@ function shoeSpec(): AssetSpec {
   };
 }
 
-/** The concrete ground: one plane, one material with colour, normal and roughness maps of one bay, repeated. */
+/**
+ * The concrete ground: one plane, one material with colour, normal and
+ * roughness maps, each a tile of its own number of bays with its own repeat
+ * (groundSpec.ts GROUND_TEXTURES, ADR-38).
+ */
 function groundSpec(): AssetSpec {
   const T = GROUND_TEXTURES;
-  const repeat: [number, number] = [PLANE_BAYS.x, PLANE_BAYS.z];
   const color = concreteColor();
   const rough = concreteRoughness();
   return {
@@ -206,9 +221,15 @@ function groundSpec(): AssetSpec {
       design: 'src/asset/groundSpec.ts',
     },
     textures: [
-      { key: 'color', file: T.color.file, png: encodePng(color.width, color.height, 1, color.grey), wrap: 'repeat', repeat },
-      { key: 'normal', file: T.normal.file, png: png(concreteNormal()), wrap: 'repeat', repeat },
-      { key: 'roughness', file: T.roughness.file, png: encodePng(rough.width, rough.height, 1, rough.grey), wrap: 'repeat', repeat },
+      { key: 'color', file: T.color.file, png: encodePng(color.width, color.height, 1, color.grey), wrap: 'repeat', repeat: groundRepeat('color') },
+      { key: 'normal', file: T.normal.file, png: png(concreteNormal()), wrap: 'repeat', repeat: groundRepeat('normal') },
+      {
+        key: 'roughness',
+        file: T.roughness.file,
+        png: encodePng(rough.width, rough.height, 1, rough.grey),
+        wrap: 'repeat',
+        repeat: groundRepeat('roughness'),
+      },
     ],
     materials: [
       {
@@ -287,6 +308,9 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
       .setAttribute('NORMAL', accessor('VEC3', g.getAttribute('normal').array as Float32Array));
     const uv = g.getAttribute('uv');
     if (uv && textured.has(material)) prim.setAttribute('TEXCOORD_0', accessor('VEC2', uv.array as Float32Array));
+    // A linear vertex colour multiplies the base colour (the board's dark bolts in the steel group, ADR-38).
+    const color = g.getAttribute('color');
+    if (color) prim.setAttribute('COLOR_0', accessor('VEC3', color.array as Float32Array));
     const count = g.getAttribute('position').count;
     const index = Array.from(g.index!.array);
     prim.setIndices(accessor('SCALAR', count < 65536 ? new Uint16Array(index) : new Uint32Array(index)));

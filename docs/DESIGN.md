@@ -181,6 +181,8 @@ Triangle estimate, which the budget script should confirm:
 | Bolt heads (8 radial segments) | 8 | 28 | 224 |
 | Total | | | about 11,700 |
 
+Measured since the truck pass (2026-11-05, ADR-38, 7.4): Medium 14,272 triangles (aluminium 2,856, steel 1,760 with the bolts, bushings 352 with the pivot cup inserts), High 47,488 (9,560, 4,368, 736). The textures row above is Medium; the deck-bottom map now carries the wear of 7.3.
+
 ### 7.2 Deck geometry
 
 **Plan outline** (half width `w(x)`, metres; symmetric in z). Overall length `0.8065` from tail tip `x = -0.3970` to nose tip `x = +0.4095`; overall width `0.2032` at x = 0.
@@ -273,25 +275,42 @@ No roughness or normal map; the grain is value only. The grip covers the top fla
 
 **Deck graphic.** Source `assets/source/deck-graphic.svg`, 2048 x 512, nose at the right (+X); rasterize with resvg at 1024 x 256 (half scale) for the GLB. It is original art: a burnt orange field `#e0532c`, the word TRICK LAB in near-black `#17181a` pixel letters (5 x 7 cells of 26 px, x 280 to 1554, 182 px tall), three tally marks at the tail (x 98 to 252, 220 px tall: count the rotations) and a cream `#f3eadb` disc of radius 170 at (1770, 256) with a black chevron pointing at the nose. The field covers the whole texture so the outline can cut it anywhere. Contrast: ink on field 4.6:1, cream on field 3.2:1, grip mean against the field 4.3:1, so each half flip is a clear value change. The disc is the single strongest shape and sits only at the nose, so a viewer can count rotations and tell nose from tail mid-flip. All art is rects, paths and circles: no fonts, filters or gradients, so resvg and a browser agree pixel for pixel. The chevron fits inside the disc with 50 px to spare, and the disc clears the outline by at least 100 px where they are closest (x 1900).
 
+**Deck wear** (truck pass, 2026-11-05, ADR-38; `DECK_WEAR` in `src/asset/spec.ts`, `wearDeckBottom` in `textures.ts`). The build bakes a mild, used state over the rasterized graphic, placed in deck metres so both tiers get the same marks. Seed `20261106`. One wear mask, 0 clean print to 1 bare wood, drives the colour and (High) the roughness:
+
+| Mark | Value |
+| --- | --- |
+| Maple grain under the print | lines along the deck, 1.6 mm apart on average, wandering up to 2.2 mm over 0.11 m; +-2 levels on the print (the wave snapped to 0.2 m blocks along the deck, which 2 levels cannot show and which a PNG row filter stores nearly free), +-14 on bare wood |
+| Slide scratches | 16 between the trucks (x -0.16 to 0.16), mostly across the deck (up to 24 deg off), 3 to 11 cm long, 0.4 to 1.1 mm wide, strength 0.35 to 1, tapered at both ends |
+| Tips scraped to wood | within 7.5 cm of the tail tip and 5.5 cm of the nose tip, 5.5 to 12 mm (tail) and 5 to 9 mm (nose) in from the outline, ragged by 4 mm noise, strongest at the tip (the graphic starts 4 mm in, at the bevel, so a few millimetres of bare maple show) |
+| Scuff haze | patches of 18 mm noise within 9 cm of each tip, mask at most 0.24 (tail) and 0.15 (nose) |
+| Colour | scuffed print goes pale toward `#f2e9da` by up to 0.42; mask 0.55 to 0.85 fades to bare maple `#d9c39c` |
+| Roughness (High, `deck-bottom-roughness.png` 1024 x 256 grey, glTF green, factor 1) | print 0.45, scuffed 0.62, bare wood 0.80 |
+| Medium | the same colour; the graphic keeps its constant roughness 0.45, because Medium has no texture slot left (4 of 4) |
+
+Measured on the High map: 0.5 percent of the visible graphic is bare wood and 5.7 percent is touched at all (tested to stay within 0.1 to 3 and under 20); the nose disc stays cream (mean red above 235) and the tally marks keep their ink (tested). Nothing covers the deck uniformly.
+
 ### 7.4 Hardware and trucks
 
 Positions are for the nose truck, centred at `x_c = +0.208` (midpoint of the bolt pattern, which runs `x = 0.181` to `0.235`). Mirror x for the tail truck. Deck bottom under a truck is `y = -0.00575` (flat, no kick, zero concave on the centreline).
 
-**Bolt heads** (8): flat cylinders radius `0.00475`, height `0.002`, 8 radial segments, base at `y = +0.0055` (sunk 0.25 mm into the grip), at `x in {0.181, 0.235}` and mirrored, `z = +-0.0205` (pattern `0.054 x 0.041`). Steel material.
+**Bolt heads** (8, countersunk since the truck pass, 2026-11-05, ADR-38): at `x in {0.181, 0.235}` and mirrored, `z = +-0.0205` (pattern `0.054 x 0.041`). Each is a lathe on the local deck normal (`surfaceNormal`, tilted about 3 deg across by the concave) at the grip's top over its plan point: radius `0.00475`, rim `0.15` mm proud of the grip, chamfered to a flat top `0.7` mm proud at radius `0.0034`, and a hidden part `0.6` mm into the deck (was a flat cylinder 2 mm tall, 1.3 mm proud at the centreline). Medium 10 segments; High 24 with a hex socket for a 3 mm key (apothem 1.5 mm), its floor `0.1` mm above the grip so the grip never covers it. Steel material darkened to black oxide by a vertex colour (glTF `COLOR_0` `(0.12, 0.12, 0.125)` linear; 1 on every other steel part), so there is no eighth material.
 
 | Part | Geometry | Material |
 | --- | --- | --- |
 | Baseplate | rounded box `0.085 (X) x 0.008 (Y) x 0.060 (Z)`, corner radius `0.002`, 4 segments per edge, centre `(0.208, -0.00975, 0)` (top at `-0.00575`) | aluminium |
-| Pivot cup | cylinder radius `0.011`, length `0.016`, 12 segments, centre `(0.2448, -0.0203, 0)`, axis `d_p = (0.6428, 0.7660, 0)` (40 deg from vertical, leaning outboard) | aluminium |
+| Pivot cup socket | cylinder radius `0.0122` on the pivot axis from `-0.003` to `0.008` about the cup centre `(0.2448, -0.0203, 0)`, axis `d_p = (0.6428, 0.7660, 0)` (40 deg from vertical, leaning outboard), 12 segments (was radius `0.011`, length `0.016`) | aluminium |
+| Pivot cup insert | cylinder radius `0.0098` from `-0.0085` to `-0.0025` on the same axis: the urethane cup's lip below the socket, where the pivot enters (ADR-38) | bushing |
 | Kingpin | cylinder radius `0.0045`, length `0.052`, 10 segments, from `K0 = (0.198, -0.01375, 0)` along `d_k = (-0.3420, -0.9397, 0)` (20 deg from vertical, leaning inboard, so the two kingpins face each other) | steel |
 | Cup washer, boardside | cylinder radius `0.0125`, thickness `0.0012`, 16 segments, on the kingpin from `0` to `0.0012` | steel |
 | Bushing, boardside | cone radius `0.0125` to `0.0115`, length `0.0145`, 16 segments, on the kingpin from `0.0012` to `0.0157` | bushing |
-| Yoke (hanger body) | rounded box `0.030 (X') x 0.036 (Y') x 0.040 (Z)`, radius `0.004`, centre `(0.1993, -0.046, 0)`, rotated about Z so its Y' axis is parallel to the kingpin (`rotation.z = -20 deg` for the nose truck, `+20 deg` for the tail) | aluminium |
+| Bushing seat | chamfered ring on the kingpin from `0.0157` to `0.0277`, radius `0.0136`, chamfer `0.0016`, 12 segments (High 32): the hanger's seat between the two bushings (ADR-38; replaces the rounded-box yoke) | aluminium |
 | Bushing, roadside | cone radius `0.0115` to `0.0105`, length `0.012`, on the kingpin from `0.0277` to `0.0397` | bushing |
 | Cup washer, roadside | cylinder radius `0.0120`, thickness `0.0012`, on the kingpin from `0.0397` to `0.0409` | steel |
 | Kingpin nut | hex prism (6 radial segments) radius `0.0075`, height `0.007`, on the kingpin from `0.0409` to `0.0479` (4 mm of thread shows beyond it) | steel |
-| Axle housing | rounded box `0.028 (X) x 0.022 (Y) x 0.122 (Z)`, radius `0.006`, 4 segments, centre `A = (0.208, -0.05775, 0)` | aluminium |
-| Pivot | cylinder radius `0.0075`, length `0.030`, 10 segments, from `(0.220, -0.04975, 0)` along `d_p` into the pivot cup | aluminium |
+| Hanger body | a loft along the axle of convex sections about `A = (0.208, -0.05775, 0)`, each the convex hull of circles: to `abs(z) = 0.007` the yoke (the axle circle `0.011`, a lobe `0.0092` under the bushing seat, `0.0217` down the kingpin and `0.005` outboard, and the pivot boss `0.0095`, `0.006` along the pivot), blended by smoothstep to `abs(z) = 0.027` into the bar (the axle circle and a lobe `0.0015` inboard and `0.0105` above it, radius `0.0085`), tapering linearly to `abs(z) = 0.05` (axle circle `0.0094`, lobe `0.0025` up, `0.0072`); 20 points by 17 stations (High 40 by 33). Seen from the front the top edge falls from the yoke to the ends and the bottom stays on the axle line, the cast Stage 11 silhouette. Replaces the rounded-box axle housing (ADR-38) | aluminium |
+| Axle bulges | chamfered barrels round the axle at `abs(z)` `0.0465` to `0.061`, radius `0.011`, chamfer `0.0015`, 12 segments (High 32), standing 1.6 mm proud of the bar's end | aluminium |
+| Hanger envelope (`TRUCK.axleHousing`) | nothing of the hanger reaches below `y = -0.06875` or past `abs(z) = 0.061`, the old housing's box, so the feet clearance solids (ADR-29) are unchanged | |
+| Pivot | cone radius `0.0085` at the boss to `0.0062` at the tip (was a `0.0075` cylinder), length `0.030`, 10 segments, from `(0.220, -0.04975, 0)` along `d_p` into the cup insert | aluminium |
 | Axle | cylinder radius `0.004`, length `0.203` along Z, 12 segments, centre `A` (axle to axle `0.203`, just under deck width) | steel |
 | Speed washers (4) | cylinder radius `0.0065`, thickness `0.001`, 12 segments, at `abs(z)` in `[0.061, 0.062]` and `[0.094, 0.095]` | steel |
 | Axle nuts (2) | hex prism radius `0.0062`, height `0.006`, at `abs(z)` in `[0.095, 0.101]` | steel |
@@ -300,9 +319,9 @@ Truck height from the deck to the axle centre is `0.052` (a mid truck). Wheel to
 
 | Material | Colour | Roughness | Metalness | Used by |
 | --- | --- | --- | --- | --- |
-| aluminium (raw cast) | `#b7babd` | `0.50` | `0.85` | baseplate, pivot cup, yoke, axle housing, pivot |
-| steel | `#cfd2d5` | `0.28` | `1.0` | kingpin, axle, nuts, washers, bolt heads |
-| bushing (urethane) | `#d9a441` (amber) | `0.55` | `0` | 4 bushings |
+| aluminium (raw cast) | `#b7babd` | `0.50` | `0.85` | baseplate, pivot cup socket, hanger body, bushing seat, axle bulges, pivot |
+| steel | `#cfd2d5` | `0.28` | `1.0` | kingpin, axle, nuts, washers; bolt heads at vertex colour `0.12` (black oxide) |
+| bushing (urethane) | `#d9a441` (amber) | `0.55` | `0` | 4 bushings, 2 pivot cup inserts |
 
 Metal reads as metal only with the environment map (7.6); without it, both metals go near black.
 
@@ -572,21 +591,23 @@ ADR-31. The board used to sit on a 1.6 x 1.2 m grey slab with black edge lines a
 
 | Property | Value |
 | --- | --- |
-| Plane | one quad on y `0`, `40.0 x 39.6` m (25 x 33 bays, both odd, so a bay centre is under the origin and the plane's edges are on joints), 2 triangles, UVs 0 to 1 repeated 25 x 33 times by `KHR_texture_transform` |
-| Bay (one texture tile) | `1.6 x 1.2` m, the old pad |
-| Colour map | `1024 x 1024`, one grey channel around `150`, tinted by the base colour factor so the mean lands on `#616466`; seed `20261131` |
-| Tonal variation | value-noise fBm: `0.4` m cells, 3 octaves, +-9 levels; mottle `0.05` m, 2 octaves, +-4; grain `3.5` mm, +-2.5 |
-| Aggregate | 9,000 specks, radius 0.8 to 2.6 mm, +-14 levels, slightly smoother; those over 2 mm stand `0.05` mm proud |
-| Pits | 1,400, radius 0.6 to 1.8 mm, `0.6` mm deep, -18 levels |
-| Hairline cracks | 5 random walks of 0.18 to 0.5 m, `1.2` mm wide, `0.4` mm deep, -16 levels, stopping at the joint |
-| Expansion joint | along every bay edge: `12` mm wide, `4` mm deep, `3` mm rounded shoulders, -42 levels, roughness `1.0` |
-| Painted centre mark | `0.9 x 0.02` m at the bay centre (where the mark mesh was), +8 levels, worn to a quarter where the wear noise is low, edges ragged by 1.5 mm, roughness `0.8` |
-| Wheel marks | under the four wheels of the resting board (x `+-0.208`, z `+-0.078`): ellipses `35 x 22` mm, -7 levels, roughness -0.12 |
-| Roughness map | `256 x 256`, one grey channel (glTF green is roughness; blue is metalness, times a metallic factor of 0): base `0.93`, worn patches down to `0.78`, `-0.06` around the bay centre, 3,000 dust specks toward `1.0` |
-| Normal map | `1024 x 1024` RGB, tangent space (glTF convention, as the high grip), from the height field in metres, scale `1.0` |
-| Budget | 500 KB, 1 draw call, 64 triangles, 3 textures at 1024 px. Measured: 434.9 KB (colour 277.8 KB, normal 129.6 KB, roughness 24.4 KB), 1, 2, 3; about 11 MB of GPU memory with mips |
+| Plane | one quad on y `0`, `40.0 x 39.6` m (25 x 33 bays, both odd, so a bay centre is under the origin and the plane's edges are on joints), 2 triangles, UVs 0 to 1; each map repeated by its own `KHR_texture_transform` (25 / n by 33 / n for a tile of n x n bays) |
+| Bay | `1.6 x 1.2` m, the old pad |
+| Tiles (varied bays, 2026-11-05, ADR-38) | normal map one bay; colour map four different bays (2 x 2); roughness map nine (3 x 3). 2 and 3 share no factor, so colour and roughness line up the same way only every 6 x 6 bays (9.6 x 7.2 m). The bay under the board is bay (0, 0) of the colour tile and (0, 1) of the roughness tile (`originBay`) |
+| Colour map | `1024 x 1024` over 2 x 2 bays (3.1 x 2.3 mm per texel), one grey channel around `150`, tinted by the base colour factor so the mean lands on `#616466`; seed `20261131` (fine detail) and `20261132` (per-bay marks). The fine detail of the normal map's bay (grain, aggregate, pits, joint), box filtered 2 x 2, is the same in every bay; the rest is per bay |
+| Tonal variation | value-noise fBm over the 2 x 2 tile: `0.4` m cells, 3 octaves, +-9 levels; mottle `0.05` m, 2 octaves, +-4; grain `12` mm, +-2.5 (was 3.5 mm, which is per-texel noise at the new texel size); a slab shade per bay, +-5 levels |
+| Aggregate | 9,000 specks per bay, radius 0.8 to 2.6 mm, +-14 levels; those over 2 mm stand `0.05` mm proud |
+| Pits | 1,400 per bay, radius 0.6 to 1.8 mm, `0.6` mm deep, -18 levels |
+| Hairline cracks | per bay of the colour tile 0 to 4 random walks of 0.18 to 0.55 m, -16 levels at `1.2` mm (drawn a texel wide at the same total darkness), stopping at the joint; colour only, since the normal map is shared |
+| Stains | per bay of the colour tile 0 to 2 soft dark patches, radius 7 to 22 cm, -4 to -9 levels |
+| Expansion joint | along every bay edge of every tile: `12` mm wide, `4` mm deep, `3` mm rounded shoulders, -42 levels, roughness `1.0` (supersampled 4 x 4 on the roughness map, where it is about a texel wide) |
+| Painted centre mark | `0.9 x 0.02` m at the centre of the bay under the board only (where the mark mesh was), so one bay in four shows it (it was every bay), +8 levels, worn to a quarter where the wear noise is low, edges ragged by 1.5 mm, roughness `0.8` |
+| Wheel marks | in the bay under the board only, under the four wheels of the resting board (x `+-0.208`, z `+-0.078`): ellipses `35 x 22` mm, -7 levels, roughness -0.12 |
+| Roughness map | `512 x 512` over 3 x 3 bays (9.4 x 7.0 mm per texel), one grey channel (glTF green is roughness; blue is metalness, times a metallic factor of 0): base `0.93`, worn patches down to `0.78`, a slab offset per bay of +-0.03, `-0.06` around the centre of the bay under the board; seed `20261133`. The 3,000 dust specks (1 to 3 mm) went: they are below this texel |
+| Normal map | `1024 x 1024` RGB over one bay, tangent space (glTF convention, as the high grip), from the height field in metres (joint, aggregate, pits; the cracks left it with the per-bay colour), scale `1.0` |
+| Budget | 500 KB, 1 draw call, 64 triangles, 3 textures at 1024 px. Measured: 432.7 KB (colour 280.6 KB, normal 121.2 KB, roughness 27.7 KB), 1, 2, 3; about 12 MB of GPU memory with mips (was 434.9 KB: 277.8, 129.6, 24.4; 11 MB) |
 
-Fine per-pixel grain is what PNG cannot compress, so the grain is smooth noise a few texels across, only the larger stones have height, and the roughness map is 256 px. A first cut with grain in the height field had a 775 KB normal map on its own.
+Fine per-pixel grain is what PNG cannot compress, so the grain is smooth noise a few texels across, only the larger stones have height, and the roughness map is low frequency. A first cut with grain in the height field had a 775 KB normal map on its own; a first cut of the varied colour tile with the 3.5 mm grain was 372 KB of colour alone.
 
 ### 10.2 Scene (`ART` in `src/scene/artDirection.ts`)
 

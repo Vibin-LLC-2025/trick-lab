@@ -10,8 +10,8 @@ import { GROUND_URL } from './modelUrls';
 
 /**
  * The concrete ground from ground.glb (ADR-31): one plane, one material
- * (colour, normal and roughness maps of one slab bay, repeated), one draw
- * call. Same cache rules as BoardModel: `dispose={null}`, nothing disposed
+ * (colour, normal and roughness maps, tiles of 4, 1 and 9 slab bays each
+ * repeated by its own texture transform, ADR-38), one draw call. Same cache rules as BoardModel: `dispose={null}`, nothing disposed
  * here. Anisotropy is the tier's ground number (ART.quality), set once on
  * the cached textures.
  */

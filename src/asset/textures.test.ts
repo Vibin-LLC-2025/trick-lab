@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { GLUE_COLOR, PLY_COLORS, TEXTURES, WHEEL_BANDS, WHEEL_HIGH_BAND_KINDS } from './spec';
+import { DECK_WEAR, GLUE_COLOR, KICK, OUTLINE, PLY_COLORS, TEXTURES, TEXTURES_HIGH, WHEEL_BANDS, WHEEL_HIGH_BAND_KINDS } from './spec';
+import { halfWidth } from './deck';
 import {
   bandStart,
+  deckBottomPoint,
+  deckWear,
   downsample2,
   gripGrey,
   gripHigh,
   gripTint,
+  greyFromField,
   hexToRgb,
   mulberry32,
   normalMapFromHeight,
   plyPixels,
   plyPixelsHigh,
   wheelPixels,
+  wearDeckBottom,
   wheelPixelsHigh,
   type Pixels,
 } from './textures';
@@ -159,5 +164,121 @@ describe('high-tier textures (quality tiers, 2026-11-04)', () => {
     expect(hexAt(wheel, bandStart(6, n, 512))).toBe(WHEEL_BANDS.core);
     expect(hexAt(wheel, bandStart(13, n, 512))).toBe(WHEEL_BANDS.tread);
     expect(hexAt(wheel, 511)).toBe(WHEEL_BANDS.race);
+  });
+});
+
+describe('deck bottom wear (ADR-38)', () => {
+  const { width: W, height: H } = TEXTURES.deckBottom;
+  const wear = deckWear(W, H);
+  const FIELD = [224, 83, 44] as const;
+  /** A flat field with the nose disc and the three tally marks of the design (deck-graphic.svg, at this size). */
+  const graphic = (): Pixels => {
+    const rgb = new Uint8Array(W * H * 3);
+    const s = W / 2048;
+    for (let r = 0; r < H; r++)
+      for (let c = 0; c < W; c++) {
+        const disc = Math.hypot(c / s - 1770, r / s - 256) < 170;
+        const tally = c / s > 98 && c / s < 252 && Math.abs(r / s - 256) < 110 && (c / s - 98) % 51.3 < 30;
+        rgb.set(disc ? [243, 234, 219] : tally ? [23, 24, 26] : FIELD, (r * W + c) * 3);
+      }
+    return { width: W, height: H, rgb };
+  };
+  const inside = (c: number, r: number) => {
+    const [x, z] = deckBottomPoint(c, r, W, H);
+    // The graphic starts at the bevel, 4 mm in from the outline.
+    return Math.abs(z) < halfWidth(x) - 0.004;
+  };
+  const [bareFrom, bareTo] = DECK_WEAR.expose;
+
+  it('is the same every build and the same marks at every resolution (placed in metres)', () => {
+    expect(Array.from(deckWear(W, H).mask)).toEqual(Array.from(wear.mask));
+    const big = deckWear(2 * W, 2 * H).mask;
+    const down = downsample2(big, 2 * W, 2 * H);
+    let diff = 0;
+    for (let i = 0; i < down.length; i++) diff += Math.abs(down[i]! - wear.mask[i]!);
+    expect(diff / down.length).toBeLessThan(0.01);
+  });
+
+  it('is mild and local, not noise over the deck: a little bare wood, most of the print untouched', () => {
+    let seen = 0, bare = 0, worn = 0;
+    for (let r = 0; r < H; r++)
+      for (let c = 0; c < W; c++) {
+        if (!inside(c, r)) continue;
+        const m = wear.mask[r * W + c]!;
+        seen++;
+        if (m > bareTo) bare++;
+        if (m > 0.02) worn++;
+      }
+    expect(bare / seen).toBeGreaterThan(0.001);
+    expect(bare / seen).toBeLessThan(0.03);
+    expect(worn / seen).toBeLessThan(0.2);
+  });
+
+  it('bares wood only along the slide scratches between the trucks and at the nose and tail edges', () => {
+    const S = DECK_WEAR.scratches;
+    // A scratch is at most half its length times sin(angle) off its centre in x.
+    const scratchX = S.x[1] + (S.length[1] / 2) * Math.sin((S.angleDeg * Math.PI) / 180);
+    let tips = 0, middle = 0;
+    for (let r = 0; r < H; r++)
+      for (let c = 0; c < W; c++) {
+        if (!inside(c, r) || wear.mask[r * W + c]! <= bareFrom) continue;
+        const [x] = deckBottomPoint(c, r, W, H);
+        const nearTip = x < OUTLINE.tailTip + DECK_WEAR.edge.tail.reach || x > OUTLINE.noseTip - DECK_WEAR.edge.nose.reach;
+        expect(nearTip || Math.abs(x) <= scratchX, `bare wood at x ${x.toFixed(3)}`).toBe(true);
+        if (nearTip) tips++;
+        else middle++;
+      }
+    expect(tips).toBeGreaterThan(0);
+    expect(middle).toBeGreaterThan(0);
+    // The scratches stay off the kicks, where the nose disc and the tally marks are.
+    expect(scratchX).toBeLessThan(KICK.start);
+  });
+
+  it('keeps the nose disc and the tally marks legible', () => {
+    const { color } = wearDeckBottom(graphic());
+    const src = graphic();
+    const s = W / 2048;
+    let disc = 0, discChange = 0, n = 0;
+    for (let r = 0; r < H; r++)
+      for (let c = 0; c < W; c++) {
+        if (Math.hypot(c / s - 1770, r / s - 256) >= 160) continue;
+        const i = (r * W + c) * 3;
+        disc += color.rgb[i]!;
+        discChange = Math.max(discChange, Math.abs(color.rgb[i]! - src.rgb[i]!));
+        n++;
+      }
+    // The disc stays cream (red channel near 243), changed by at most the grain and a touch of haze.
+    expect(disc / n).toBeGreaterThan(235);
+    expect(discChange).toBeLessThan(25);
+    // The tally marks keep their contrast with the field: ink below 60 in red, field above 180.
+    for (const col of [105, 160, 210].map((v) => Math.round(v * s))) {
+      const ink = color.rgb[((H / 2) * W + col) * 3]!;
+      expect(ink, `tally at column ${col}`).toBeLessThan(60);
+    }
+    expect(color.rgb[((H / 2) * W + Math.round(280 * s) - 4) * 3]!).toBeGreaterThan(180);
+  });
+
+  it('takes the colour and the roughness from the one mask, and the print grain is faint', () => {
+    const src = graphic();
+    const { color, roughness, wear: w } = wearDeckBottom(src);
+    const R = DECK_WEAR.roughness;
+    let maxClean = 0;
+    for (let i = 0; i < W * H; i++) {
+      const m = w.mask[i]!;
+      if (m === 0) {
+        expect(roughness[i]).toBeCloseTo(R.print, 6);
+        maxClean = Math.max(maxClean, Math.abs(color.rgb[i * 3]! - src.rgb[i * 3]!));
+      }
+      if (m >= bareTo) expect(roughness[i]).toBeCloseTo(R.wood, 6);
+      expect(roughness[i]).toBeGreaterThanOrEqual(R.print - 1e-6);
+      expect(roughness[i]).toBeLessThanOrEqual(R.wood + 1e-6);
+    }
+    // Clean print moves by the grain alone: at most DECK_WEAR.grain.print levels.
+    expect(maxClean).toBeLessThanOrEqual(DECK_WEAR.grain.print + 0.5);
+    expect(maxClean).toBeGreaterThan(0);
+    // The high tier stores that roughness at half size: one grey channel, the same field box filtered.
+    const T = TEXTURES_HIGH;
+    const hi = greyFromField(new Float32Array(T.deckBottom.width * T.deckBottom.height).fill(R.wood), T.deckBottom.width, T.deckBottom.height, T.deckRoughness.width, T.deckRoughness.height);
+    expect(hi.grey.every((g) => g === Math.round(R.wood * 255))).toBe(true);
   });
 });

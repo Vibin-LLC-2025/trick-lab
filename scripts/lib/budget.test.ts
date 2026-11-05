@@ -148,12 +148,12 @@ describe('the committed GLBs', () => {
     expect(stats.textures).toHaveLength(4);
   });
 
-  it('board-high.glb meets the high budget, matches the source and carries the grip normal map', async () => {
+  it('board-high.glb meets the high budget, matches the source and carries the grip normal map and the deck wear roughness map', async () => {
     const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.boardHigh));
     expect(failing(stats, 'boardHigh')).toEqual([]);
     expect(stats.triangles).toBe(sum(boardTriangles(buildBoard('high'))));
     expect(stats.drawCalls).toBe(7);
-    expect(stats.textures.map((t) => t.name)).toEqual(['grip', 'gripNormal', 'deckBottom', 'ply', 'wheel']);
+    expect(stats.textures.map((t) => t.name)).toEqual(['grip', 'gripNormal', 'deckBottom', 'deckRoughness', 'ply', 'wheel']);
     expect(stats.textures.every((t) => t.mipmapped)).toBe(true);
   });
 

@@ -115,14 +115,56 @@ export const DECK_DETAIL: Record<DetailLevel, { intervals: number; rings: typeof
   high: { intervals: 48, rings: RINGS_HIGH },
 };
 
-/** 7.4 hardware, nose truck. The tail truck mirrors x. */
+/**
+ * 7.4 hardware, nose truck. The tail truck mirrors x. Truck pass
+ * (2026-11-05, ADR-38): the rounded-box yoke and axle housing are replaced
+ * by a hanger in the cast Stage 11 silhouette (a blended body lofted along
+ * the axle, tall at the yoke and tapering to the ends, with axle bulges, a
+ * pivot boss and a bushing seat on the kingpin); the pivot cup's urethane
+ * insert is its own part in the bushing material; the bolt heads are
+ * countersunk. The axle line, wheelbase and wheels are unchanged, so REST_Y is.
+ */
 export const TRUCK = {
   centerX: 0.208,
   /** Deck bottom under a truck (flat, no kick, zero concave on the centreline). */
   deckBottom: -0.00575,
-  bolts: { x: [0.181, 0.235], z: 0.0205, radius: 0.00475, height: 0.002, base: 0.0055, segments: 8 },
+  /**
+   * Countersunk mounting bolts at the new-school pattern. Each head sits on
+   * the grip along the local deck normal (deck.ts surfaceNormal) over its
+   * plan point: `profile` is (radius, height above the grip) from the hidden
+   * bottom up over the rim to the flat top, so the rim stands `rim` proud and
+   * the top `top` (a countersunk head pulled flush, not a raised disc).
+   * `tint` is the linear vertex colour (glTF COLOR_0) that darkens the
+   * shared steel material to black-oxide bolts; every other steel part is 1.
+   */
+  bolts: {
+    x: [0.181, 0.235],
+    z: 0.0205,
+    radius: 0.00475,
+    rim: 0.00015,
+    top: 0.0007,
+    profile: [
+      [0, -0.0006],
+      [0.00475, -0.0006],
+      [0.00475, 0.00015],
+      [0.0038, 0.0006],
+      [0.0034, 0.0007],
+      [0, 0.0007],
+    ] as readonly (readonly [number, number])[],
+    tint: [0.12, 0.12, 0.125] as V3,
+  },
   baseplate: { size: [0.1, 0.008, 0.06] as V3, radius: 0.002, center: [0.2155, -0.00975, 0] as V3 },
-  pivotCup: { radius: 0.011, length: 0.016, segments: 12, center: [0.2448, -0.0203, 0] as V3 },
+  /**
+   * Pivot cup on the pivot axis, distances from `center`: the aluminium
+   * socket cast into the baseplate, and the urethane insert whose lip shows
+   * below it where the pivot enters (bushing material).
+   */
+  pivotCup: {
+    center: [0.2448, -0.0203, 0] as V3,
+    socket: { radius: 0.0122, from: -0.003, to: 0.008 },
+    insert: { radius: 0.0098, from: -0.0085, to: -0.0025 },
+    segments: 12,
+  },
   /** 40 deg from vertical, leaning outboard. */
   pivotAxis: [0.6428, 0.766, 0] as V3,
   kingpin: { radius: 0.0045, length: 0.052, segments: 10, start: [0.198, -0.01375, 0] as V3 },
@@ -131,22 +173,48 @@ export const TRUCK = {
   /** Stack on the kingpin, distances along kingpinAxis from kingpin.start. */
   cupWasherTop: { radius: 0.0125, from: 0, to: 0.0012, segments: 16 },
   bushingTop: { radiusFrom: 0.0125, radiusTo: 0.0115, from: 0.0012, to: 0.0157, segments: 16 },
+  /** The hanger's bushing seat: a chamfered ring round the kingpin between the two bushings. */
+  seat: { from: 0.0157, to: 0.0277, radius: 0.0136, chamfer: 0.0016 },
   bushingBottom: { radiusFrom: 0.0115, radiusTo: 0.0105, from: 0.0277, to: 0.0397, segments: 16 },
   cupWasherBottom: { radius: 0.012, from: 0.0397, to: 0.0409, segments: 16 },
   kingpinNut: { radius: 0.0075, from: 0.0409, to: 0.0479, segments: 6 },
-  yoke: { size: [0.03, 0.036, 0.04] as V3, radius: 0.004, center: [0.1993, -0.046, 0] as V3, rotZDeg: -20 },
-  axleHousing: { size: [0.028, 0.022, 0.122] as V3, radius: 0.006, center: [0.208, -0.05775, 0] as V3 },
-  pivot: { radius: 0.0075, length: 0.03, segments: 10, start: [0.22, -0.04975, 0] as V3 },
+  /**
+   * The hanger's envelope and axle line: `center` is the axle centre, and no
+   * part of the hanger reaches below `center.y - size.y / 2` or past
+   * `size.z / 2` along the axle (where the inner speed washers start). Read
+   * by src/scene/clearance.test.ts and pinned in src/sim/boardVolume.ts.
+   */
+  axleHousing: { size: [0.028, 0.022, 0.122] as V3, center: [0.208, -0.05775, 0] as V3 },
+  /**
+   * The hanger body: a loft along the axle (z) of convex sections in the x-y
+   * plane, each the convex hull of a few circles, sampled by angle about the
+   * axle centre. Up to `yokeZ` the section is the yoke: the axle circle, a
+   * lobe under the bushing seat (`along` the kingpin from its start, `out`
+   * toward the outboard side) and the pivot boss (`along` the pivot from its
+   * start). By `blendZ` it has blended (smoothstep) into the bar: the axle
+   * circle and a lobe above it, both tapering linearly to `endZ`, where the
+   * body ends inside the axle bulge. Seen from the front, the top edge falls
+   * from the yoke to the ends and the bottom stays on the axle line.
+   */
+  hanger: {
+    yokeZ: 0.007,
+    blendZ: 0.027,
+    endZ: 0.05,
+    axleRadius: [0.011, 0.0094] as readonly [number, number],
+    seatLobe: { along: 0.0217, out: 0.005, radius: 0.0092 },
+    pivotLobe: { along: 0.006, radius: 0.0095 },
+    /** Bar lobe: centre dx from the axle, height above it and radius, at blendZ and at endZ. */
+    barLobe: { dx: -0.0015, height: [0.0105, 0.0025] as readonly [number, number], radius: [0.0085, 0.0072] as readonly [number, number] },
+  },
+  /** The axle bulges: a chamfered barrel round the axle at each end of the hanger, out to the envelope. */
+  axleBulge: { from: 0.0465, to: 0.061, radius: 0.011, chamfer: 0.0015 },
+  /** The pivot: a cone from the hanger's pivot boss into the cup insert. */
+  pivot: { radiusRoot: 0.0085, radiusTip: 0.0062, length: 0.03, segments: 10, start: [0.22, -0.04975, 0] as V3 },
   axle: { radius: 0.004, length: 0.203, segments: 12 },
   speedWashers: { radius: 0.0065, ranges: [[0.061, 0.062], [0.094, 0.095]] as const, segments: 12 },
   axleNuts: { radius: 0.0062, range: [0.095, 0.101] as const, segments: 6 },
-  /**
-   * Rounded-box arc segments. DESIGN.md says 4 per edge; three's
-   * RoundedBoxGeometry spends (2s + 1)^2 quads per face, so 4 costs 972
-   * triangles per box (2,916 per truck for three boxes). 2 and 3 keep the
-   * fillets visible at close range for 300 and 588.
-   */
-  roundSegments: { baseplate: 2, yoke: 3, axleHousing: 3 },
+  /** Rounded-box arc segments for the baseplate: three spends (2s + 1)^2 quads per face, so 2 is 300 triangles. */
+  roundSegments: { baseplate: 2 },
 } as const;
 
 /** 7.5 wheel lathe profile, (r, z) with z along the axle, +z outboard. */
@@ -186,6 +254,10 @@ export const HARDWARE_DETAIL = {
   medium: {
     roundSegments: TRUCK.roundSegments,
     pivotCup: TRUCK.pivotCup.segments,
+    /** Hanger loft: points round each section, and the stations along the axle (|z|, mirrored). */
+    hanger: { ring: 20, stations: [0, 0.004, 0.007, 0.012, 0.017, 0.022, 0.027, 0.038, 0.05] as readonly number[] },
+    seat: 12,
+    bulge: 12,
     kingpin: TRUCK.kingpin.segments,
     cupWasher: TRUCK.cupWasherTop.segments,
     bushing: TRUCK.bushingTop.segments,
@@ -193,15 +265,21 @@ export const HARDWARE_DETAIL = {
     axle: TRUCK.axle.segments,
     speedWasher: TRUCK.speedWashers.segments,
     nut: 6,
-    bolt: TRUCK.bolts.segments,
-    /** Bolt heads are plain cylinders. */
-    boltSocket: null as null | { radius: number; depth: number },
+    bolt: 10,
+    /** Plain countersunk heads. */
+    boltHex: null as null | { apothem: number; floor: number },
     wheelRadial: WHEEL.radialSegments,
     wheelProfile: WHEEL.profile,
   },
   high: {
-    roundSegments: { baseplate: 4, yoke: 4, axleHousing: 4 },
+    roundSegments: { baseplate: 4 },
     pivotCup: 28,
+    hanger: {
+      ring: 40,
+      stations: [0, 0.002, 0.004, 0.0055, 0.007, 0.009, 0.0115, 0.014, 0.0165, 0.019, 0.0215, 0.024, 0.027, 0.031, 0.036, 0.042, 0.05] as readonly number[],
+    },
+    seat: 32,
+    bulge: 32,
     kingpin: 24,
     cupWasher: 32,
     bushing: 32,
@@ -209,9 +287,13 @@ export const HARDWARE_DETAIL = {
     axle: 32,
     speedWasher: 24,
     nut: 6,
-    bolt: 16,
-    /** A round socket in each bolt head (an allen head, 4 mm across, 0.8 mm deep). */
-    boltSocket: { radius: 0.002, depth: 0.0008 } as null | { radius: number; depth: number },
+    /** A multiple of 6, so the hex socket's corners fall on the head's segments. */
+    bolt: 24,
+    /**
+     * A hex socket in each head for a 3 mm key (apothem 1.5 mm), its floor
+     * `floor` above the grip so the grip never covers it (0.6 mm deep).
+     */
+    boltHex: { apothem: 0.0015, floor: 0.0001 } as null | { apothem: number; floor: number },
     wheelRadial: 64,
     /**
      * High wheel lathe profile, (r, z) with z along the axle, +z outboard:
@@ -291,6 +373,8 @@ export const TEXTURES_HIGH = {
   /** Half the colour map's size: the grain normals are derived from a 2 x 2 box-filtered lift field (a full-size map was 2.1 MB of PNG). */
   gripNormal: { file: 'grip-normal.png', width: 512, height: 512, wrap: 'repeat', tile: 0.2 },
   deckBottom: { file: 'deck-bottom-high.png', width: 2048, height: 512, wrap: 'clamp' },
+  /** The deck wear's roughness (glTF green; one grey channel), at half the graphic's size (ADR-38). */
+  deckRoughness: { file: 'deck-bottom-roughness.png', width: 1024, height: 256, wrap: 'clamp' },
   ply: { file: 'ply-high.png', width: 32, height: 256, wrap: 'clamp' },
   wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'clamp' },
 } as const;
@@ -354,6 +438,51 @@ export const GRIP_RECIPE_HIGH = {
 
 /** High ply stripes: per-column (along the deck) brightness jitter, so the edge reads as wood, not paint. */
 export const PLY_GRAIN = { seed: 20261105, jitter: 5 } as const;
+
+/**
+ * Deck bottom wear (truck pass, 2026-11-05, ADR-38), baked over the
+ * rasterized graphic in deck metres, so both tiers get the same marks. A
+ * mild, used board: the print shows the maple's grain faintly; a few slide
+ * scratches cross the middle between the trucks; the tail and nose tips are
+ * scraped back to wood at the edge, the tail more; a light scuff haze sits
+ * near both tips. One wear mask (0 clean print, 1 bare wood) drives the
+ * colour on both tiers and the roughness map on High (Medium has no texture
+ * slot left for it, so its graphic keeps the constant 0.45).
+ * Fixed seed; nothing is uniform noise over the whole deck.
+ */
+export const DECK_WEAR = {
+  seed: 20261106,
+  /** Maple grain under the print: lines along the deck (x), wavy, `period` metres apart on average. */
+  grain: { period: 0.0016, wave: { amplitude: 0.0022, length: 0.11 }, print: 2, wood: 14, block: 0.2 },
+  /** Bare maple where the print is gone (the bottom ply, a shade lighter than PLY_COLORS[6] where scraped). */
+  wood: '#d9c39c',
+  /** Scraped print goes pale toward this, by up to `mix`. */
+  scuff: { color: '#f2e9da', mix: 0.42 },
+  /** Slide scratches across the middle: lines mostly along z, `angle` deg off it at most. */
+  scratches: {
+    count: 16,
+    x: [-0.16, 0.16] as const,
+    length: [0.03, 0.11] as const,
+    width: [0.0004, 0.0011] as const,
+    angleDeg: 24,
+    strength: [0.35, 1] as const,
+  },
+  /**
+   * Tips scraped to wood at the outline: within `reach` of the tip along x,
+   * `width` metres in from the outline (the graphic starts 4 mm in, at the
+   * bevel), ragged by noise of `cell` metres, strongest at the tip.
+   */
+  edge: {
+    tail: { reach: 0.075, width: [0.0055, 0.012] as const, strength: 1 },
+    nose: { reach: 0.055, width: [0.005, 0.009] as const, strength: 0.8 },
+    cell: 0.004,
+  },
+  /** Scuff haze near the tips: patches of `cell` metres, at most `tail` or `nose`, fading over `reach` from the tip. */
+  haze: { cell: 0.018, above: [0.55, 0.85] as const, tail: 0.24, nose: 0.15, reach: 0.09 },
+  /** Exposed wood fades in over this band of the mask. */
+  expose: [0.55, 0.85] as const,
+  roughness: { print: 0.45, scuffed: 0.62, wood: 0.8 },
+} as const;
 
 /**
  * Glb node names, one mesh with one primitive each, so one draw call each.

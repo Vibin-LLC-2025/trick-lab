@@ -20,9 +20,9 @@
 // - the primitive deck (Low and the fallback): three boxes, a flat middle and
 //   two straight kicks, as src/scene/resources.ts builds it;
 // - per truck three boxes that hold all the hardware of both boards: hanger
-//   (baseplate, pivot cup, yoke, kingpin, bushings, axle housing), wheels, and
-//   the axle ends with their nuts. The bolt heads (1.3 mm proud of the grip
-//   at the centreline, lower than the rails) are left out.
+//   (baseplate, pivot cup, hanger body and bushing seat, kingpin, bushings, axle bulges), wheels, and
+//   the axle ends with their nuts. The countersunk bolt heads (0.7 mm proud of the grip,
+//   ADR-38; they were 1.3 mm) are left out.
 // src/sim may not import src/asset or src/scene, so BOARD is a pinned copy;
 // boardVolume.test.ts checks it against the built deck and hardware and
 // against ART.board by behaviour, not just by value.
@@ -69,8 +69,8 @@ export const BOARD = {
    * Hardware boxes for the nose truck (the tail truck mirrors x): x range, y
    * range, z half width. Each holds the GLB parts (TRUCK, WHEEL) and the
    * primitive's (ART.board.trucks, wheels).
-   * - hanger: baseplate x 0.1655 to 0.2655 down to the axle housing bottom,
-   *   0.06875; z the housing's 0.061 and the primitive hanger's 0.062.
+   * - hanger: baseplate x 0.1655 to 0.2655 down to the hanger envelope bottom,
+   *   0.06875 (TRUCK.axleHousing); z the envelope's 0.061 and the primitive hanger's 0.062.
    * - wheels: the primitive's 0.027 radius about x 0.208, from the pad (rest
    *   height 0.08425 below the deck centre) to the top of the primitive wheel;
    *   z to the wheel's outer face, 0.078 + 0.016.

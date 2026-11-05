@@ -122,3 +122,24 @@ ADR-31; the look and the numbers are DESIGN.md section 10. `npm run assets` now 
 **Why the maps are the sizes they are.** PNG cannot compress per-pixel noise. A first cut with fine grain in the height field gave a 775 KB normal map and a 329 KB colour map. The grain is now smooth noise a few texels across (+-2.5 grey levels), only stones over 2 mm across have height (0.05 mm), and the roughness, which is low frequency, is 256 px: 432 KB for all three.
 
 **Runtime.** `GroundModel` (lazy chunk, 0.7 KB, sharing the BoardModel chunk's loader) renders the one node with `dispose={null}`, sets `ART.quality[tier].groundAnisotropy` on the cached maps (16 High, 8 Medium) and receives the shadow on High; `Pad` imports it at once on Medium and High so the GLB streams in parallel, and renders the untextured plane on Low, while it streams, and if it fails. `AssetBoundary` takes `reportToStore={false}` here, so a failed ground does not disable the board's tiers (checked by blocking the file: plain plane, Medium board still loaded, nothing announced). `SceneEnvironment` now prefilters a procedural outdoor scene (`src/scene/outdoorEnvironment.ts`) instead of RoomEnvironment, with the same lifecycle.
+
+## Truck, wear and ground pass (2026-11-05): ADR-38
+
+The look and the numbers are DESIGN.md 7.3, 7.4 and 10.1. Three files changed, `shoes.glb` rebuilt byte for byte.
+
+| File | Tier | Bytes | Draw calls | Triangles | Textures |
+| --- | --- | --- | --- | --- | --- |
+| `board.glb` | Medium | 281.4 KB (was 250.2; PNG 192.6) | 7 | 14,272 (was 13,904) | 4: deck-bottom now carries the wear (34.8 KB, was 4.5) |
+| `board-high.glb` | High | 1,823.3 KB (was 1,709.4; PNG 1,589.6) | 7 | 47,488 (was 42,736) | 6 (was 5): adds `deck-bottom-roughness.png` 1024 x 256 grey, 10.9 KB; deck-bottom-high 92.4 KB (was 10.1); 13.54 MB on the GPU |
+| `ground.glb` | Medium and High | 432.7 KB (was 434.9) | 1 | 2 | 3: colour 1024 over 2 x 2 bays 280.6 KB, normal 1024 over one bay 121.2 KB, roughness 512 over 3 x 3 bays 27.7 KB; 12.00 MB on the GPU |
+
+| File | What changed | Tested by |
+| --- | --- | --- |
+| `src/asset/spec.ts` | `TRUCK`: countersunk `bolts` (profile, rim, top, tint), pivot cup `socket` and `insert`, `seat`, `hanger` (the loft's circles and stations), `axleBulge`, the pivot cone; `axleHousing` is now the hanger envelope only; `HARDWARE_DETAIL` gains `hanger`, `seat`, `bulge` and `boltHex`. `DECK_WEAR`, and `TEXTURES_HIGH.deckRoughness` | everything below |
+| `src/asset/hardware.ts` | `hangerSection` and `buildHangerBody` (a loft of convex hulls sampled by angle, each triangle oriented outward from the axle line, so the mirrored truck needs no negative scale), `latheOnAxis`, `boltSeat` and the countersunk `buildBoltHead` (High: a hex socket), `tint` for vertex colours | `hardware.test.ts`, `board.test.ts`, `src/sim/boardVolume.test.ts`, `src/scene/clearance.test.ts` (unchanged) |
+| `src/asset/board.ts` | The steel group carries a vertex colour: 1 on the truck steel, `TRUCK.bolts.tint` on the bolt heads | `board.test.ts` |
+| `src/asset/textures.ts` | `deckWear` (mask and grain in deck metres) and `wearDeckBottom` (colour and roughness from the one mask); `greyFromField` | `textures.test.ts` |
+| `src/asset/groundSpec.ts`, `groundTextures.ts` | Per-map tiles of bays (`GROUND_TEXTURES[key].bays`), `groundRepeat`, `originBay`; the one-bay fine surface (`concreteSurface`, now grey detail and height only), `concreteColorField` (four bays), `concreteRoughnessField` (nine bays) | `ground.test.ts` |
+| `scripts/lib/build.ts` | `COLOR_0` from a geometry's `color` attribute; the deck graphic goes through `wearDeckBottom`; the High graphic gets a metallic-roughness texture with factor 1; each ground map takes `groundRepeat(key)` | `budget.test.ts` (determinism, committed bytes, the High texture list) |
+
+**Bytes.** The wear and the varied bays cost little because the expensive parts were made predictable for PNG's row filters. The print grain's wave is snapped to 0.2 m blocks along the deck (each texel row then repeats along a block: 2 KB, against 12 to 14 KB for the continuous wave at 2 levels, which shows no difference); texels outside the outline at the tips are plain wood without grain; the scuff haze is limited to patches near the tips. On the ground, the colour tile's grain moved from 3.5 mm to 12 mm cells: at the new 3.1 mm texel the old grain was per-texel noise and cost 154 KB.
