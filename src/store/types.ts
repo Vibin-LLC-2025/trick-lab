@@ -1,5 +1,9 @@
+import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { InputKey, PresetId, TrickResult } from '../sim/tricks';
+
+/** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
+export type { Stance };
 
 export type EventType =
   | 'input.changed'
@@ -19,11 +23,16 @@ export interface TrickEvent {
 }
 
 export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
-export type PlaybackRate = 1 | 0.25;
+/** One of SPEEDS in store/speed.ts. */
+export type PlaybackRate = number;
 export type FocusTarget = { kind: 'setup-heading' };
 export type Theme = 'dark' | 'light';
-/** Board level of detail: the GLB model (high) or the primitive board (low). */
-export type BoardDetail = 'high' | 'low';
+/**
+ * Quality tier (ADR-16). High: the detailed board, shoes and shadows for a
+ * desktop GPU. Medium: the original GLB board, no shadows. Low: the primitive
+ * board, the Chromebook fallback.
+ */
+export type Quality = 'high' | 'medium' | 'low';
 
 export interface InputsSlice extends TrickInputs {
   /** Preset last applied, cleared as soon as a slider moves. */
@@ -36,7 +45,10 @@ export interface PlaybackSlice {
   status: PlaybackStatus;
   /** 0 to 1 of the current flight's airtime. Committed at most 10 Hz while playing. */
   progress: number;
+  /** Playback speed, one of SPEEDS. Applies live, mid-flight. Not logged. */
   rate: PlaybackRate;
+  /** The slow speed `s` switches to: the last speed below 1x the student picked. */
+  slowRate: PlaybackRate;
   /** The flight being played or last played; null before the first pop and after reset. */
   flight: Flight | null;
   /** Increments on every pop so the render loop can tell a new flight from a resumed one. */
@@ -48,15 +60,25 @@ export interface PlaybackSlice {
   /** Pops with the current inputs. Under reduced motion the trick resolves at once. */
   popTrick: () => void;
   togglePause: () => void;
+  /** The speed slider. Snaps to the nearest stop. Not announced (the slider speaks its value). */
+  setRate: (rate: number) => void;
+  /** The [ and ] keys: one stop slower or faster, announced. */
+  stepRate: (direction: 1 | -1) => void;
+  /** The s key: normal speed or back to the last slow speed, announced. */
   toggleSlowMotion: () => void;
   /** Moves the frozen board. Pauses a playing flight. Logs nothing until commitScrub. */
   scrub: (progress: number) => void;
   /** Ends a scrub gesture (pointer up, key up, blur): one playback.scrubbed event. */
   commitScrub: () => void;
-  /** Called by FlightDriver: the 10 Hz progress commit. Not logged. */
+  /** Called by FlightDriver: the 10 Hz progress commit. Not logged. Also mirrors it into the live playhead. */
   syncProgress: (progress: number) => void;
-  /** Called by FlightDriver when progress reaches 1, or by popTrick under reduced motion. */
-  land: () => void;
+  /**
+   * Resolves the flight in the air (idempotent): called by FlightDriver when
+   * progress reaches 1, by popTrick when the pop does not animate, and by the
+   * ui slice when motion is reduced or the 3D view fails mid-flight. `lead`,
+   * if given, opens the one announcement that also carries the result.
+   */
+  land: (lead?: string) => void;
 }
 
 export interface AssessmentSlice {
@@ -72,24 +94,45 @@ export interface UiSlice {
   perfVisible: boolean;
   shortcutsOpen: boolean;
   theme: Theme;
-  /** Mirrors prefers-reduced-motion; App keeps it in sync. */
+  /** Mirrors prefers-reduced-motion; App keeps it in sync. Turning it on mid-flight resolves the flight (ADR-6). */
   reducedMotion: boolean;
   announcement: { message: string; nonce: number };
   focusRequest: (FocusTarget & { nonce: number }) | null;
   /** Increments when the student asks to reset the camera. */
   viewResetNonce: number;
-  /** Persisted under trick-lab.board-detail. Not logged: the event contract has no UI events. */
-  boardDetail: BoardDetail;
-  /** Set when the GLB fails to load; the scene then shows the primitive board and the control is disabled. */
+  /** Persisted under trick-lab.quality. Not logged: the event contract has no UI events. */
+  quality: Quality;
+  /** True while the tier is the device's auto-pick, false once the student chose one. */
+  qualityAuto: boolean;
+  /** Set when a GLB fails to load; the scene then shows the primitive board and the High and Medium options are disabled. The saved `quality` is kept; read the tier in use with effectiveQuality (quality.ts). */
   boardAssetFailed: boolean;
+  /** Set when the whole 3D view fails (SceneBoundary). Not persisted, not logged. Pops then resolve at once, like reduced motion (ADR-6). */
+  sceneUnavailable: boolean;
+  /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
+  feetVisible: boolean;
+  /** Foot trails: the route of each shoe through the trick, with arrowheads (DESIGN.md 8.5). Persisted under trick-lab.foot-trails, default off. Not logged. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
+  footPathsVisible: boolean;
+  /** Which foot leads (ADR-25). Persisted under trick-lab.stance, default goofy. Not logged, not reset, not exported. */
+  stance: Stance;
+  /** Motion cues: arrows on the deck showing how each shoe will move against the board for the set inputs (ADR-26). Persisted under trick-lab.motion-cues, default on. Not logged. */
+  motionCuesVisible: boolean;
   togglePerf: () => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleTheme: () => void;
   setReducedMotion: (reduced: boolean) => void;
   resetView: () => void;
-  setBoardDetail: (detail: BoardDetail) => void;
+  setQuality: (quality: Quality) => void;
+  toggleFeet: () => void;
+  /** Shows or hides the foot trails. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
+  toggleFootPaths: () => void;
+  /** Switches goofy and regular, persisted and announced; a no-op if unchanged. */
+  setStance: (stance: Stance) => void;
+  /** Shows or hides the motion cues. */
+  toggleMotionCues: () => void;
   /** Called by the scene's error boundary when the board model cannot load. */
   setBoardAssetFailed: () => void;
+  /** Called by SceneBoundary when the 3D view cannot render: announces once and resolves a flight in the air. */
+  setSceneUnavailable: () => void;
   announce: (message: string) => void;
   requestFocus: (target: FocusTarget) => void;
 }

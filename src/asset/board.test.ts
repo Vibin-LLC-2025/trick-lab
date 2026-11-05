@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Box3, type BufferGeometry } from 'three';
 import { boardTriangles, buildBoard } from './board';
-import { buildBolts, buildWheel } from './hardware';
-import { BUDGET, OUTLINE, PARTS, REST_Y, TRUCK, WHEEL } from './spec';
+import { buildBoltHead, buildBolts, buildWheel } from './hardware';
+import { BUDGET, BUDGETS, HARDWARE_DETAIL, OUTLINE, PARTS, REST_Y, TRUCK, WHEEL, WHEEL_HIGH_BAND_KINDS } from './spec';
 
 const board = buildBoard();
 const box = (g: BufferGeometry) => {
@@ -107,5 +107,67 @@ describe('wheel lathe (DESIGN.md 7.5)', () => {
       // The last profile point (v = 1) is the outer bearing face, which sits outboard of the wheel centre.
       for (let i = 0; i < p.count; i++) if (v.getY(i) === 1) expect(Math.sign(p.getZ(i) - side * WHEEL.centerZ)).toBe(side);
     }
+  });
+});
+
+describe('high-detail board (quality tiers, 2026-11-04)', () => {
+  const high = buildBoard('high');
+  const det = HARDWARE_DETAIL.high;
+
+  it('has the same footprint, rest height and part list as the medium board, within the high budget', () => {
+    expect(box(high.parts.Wheels).min.y + REST_Y).toBeCloseTo(0, 6);
+    const all = new Box3();
+    for (const p of PARTS) all.union(box(high.parts[p.node]));
+    expect(all.max.x - all.min.x).toBeCloseTo(OUTLINE.length, 2);
+    expect(all.max.z - all.min.z).toBeCloseTo(OUTLINE.width, 2);
+    expect(all.max.z + all.min.z).toBeCloseTo(0, 6);
+    const tris = boardTriangles(high);
+    const total = Object.values(tris).reduce((a, b) => a + b, 0);
+    expect(total).toBeLessThanOrEqual(BUDGETS.boardHigh.triangles);
+    const mediumTotal = Object.values(boardTriangles(board)).reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(2 * mediumTotal);
+    expect(tris.Wheels).toBe(4 * det.wheelRadial * (det.wheelProfile.length - 1) * 2);
+  });
+
+  it('rounds the wheels to 64 segments with a modelled 608 bearing (8 mm bore, 22 mm outer race)', () => {
+    const w = buildWheel(WHEEL.centerX, 1, det);
+    const p = w.getAttribute('position');
+    const b = box(w);
+    expect(b.max.y - b.min.y).toBeCloseTo(2 * WHEEL.radius, 5);
+    expect(b.max.z - b.min.z).toBeCloseTo(WHEEL.width, 5);
+    const radii = new Set<number>();
+    for (let i = 0; i < p.count; i++) radii.add(Math.round(Math.hypot(p.getX(i) - WHEEL.centerX, p.getY(i) - WHEEL.centerY) * 1e4) / 1e4);
+    expect(radii.has(0.004)).toBe(true);
+    expect(radii.has(0.011)).toBe(true);
+    expect(WHEEL_HIGH_BAND_KINDS).toHaveLength(det.wheelProfile.length - 1);
+    // The profile mirrors around the contact patch, as do the bands.
+    expect([...WHEEL_HIGH_BAND_KINDS].reverse()).toEqual(WHEEL_HIGH_BAND_KINDS);
+  });
+
+  it('gives each bolt head a round socket that stays inside the head', () => {
+    const head = buildBoltHead(0.181, 0.0205, det);
+    const b = box(head);
+    expect(b.max.y - b.min.y).toBeCloseTo(TRUCK.bolts.height, 6);
+    expect(b.max.x - b.min.x).toBeCloseTo(2 * TRUCK.bolts.radius, 4);
+    // Socket floor vertices sit below the head's top face, inside the socket radius.
+    const p = head.getAttribute('position');
+    let floor = 0;
+    for (let i = 0; i < p.count; i++) {
+      const r = Math.hypot(p.getX(i) - 0.181, p.getZ(i) - 0.0205);
+      const y = p.getY(i) - TRUCK.bolts.base;
+      if (Math.abs(y - (TRUCK.bolts.height - det.boltSocket!.depth)) < 1e-7 && r <= det.boltSocket!.radius + 1e-7) floor++;
+    }
+    expect(floor).toBeGreaterThan(0);
+    expect(buildBolts(det)).toHaveLength(8);
+  });
+
+  it('has no NaN and mirrors the trucks', () => {
+    for (const p of PARTS) {
+      const g = high.parts[p.node];
+      for (const name of Object.keys(g.attributes))
+        expect(Array.from(g.getAttribute(name).array).every(Number.isFinite), p.node + '.' + name).toBe(true);
+    }
+    const al = box(high.parts.Truck_Aluminium);
+    expect(al.max.x + al.min.x).toBeCloseTo(0, 6);
   });
 });

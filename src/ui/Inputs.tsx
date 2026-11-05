@@ -1,4 +1,4 @@
-import { displayValue, INPUT_NAMES, INPUT_UNITS, valueText } from '../sim/format';
+import { displayUnit, displayValue, INPUT_NAMES, valueText } from '../sim/format';
 import { INPUT_LIMITS, type InputKey } from '../sim/tricks';
 import { useTrickStore } from '../store';
 
@@ -6,8 +6,9 @@ const KEYS: InputKey[] = ['pop', 'flick', 'scoop'];
 
 const HELP: Record<InputKey, string> = {
   pop: 'Peak height of the jump',
-  flick: 'Flip rate about the long axis',
-  scoop: 'Shove rate about the vertical axis',
+  // Signed rates (ADR-30): the slider is centred on 0 and the side picks the direction.
+  flick: 'Flip rate about the long axis: right for a kickflip, left for a heelflip',
+  scoop: 'Shove rate about the vertical axis: right for backside, left for frontside',
 };
 
 function Field({ k }: { k: InputKey }) {
@@ -24,7 +25,7 @@ function Field({ k }: { k: InputKey }) {
       </label>
       <output className="field__value" htmlFor={id} aria-hidden="true">
         {displayValue(k, value)}
-        <span className="field__unit">{INPUT_UNITS[k]}</span>
+        <span className="field__unit">{displayUnit(k, value)}</span>
       </output>
       <input
         id={id}

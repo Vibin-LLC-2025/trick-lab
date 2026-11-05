@@ -84,3 +84,41 @@ All seven sit under a root node `Board`, whose extras record the units, rest hei
 ## How an artist-made board would slot in
 
 Export from Blender as glTF binary with the same conventions (metres, Y up, nose +X, origin at the deck centre, wheel bottoms at y = -0.08425) and the same seven node names, one material each. Run it through the same compression (`meshopt()` from glTF-Transform, or `gltfpack -cc`) and replace `public/models/board.glb`. `npm run assets:check` is the gate: size, draw calls, triangles, texture count, size and mips, required extensions and the physical size all apply unchanged. `BoardModel` needs no code change as long as the node names match.
+
+## Quality pass (2026-11-04): three assets from one pipeline
+
+`npm run assets` now builds three files, all deterministic, all committed, each gated by its own `BUDGETS` entry in `src/asset/spec.ts` (ADR-16). `scripts/lib/build.ts` has one generic `buildGlb(spec)`; `buildBoardGlb(level)` and `buildShoesGlb()` describe the parts, materials and textures. `budget.ts` takes the asset key for its limits, node list and size rows; `inspect.ts` checks mipmaps on every texture slot (normal, metallic-roughness, occlusion, emissive), not only base colour. `check-assets.ts` prints one table per file.
+
+| File | Tier | Bytes | Draw calls | Triangles | Textures |
+| --- | --- | --- | --- | --- | --- |
+| `board.glb` | Medium | 250.2 KB (byte for byte as before) | 7 | 13,904 | 4 |
+| `board-high.glb` | High | 1,709.4 KB (of which PNG 1,496.4 KB) | 7 | 42,736 | 5: grip 1024 x 1024 RGB, grip normal 512 x 512, graphic 2048 x 512, ply 32 x 256, wheel 64 x 512 (12.21 MB on the GPU with mips) |
+| `shoes.glb` | High | 241.8 KB | 3 | 9,214 | 2: upper 512 x 512, sole band 16 x 64 |
+
+**High board.** The same `src/asset` code with a detail level (`buildBoard('high')`): outline intervals 48, a six-step bevel per side generated from the 4 mm bevel circle (`RINGS_HIGH`; the medium ring table is that at 0, 30, 60 and 90 degrees), rounded-box fillets at 4 segments, cylinders at 24 to 32, bolt heads at 16 with a round 4 mm socket, hexagon nuts, and wheels at 64 radial segments over a 28-point profile that models the 608 bearing (shield, races, bore). The grip colour map is the medium recipe scaled to 1024 px with the same seed; its normal map is derived from the same height field, box filtered to 512 px (at 1024 px the noise PNG alone was 2.1 MB and the file 3.3 MB, over the 2.5 MB gate), strength 0.6. The deck graphic is rasterised at 2048 x 512. Not done: a wheel print (the lathe's polar UVs would smear a square mark) and a hex bolt socket.
+
+**Shoes.** One right shoe (the runtime mirrors it, `Feet.tsx`): the footprint is a half-width function per side (superellipse heel and toe, a smoothstep from heel to ball width, a cosine-windowed arch dip), the sole is 12 nested footprint rings lofted like the deck with a 16 x 64 band texture for the foxing stripe, the upper is a 73 x 48 lofted grid of superellipse arches with a height profile and a valley for the ankle and tongue, welded for smooth normals, with a seeded 512 x 512 canvas weave carrying the toe cap, heel tab, tongue and eyelets; the laces are 11 merged 8-segment cylinders. Nodes `Shoe_Sole`, `Shoe_Upper`, `Shoe_Laces`. Origin at the footprint centre on the sole bottom, toe +X, up +Y, lateral +Z; `SHOE` in `shoeSpec.ts` must equal `FOOT` in `src/sim/feet.ts` (`shoe.test.ts`). Every number is in `shoeSpec.ts`; the look is DESIGN.md 8.3.
+
+**Runtime.** `modelUrls.ts` maps the tier to a file; `BoardModel` takes the URL, sets the tier's anisotropy on every cached texture once, and casts shadows on High; `ShoesModel` does the same for the shoe; both are lazy chunks and both preload on module load for the tier that needs them. `AssetBoundary` (in `Board.tsx`) is shared: any GLB failure drops the scene to the primitives and disables High and Medium.
+
+## Ground pass (2026-11-04): the concrete ground, a fourth asset
+
+ADR-31; the look and the numbers are DESIGN.md section 10. `npm run assets` now builds four files; `npm run assets -- ground` (any asset keys from `ASSET_FILES`) builds only those, which is how this pass wrote `ground.glb` without rewriting the other three (they stay byte for byte as committed, checked by building them in memory and comparing).
+
+| File | Tier | Bytes | Draw calls | Triangles | Textures |
+| --- | --- | --- | --- | --- | --- |
+| `ground.glb` | Medium and High (Low draws an untextured plane) | 434.9 KB (of which PNG 431.8 KB: colour 277.8, normal 129.6, roughness 24.4) | 1 | 2 | 3: colour 1024 x 1024 grey, normal 1024 x 1024 RGB, roughness 256 x 256 grey (11.00 MB on the GPU with mips) |
+
+| File | Role | Tested by |
+| --- | --- | --- |
+| `src/asset/groundSpec.ts` | Bay and plane size, texture sizes, seed, tone, aggregate, pits, cracks, joint, painted mark, roughness, wheel marks, node and material. Pure data | everything below |
+| `src/asset/groundTextures.ts` | One concrete surface (grey, height in metres, roughness) on the 1024 px grid from tileable value-noise fBm and seeded stamps; encoded as the grey colour map, the normal map (`normalMapFromHeight`, which now takes a separate slope down the image for non-square texels) and the roughness map (box filtered to 256 px); `concreteTint()` is the base colour factor | `ground.test.ts` (tiling, joint in all three maps, normal convention, mean grey, roughness range) |
+| `src/asset/ground.ts` | The 40.0 x 39.6 m quad on y 0, UVs 0 to 1, +u to +X and +v to +Z | `ground.test.ts` |
+| `scripts/lib/build.ts` | `groundSpec()`: one material with base colour, normal and metallic-roughness textures, each with the repeat transform (25 x 33). Texture specs now carry their `repeat` (the board's grip computes it from its tile, same bytes) and materials an optional `roughnessMap` | `budget.test.ts` (determinism, and the committed `ground.glb` equals a fresh build byte for byte) |
+| `scripts/lib/budget.ts` | The ground's own rows: size x and z at least 24 m and a whole odd number of bays, surface height 0 within 0.5 mm, centred on the origin within 1 mm; node `Ground_Concrete` | `budget.test.ts` |
+
+`assets:check` for `ground.glb` (2026-11-04): 434.9 KB of 500 KB, 1 of 1 draw call, 2 of 64 triangles, 3 of 3 textures, long side 1024 of 1024 px, all power of two and mipmapped, meshopt and quantization required, no Draco, size x 40.000 m (25 bays), size z 39.600 m (33 bays), surface 0.0 mm, centred 0.0 mm.
+
+**Why the maps are the sizes they are.** PNG cannot compress per-pixel noise. A first cut with fine grain in the height field gave a 775 KB normal map and a 329 KB colour map. The grain is now smooth noise a few texels across (+-2.5 grey levels), only stones over 2 mm across have height (0.05 mm), and the roughness, which is low frequency, is 256 px: 432 KB for all three.
+
+**Runtime.** `GroundModel` (lazy chunk, 0.7 KB, sharing the BoardModel chunk's loader) renders the one node with `dispose={null}`, sets `ART.quality[tier].groundAnisotropy` on the cached maps (16 High, 8 Medium) and receives the shadow on High; `Pad` imports it at once on Medium and High so the GLB streams in parallel, and renders the untextured plane on Low, while it streams, and if it fails. `AssetBoundary` takes `reportToStore={false}` here, so a failed ground does not disable the board's tiers (checked by blocking the file: plain plane, Medium board still loaded, nothing announced). `SceneEnvironment` now prefilters a procedural outdoor scene (`src/scene/outdoorEnvironment.ts`) instead of RoomEnvironment, with the same lifecycle.

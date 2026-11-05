@@ -1,10 +1,17 @@
-/* trick-lab application styles (2026-11-04)
+/* trick-lab application styles (UI redesign 2026-11-04, docs/DESIGN.md 9)
    Uses tokens from tokens.css. Every class in docs/BRIEF.md "Markup and class
    contract" is styled here. Import order: tokens.css, then app.css.
-   Rule of the house: no state is color alone. Active presets get a left bar
-   and weight, the slow-motion toggle moves its knob, outcomes carry a glyph
-   and a border style, good/bad telemetry values carry a glyph and weight,
-   done objectives get a filled tick. */
+
+   The 3D stage is the hero; the two side columns are quiet. Each column is
+   one surface, and its panels are sections split by a hairline and spacing,
+   not stacked cards. No left-border accents, no panel shadows, no gradients
+   (the one exception is the two-colour "both feet" dot, a hard split).
+
+   Rule of the house: no state is colour alone. Active presets get a heavier
+   border, weight and a filled key; switches move their knob; checked
+   segments get an inset border and weight; outcomes carry a glyph; a missed
+   axis carries a "!" and weight; the Foot motion step under the playhead
+   gets a filled number and a tinted row; done objectives get a filled tick. */
 
 /* ---------- Base ---------- */
 
@@ -23,8 +30,8 @@ body,
 
 body {
   font-family: var(--font-sans);
-  font-size: var(--text-md);
-  line-height: var(--leading-normal);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
@@ -58,13 +65,12 @@ a {
 }
 
 /* One focus treatment for everything interactive. The ring sits 2px off the
-   element so it is judged against the page or card background, where
-   --color-focus meets 3:1 in both themes. Range inputs opt out below and
-   ring their thumb instead. */
+   element so it is judged against the column surface, where --color-focus
+   meets 3:1 in both themes, and follows the element's own radius. Range
+   inputs and segmented options draw their own ring below. */
 :focus-visible {
   outline: var(--focus-ring) solid var(--color-focus);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 
 :focus:not(:focus-visible) {
@@ -72,9 +78,9 @@ a {
 }
 
 /* ---------- App shell ----------
-   Three columns: setup (left), stage (center), results (right). Each side
-   column scrolls on its own; the stage holds still. Below 960px everything
-   stacks under the stage. */
+   Three columns: setup (left), stage (centre), results (right). Each side
+   column is one surface and scrolls on its own; the stage holds still.
+   Below 960px everything stacks under the stage. */
 
 .app {
   display: grid;
@@ -83,8 +89,8 @@ a {
   grid-template-areas: "setup stage results";
   height: 100vh;
   height: 100dvh;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-2);
   background: var(--color-bg);
 }
 
@@ -94,10 +100,9 @@ a {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--color-line-strong);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
-  background: var(--scene-bg); /* equals the scene clear color, so resize gaps do not flash */
-  box-shadow: var(--shadow-sm);
+  background: var(--scene-bg); /* equals the scene clear colour, so resize gaps do not flash */
 }
 
 .app__stage canvas {
@@ -109,12 +114,15 @@ a {
 .app__setup,
 .app__results {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: 2px; /* room for the focus ring on edge controls */
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .app__setup {
@@ -142,36 +150,46 @@ a {
     min-height: 260px;
   }
 
+  /* The panels of each column sit side by side where there is room. */
   .app__setup,
   .app__results {
-    overflow: visible;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    align-items: start;
+    overflow: clip;
   }
 }
 
-/* ---------- Panel ---------- */
+/* ---------- Panel ----------
+   A section of a column: a small title, then its content. Every panel has a
+   hairline on top and is pulled up 1px, so the column's clip hides the first
+   one (and the first row in the one-column grid). */
 
 .panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  min-width: 0;
+  margin-top: -1px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-line);
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 20px;
+  margin-block: -4px; /* the 28px header buttons do not push the title down */
 }
 
 .panel__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: var(--weight-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  line-height: var(--leading-tight);
+  letter-spacing: 0.02em;
   color: var(--color-muted);
-  padding-bottom: var(--space-2);
-  border-bottom: 2px solid var(--color-line);
 }
 
 /* The setup heading receives focus after reset (tabindex="-1"). */
@@ -179,30 +197,40 @@ a {
   border-radius: var(--radius-sm);
 }
 
+.panel__count {
+  font-weight: var(--weight-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel__note {
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  color: var(--color-muted);
+}
+
 /* ---------- Presets ----------
    Markup: <div class="presets" role="group" aria-label="Trick presets">
      <button class="preset preset--active" aria-pressed="true">Kickflip <kbd class="preset__key">1</kbd></button>
-   Active = left bar, bold, tinted; aria-pressed="true" is styled the same so
-   the state cannot drift from the attribute. */
+   Compact chips, two by two. Active = accent tint, a 2px accent border
+   (1px border plus an inset 1px), bold, and a filled key; aria-pressed is
+   styled the same so the state cannot drift from the attribute. */
 
 .presets {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .preset {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  min-height: 32px;
+  padding: var(--space-1) 6px var(--space-1) 10px;
   border: 1px solid var(--color-line-strong);
-  border-left-width: 4px;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
@@ -224,21 +252,20 @@ a {
 .preset[aria-pressed="true"] {
   background: var(--color-accent-bg);
   border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
   font-weight: var(--weight-bold);
 }
 
 .preset__key {
   flex: none;
-  min-width: 1.5em;
-  padding: 0 5px;
+  min-width: 18px;
+  padding: 0 4px;
   border: 1px solid var(--color-line-strong);
-  border-bottom-width: 2px;
   border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  line-height: 1.5;
+  line-height: 16px;
   text-align: center;
   color: var(--color-muted);
 }
@@ -257,12 +284,12 @@ a {
        <output class="field__value" for="pop">0.35<span class="field__unit">m</span></output>
        <input class="field__range" id="pop" type="range" min="0.15" max="0.6" step="0.05" aria-valuetext="0.35 meters">
      </div>
-   The label sits top-left, the value top-right, the slider spans below. */
+   Label left and value right on one row, the track right under them. */
 
 .inputs {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-1);
 }
 
 .field {
@@ -272,7 +299,6 @@ a {
     "label value"
     "range range";
   align-items: baseline;
-  row-gap: var(--space-2);
   column-gap: var(--space-2);
 }
 
@@ -285,7 +311,6 @@ a {
 .field__value {
   grid-area: value;
   font-family: var(--font-mono);
-  font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--color-text);
@@ -293,7 +318,8 @@ a {
 }
 
 .field__unit {
-  margin-left: var(--space-1);
+  margin-left: 3px;
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: var(--weight-normal);
   color: var(--color-muted);
@@ -303,18 +329,31 @@ a {
   grid-area: range;
 }
 
+/* Signed rates (flick and scoop, ADR-30, 2026-11-04) are centred on 0, the
+   side is the direction: a tick marks the centre of the track (the thumb
+   covers it at 0), and Firefox's fill from the minimum is dropped, since a
+   bar from -3 would read as an amount. */
+.field__range[min^="-"] {
+  background: linear-gradient(var(--color-muted), var(--color-muted)) center / 2px 12px no-repeat;
+}
+
+.field__range[min^="-"]::-moz-range-progress {
+  background: transparent;
+}
+
 /* ---------- Range inputs (shared) ----------
-   Chromium and Firefox need separate pseudo-elements. The track is a thin
-   bar in --color-line-strong (3:1 or better against bg and surface), the
-   thumb is a solid accent disc with a surface-colored border so it reads on
-   the track. Focus rings the thumb, not the whole input. */
+   Chromium and Firefox need separate pseudo-elements. The input box is the
+   24px hit area; the track is a 4px bar in --color-line-strong (3:1 or
+   better on the surface), the thumb a solid accent disc with a surface ring
+   so it reads on the track. Focus rings the thumb, not the whole input. */
 
 .field__range,
 .timeline__range {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   width: 100%;
-  height: var(--range-thumb);
+  height: var(--range-hit);
   margin: 0;
   padding: 0;
   background: transparent;
@@ -350,7 +389,7 @@ a {
 
 .field__range:focus-visible::-webkit-slider-thumb,
 .timeline__range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 3px var(--color-surface), 0 0 0 6px var(--color-focus);
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 2px var(--color-surface), 0 0 0 5px var(--color-focus);
 }
 
 /* Firefox track, progress and thumb */
@@ -381,7 +420,7 @@ a {
 
 .field__range:focus-visible::-moz-range-thumb,
 .timeline__range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 3px var(--color-surface), 0 0 0 6px var(--color-focus);
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 0 2px var(--color-surface), 0 0 0 5px var(--color-focus);
 }
 
 .field__range:disabled,
@@ -393,44 +432,56 @@ a {
 /* ---------- Playback and buttons ----------
    Markup: <div class="playback">
      <button class="btn btn--primary">Pop <kbd>Space</kbd></button>
-     <button class="toggle toggle--on" aria-pressed="true">Slow motion <span class="toggle__state">0.25x</span></button>
+     <button class="btn">Pause</button>
      <button class="btn btn--danger">Reset</button>
-     <div class="timeline"> ... </div>
-   </div> */
+     <div class="timeline"> Speed ... </div>
+     <div class="timeline"> Timeline ... </div>
+   </div>
+   Pop is the one filled button in the app and takes the rest of its row.
+   Pause and Reset are quiet outlined secondaries. */
 
 .playback {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .playback > .timeline {
   flex-basis: 100%;
 }
 
+.playback > .btn + .timeline {
+  margin-top: var(--space-1);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-4);
+  gap: 6px;
+  min-height: var(--control-h-lg);
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
 
 .btn kbd {
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  opacity: 0.8;
+  font-weight: var(--weight-medium);
+  line-height: 16px;
 }
 
 .btn:hover {
@@ -448,14 +499,19 @@ a {
   transform: none;
 }
 
+.btn:disabled:hover,
+.btn[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
 .btn--primary {
-  min-height: 44px;
-  padding-inline: var(--space-5);
+  flex: 1 1 auto;
+  padding-inline: var(--space-4);
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-fg);
   font-weight: var(--weight-bold);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .btn--primary:hover {
@@ -463,8 +519,12 @@ a {
   filter: brightness(1.08);
 }
 
+.btn--primary[aria-disabled="true"]:hover {
+  background: var(--color-accent);
+  filter: none;
+}
+
 .btn--ghost {
-  background: transparent;
   border-color: transparent;
   color: var(--color-accent);
 }
@@ -474,75 +534,74 @@ a {
 }
 
 .btn--danger {
-  background: transparent;
-  border-color: var(--color-bad);
   color: var(--color-bad);
 }
 
 .btn--danger:hover {
-  background: var(--color-bad);
-  color: var(--color-bad-fg);
+  background: var(--color-bad-bg);
+  border-color: var(--color-bad);
 }
 
-/* ---------- Toggle (button with aria-pressed) ----------
+/* Small buttons for panel headers (Reset view, Shortcuts, Download JSON). */
+.btn--sm {
+  min-height: var(--control-h);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* ---------- Toggle (button with aria-pressed), drawn as a switch ----------
+   Markup: <button class="toggle toggle--on" aria-pressed="true">Feet</button>
    The track is ::before and the knob is ::after, so the button needs only
-   text. On state: knob moves right (position, not color alone), tinted
-   background, accent border, and any .toggle__state text goes bold. */
+   text. On: the knob moves right (position, not colour alone) and the track
+   fills with the accent. */
 
 .toggle {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 2px 6px 2px 4px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--color-text);
   font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  text-align: left;
   cursor: pointer;
-  transition: background-color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.toggle:hover {
+  background: var(--color-surface-2);
 }
 
 .toggle::before {
   content: "";
   flex: none;
-  width: 40px;
-  height: 22px;
+  width: 26px;
+  height: 16px;
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-pill);
   background: var(--color-surface-2);
-  border: 1px solid var(--color-line-strong);
-  transition: background-color var(--dur-base) var(--ease-out);
+  transition: background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
 }
 
 .toggle::after {
   content: "";
   position: absolute;
-  left: var(--space-2);
+  left: 7px; /* padding 4 + border 1 + gap 2 */
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--color-line-strong);
-  transform: translate(3px, -50%);
+  background: var(--color-muted);
+  transform: translateY(-50%);
   transition: transform var(--dur-base) var(--ease-out),
     background-color var(--dur-base) var(--ease-out);
-}
-
-.toggle__state {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-}
-
-.toggle--on,
-.toggle[aria-pressed="true"] {
-  background: var(--color-accent-bg);
-  border-color: var(--color-accent);
 }
 
 .toggle--on::before,
@@ -554,7 +613,15 @@ a {
 .toggle--on::after,
 .toggle[aria-pressed="true"]::after {
   background: var(--color-accent-fg);
-  transform: translate(21px, -50%);
+  transform: translate(10px, -50%);
+}
+
+/* Optional state text after a toggle's label, e.g. a speed. */
+.toggle__state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
 }
 
 .toggle--on .toggle__state,
@@ -563,157 +630,210 @@ a {
   font-weight: var(--weight-bold);
 }
 
-/* ---------- Timeline ----------
+/* ---------- Timeline and Speed ----------
    Markup: <div class="timeline">
      <label class="timeline__label" for="timeline">Timeline <span>42% of flight</span></label>
      <input class="timeline__range" id="timeline" type="range" min="0" max="100" step="1" aria-valuetext="42 percent of flight">
    </div>
-   The timeline sits in its own inset well so it reads as a scrubber rather
-   than a fourth input. Tick marks at 0, 50 and 100 are drawn on the well. */
+   The same row as a field: label left, mono readout right, track below.
+   The thumb is square-cornered, so a playhead looks different from a dial. */
 
 .timeline {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-3) var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-2);
 }
 
 .timeline__label {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: var(--space-2);
-  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--color-text);
 }
 
 .timeline__label > span {
   font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
 }
 
 .timeline__range::-webkit-slider-thumb {
-  border-radius: var(--radius-sm); /* square-ish thumb: a playhead, not a dial */
+  border-radius: var(--radius-sm);
 }
 
 .timeline__range::-moz-range-thumb {
   border-radius: var(--radius-sm);
 }
 
-/* ---------- Telemetry ----------
-   Markup: <dl class="telemetry">
-     <div class="telemetry__row"><dt class="telemetry__k">Airtime</dt><dd class="telemetry__v">0.53 s</dd></div>
-     <div class="telemetry__row"><dt class="telemetry__k">Outcome</dt><dd class="telemetry__v telemetry__v--good">landed</dd></div>
-   Good and bad values carry a glyph and weight as well as color. */
+/* ---------- View panel ----------
+   Header: <div class="panel__head"><h2 class="panel__title">View</h2>
+     <div class="view-panel__actions"><button class="btn btn--ghost btn--sm">Reset view</button>...</div></div>
+   Then <div class="view-panel__toggles"> of .toggle switches, two per row. */
 
-.telemetry {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
+.view-panel__actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: -6px; /* optical: the ghost button text lines up with the column edge */
 }
 
-.telemetry__row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.view-panel__toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-2);
+  margin-inline: -4px; /* the switch tracks line up with the labels above */
+}
+
+/* ---------- Segmented control (Stance, Quality) ----------
+   A native radio group dressed as a segmented control, so arrow keys, form
+   semantics and screen readers work without script. Markup (DESIGN.md 8.4):
+     <fieldset class="segmented" aria-describedby="quality-hint">
+       <legend class="segmented__legend">Quality</legend>
+       <div class="segmented__options">
+         <label class="segmented__option">
+           <input class="segmented__input" type="radio" name="quality" value="high">
+           <span class="segmented__label">High</span>
+         </label> ...
+       </div>
+       <p class="segmented__hint" id="quality-hint">...</p>
+     </fieldset>
+   The legend floats left so the group is one row; the hint goes under it.
+   The input stays in the DOM (transparent, still focusable, covering its
+   label); the label draws the state and the focus ring. Checked = accent
+   tint, inset accent border and bold, so the state is never colour alone. */
+
+.segmented {
+  display: flow-root;
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-line);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.segmented__legend {
+  float: left;
+  width: 60px;
+  padding: 0;
+  font-weight: var(--weight-medium);
+  line-height: 30px; /* the height of the options row */
+  color: var(--color-text);
+}
+
+.segmented__options {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-md);
+}
+
+.segmented__option {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  cursor: pointer;
+}
+
+.segmented__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  transition: background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.segmented__option:hover .segmented__label {
   background: var(--color-surface-2);
 }
 
-.telemetry__k {
+.segmented__input:checked + .segmented__label {
+  background: var(--color-accent-bg);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* Focus ring on the label (the input is invisible), drawn inside it so it
+   never overlaps the next option. --color-focus meets 3:1 on surface and on
+   accent-bg in both themes. */
+.segmented__input:focus-visible + .segmented__label {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.segmented__input:disabled + .segmented__label {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.segmented__hint {
+  clear: both;
+  padding-top: var(--space-1);
   font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  line-height: var(--leading-snug);
   color: var(--color-muted);
 }
 
-.telemetry__v {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-  line-height: var(--leading-tight);
-  color: var(--color-text);
-  overflow-wrap: anywhere;
+.segmented + .segmented {
+  margin-top: var(--space-1);
 }
 
-.telemetry__v--good {
-  color: var(--color-ok);
-  font-weight: var(--weight-bold);
-}
-
-.telemetry__v--good::before {
-  content: "\2713\00a0"; /* check mark, decorative */
-}
-
-.telemetry__v--bad {
-  color: var(--color-bad);
-  font-weight: var(--weight-bold);
-}
-
-.telemetry__v--bad::before {
-  content: "!\00a0";
-}
-
-/* ---------- Outcome card ----------
-   Markup: <div class="outcome outcome--landed" role="status">
+/* ---------- Outcome (the results headline) ----------
+   Markup: <div class="outcome outcome--landed">
      <p class="outcome__name">Kickflip landed</p>
      <p class="outcome__detail">365 deg flip, 0 deg shove, 0.53 s in the air.</p>
    </div>
-   Landed: solid green left bar, tinted, check glyph. Bailed: dashed red
-   border, tinted, cross glyph. Idle (neither modifier): quiet dashed card. */
+   No card: the name is the largest text in the columns. Landed and bailed
+   add a filled status glyph (tick or cross) and colour the name. */
 
 .outcome {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border: 1px dashed var(--color-line-strong);
-  border-left: 5px solid var(--color-line-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  transition: background-color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out);
+  gap: 2px;
 }
 
 .outcome__name {
-  font-size: var(--text-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   letter-spacing: -0.01em;
+  color: var(--color-text);
 }
 
-/* The glyph slot exists only when there is a glyph, so the idle title is not
-   indented (integration pass, 2026-11-04). */
 .outcome--landed .outcome__name::before,
 .outcome--bailed .outcome__name::before {
-  display: inline-block;
-  width: 1.2em;
-  font-family: var(--font-mono);
-}
-
-.outcome__detail {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   font-size: var(--text-sm);
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.outcome--landed {
-  border-style: solid;
-  border-color: var(--color-ok);
-  background: var(--color-ok-bg);
+  font-weight: var(--weight-bold);
+  line-height: 1;
 }
 
 .outcome--landed .outcome__name {
@@ -722,13 +842,8 @@ a {
 
 .outcome--landed .outcome__name::before {
   content: "\2713"; /* check mark */
-}
-
-.outcome--bailed {
-  border-style: dashed;
-  border-left-style: solid;
-  border-color: var(--color-bad);
-  background: var(--color-bad-bg);
+  background: var(--color-ok);
+  color: var(--color-ok-fg);
 }
 
 .outcome--bailed .outcome__name {
@@ -737,47 +852,221 @@ a {
 
 .outcome--bailed .outcome__name::before {
   content: "\00d7"; /* multiplication sign, reads as a cross */
+  background: var(--color-bad);
+  color: var(--color-bad-fg);
+  font-size: var(--text-md);
+}
+
+.outcome__detail {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Telemetry ----------
+   Markup: <dl class="telemetry">
+     <div class="telemetry__row"><dt class="telemetry__k">Airtime</dt><dd class="telemetry__v">0.53 s</dd></div>
+     <div class="telemetry__row"><dt class="telemetry__k">Flip</dt><dd class="telemetry__v telemetry__v--bad">244°</dd></div>
+   Four numbers in one strip under a hairline. A missed axis carries a "!"
+   and weight as well as colour; "not yet" is quiet sans text. */
+
+.telemetry {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-line);
+}
+
+.telemetry__row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.telemetry__k {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-muted);
+}
+
+.telemetry__v {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.telemetry__v--none {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
+  color: var(--color-muted);
+}
+
+.telemetry__v--bad {
+  color: var(--color-bad);
+  font-weight: var(--weight-bold);
+}
+
+.telemetry__v--bad::before {
+  content: "!";
+  margin-right: 2px;
+}
+
+/* The direction of a signed total (ADR-30, 2026-11-04): "365°" over
+   "heelflip". Its own line in the field unit's small muted type, so the four
+   columns keep their width. */
+.telemetry__dir {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--color-muted);
+}
+
+/* ---------- Foot motion (DESIGN.md 8.5 and 9) ----------
+   Markup: <div class="panel__head"><h2 class="panel__title">Foot motion</h2>
+     <p class="foot-steps__legend"><span class="foot-steps__key"><span class="foot-steps__swatch foot-steps__swatch--front"></span>Front</span> ...</p></div>
+     <ol class="foot-steps"><li class="foot-step foot-step--front foot-step--now"><span class="foot-step__who">Front foot</span> <span class="foot-step__text">flicks ...</span><span class="visually-hidden">, now</span></li></ol>
+   A plain numbered list. The foot's trail colour is a small dot before its
+   name (the words carry the meaning too). The step under the playhead gets
+   a filled number and a tinted row. */
+
+.foot-steps__legend {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.foot-steps__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.foot-steps__swatch,
+.foot-step__who::before {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-line-strong);
+}
+
+.foot-steps__swatch--front {
+  background: var(--path-front);
+}
+
+.foot-steps__swatch--back {
+  background: var(--path-back);
+}
+
+.foot-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-inline: -6px; /* row tints bleed past the text, the text lines up with the title */
+  counter-reset: foot-step;
+}
+
+.foot-step {
+  position: relative;
+  padding: var(--space-1) 6px var(--space-1) 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  counter-increment: foot-step;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.foot-step::before {
+  content: counter(foot-step);
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.foot-step__who {
+  font-weight: var(--weight-semibold);
+}
+
+.foot-step__who::before {
+  content: "";
+  margin-right: 6px;
+  vertical-align: 0;
+}
+
+.foot-step--front .foot-step__who::before {
+  background: var(--path-front);
+}
+
+.foot-step--back .foot-step__who::before {
+  background: var(--path-back);
+}
+
+/* Both feet: the two trail colours side by side in one dot. */
+.foot-step--both .foot-step__who::before {
+  background: linear-gradient(90deg, var(--path-front) 50%, var(--path-back) 50%);
+}
+
+.foot-step--now {
+  background: var(--color-surface-2);
+}
+
+.foot-step--now::before {
+  background: var(--color-text);
+  color: var(--color-surface);
 }
 
 /* ---------- Objectives ----------
-   Markup: <li class="objective objective--done"><span class="objective__check" aria-hidden="true">✓</span><span class="objective__text">Land a kickflip</span><span class="visually-hidden">done</span></li>
-   The tick glyph is decorative; the done state is also in text. */
+   Markup: <li class="objective objective--done"><span class="objective__check" aria-hidden="true">✓</span><span class="objective__text">Land a kickflip</span><span class="visually-hidden">, done</span></li>
+   A tight checklist. The tick glyph is decorative; the done state is also
+   in text. */
 
 .objectives {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
 }
 
 .objective {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr);
   gap: var(--space-2);
-  align-items: start;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
+  align-items: center;
+  padding: 3px 0;
   color: var(--color-text);
-  transition: background-color var(--dur-base) var(--ease-out);
 }
 
 .objective__check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
+  width: 16px;
+  height: 16px;
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   line-height: 1;
   color: transparent; /* tick text present in the DOM, drawn only when done */
-  background: var(--color-surface);
-}
-
-.objective--done {
-  background: var(--color-ok-bg);
+  transition: background-color var(--dur-base) var(--ease-out);
 }
 
 .objective--done .objective__check {
@@ -786,55 +1075,60 @@ a {
   border-color: var(--color-ok);
 }
 
-.objective--done .objective__text {
-  color: var(--color-muted);
-  font-weight: var(--weight-medium);
-}
-
 /* ---------- Event log ----------
-   Markup: <div class="eventlog"><table><thead>...</thead><tbody><tr class="eventlog__row"><td class="eventlog__t">1240</td><td class="eventlog__type">trick.popped</td><td>{...}</td></tr></tbody></table></div> */
+   Markup: <div class="eventlog"><table><thead>...</thead><tbody><tr class="eventlog__row"><td class="eventlog__t">1240</td><td class="eventlog__type">trick.popped</td><td>{...}</td></tr></tbody></table></div>
+   Lowest in the hierarchy: small mono text in a capped, scrollable well. */
 
 .eventlog {
   display: block;
-  max-height: 240px;
+  max-height: 168px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .eventlog table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed; /* the payload keeps a usable width whatever the type */
+}
+
+.eventlog th:nth-child(1) {
+  width: 48px;
+}
+
+.eventlog th:nth-child(2) {
+  width: 15ch; /* long types ("objective.completed") clip with an ellipsis; the cell's title has the whole name */
 }
 
 .eventlog thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  text-align: left;
-  font-weight: var(--weight-semibold);
-  color: var(--color-muted);
-  background: var(--color-surface-2);
-  padding: var(--space-1) var(--space-2);
+  padding: 3px var(--space-2);
   border-bottom: 1px solid var(--color-line);
-  white-space: nowrap; /* "t (ms)" wrapped and clipped in the 320px column (integration pass, 2026-11-04) */
+  background: var(--color-surface-2);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  color: var(--color-muted);
+  white-space: nowrap;
 }
 
 .eventlog__row > * {
   padding: 2px var(--space-2);
-  border-bottom: 1px solid var(--color-line);
   vertical-align: top;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* one line per event; the full payload is in the cell's title and in the download */
 }
 
 .eventlog__row > *:last-child {
-  white-space: normal;
-  overflow-wrap: anywhere;
   color: var(--color-muted);
 }
 
@@ -845,15 +1139,13 @@ a {
 }
 
 .eventlog__type {
-  color: var(--color-accent);
+  color: var(--color-text);
   font-weight: var(--weight-medium);
 }
 
-/* Fallback if rows are rendered as list items instead of a table. */
-.eventlog > ol > .eventlog__row,
-.eventlog > .eventlog__row {
-  display: grid;
-  grid-template-columns: 64px 140px minmax(0, 1fr);
+.eventlog__t,
+.eventlog thead th:first-child {
+  padding-right: 0;
 }
 
 /* ---------- Perf badge ---------- */
@@ -882,13 +1174,12 @@ a {
 }
 
 /* ---------- Shortcuts dialog (native <dialog>) ----------
-   Markup: <dialog class="shortcuts"><h2>Keyboard shortcuts</h2><dl><dt><kbd>1</kbd> to <kbd>4</kbd></dt><dd>Apply preset</dd>...</dl><button class="btn">Close</button></dialog> */
+   Markup: <dialog class="shortcuts"><h2>Keyboard shortcuts</h2><dl><div><dt><kbd>1</kbd></dt><dd>Apply preset</dd></div>...</dl><button class="btn">Close</button></dialog> */
 
 .shortcuts {
   width: min(92vw, 460px);
   padding: var(--space-5);
   border: 1px solid var(--color-line-strong);
-  border-top: 4px solid var(--color-accent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text);
@@ -900,9 +1191,9 @@ a {
 }
 
 .shortcuts h2 {
+  margin-bottom: var(--space-3);
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
-  margin-bottom: var(--space-3);
 }
 
 .shortcuts dl {
@@ -910,6 +1201,10 @@ a {
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-2) var(--space-4);
   margin-bottom: var(--space-4);
+}
+
+.shortcuts dl > div {
+  display: contents;
 }
 
 .shortcuts dt {
@@ -921,13 +1216,13 @@ a {
 .shortcuts kbd {
   display: inline-block;
   min-width: 1.6em;
-  padding: 1px 6px;
+  padding: 0 5px;
   border: 1px solid var(--color-line-strong);
-  border-bottom-width: 2px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-2);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  line-height: 18px;
   text-align: center;
 }
 
@@ -949,153 +1244,6 @@ a {
   clip-path: inset(50%) !important;
   white-space: nowrap !important;
   border: 0 !important;
-}
-
-/* Optional: view panel buttons (theme toggle, reset view) placed inside a
-   .panel__title and pushed to the right. */
-.theme-toggle,
-.view-panel__actions {
-  margin-left: auto;
-  display: inline-flex;
-  gap: var(--space-1);
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-/* ---------- Segmented control (View panel, "Board detail") ----------
-   Added 2026-11-04 for the realistic board. A native radio group dressed as a
-   segmented control, so arrow keys, form semantics and screen readers work
-   without script. Markup (class names are the contract, see docs/DESIGN.md,
-   "Realistic board"):
-     <fieldset class="segmented" aria-describedby="board-detail-hint">
-       <legend class="segmented__legend">Board detail</legend>
-       <div class="segmented__options">
-         <label class="segmented__option">
-           <input class="segmented__input" type="radio" name="board-detail" value="high" checked>
-           <span class="segmented__label">High</span>
-         </label>
-         <label class="segmented__option">
-           <input class="segmented__input" type="radio" name="board-detail" value="low">
-           <span class="segmented__label">Low</span>
-         </label>
-       </div>
-       <p class="segmented__hint" id="board-detail-hint">Low uses the simple board. Faster on Chromebooks.</p>
-     </fieldset>
-   The input stays in the DOM (visually hidden, still focusable); the label
-   draws the state and the focus ring. Checked = accent tint, accent border,
-   bold and a filled dot glyph, so the state is never color alone. */
-
-.segmented {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.segmented__legend {
-  padding: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-text);
-}
-
-.segmented__options {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  overflow: hidden;
-}
-
-.segmented__option {
-  position: relative;
-  display: inline-flex;
-  min-width: 72px;
-  cursor: pointer;
-}
-
-.segmented__option + .segmented__option {
-  border-left: 1px solid var(--color-line-strong);
-}
-
-.segmented__input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.segmented__label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 36px;
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-tight);
-  color: var(--color-text);
-  transition: background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-
-/* Dot glyph: hollow when idle, filled when checked (state is not color alone). */
-.segmented__label::before {
-  content: "";
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid var(--color-line-strong);
-  background: transparent;
-  transition: background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-
-.segmented__option:hover .segmented__label {
-  background: var(--color-surface-2);
-}
-
-.segmented__input:checked + .segmented__label {
-  background: var(--color-accent-bg);
-  color: var(--color-text);
-  font-weight: var(--weight-bold);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-
-.segmented__input:checked + .segmented__label::before {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-/* Focus ring on the label (the input is invisible), drawn inside the group
-   so the overflow clip never cuts it. --color-focus meets 3:1 on surface and
-   on accent-bg in both themes. */
-.segmented__input:focus-visible + .segmented__label {
-  outline: var(--focus-ring) solid var(--color-focus);
-  outline-offset: calc(-1 * var(--focus-ring));
-  border-radius: var(--radius-sm);
-}
-
-.segmented__input:disabled + .segmented__label {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.segmented__hint {
-  font-size: var(--text-xs);
-  color: var(--color-muted);
 }
 
 /* ---------- Reduced motion ---------- */

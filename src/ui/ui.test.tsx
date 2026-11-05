@@ -66,8 +66,63 @@ describe('trick lab UI', () => {
     expect(pop).toHaveAttribute('aria-valuetext', '0.20 meters');
     const flick = screen.getByRole('slider', { name: /^Flick/ });
     fireEvent.change(flick, { target: { value: '1.9' } });
-    expect(flick).toHaveAttribute('aria-valuetext', '1.9 revolutions per second');
+    expect(flick).toHaveAttribute('aria-valuetext', '1.9 revolutions per second, kickflip');
     expect(useTrickStore.getState().events.map((e) => e.type)).toEqual(['input.changed', 'input.changed']);
+  });
+
+  it('centres the signed rate sliders on 0 and names the direction with the value (ADR-30)', async () => {
+    await setup();
+    const flick = screen.getByRole('slider', { name: /^Flick/ });
+    const scoop = screen.getByRole('slider', { name: /^Scoop/ });
+    for (const s of [flick, scoop]) {
+      expect(s).toHaveAttribute('min', '-3');
+      expect(s).toHaveAttribute('max', '3');
+      expect(s).toHaveAttribute('step', '0.1');
+      expect(s).toHaveValue('0');
+    }
+    expect(flick).toHaveAccessibleName(/right for a kickflip, left for a heelflip/);
+    expect(scoop).toHaveAccessibleName(/right for backside, left for frontside/);
+    const readout = (s: HTMLElement) => s.closest('.field')!.querySelector('.field__value')!;
+    expect(readout(flick)).toHaveTextContent(/^0\.0rev\/s$/);
+    fireEvent.change(flick, { target: { value: '-1.9' } });
+    expect(flick).toHaveAttribute('aria-valuetext', '1.9 revolutions per second, heelflip');
+    expect(readout(flick)).toHaveTextContent(/^1\.9rev\/s heelflip$/);
+    fireEvent.change(scoop, { target: { value: '-0.9' } });
+    expect(scoop).toHaveAttribute('aria-valuetext', '0.9 revolutions per second, frontside');
+    expect(readout(scoop).querySelector('.field__unit')).toHaveTextContent('rev/s frontside');
+    fireEvent.change(scoop, { target: { value: '0.9' } });
+    expect(readout(scoop).querySelector('.field__unit')).toHaveTextContent('rev/s backside');
+    expect(useTrickStore.getState().scoop).toBe(0.9);
+  });
+
+  it('keys 1 to 8 apply the eight presets in order; the objectives start at 0 of 8', async () => {
+    const user = await setup();
+    expect(screen.getByRole('heading', { name: 'Objectives 0 of 8' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Trick presets' })).getAllByRole('button')).toHaveLength(8);
+    const labels = ['Kickflip', 'Heelflip', 'Pop shove-it', 'Frontside shove-it', 'Varial flip', 'Varial heelflip', 'Hardflip', '360 flip'];
+    for (const [i, label] of labels.entries()) {
+      await user.keyboard(String(i + 1));
+      expect(presetButton(label)).toHaveAttribute('aria-pressed', 'true');
+      expect(presetButton(label)).toHaveAttribute('aria-keyshortcuts', String(i + 1));
+      expect(announcer()).toHaveTextContent(`${label} preset applied`);
+    }
+    await user.keyboard('2');
+    expect(screen.getByRole('slider', { name: /^Flick/ })).toHaveValue('-1.9');
+    expect(screen.getByRole('slider', { name: /^Scoop/ })).toHaveValue('0');
+  });
+
+  it('a heelflip reads its direction in the outcome strip and the card', async () => {
+    const user = await setup();
+    await user.keyboard('6');
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    landNow();
+    const outcome = screen.getByRole('region', { name: 'Outcome' });
+    expect(within(outcome).getByText('Varial heelflip landed')).toHaveClass('outcome__name');
+    expect(within(outcome).getByText('365 deg heelflip, 173 deg frontside shove, 0.53 s in the air.')).toBeInTheDocument();
+    const values = [...outcome.querySelectorAll('.telemetry__v')].map((v) => v.textContent);
+    expect(values).toEqual(['0.53 s', '0.35 m', '365° heelflip', '173° frontside']);
+    expect(within(outcome).getByText('frontside')).toHaveClass('telemetry__dir');
+    expect(screen.getByRole('heading', { name: 'Objectives 1 of 8' })).toBeInTheDocument();
   });
 
   it('key 1 applies the kickflip preset, Space pops, and landing scores the objective', async () => {
@@ -80,22 +135,25 @@ describe('trick lab UI', () => {
 
     await user.keyboard(' ');
     expect(useTrickStore.getState().status).toBe('playing');
-    expect(announcer()).toHaveTextContent('Popped with pop 0.35 meters, flick 1.9 revolutions per second');
+    expect(announcer()).toHaveTextContent('Popped with pop 0.35 meters, kickflip flick 1.9 revolutions per second');
     expect(screen.getByText('In the air')).toBeInTheDocument();
     expect(timeline()).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pop' })).toHaveAttribute('aria-disabled', 'true');
 
     landNow();
     expect(announcer()).toHaveTextContent(
-      'Kickflip landed. 365 degrees of flip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 4 objectives done.',
+      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 8 objectives done.',
     );
     expect(screen.getByText('Kickflip landed')).toBeInTheDocument();
-    expect(screen.getByText('365 deg flip, 0 deg shove, 0.53 s in the air.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Objectives 1 of 4' })).toBeInTheDocument();
+    expect(screen.getByText('365 deg kickflip, 0 deg shove, 0.53 s in the air.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Objectives 1 of 8' })).toBeInTheDocument();
     expect(document.querySelectorAll('.objective--done')).toHaveLength(1);
-    const telemetry = screen.getByRole('region', { name: 'Telemetry' });
-    expect(within(telemetry).getByText('365°')).toBeInTheDocument();
-    expect(within(telemetry).getByText('landed')).toHaveClass('telemetry__v--good');
+    // The outcome headline names the trick; the strip below gives the numbers and marks no axis.
+    const outcome = screen.getByRole('region', { name: 'Outcome' });
+    expect(within(outcome).getByText('Kickflip landed')).toHaveClass('outcome__name');
+    expect(within(outcome).getByText('365°', { exact: false }).closest('.telemetry__v')).toHaveTextContent('365° kickflip');
+    expect(within(outcome).getByText('0.53 s')).toBeInTheDocument();
+    expect(outcome.querySelector('.telemetry__v--bad')).toBeNull();
   });
 
   it('clicking a preset keeps focus on it; resolving a trick does not move focus', async () => {
@@ -110,12 +168,17 @@ describe('trick lab UI', () => {
 
   it('a low pop is not landed and says which axis and by how much', async () => {
     const user = await setup();
-    await user.keyboard('4');
+    await user.keyboard('8');
     fireEvent.change(screen.getByRole('slider', { name: /^Pop/ }), { target: { value: '0.15' } });
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     landNow();
     expect(announcer()).toHaveTextContent(/not landed: flip under-rotated by 121 degrees/);
     expect(document.querySelector('.outcome--bailed')).not.toBeNull();
+    // The axis that missed is marked in the strip, in text as well as style.
+    const missed = document.querySelectorAll('.telemetry__v--bad');
+    expect(missed).toHaveLength(1);
+    expect(missed[0]).toHaveTextContent(/^239° kickflip, off target$/);
+    expect(missed[0]!.closest('.telemetry__row')).toHaveTextContent(/^Flip/);
     expect(document.querySelectorAll('.objective--done')).toHaveLength(0);
   });
 
@@ -125,19 +188,44 @@ describe('trick lab UI', () => {
     await user.keyboard(' ');
     expect(useTrickStore.getState().status).toBe('idle');
 
-    // Space on the slow-motion toggle presses the toggle, it does not pop.
-    const slow = screen.getByRole('button', { name: /^Slow motion/ });
-    slow.focus();
+    // Space on the speed slider does not pop either.
+    screen.getByRole('slider', { name: /^Speed/ }).focus();
     await user.keyboard(' ');
-    expect(slow).toHaveAttribute('aria-pressed', 'true');
     expect(useTrickStore.getState().status).toBe('idle');
   });
 
-  it('s toggles slow motion, p the perf badge, t the theme', async () => {
+  it('the speed slider moves by stops with the keyboard and stays live while the board is in the air', async () => {
+    const user = await setup();
+    const speed = screen.getByRole('slider', { name: /^Speed/ });
+    expect(speed).toHaveAttribute('aria-valuetext', 'normal speed');
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    expect(useTrickStore.getState().status).toBe('playing');
+    expect(speed).toBeEnabled();
+    // jsdom has no native range keys; fire what the browser fires (one stop per arrow, Home, End).
+    expect(speed).toHaveAttribute('max', '13');
+    expect(speed).toHaveValue('10');
+    fireEvent.change(speed, { target: { value: '8' } });
+    expect(useTrickStore.getState().rate).toBe(0.6);
+    expect(speed).toHaveAttribute('aria-valuetext', '0.6 times speed');
+    expect(screen.getByText('0.6x')).toBeInTheDocument();
+    fireEvent.change(speed, { target: { value: '0' } });
+    expect(useTrickStore.getState().rate).toBe(0.05);
+    fireEvent.change(speed, { target: { value: '13' } });
+    expect(useTrickStore.getState().rate).toBe(2);
+    expect(useTrickStore.getState().status).toBe('playing');
+    expect(useTrickStore.getState().events.map((e) => e.type)).toEqual(['trick.popped']);
+  });
+
+  it('s toggles slow motion, [ and ] step the speed, p the perf badge, t the theme', async () => {
     const user = await setup();
     await user.keyboard('s');
     expect(useTrickStore.getState().rate).toBe(0.25);
-    expect(screen.getByRole('button', { name: /^Slow motion/ })).toHaveTextContent('0.25x');
+    expect(screen.getByRole('slider', { name: /^Speed/ })).toHaveAttribute('aria-valuetext', '0.25 times speed');
+    await user.keyboard('[['); // user-event: a doubled bracket types one
+    expect(useTrickStore.getState().rate).toBe(0.2);
+    expect(announcer()).toHaveTextContent('0.2 times speed.');
+    await user.keyboard(']]');
+    expect(useTrickStore.getState().rate).toBe(0.3);
 
     const badge = document.querySelector('.perf-badge')!;
     expect(badge).toHaveAttribute('hidden');
@@ -203,11 +291,11 @@ describe('reduced motion', () => {
     mockReducedMotion(true);
     const user = await setup();
     expect(useTrickStore.getState().reducedMotion).toBe(true);
-    await user.keyboard('2');
+    await user.keyboard('3');
     await user.keyboard(' ');
 
     expect(useTrickStore.getState().status).toBe('done');
-    expect(announcer()).toHaveTextContent(/Popped with .* Pop shove-it landed\. 0 degrees of flip, 173 degrees of shove/);
+    expect(announcer()).toHaveTextContent(/Popped with .* Pop shove-it landed\. 0 degrees of flip, 173 degrees of backside shove/);
     expect(announcer()).toHaveTextContent('Objective complete: Land a pop shove-it.');
     expect(description()).toHaveTextContent('Skateboard back on the pad at its landing pose.');
 
@@ -248,32 +336,36 @@ describe('timeline keyboard scrub', () => {
   });
 });
 
-describe('board detail control', () => {
-  const group = () => screen.getByRole('group', { name: 'Board detail' });
-  const radio = (name: 'High' | 'Low') => within(group()).getByRole('radio', { name });
+describe('quality control', () => {
+  const group = () => screen.getByRole('group', { name: 'Quality' });
+  const radio = (name: 'High' | 'Medium' | 'Low') => within(group()).getByRole('radio', { name });
 
-  it('is a named radio group with a hint, High checked by default', async () => {
+  it('is a named radio group with a hint; in jsdom the device pick is Medium and the hint says so', async () => {
     await setup();
-    expect(group()).toHaveAccessibleDescription('Low uses the simple board. Faster on Chromebooks.');
-    expect(radio('High')).toBeChecked();
+    expect(group()).toHaveAccessibleDescription(/^Picked for this device\. High adds shoes, shadows and a finer board\./);
+    expect(radio('Medium')).toBeChecked();
+    expect(radio('High')).not.toBeChecked();
     expect(radio('Low')).not.toBeChecked();
   });
 
-  it('arrow keys switch the detail, persist it and announce it, without logging or popping', async () => {
+  it('arrow keys switch the tier, persist it and announce it, without logging or popping', async () => {
     const user = await setup();
-    act(() => radio('High').focus());
+    act(() => radio('Medium').focus());
     await user.keyboard('{ArrowRight}');
     expect(radio('Low')).toBeChecked();
     expect(radio('Low')).toHaveFocus();
-    expect(useTrickStore.getState().boardDetail).toBe('low');
-    expect(localStorage.getItem('trick-lab.board-detail')).toBe('low');
-    expect(announcer()).toHaveTextContent('Board detail low: simple board.');
+    expect(useTrickStore.getState().quality).toBe('low');
+    expect(useTrickStore.getState().qualityAuto).toBe(false);
+    expect(localStorage.getItem('trick-lab.quality')).toBe('low');
+    expect(announcer()).toHaveTextContent('Quality low: simple board. Fastest.');
+    expect(group()).toHaveAccessibleDescription(/^High adds shoes/);
     // Space keeps its native meaning on a radio: no pop.
     await user.keyboard(' ');
     expect(useTrickStore.getState().status).toBe('idle');
-    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowLeft}{ArrowLeft}');
     expect(radio('High')).toBeChecked();
-    expect(useTrickStore.getState().boardDetail).toBe('high');
+    expect(useTrickStore.getState().quality).toBe('high');
+    expect(announcer()).toHaveTextContent('Quality high: detailed board, shoes and shadows.');
     expect(useTrickStore.getState().events).toEqual([]);
   });
 
@@ -283,12 +375,269 @@ describe('board detail control', () => {
     expect(radio('Low')).toBeChecked();
   });
 
-  it('is disabled and shows Low if the model failed to load', async () => {
+  it('is disabled above Low and shows Low if a model failed to load', async () => {
     await setup();
     act(() => useTrickStore.getState().setBoardAssetFailed());
     expect(radio('Low')).toBeChecked();
     expect(radio('High')).toBeDisabled();
-    expect(radio('Low')).toBeDisabled();
+    expect(radio('Medium')).toBeDisabled();
+    expect(radio('Low')).not.toBeDisabled();
     expect(announcer()).toHaveTextContent('The board model did not load. Showing the simple board.');
+  });
+});
+
+describe('stance control (ADR-25)', () => {
+  const group = () => screen.getByRole('group', { name: 'Stance' });
+  const radio = (name: 'Goofy' | 'Regular') => within(group()).getByRole('radio', { name });
+
+  it('is a named radio group with a hint, Goofy first and checked by default', async () => {
+    await setup();
+    expect(group()).toHaveAccessibleDescription(
+      'Goofy: right foot forward, nose on the right. Regular: left foot forward, nose on the left.',
+    );
+    const radios = within(group()).getAllByRole('radio');
+    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(['goofy', 'regular']);
+    expect(radio('Goofy')).toBeChecked();
+    expect(description()).toHaveTextContent('Goofy stance, nose to the right, heel side toward the camera.');
+  });
+
+  it('Tab reaches the checked option and an arrow key switches it, persisted, announced, described, not logged', async () => {
+    const user = await setup();
+    // The View switches come first; the last one is the perf badge.
+    act(() => screen.getByRole('button', { name: 'Perf badge' }).focus());
+    await user.tab();
+    expect(radio('Goofy')).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(radio('Regular')).toBeChecked();
+    expect(radio('Regular')).toHaveFocus();
+    expect(useTrickStore.getState().stance).toBe('regular');
+    expect(localStorage.getItem('trick-lab.stance')).toBe('regular');
+    expect(announcer()).toHaveTextContent('Regular stance: left foot forward, nose on the left.');
+    expect(description()).toHaveTextContent('Regular stance, nose to the left, heel side toward the camera.');
+    expect(description()).toHaveTextContent('Flick rolls the grip toward the heel side');
+    // Space keeps its native meaning on a radio: no pop.
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().status).toBe('idle');
+    await user.keyboard('{ArrowLeft}');
+    expect(radio('Goofy')).toBeChecked();
+    expect(announcer()).toHaveTextContent('Goofy stance: right foot forward, nose on the right.');
+    expect(description()).toHaveTextContent('Goofy stance');
+    expect(useTrickStore.getState().events).toEqual([]);
+  });
+
+  it('clicking a label selects its option', async () => {
+    const user = await setup();
+    await user.click(screen.getByText('Regular'));
+    expect(radio('Regular')).toBeChecked();
+    expect(description()).toHaveTextContent('nose to the left');
+  });
+});
+
+describe('feet', () => {
+  const button = () => screen.getByRole('button', { name: 'Show feet' });
+
+  it('is a pressed toggle, on by default, persisted and announced, never logged', async () => {
+    const user = await setup();
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    expect(description()).toHaveTextContent('Front foot across the board just behind the front bolts; back foot on its ball across the tail, heel up.');
+    await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(localStorage.getItem('trick-lab.feet')).toBe('off');
+    expect(announcer()).toHaveTextContent('Feet hidden.');
+    expect(description()).not.toHaveTextContent('Front foot');
+    expect(useTrickStore.getState().events).toEqual([]);
+    await user.click(button());
+    expect(description()).toHaveTextContent('Front foot across the board');
+  });
+
+  it('describes the stance from the inputs, then the flight', async () => {
+    const user = await setup();
+    await user.click(presetButton('Kickflip'));
+    expect(description()).toHaveTextContent('turned 42 degrees toward the nose with the heel over the heel-side edge; back foot on its ball across the tail, heel up.');
+    // Focus is on the preset button, where Space is native, so pop through the store.
+    act(() => useTrickStore.getState().popTrick());
+    expect(description()).toHaveTextContent('Feet in the air above the board.');
+    landNow();
+    expect(description()).toHaveTextContent('Feet landed on the bolts.');
+  });
+});
+
+describe('foot trails', () => {
+  const button = () => screen.getByRole('button', { name: 'Show foot trails' });
+
+  it('starts unpressed, then shows, persists and announces the trails, never logged', async () => {
+    const user = await setup();
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    expect(useTrickStore.getState().footPathsVisible).toBe(true);
+    expect(localStorage.getItem('trick-lab.foot-trails')).toBe('on');
+    expect(announcer()).toHaveTextContent('Foot trails shown.');
+    await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(localStorage.getItem('trick-lab.foot-trails')).toBe('off');
+    expect(announcer()).toHaveTextContent('Foot trails hidden.');
+    expect(useTrickStore.getState().events).toEqual([]);
+  });
+
+  it('can be switched on from the keyboard', async () => {
+    const user = await setup();
+    button().focus();
+    await user.keyboard('{Enter}');
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard(' ');
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('motion cues', () => {
+  const button = () => screen.getByRole('button', { name: 'Show motion cues' });
+
+  it('starts pressed, then hides, persists and announces the cues, never logged', async () => {
+    const user = await setup();
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    expect(button()).toHaveTextContent('Motion cues');
+    await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(useTrickStore.getState().motionCuesVisible).toBe(false);
+    expect(localStorage.getItem('trick-lab.motion-cues')).toBe('off');
+    expect(announcer()).toHaveTextContent('Motion cues hidden.');
+    await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('trick-lab.motion-cues')).toBe('on');
+    expect(announcer()).toHaveTextContent('Motion cues shown.');
+    expect(useTrickStore.getState().events).toEqual([]);
+  });
+
+  it('can be switched from the keyboard, and Space on it does not pop', async () => {
+    const user = await setup();
+    button().focus();
+    await user.keyboard('{Enter}');
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    await user.keyboard(' ');
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    expect(useTrickStore.getState().status).toBe('idle');
+  });
+});
+
+describe('foot motion panel', () => {
+  const panel = () => screen.getByRole('region', { name: 'Foot motion' });
+  const items = () => within(panel()).getAllByRole('listitem');
+
+  it('lists the steps for the live inputs and follows a preset', async () => {
+    const user = await setup();
+    expect(items()[0]).toHaveTextContent('Back foot');
+    expect(items()[0]).toHaveTextContent('snaps the tail down');
+    await user.click(presetButton('Kickflip'));
+    expect(within(panel()).getByText(/flicks forward, out and up off the heel-side corner of the nose, 19 cm/)).toBeInTheDocument();
+    expect(panel()).not.toHaveTextContent(', now');
+  });
+
+  it('marks the steps under the playhead while the trick plays and when scrubbed', async () => {
+    const user = await setup();
+    await user.click(presetButton('Kickflip'));
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    act(() => useTrickStore.getState().syncProgress(0.1));
+    const now = () => items().filter((li) => li.classList.contains('foot-step--now')).map((li) => li.textContent);
+    expect(now().join(' ')).toMatch(/flicks/);
+    expect(now().join(' ')).toMatch(/, now/);
+    landNow();
+    expect(now()).toHaveLength(1);
+    expect(now()[0]).toMatch(/land on the grip/);
+  });
+});
+
+/** A prefers-reduced-motion query whose answer the test can change, firing the change event like a browser. */
+function liveReducedMotion() {
+  let reduced = false;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      get matches() {
+        return reduced && query.includes('reduce');
+      },
+      media: query,
+      addEventListener: (_type: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_type: string, l: () => void) => listeners.delete(l),
+    })),
+  );
+  return (next: boolean) =>
+    act(() => {
+      reduced = next;
+      for (const l of listeners) l();
+    });
+}
+
+describe('reduced motion turned on mid-flight (ADR-6)', () => {
+  const resolved = () => useTrickStore.getState().events.filter((e) => e.type === 'trick.resolved');
+
+  it('a playing flight resolves at once, announced once with the result, and the timeline scrubs', async () => {
+    const setReduced = liveReducedMotion();
+    const user = await setup();
+    await user.keyboard('1');
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().status).toBe('playing');
+    setReduced(true);
+    expect(useTrickStore.getState().status).toBe('done');
+    expect(announcer()).toHaveTextContent(/^Reduced motion on: the board goes straight to its landing\. Kickflip landed\..*Objective complete: Land a kickflip\./);
+    expect(description()).toHaveTextContent('Skateboard back on the pad at its landing pose.');
+    expect(timeline()).toBeEnabled();
+    // FlightDriver's land() arriving late changes nothing.
+    landNow();
+    expect(resolved()).toHaveLength(1);
+    expect(useTrickStore.getState().completed).toEqual(['kickflip']);
+  });
+
+  it('a paused flight resolves too, and Resume is gone rather than playing', async () => {
+    const setReduced = liveReducedMotion();
+    const user = await setup();
+    await user.keyboard(' ');
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
+    setReduced(true);
+    expect(useTrickStore.getState().status).toBe('done');
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(useTrickStore.getState().status).toBe('done');
+    expect(resolved()).toHaveLength(1);
+    // The next pop resolves at once with one combined announcement. (Focus is on a button, where Space presses it.)
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    expect(useTrickStore.getState().status).toBe('done');
+    expect(announcer()).toHaveTextContent(/^Popped with .*Ollie landed\./);
+    expect(resolved()).toHaveLength(2);
+  });
+});
+
+describe('scene description while the board is in the air (audit fix, 2026-11-04)', () => {
+  it('says it is waiting to land, playing, paused, and on a second pop after a landed trick', async () => {
+    const user = await setup();
+    expect(description()).toHaveTextContent('No trick popped yet.');
+    await user.keyboard('1');
+    await user.keyboard(' ');
+    expect(description()).toHaveTextContent('Waiting for this trick to land.');
+    expect(description()).not.toHaveTextContent('No trick popped yet.');
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(description()).toHaveTextContent('Waiting for this trick to land.');
+    await user.click(screen.getByRole('button', { name: 'Resume' }));
+    landNow();
+    expect(description()).toHaveTextContent('Last trick: Kickflip landed.');
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    expect(description()).toHaveTextContent('Waiting for this trick to land.');
+    expect(description()).not.toHaveTextContent('Last trick');
+  });
+});
+
+describe('effective quality (ADR-15)', () => {
+  it('a failed model shows Low without overwriting the saved tier', async () => {
+    localStorage.setItem('trick-lab.quality', 'high');
+    useTrickStore.setState({ quality: 'high', qualityAuto: false });
+    await setup();
+    const group = screen.getByRole('group', { name: 'Quality' });
+    expect(within(group).getByRole('radio', { name: 'High' })).toBeChecked();
+    act(() => useTrickStore.getState().setBoardAssetFailed());
+    expect(within(group).getByRole('radio', { name: 'Low' })).toBeChecked();
+    expect(useTrickStore.getState().quality).toBe('high');
+    expect(localStorage.getItem('trick-lab.quality')).toBe('high');
   });
 });

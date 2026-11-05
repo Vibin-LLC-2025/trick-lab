@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useTrickStore } from '../store';
+import { SPEEDS, speedIndex, speedLabel, speedText, useTrickStore } from '../store';
 
 /**
  * A run of arrow or Page key presses is one scrub gesture: commit once the
@@ -59,17 +59,45 @@ function Timeline() {
   );
 }
 
+/**
+ * Speed (2026-11-04, replaces the slow-motion toggle): a native range over
+ * the SPEEDS stops, 0.05x to 2x. It stays enabled while the board is in the
+ * air, and FlightDriver reads the rate every frame, so dragging it slows or
+ * speeds a flight already playing. Arrows move one stop, Home and End jump
+ * to the ends. The global keys [ and ] step it and s toggles slow motion.
+ */
+function Speed() {
+  const rate = useTrickStore((s) => s.rate);
+  const setRate = useTrickStore((s) => s.setRate);
+  return (
+    <div className="timeline">
+      <label className="timeline__label" htmlFor="speed">
+        Speed <span aria-hidden="true">{speedLabel(rate)}</span>
+      </label>
+      <input
+        id="speed"
+        className="timeline__range"
+        type="range"
+        min={0}
+        max={SPEEDS.length - 1}
+        step={1}
+        value={speedIndex(rate)}
+        aria-valuetext={speedText(rate)}
+        aria-keyshortcuts="[ ] s"
+        onChange={(e) => setRate(SPEEDS[Number(e.currentTarget.value)] ?? 1)}
+      />
+    </div>
+  );
+}
+
 export function Playback() {
   const status = useTrickStore((s) => s.status);
-  const rate = useTrickStore((s) => s.rate);
   const popTrick = useTrickStore((s) => s.popTrick);
   const togglePause = useTrickStore((s) => s.togglePause);
-  const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
   const resetSession = useTrickStore((s) => s.resetSession);
   const announce = useTrickStore((s) => s.announce);
   const playing = status === 'playing';
   const pausable = status === 'playing' || status === 'paused';
-  const slow = rate === 0.25;
 
   return (
     <section className="panel" aria-labelledby="playback-heading">
@@ -90,24 +118,16 @@ export function Playback() {
         </button>
         <button
           type="button"
-          className="btn btn--ghost"
+          className="btn"
           aria-disabled={!pausable || undefined}
           onClick={() => (pausable ? togglePause() : announce('Nothing is playing. Pop first.'))}
         >
           {status === 'paused' ? 'Resume' : 'Pause'}
         </button>
-        <button
-          type="button"
-          className={`toggle${slow ? ' toggle--on' : ''}`}
-          aria-pressed={slow}
-          aria-keyshortcuts="s"
-          onClick={toggleSlowMotion}
-        >
-          Slow motion <span className="toggle__state">{slow ? '0.25x' : '1x'}</span>
-        </button>
         <button type="button" className="btn btn--danger" aria-keyshortcuts="r" onClick={resetSession}>
           Reset
         </button>
+        <Speed />
         <Timeline />
       </div>
     </section>

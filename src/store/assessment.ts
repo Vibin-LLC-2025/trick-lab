@@ -2,11 +2,12 @@ import type { StateCreator } from 'zustand';
 import type { AssessmentSlice, TrickState } from './types';
 import { initialInputs } from './inputs';
 import { initialPlayback } from './playback';
+import type { Playhead } from './playhead';
 
 export type Clock = () => number;
 
 export const createAssessmentSlice =
-  (now: Clock): StateCreator<TrickState, [], [], AssessmentSlice> =>
+  (now: Clock, head: Playhead): StateCreator<TrickState, [], [], AssessmentSlice> =>
   (set, get) => {
     let seq = 0;
     return {
@@ -23,6 +24,9 @@ export const createAssessmentSlice =
       // Inputs, board pose and score go back to the start; the event log is
       // kept, because a reset is itself an assessable action (ADR-7).
       resetSession: () => {
+        // The playhead belongs to no flight until the next pop.
+        head.flightId = -1;
+        head.progress = 0;
         set({ ...initialInputs(), ...initialPlayback(), completed: [] });
         get().log('session.reset');
         get().requestFocus({ kind: 'setup-heading' });

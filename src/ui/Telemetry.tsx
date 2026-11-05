@@ -1,4 +1,4 @@
-import { deg, outcomeCard, seconds } from '../sim/format';
+import { degReadout, outcomeCard, seconds } from '../sim/format';
 import { useTrickStore } from '../store';
 
 const NONE = 'not yet';
@@ -31,35 +31,45 @@ function OutcomeCard() {
   );
 }
 
-function Row({ k, v, tone }: { k: string; v: string; tone?: 'good' | 'bad' }) {
+/** `dir` is a signed total's direction word (ADR-30), shown small under the number. */
+function Row({ k, v, dir, bad }: { k: string; v: string | null; dir?: string; bad?: boolean }) {
   return (
     <div className="telemetry__row">
       <dt className="telemetry__k">{k}</dt>
-      <dd className={`telemetry__v${tone ? ` telemetry__v--${tone}` : ''}`}>{v}</dd>
+      <dd className={`telemetry__v${v === null ? ' telemetry__v--none' : ''}${bad ? ' telemetry__v--bad' : ''}`}>
+        {v ?? NONE}
+        {v !== null && dir ? (
+          <>
+            {' '}
+            <span className="telemetry__dir">{dir}</span>
+          </>
+        ) : null}
+        {bad && <span className="visually-hidden">, off target</span>}
+      </dd>
     </div>
   );
 }
 
+/**
+ * The results headline (DESIGN.md 4 and 9): the outcome, then four numbers.
+ * The trick name and the landed or bailed state are in the headline, so the
+ * grid does not repeat them; the axis that missed is marked instead.
+ */
 export function Telemetry() {
   const r = useTrickStore((s) => s.result);
+  const missed = r && !r.landed ? r.failedAxis : null;
 
   return (
     <section className="panel" aria-labelledby="telemetry-heading">
       <h2 id="telemetry-heading" className="panel__title">
-        Telemetry
+        Outcome
       </h2>
       <OutcomeCard />
       <dl className="telemetry">
-        <Row k="Airtime" v={r ? `${seconds(r.airtime)} s` : NONE} />
-        <Row k="Peak height" v={r ? `${r.peak.toFixed(2)} m` : NONE} />
-        <Row k="Flip rotation" v={r ? `${deg(r.rollTotal)}°` : NONE} />
-        <Row k="Shove rotation" v={r ? `${deg(r.yawTotal)}°` : NONE} />
-        <Row
-          k="Outcome"
-          v={r ? (r.landed ? 'landed' : `${r.outcome} ${r.failedAxis}`) : NONE}
-          tone={r ? (r.landed ? 'good' : 'bad') : undefined}
-        />
-        <Row k="Trick" v={r ? r.name : NONE} />
+        <Row k="Airtime" v={r ? `${seconds(r.airtime)} s` : null} />
+        <Row k="Peak" v={r ? `${r.peak.toFixed(2)} m` : null} />
+        <Row k="Flip" v={r ? degReadout('flip', r.rollTotal).value : null} dir={r ? degReadout('flip', r.rollTotal).dir : ''} bad={missed === 'flip'} />
+        <Row k="Shove" v={r ? degReadout('shove', r.yawTotal).value : null} dir={r ? degReadout('shove', r.yawTotal).dir : ''} bad={missed === 'shove'} />
       </dl>
     </section>
   );

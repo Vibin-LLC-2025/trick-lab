@@ -3,7 +3,7 @@ import { useTrickStore } from '../store';
 
 /**
  * Trick presets. Applying one keeps focus on its button (native behavior) and
- * announces the values it set. Keys 1 to 4 do the same from anywhere.
+ * announces the values it set. Keys 1 to 8 do the same from anywhere.
  */
 export function Presets() {
   const active = useTrickStore((s) => s.activePreset);

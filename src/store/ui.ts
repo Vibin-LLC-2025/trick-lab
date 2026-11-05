@@ -1,8 +1,18 @@
 import type { StateCreator } from 'zustand';
-import type { BoardDetail, Theme, TrickState, UiSlice } from './types';
+import { isStance } from '../sim/feet';
+import { inFlight } from './playback';
+import { detectQuality, isQuality } from './quality';
+import type { Quality, Stance, Theme, TrickState, UiSlice } from './types';
 
 export const THEME_KEY = 'trick-lab.theme';
-export const BOARD_DETAIL_KEY = 'trick-lab.board-detail';
+export const QUALITY_KEY = 'trick-lab.quality';
+/** The pre-tier setting (ADR-15); read once so an earlier "Low" choice survives the upgrade. */
+export const LEGACY_DETAIL_KEY = 'trick-lab.board-detail';
+export const FEET_KEY = 'trick-lab.feet';
+/** Foot trails (the identifier still says paths; see types.ts). */
+export const PATHS_KEY = 'trick-lab.foot-trails';
+export const STANCE_KEY = 'trick-lab.stance';
+export const CUES_KEY = 'trick-lab.motion-cues';
 
 /** index.html applies the saved theme before first paint; the store starts from what it set. */
 function readTheme(): Theme {
@@ -20,22 +30,60 @@ export function applyTheme(theme: Theme) {
   }
 }
 
-/** The board detail is not needed before first paint, so it is read straight from storage. */
-export function readBoardDetail(): BoardDetail {
+const read = (key: string): string | null => {
   try {
-    return localStorage.getItem(BOARD_DETAIL_KEY) === 'low' ? 'low' : 'high';
+    return localStorage.getItem(key);
   } catch {
-    return 'high';
+    return null;
   }
-}
+};
 
-function saveBoardDetail(detail: BoardDetail) {
+const save = (key: string, value: string) => {
   try {
-    localStorage.setItem(BOARD_DETAIL_KEY, detail);
+    localStorage.setItem(key, value);
   } catch {
     // Blocked storage: the choice still applies for this session.
   }
+};
+
+/**
+ * The saved tier wins; a legacy "Low" board detail becomes Low; otherwise the
+ * device picks (ADR-16). Not needed before first paint, so read straight from storage.
+ */
+export function readQuality(): { quality: Quality; qualityAuto: boolean } {
+  const saved = read(QUALITY_KEY);
+  if (isQuality(saved)) return { quality: saved, qualityAuto: false };
+  if (read(LEGACY_DETAIL_KEY) === 'low') return { quality: 'low', qualityAuto: false };
+  return { quality: detectQuality(), qualityAuto: true };
 }
+
+export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
+/** Foot trails are off until the student switches them on. */
+export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
+/** Motion cues are on until the student switches them off (ADR-26). */
+export const readMotionCuesVisible = (): boolean => read(CUES_KEY) !== 'off';
+/** Goofy unless regular was saved (ADR-25). */
+export const readStance = (): Stance => {
+  const saved = read(STANCE_KEY);
+  return isStance(saved) ? saved : 'goofy';
+};
+
+export const STANCE_ANNOUNCEMENT: Record<Stance, string> = {
+  goofy: 'Goofy stance: right foot forward, nose on the right.',
+  regular: 'Regular stance: left foot forward, nose on the left.',
+};
+
+export const QUALITY_ANNOUNCEMENT: Record<Quality, string> = {
+  high: 'Quality high: detailed board, shoes and shadows.',
+  medium: 'Quality medium: detailed board, no shadows.',
+  low: 'Quality low: simple board. Fastest.',
+};
+
+/** Opens the one announcement when the motion preference turns on mid-flight (ADR-6). */
+export const REDUCED_MOTION_LEAD = 'Reduced motion on: the board goes straight to its landing.';
+/** The one announcement when the 3D view fails (SceneBoundary); the result follows it if a trick was in the air. */
+export const SCENE_UNAVAILABLE_ANNOUNCEMENT =
+  'The 3D view stopped working. Tricks now resolve at once; the timeline, readouts and results still work.';
 
 export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, get) => {
   let nonce = 0;
@@ -47,8 +95,13 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     announcement: { message: '', nonce: 0 },
     focusRequest: null,
     viewResetNonce: 0,
-    boardDetail: readBoardDetail(),
+    ...readQuality(),
     boardAssetFailed: false,
+    sceneUnavailable: false,
+    feetVisible: readFeetVisible(),
+    footPathsVisible: readFootPathsVisible(),
+    stance: readStance(),
+    motionCuesVisible: readMotionCuesVisible(),
 
     togglePerf: () => set((s) => ({ perfVisible: !s.perfVisible })),
     setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
@@ -58,21 +111,59 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       set({ theme });
       get().announce(theme === 'light' ? 'Light theme.' : 'Dark theme.');
     },
-    setReducedMotion: (reducedMotion) => set({ reducedMotion }),
+    setReducedMotion: (reducedMotion) => {
+      if (get().reducedMotion === reducedMotion) return;
+      set({ reducedMotion });
+      // Live change (ADR-6): a flight playing or paused stops animating and
+      // resolves now, through the same path as a landing, once.
+      if (reducedMotion && inFlight(get())) get().land(REDUCED_MOTION_LEAD);
+    },
     resetView: () => {
       set((s) => ({ viewResetNonce: s.viewResetNonce + 1 }));
       get().announce('Camera view reset.');
     },
-    setBoardDetail: (boardDetail) => {
-      if (get().boardDetail === boardDetail) return;
-      saveBoardDetail(boardDetail);
-      set({ boardDetail });
-      get().announce(boardDetail === 'low' ? 'Board detail low: simple board.' : 'Board detail high: full model.');
+    setQuality: (quality) => {
+      if (get().quality === quality && !get().qualityAuto) return;
+      save(QUALITY_KEY, quality);
+      set({ quality, qualityAuto: false });
+      get().announce(QUALITY_ANNOUNCEMENT[quality]);
+    },
+    toggleFeet: () => {
+      const feetVisible = !get().feetVisible;
+      save(FEET_KEY, feetVisible ? 'on' : 'off');
+      set({ feetVisible });
+      get().announce(feetVisible ? 'Feet shown.' : 'Feet hidden.');
+    },
+
+    toggleFootPaths: () => {
+      const footPathsVisible = !get().footPathsVisible;
+      save(PATHS_KEY, footPathsVisible ? 'on' : 'off');
+      set({ footPathsVisible });
+      get().announce(footPathsVisible ? 'Foot trails shown.' : 'Foot trails hidden.');
+    },
+    toggleMotionCues: () => {
+      const motionCuesVisible = !get().motionCuesVisible;
+      save(CUES_KEY, motionCuesVisible ? 'on' : 'off');
+      set({ motionCuesVisible });
+      get().announce(motionCuesVisible ? 'Motion cues shown.' : 'Motion cues hidden.');
+    },
+    setStance: (stance) => {
+      if (get().stance === stance) return;
+      save(STANCE_KEY, stance);
+      set({ stance });
+      get().announce(STANCE_ANNOUNCEMENT[stance]);
     },
     setBoardAssetFailed: () => {
       if (get().boardAssetFailed) return;
       set({ boardAssetFailed: true });
       get().announce('The board model did not load. Showing the simple board.');
+    },
+    setSceneUnavailable: () => {
+      if (get().sceneUnavailable) return;
+      set({ sceneUnavailable: true });
+      // One announcement: the failure, then the result if a trick was in the air.
+      if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
+      else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
     },
     announce: (message) => set({ announcement: { message, nonce: ++nonce } }),
     requestFocus: (target) => set({ focusRequest: { ...target, nonce: ++nonce } }),

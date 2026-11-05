@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { computeFlight } from './flight';
 import {
   DEFAULT_INPUTS,
+  isUnderRotated,
   newlyCompleted,
+  presetById,
   nameFor,
   OBJECTIVES,
   PRESETS,
@@ -34,9 +36,27 @@ describe('presets', () => {
   });
 
   it('matches the numbers quoted in the brief', () => {
-    expect(resolveTrick(PRESETS[0]!.inputs).rollTotal).toBeCloseTo(365, 0);
-    expect(resolveTrick(PRESETS[1]!.inputs).yawTotal).toBeCloseTo(173, 0);
-    expect(resolveTrick(PRESETS[3]!.inputs).yawTotal).toBeCloseTo(365, 0);
+    expect(resolveTrick(presetById('kickflip').inputs).rollTotal).toBeCloseTo(365, 0);
+    expect(resolveTrick(presetById('pop-shove-it').inputs).yawTotal).toBeCloseTo(173, 0);
+    expect(resolveTrick(presetById('360-flip').inputs).yawTotal).toBeCloseTo(365, 0);
+    // The mirrors (ADR-30): the same magnitudes, the other sign.
+    expect(resolveTrick(presetById('heelflip').inputs).rollTotal).toBeCloseTo(-365, 0);
+    expect(resolveTrick(presetById('frontside-pop-shove-it').inputs).yawTotal).toBeCloseTo(-173, 0);
+  });
+
+  it('a mirror preset bails the same way as its original: under-rotated, by the same amount, signed the other way', () => {
+    const pairs = [
+      ['kickflip', 'heelflip'],
+      ['pop-shove-it', 'frontside-pop-shove-it'],
+      ['varial-flip', 'varial-heelflip'],
+    ] as const;
+    for (const [a, b] of pairs) {
+      const ra = resolveTrick({ ...presetById(a).inputs, pop: 0.15 });
+      const rb = resolveTrick({ ...presetById(b).inputs, pop: 0.15 });
+      expect(rb.outcome).toBe('under-rotated');
+      expect(rb.failedAxis).toBe(ra.failedAxis);
+      expect(rb.failedBy).toBeCloseTo(-ra.failedBy, 10);
+    }
   });
 
   it('the bonus is reachable: a kickflip lands at pop 0.20 m with more flick', () => {
@@ -45,12 +65,26 @@ describe('presets', () => {
     expect(r.landed).toBe(true);
   });
 
-  it('keys 1 to 4 map to the presets in order', () => {
-    expect(PRESETS.map((p) => p.key)).toEqual(['1', '2', '3', '4']);
+  it('keys 1 to 8 map to the presets in order', () => {
+    expect(PRESETS.map((p) => p.key)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+    expect(PRESETS.map((p) => [p.label, p.inputs.flick, p.inputs.scoop])).toEqual([
+      ['Kickflip', 1.9, 0],
+      ['Heelflip', -1.9, 0],
+      ['Pop shove-it', 0, 0.9],
+      ['Frontside shove-it', 0, -0.9],
+      ['Varial flip', 1.9, 0.9],
+      ['Varial heelflip', -1.9, -0.9],
+      ['Hardflip', 1.9, -0.9],
+      ['360 flip', 1.9, 1.9],
+    ]);
     expect(OBJECTIVES.map((o) => o.label)).toEqual([
       'Land a kickflip',
+      'Land a heelflip',
       'Land a pop shove-it',
+      'Land a frontside shove-it',
       'Land a varial flip',
+      'Land a varial heelflip',
+      'Land a hardflip',
       'Land a 360 flip',
     ]);
   });
@@ -58,19 +92,54 @@ describe('presets', () => {
 
 describe('naming table', () => {
   it.each([
-    [0, 0, 'Ollie'],
-    [1, 0, 'Kickflip'],
-    [0, 1, 'Pop shove-it'],
-    [1, 1, 'Varial flip'],
-    [1, 2, '360 flip'],
-    [0, 2, '360 shove-it'],
-    [2, 0, 'Double kickflip'],
-    [2, 2, 'Double tre'],
-    [2, 1, 'Unnamed (2 flips, 1 half shove)'],
-    [0, 3, 'Unnamed (0 flips, 3 half shoves)'],
-    [1, 4, 'Unnamed (1 flip, 4 half shoves)'],
-  ])('(%i flips, %i half shoves) is %s', (flips, halfShoves, name) => {
-    expect(nameFor(flips, halfShoves).name).toBe(name);
+    [0, 0, 'ollie', 'Ollie'],
+    [1, 0, 'kickflip', 'Kickflip'],
+    [-1, 0, 'heelflip', 'Heelflip'],
+    [2, 0, 'double-kickflip', 'Double kickflip'],
+    [-2, 0, 'double-heelflip', 'Double heelflip'],
+    [0, 1, 'pop-shove-it', 'Pop shove-it'],
+    [0, -1, 'frontside-pop-shove-it', 'Frontside pop shove-it'],
+    [0, 2, '360-shove-it', '360 shove-it'],
+    [0, -2, 'frontside-360-shove-it', 'Frontside 360 shove-it'],
+    [1, 1, 'varial-flip', 'Varial flip'],
+    [1, -1, 'hardflip', 'Hardflip'],
+    [-1, -1, 'varial-heelflip', 'Varial heelflip'],
+    [-1, 1, 'inward-heelflip', 'Inward heelflip'],
+    [1, 2, '360-flip', '360 flip'],
+    [1, -2, '360-hardflip', '360 hardflip'],
+    [-1, -2, 'laser-flip', 'Laser flip'],
+    [-1, 2, '360-inward-heelflip', '360 inward heelflip'],
+    [2, 2, 'double-tre', 'Double tre'],
+    [2, 1, 'unnamed', 'Unnamed (2 kickflips, 1 backside half shove)'],
+    [-2, -1, 'unnamed', 'Unnamed (2 heelflips, 1 frontside half shove)'],
+    [0, 3, 'unnamed', 'Unnamed (0 flips, 3 backside half shoves)'],
+    [1, 4, 'unnamed', 'Unnamed (1 kickflip, 4 backside half shoves)'],
+    [-1, -4, 'unnamed', 'Unnamed (1 heelflip, 4 frontside half shoves)'],
+    [-3, 0, 'unnamed', 'Unnamed (3 heelflips, 0 half shoves)'],
+    [-2, 2, 'unnamed', 'Unnamed (2 heelflips, 2 backside half shoves)'],
+  ])('(%i flips, %i half shoves) is %s, %s', (flips, halfShoves, id, name) => {
+    expect(nameFor(flips, halfShoves)).toEqual({ id, name });
+  });
+
+  it('names the signed flight: negative flick is a heelflip, negative scoop frontside', () => {
+    expect(recognize(withTotals(-365, 0)).id).toBe('heelflip');
+    expect(recognize(withTotals(365, -173)).id).toBe('hardflip');
+    expect(recognize(withTotals(-365, 173)).id).toBe('inward-heelflip');
+    expect(recognize(withTotals(-365, -365)).id).toBe('laser-flip');
+    expect(resolveTrick({ pop: 0.35, flick: -1.9, scoop: 1.9 }).id).toBe('360-inward-heelflip');
+    expect(resolveTrick({ pop: 0.35, flick: 1.9, scoop: -1.9 }).id).toBe('360-hardflip');
+    expect(resolveTrick({ pop: 0.35, flick: 0, scoop: -1.9 }).id).toBe('frontside-360-shove-it');
+    expect(resolveTrick({ pop: 0.35, flick: -3, scoop: 0 }).id).toBe('double-heelflip');
+  });
+
+  it('rounds symmetrically: half a turn either way is a whole turn, and nothing names itself -0', () => {
+    expect(recognize(withTotals(180, 0)).flips).toBe(1);
+    expect(recognize(withTotals(-180, 0)).flips).toBe(-1);
+    expect(recognize(withTotals(0, -90)).halfShoves).toBe(-1);
+    const small = recognize(withTotals(-10, -10));
+    expect(Object.is(small.flips, 0)).toBe(true);
+    expect(Object.is(small.halfShoves, 0)).toBe(true);
+    expect(small.id).toBe('ollie');
   });
 
   it('the default inputs are an ollie', () => {
@@ -104,6 +173,40 @@ describe('tolerances and under/over detection', () => {
     expect(r.failedBy).toBeCloseTo(40, 10);
   });
 
+  it('decides under or over against the direction of rotation, keeping the signed error', () => {
+    // Short of a heelflip: -300 is 60 short of -360, the error is +60.
+    const short = recognize(withTotals(-300, 0));
+    expect(short.id).toBe('heelflip');
+    expect(short.outcome).toBe('under-rotated');
+    expect(short.failedBy).toBeCloseTo(60, 10);
+    // Past a heelflip: -420 is 60 past -360, the error is -60.
+    const past = recognize(withTotals(-420, 0));
+    expect(past.outcome).toBe('over-rotated');
+    expect(past.failedBy).toBeCloseTo(-60, 10);
+    // Short and past of a frontside half shove.
+    expect(recognize(withTotals(0, -150)).outcome).toBe('under-rotated');
+    expect(recognize(withTotals(0, -210)).outcome).toBe('over-rotated');
+    // Rotation that rounds to no turn at all is past it, either way.
+    expect(recognize(withTotals(-40, 0)).outcome).toBe('over-rotated');
+    expect(recognize(withTotals(40, 0)).outcome).toBe('over-rotated');
+  });
+
+  it('isUnderRotated is a magnitude test against the nearest turn', () => {
+    expect(isUnderRotated(300, 360)).toBe(true);
+    expect(isUnderRotated(-300, 360)).toBe(true);
+    expect(isUnderRotated(420, 360)).toBe(false);
+    expect(isUnderRotated(-420, 360)).toBe(false);
+    expect(isUnderRotated(-150, 180)).toBe(true);
+    expect(isUnderRotated(-20, 180)).toBe(false);
+  });
+
+  it('lands a heelflip within the same tolerances as a kickflip', () => {
+    expect(recognize(withTotals(-390, 0)).landed).toBe(true);
+    expect(recognize(withTotals(-330, -205)).landed).toBe(true);
+    expect(recognize(withTotals(-391, 0)).landed).toBe(false);
+    expect(recognize(withTotals(-360, -206)).landed).toBe(false);
+  });
+
   it('blames the axis furthest past its tolerance when both fail', () => {
     const r = recognize(withTotals(300, 150)); // flip 30 past, shove 5 past
     expect(r.failedAxis).toBe('flip');
@@ -115,9 +218,19 @@ describe('tolerances and under/over detection', () => {
 
 describe('objectives', () => {
   it('a landed preset trick completes its objective once', () => {
-    const r = resolveTrick(PRESETS[2]!.inputs);
+    const r = resolveTrick(presetById('varial-flip').inputs);
     expect(newlyCompleted(r, [])).toEqual(['varial-flip']);
     expect(newlyCompleted(r, ['varial-flip'])).toEqual([]);
+  });
+
+  it('a landed mirror trick completes its own objective, not the original', () => {
+    expect(newlyCompleted(resolveTrick(presetById('heelflip').inputs), ['kickflip'])).toEqual(['heelflip']);
+    expect(newlyCompleted(resolveTrick(presetById('hardflip').inputs), [])).toEqual(['hardflip']);
+    // An inward heelflip is not a preset: it lands but completes nothing.
+    const inward = resolveTrick({ pop: 0.35, flick: -1.9, scoop: 0.9 });
+    expect(inward.id).toBe('inward-heelflip');
+    expect(inward.landed).toBe(true);
+    expect(newlyCompleted(inward, [])).toEqual([]);
   });
 
   it('a bail or a non-preset trick completes nothing', () => {
@@ -132,5 +245,27 @@ describe('snapInput', () => {
     expect(snapInput('pop', 0.05)).toBe(0.15);
     expect(snapInput('flick', 1.9000000001)).toBe(1.9);
     expect(snapInput('scoop', 4)).toBe(3);
+  });
+
+  it('snaps negatives to the same grid and clamps at -3', () => {
+    expect(snapInput('flick', -1.9000000001)).toBe(-1.9);
+    expect(snapInput('flick', -1.94)).toBe(-1.9);
+    expect(snapInput('scoop', -0.86)).toBe(-0.9);
+    expect(snapInput('scoop', -4)).toBe(-3);
+    expect(snapInput('flick', -3)).toBe(-3);
+  });
+
+  it('never returns -0', () => {
+    for (const v of [-0, -0.04, -0.0000001, 0.04, 1e-12, -1e-12]) {
+      expect(Object.is(snapInput('flick', v), 0)).toBe(true);
+      expect(Object.is(snapInput('scoop', v), 0)).toBe(true);
+    }
+  });
+
+  it('every grid value from -3 to 3 snaps to itself', () => {
+    for (let i = -30; i <= 30; i++) {
+      const v = Number((i / 10).toFixed(1)) + 0;
+      expect(snapInput('flick', v)).toBe(v);
+    }
   });
 });

@@ -30,11 +30,16 @@ export function EventLog() {
 
   return (
     <section className="panel" aria-labelledby="eventlog-heading">
-      <h2 id="eventlog-heading" className="panel__title">
-        Event log <span>{events.length}</span>
-      </h2>
+      <div className="panel__head">
+        <h2 id="eventlog-heading" className="panel__title">
+          Event log <span className="panel__count">{events.length}</span>
+        </h2>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={download} disabled={events.length === 0}>
+          Download JSON
+        </button>
+      </div>
       {events.length > LOG_PANEL_ROWS && (
-        <p>
+        <p className="panel__note">
           Showing the latest {LOG_PANEL_ROWS} of {events.length} events. The download has all of them.
         </p>
       )}
@@ -49,19 +54,22 @@ export function EventLog() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((e) => (
-              <tr key={e.id} className="eventlog__row">
-                <td className="eventlog__t">{e.t}</td>
-                <td className="eventlog__type">{e.type}</td>
-                <td>{JSON.stringify(e.payload)}</td>
-              </tr>
-            ))}
+            {shown.map((e) => {
+              const payload = JSON.stringify(e.payload);
+              // One line per row; the title carries what the ellipsis clips, the download has everything.
+              return (
+                <tr key={e.id} className="eventlog__row">
+                  <td className="eventlog__t">{e.t}</td>
+                  <td className="eventlog__type" title={e.type}>
+                    {e.type}
+                  </td>
+                  <td title={payload}>{payload}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <button type="button" className="btn btn--ghost" onClick={download} disabled={events.length === 0}>
-        Download JSON
-      </button>
     </section>
   );
 }

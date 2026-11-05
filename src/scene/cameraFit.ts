@@ -50,17 +50,16 @@ export function fitDistance({ from, target, fov, aspect, points, margin }: FitIn
 }
 
 /**
- * What must stay in frame: the eight corners of the pad slab and a box around
- * the board at the highest pop (board centre at rest height plus 0.6 m, the
- * shove can point the deck any way, so the box is the deck's spin circle).
+ * What must stay in frame (ADR-18): a box around the board's flight, from
+ * the pad surface under it (`bottom`, so the shadow stays in) to the highest
+ * pop (`top`: board centre at rest height plus 0.6 m plus its half extent).
+ * The shove can point the deck any way, so the box is the deck's spin circle
+ * (`reach`). The pad is allowed to run off the edges; it used to be framed
+ * whole (ADR-11), which left the board a few hundred pixels long.
  */
-export function framingPoints(pad: { size: Vec3; center: Vec3 }, flight: { reach: number; top: number }): Vec3[] {
+export function framingPoints(flight: { reach: number; bottom: number; top: number }): Vec3[] {
   const pts: Vec3[] = [];
-  const [w, h, dp] = pad.size;
-  const [cx, cy, cz] = pad.center;
-  for (const sx of [-1, 1])
-    for (const sy of [-1, 1])
-      for (const sz of [-1, 1]) pts.push([cx + (sx * w) / 2, cy + (sy * h) / 2, cz + (sz * dp) / 2]);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push([sx * flight.reach, flight.top, sz * flight.reach]);
+  for (const y of [flight.bottom, flight.top])
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push([sx * flight.reach, y, sz * flight.reach]);
   return pts;
 }

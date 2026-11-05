@@ -11,7 +11,7 @@
 
   /* Color roles, light (concrete) */
   --color-bg: #edebe6;          /* page, light concrete */
-  --color-surface: #f8f7f4;     /* cards */
+  --color-surface: #f8f7f4;     /* the two side columns */
   --color-surface-2: #e1dfd9;   /* inset wells, hover rows, slider tracks, log */
   --color-text: #1c1e21;        /* on bg 14.02, on surface 15.59, on surface-2 12.54 */
   --color-muted: #5a5f66;       /* on bg 5.40,  on surface 6.01,  on surface-2 4.83 */
@@ -32,17 +32,22 @@
      theme in src/scene/artDirection.ts (a test asserts it), and paints
      .app__stage so resize gaps never flash. Light: pale concrete. */
   --scene-bg: #d7d3cb;
+  /* Foot path colours, the same in both themes; must equal ART.footPaths.color (tested). */
+  --path-front: #56b4e9;
+  --path-back: #f0e442;
 
   /* Type: system stack, no webfonts */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* Type scale (UI redesign 2026-11-04, DESIGN.md 9): 12 px for section
+     titles, hints, keys and the log; 13 px for labels, controls and body;
+     15 px for values; 18 px for the outcome headline only. */
   --text-xs: 0.75rem;    /* 12px */
-  --text-sm: 0.875rem;   /* 14px */
-  --text-md: 1rem;       /* 16px */
-  --text-lg: 1.125rem;   /* 18px */
-  --text-xl: 1.375rem;   /* 22px, outcome name */
-  --text-2xl: 1.75rem;   /* 28px, telemetry hero values */
+  --text-sm: 0.8125rem;  /* 13px */
+  --text-md: 0.9375rem;  /* 15px */
+  --text-lg: 1.125rem;   /* 18px, outcome headline and dialog title */
   --leading-tight: 1.25;
+  --leading-snug: 1.4;
   --leading-normal: 1.5;
   --weight-normal: 400;
   --weight-medium: 500;
@@ -60,13 +65,12 @@
 
   /* Radii: slightly square, like deck hardware */
   --radius-sm: 3px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
   --radius-pill: 999px;
 
-  /* Shadows, soft and low */
-  --shadow-sm: 0 1px 2px rgba(28, 30, 33, 0.08);
-  --shadow-md: 0 2px 8px rgba(28, 30, 33, 0.12);
+  /* Shadows: only the slider thumbs and the modal dialog cast one */
+  --shadow-sm: 0 1px 2px rgba(28, 30, 33, 0.12);
   --shadow-lg: 0 8px 24px rgba(28, 30, 33, 0.18);
 
   /* Motion */
@@ -77,13 +81,17 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Layout */
-  --col-setup: 288px;
-  --col-results: 320px;
+  --col-setup: 272px;
+  --col-results: 312px;
   --focus-ring: 3px;
+  --control-h: 28px;      /* segmented options, small buttons, switches: WCAG 2.2 target size (minimum) is 24 */
+  --control-h-lg: 36px;   /* Pop, Pause, Reset */
 
-  /* Range inputs (shared by .field__range and .timeline__range) */
-  --range-track-h: 6px;
-  --range-thumb: 20px;
+  /* Range inputs (shared by .field__range and .timeline__range). The input
+     box is 24 px tall (the hit area); the track and thumb are drawn inside. */
+  --range-hit: 24px;
+  --range-track-h: 4px;
+  --range-thumb: 16px;
 }
 
 :root[data-theme="dark"] {
@@ -91,7 +99,7 @@
 
   /* Color roles, dark (grip tape) */
   --color-bg: #121416;          /* page, grip tape */
-  --color-surface: #1c1f22;     /* cards */
+  --color-surface: #1c1f22;     /* the two side columns */
   --color-surface-2: #272b2f;   /* inset wells, hover rows, slider tracks, log */
   --color-text: #ebe8e1;        /* on bg 15.09, on surface 13.53, on surface-2 11.65 */
   --color-muted: #a7aaad;       /* on bg 7.91,  on surface 7.09,  on surface-2 6.11 */
@@ -112,7 +120,6 @@
   --scene-bg: #1e2124;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 

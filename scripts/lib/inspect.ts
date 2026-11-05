@@ -39,14 +39,22 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
     }
   });
 
-  // A texture is mipmapped if every material slot that samples it asks for a mipmap min filter.
+  // A texture is mipmapped if every material slot that samples it (base colour,
+  // normal, metallic-roughness, occlusion, emissive) asks for a mipmap min filter.
   const mipmapped = new Map<string, boolean>();
   for (const material of root.listMaterials()) {
-    const tex = material.getBaseColorTexture();
-    const info = material.getBaseColorTextureInfo();
-    if (!tex || !info) continue;
-    const ok = MIPMAP_FILTERS.has(info.getMinFilter() ?? -1);
-    mipmapped.set(tex.getName(), (mipmapped.get(tex.getName()) ?? true) && ok);
+    const slots: [ReturnType<typeof material.getBaseColorTexture>, ReturnType<typeof material.getBaseColorTextureInfo>][] = [
+      [material.getBaseColorTexture(), material.getBaseColorTextureInfo()],
+      [material.getNormalTexture(), material.getNormalTextureInfo()],
+      [material.getMetallicRoughnessTexture(), material.getMetallicRoughnessTextureInfo()],
+      [material.getOcclusionTexture(), material.getOcclusionTextureInfo()],
+      [material.getEmissiveTexture(), material.getEmissiveTextureInfo()],
+    ];
+    for (const [tex, info] of slots) {
+      if (!tex || !info) continue;
+      const ok = MIPMAP_FILTERS.has(info.getMinFilter() ?? -1);
+      mipmapped.set(tex.getName(), (mipmapped.get(tex.getName()) ?? true) && ok);
+    }
   }
   const textures: TextureStat[] = root.listTextures().map((t) => {
     const image = t.getImage();

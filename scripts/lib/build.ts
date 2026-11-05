@@ -1,19 +1,50 @@
-// Builds the board GLB in memory: geometry from src/asset/, procedural
-// textures (src/asset/textures.ts), the deck graphic rasterized from
-// assets/source/deck-graphic.svg, then meshopt compression and quantization.
-// Deterministic: the same sources give the same bytes (tested).
+// Builds the GLBs in memory: geometry from src/asset/, procedural textures
+// (src/asset/textures.ts, shoeTextures.ts, groundTextures.ts), the deck
+// graphic rasterized from assets/source/deck-graphic.svg, then meshopt
+// compression and quantization. Deterministic: the same sources give the
+// same bytes (tested). Four assets share one builder: the medium board (the
+// original board.glb, unchanged), the high board and the shoe (quality tiers
+// and feet, 2026-11-04), and the concrete ground (ground pass, 2026-11-04).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Document, Logger, NodeIO, TextureInfo, type Texture } from '@gltf-transform/core';
+import { Document, Logger, NodeIO, TextureInfo, type Material, type Texture } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, KHRTextureTransform } from '@gltf-transform/extensions';
 import { dedup, meshopt, prune } from '@gltf-transform/functions';
 import { Resvg } from '@resvg/resvg-js';
 import { MeshoptEncoder } from 'meshoptimizer';
 import type { BufferGeometry } from 'three';
 import { buildBoard, triangleCount } from '../../src/asset/board';
-import { MATERIALS, OUTLINE, PARTS, REST_Y, TEXTURES, type MaterialKey, type PartName, type TextureKey } from '../../src/asset/spec';
-import { gripGrey, gripTint, hexToRgb, plyPixels, wheelPixels, type Pixels } from '../../src/asset/textures';
+import { buildGround } from '../../src/asset/ground';
+import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS } from '../../src/asset/groundSpec';
+import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
+import { buildShoe } from '../../src/asset/shoe';
+import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES } from '../../src/asset/shoeSpec';
+import { solePixels, upperPixels } from '../../src/asset/shoeTextures';
+import {
+  GRIP_NORMAL_SCALE,
+  MATERIALS,
+  OUTLINE,
+  PARTS,
+  REST_Y,
+  TEXTURES,
+  TEXTURES_HIGH,
+  type AssetKey,
+  type DetailLevel,
+} from '../../src/asset/spec';
+import {
+  downsample2,
+  gripGrey,
+  gripHigh,
+  gripTint,
+  hexToRgb,
+  normalMapFromHeight,
+  plyPixels,
+  plyPixelsHigh,
+  wheelPixels,
+  wheelPixelsHigh,
+  type Pixels,
+} from '../../src/asset/textures';
 import { encodePng } from './png';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -29,8 +60,7 @@ const linearFactor = (hex: string): [number, number, number, number] => {
 const png = (p: Pixels) => encodePng(p.width, p.height, 3, p.rgb);
 
 /** Rasterize the design's SVG at the texture size and drop the alpha (the field is opaque). */
-function deckBottomPng(): Uint8Array {
-  const T = TEXTURES.deckBottom;
+function deckBottomPng(T: { width: number; height: number }): Uint8Array {
   const svg = readFileSync(GRAPHIC_SVG, 'utf8');
   const img = new Resvg(svg, { fitTo: { mode: 'width', value: T.width } }).render();
   if (img.width !== T.width || img.height !== T.height) throw new Error(`deck graphic rasterized at ${img.width} x ${img.height}`);
@@ -45,79 +75,218 @@ function deckBottomPng(): Uint8Array {
 }
 
 export interface BuildReport {
-  triangles: Record<PartName, number>;
+  triangles: Record<string, number>;
   droppedTriangles: number;
   /** PNG bytes per texture file name. */
   textureBytes: Record<string, number>;
 }
 
-export async function buildBoardGlb(): Promise<{ glb: Uint8Array; report: BuildReport }> {
+/** What one asset is made of, in glTF creation order (the order fixes the bytes). */
+interface AssetSpec {
+  rootName: string;
+  extras: Record<string, unknown>;
+  /** `repeat`: a KHR_texture_transform scale for a tiling map (UVs stay in [0, 1] so they quantize). */
+  textures: { key: string; file: string; png: Uint8Array; wrap: 'repeat' | 'clamp'; repeat?: [number, number] }[];
+  materials: {
+    key: string;
+    name: string;
+    baseColor: [number, number, number, number];
+    roughness: number;
+    metalness: number;
+    map?: string;
+    normalMap?: { key: string; scale: number };
+    /** glTF metallicRoughnessTexture (green is roughness, blue metalness). */
+    roughnessMap?: string;
+  }[];
+  parts: { node: string; material: string; geometry: BufferGeometry }[];
+  droppedTriangles: number;
+}
+
+/** The board's tiling maps (the grip) repeat every `tile` metres over the deck's outline. */
+const deckRepeat = (tile: number): [number, number] => [OUTLINE.length / tile, OUTLINE.width / tile];
+
+function boardSpec(level: DetailLevel): AssetSpec {
+  const board = buildBoard(level);
+  const textures: AssetSpec['textures'] = [];
+  if (level === 'medium') {
+    const T = TEXTURES;
+    const grip = gripGrey();
+    textures.push(
+      { key: 'grip', file: T.grip.file, png: encodePng(grip.width, grip.height, 1, grip.grey), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
+      { key: 'deckBottom', file: T.deckBottom.file, png: deckBottomPng(T.deckBottom), wrap: T.deckBottom.wrap },
+      { key: 'ply', file: T.ply.file, png: png(plyPixels()), wrap: T.ply.wrap },
+      { key: 'wheel', file: T.wheel.file, png: png(wheelPixels()), wrap: T.wheel.wrap },
+    );
+  } else {
+    const T = TEXTURES_HIGH;
+    const grip = gripHigh();
+    textures.push(
+      { key: 'grip', file: T.grip.file, png: png(grip.color), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
+      {
+        key: 'gripNormal',
+        file: T.gripNormal.file,
+        png: png(normalMapFromHeight(downsample2(grip.lift, T.grip.width, T.grip.height), T.gripNormal.width, T.gripNormal.height)),
+        wrap: T.gripNormal.wrap,
+        repeat: deckRepeat(T.gripNormal.tile),
+      },
+      { key: 'deckBottom', file: T.deckBottom.file, png: deckBottomPng(T.deckBottom), wrap: T.deckBottom.wrap },
+      { key: 'ply', file: T.ply.file, png: png(plyPixelsHigh()), wrap: T.ply.wrap },
+      { key: 'wheel', file: T.wheel.file, png: png(wheelPixelsHigh()), wrap: T.wheel.wrap },
+    );
+  }
+  const materials: AssetSpec['materials'] = (Object.keys(MATERIALS) as (keyof typeof MATERIALS)[]).map((key) => {
+    const M = MATERIALS[key];
+    return {
+      key,
+      name: M.name,
+      // The medium grip is a grey map tinted by the base colour factor; the high grip is RGB.
+      baseColor: key === 'grip' && level === 'medium' ? gripTint() : linearFactor(M.color),
+      roughness: M.roughness,
+      metalness: M.metalness,
+      map: 'map' in M ? M.map : undefined,
+      normalMap: key === 'grip' && level === 'high' ? { key: 'gripNormal', scale: GRIP_NORMAL_SCALE } : undefined,
+    };
+  });
+  return {
+    rootName: 'Board',
+    extras: {
+      units: 'metres',
+      restY: REST_Y,
+      source: 'procedural, scripts/build-board.ts',
+      design: 'docs/DESIGN.md section 7',
+      // Only the high file says so, so the medium file's bytes stay as first committed.
+      ...(level === 'high' ? { level } : {}),
+    },
+    textures,
+    materials,
+    parts: PARTS.map((p) => ({ node: p.node, material: p.material, geometry: board.parts[p.node] })),
+    droppedTriangles: board.droppedTriangles,
+  };
+}
+
+function shoeSpec(): AssetSpec {
+  const shoe = buildShoe();
+  const T = SHOE_TEXTURES;
+  return {
+    rootName: 'Shoe',
+    extras: { units: 'metres', foot: 'right', source: 'procedural, scripts/build-board.ts', design: 'src/asset/shoeSpec.ts' },
+    textures: [
+      { key: 'sole', file: T.sole.file, png: png(solePixels()), wrap: T.sole.wrap },
+      { key: 'upper', file: T.upper.file, png: png(upperPixels()), wrap: T.upper.wrap },
+    ],
+    materials: (Object.keys(SHOE_MATERIALS) as (keyof typeof SHOE_MATERIALS)[]).map((key) => {
+      const M = SHOE_MATERIALS[key];
+      return {
+        key,
+        name: M.name,
+        baseColor: linearFactor(M.color),
+        roughness: M.roughness,
+        metalness: M.metalness,
+        map: 'map' in M ? M.map : undefined,
+      };
+    }),
+    parts: SHOE_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: shoe.parts[p.node] })),
+    droppedTriangles: shoe.droppedTriangles,
+  };
+}
+
+/** The concrete ground: one plane, one material with colour, normal and roughness maps of one bay, repeated. */
+function groundSpec(): AssetSpec {
+  const T = GROUND_TEXTURES;
+  const repeat: [number, number] = [PLANE_BAYS.x, PLANE_BAYS.z];
+  const color = concreteColor();
+  const rough = concreteRoughness();
+  return {
+    rootName: 'Ground',
+    extras: {
+      units: 'metres',
+      bay: [BAY.x, BAY.z],
+      bays: [PLANE_BAYS.x, PLANE_BAYS.z],
+      source: 'procedural, scripts/build-board.ts',
+      design: 'src/asset/groundSpec.ts',
+    },
+    textures: [
+      { key: 'color', file: T.color.file, png: encodePng(color.width, color.height, 1, color.grey), wrap: 'repeat', repeat },
+      { key: 'normal', file: T.normal.file, png: png(concreteNormal()), wrap: 'repeat', repeat },
+      { key: 'roughness', file: T.roughness.file, png: encodePng(rough.width, rough.height, 1, rough.grey), wrap: 'repeat', repeat },
+    ],
+    materials: [
+      {
+        key: GROUND_PARTS[0].material,
+        name: GROUND_MATERIAL.name,
+        // The colour map is grey; the factor tints its mean onto CONCRETE.color.
+        baseColor: concreteTint(),
+        roughness: GROUND_MATERIAL.roughness,
+        metalness: GROUND_MATERIAL.metalness,
+        map: 'color',
+        normalMap: { key: 'normal', scale: GROUND_NORMAL_SCALE },
+        roughnessMap: 'roughness',
+      },
+    ],
+    parts: GROUND_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: buildGround() })),
+    droppedTriangles: 0,
+  };
+}
+
+async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: BuildReport }> {
   const doc = new Document().setLogger(new Logger(Logger.Verbosity.WARN));
   doc.getRoot().getAsset().generator = 'trick-lab scripts/build-board.ts (glTF-Transform 4.5.1)';
   const buffer = doc.createBuffer();
   const textureTransform = doc.createExtension(KHRTextureTransform);
 
-  const images: Record<TextureKey, Uint8Array> = {
-    grip: (({ width, height, grey }) => encodePng(width, height, 1, grey))(gripGrey()),
-    deckBottom: deckBottomPng(),
-    ply: png(plyPixels()),
-    wheel: png(wheelPixels()),
-  };
-  const textures = {} as Record<TextureKey, Texture>;
-  for (const key of Object.keys(TEXTURES) as TextureKey[]) {
-    textures[key] = doc.createTexture(key).setImage(images[key]).setMimeType('image/png').setURI(TEXTURES[key].file);
+  const textures = new Map<string, Texture>();
+  const textureSpec = new Map<string, AssetSpec['textures'][number]>();
+  for (const t of spec.textures) {
+    textures.set(t.key, doc.createTexture(t.key).setImage(t.png).setMimeType('image/png').setURI(t.file));
+    textureSpec.set(t.key, t);
   }
 
-  const materials = {} as Record<MaterialKey, ReturnType<Document['createMaterial']>>;
-  for (const key of Object.keys(MATERIALS) as MaterialKey[]) {
-    const M = MATERIALS[key];
-    const m = doc
-      .createMaterial(M.name)
-      .setBaseColorFactor(key === 'grip' ? gripTint() : linearFactor(M.color))
-      .setRoughnessFactor(M.roughness)
-      .setMetallicFactor(M.metalness);
-    if ('map' in M) {
-      const T = TEXTURES[M.map];
-      m.setBaseColorTexture(textures[M.map]);
-      const info = m.getBaseColorTextureInfo()!;
-      const wrap = T.wrap === 'repeat' ? TextureInfo.WrapMode.REPEAT! : TextureInfo.WrapMode.CLAMP_TO_EDGE!;
-      info
-        .setWrapS(wrap)
-        .setWrapT(wrap)
-        .setMagFilter(TextureInfo.MagFilter.LINEAR!)
-        .setMinFilter(TextureInfo.MinFilter.LINEAR_MIPMAP_LINEAR!);
-      if (key === 'grip') {
-        // Grip UVs are stored in [0, 1] over the deck (so they can be quantized);
-        // the transform repeats the 512 px tile every 0.2 m.
-        const tile = TEXTURES.grip.tile;
-        info.setExtension(
-          'KHR_texture_transform',
-          textureTransform.createTransform().setScale([OUTLINE.length / tile, OUTLINE.width / tile]),
-        );
-      }
+  /** Sampler and (for a tiling map) the repeat transform; UVs are stored in [0, 1] so they quantize. */
+  const configure = (info: TextureInfo, key: string) => {
+    const T = textureSpec.get(key)!;
+    const wrap = T.wrap === 'repeat' ? TextureInfo.WrapMode.REPEAT! : TextureInfo.WrapMode.CLAMP_TO_EDGE!;
+    info
+      .setWrapS(wrap)
+      .setWrapT(wrap)
+      .setMagFilter(TextureInfo.MagFilter.LINEAR!)
+      .setMinFilter(TextureInfo.MinFilter.LINEAR_MIPMAP_LINEAR!);
+    if (T.repeat) info.setExtension('KHR_texture_transform', textureTransform.createTransform().setScale(T.repeat));
+  };
+
+  const materials = new Map<string, Material>();
+  for (const M of spec.materials) {
+    const m = doc.createMaterial(M.name).setBaseColorFactor(M.baseColor).setRoughnessFactor(M.roughness).setMetallicFactor(M.metalness);
+    if (M.map) {
+      m.setBaseColorTexture(textures.get(M.map)!);
+      configure(m.getBaseColorTextureInfo()!, M.map);
     }
-    materials[key] = m;
+    if (M.normalMap) {
+      m.setNormalTexture(textures.get(M.normalMap.key)!).setNormalScale(M.normalMap.scale);
+      configure(m.getNormalTextureInfo()!, M.normalMap.key);
+    }
+    if (M.roughnessMap) {
+      m.setMetallicRoughnessTexture(textures.get(M.roughnessMap)!);
+      configure(m.getMetallicRoughnessTextureInfo()!, M.roughnessMap);
+    }
+    materials.set(M.key, m);
   }
 
   const accessor = (type: 'VEC2' | 'VEC3' | 'SCALAR', array: Float32Array | Uint16Array | Uint32Array) =>
     doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
 
-  const board = buildBoard();
-  const root = doc
-    .createNode('Board')
-    .setExtras({ units: 'metres', restY: REST_Y, source: 'procedural, scripts/build-board.ts', design: 'docs/DESIGN.md section 7' });
-  const scene = doc.createScene('Board').addChild(root);
+  const root = doc.createNode(spec.rootName).setExtras(spec.extras);
+  const scene = doc.createScene(spec.rootName).addChild(root);
   doc.getRoot().setDefaultScene(scene);
 
-  for (const { node, material } of PARTS) {
-    const g: BufferGeometry = board.parts[node];
+  const textured = new Set(spec.materials.filter((m) => m.map).map((m) => m.key));
+  for (const { node, material, geometry: g } of spec.parts) {
     const prim = doc
       .createPrimitive()
-      .setMaterial(materials[material])
+      .setMaterial(materials.get(material)!)
       .setAttribute('POSITION', accessor('VEC3', g.getAttribute('position').array as Float32Array))
       .setAttribute('NORMAL', accessor('VEC3', g.getAttribute('normal').array as Float32Array));
     const uv = g.getAttribute('uv');
-    if (uv && 'map' in MATERIALS[material]) prim.setAttribute('TEXCOORD_0', accessor('VEC2', uv.array as Float32Array));
+    if (uv && textured.has(material)) prim.setAttribute('TEXCOORD_0', accessor('VEC2', uv.array as Float32Array));
     const count = g.getAttribute('position').count;
     const index = Array.from(g.index!.array);
     prim.setIndices(accessor('SCALAR', count < 65536 ? new Uint16Array(index) : new Uint32Array(index)));
@@ -132,9 +301,26 @@ export async function buildBoardGlb(): Promise<{ glb: Uint8Array; report: BuildR
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
   const glb = await io.writeBinary(doc);
   const report: BuildReport = {
-    triangles: Object.fromEntries(PARTS.map((p) => [p.node, triangleCount(board.parts[p.node])])) as Record<PartName, number>,
-    droppedTriangles: board.droppedTriangles,
-    textureBytes: Object.fromEntries((Object.keys(images) as TextureKey[]).map((k) => [TEXTURES[k].file, images[k].length])),
+    triangles: Object.fromEntries(spec.parts.map((p) => [p.node, triangleCount(p.geometry)])),
+    droppedTriangles: spec.droppedTriangles,
+    textureBytes: Object.fromEntries(spec.textures.map((t) => [t.file, t.png.length])),
   };
   return { glb, report };
+}
+
+/** The board GLB at a detail level ('medium' is public/models/board.glb, 'high' is board-high.glb). */
+export const buildBoardGlb = (level: DetailLevel = 'medium') => buildGlb(boardSpec(level));
+
+/** The right shoe GLB (public/models/shoes.glb). */
+export const buildShoesGlb = () => buildGlb(shoeSpec());
+
+/** The concrete ground GLB (public/models/ground.glb). */
+export const buildGroundGlb = () => buildGlb(groundSpec());
+
+/** Build any asset by its key. */
+export function buildAsset(key: AssetKey): Promise<{ glb: Uint8Array; report: BuildReport }> {
+  if (key === 'board') return buildBoardGlb('medium');
+  if (key === 'boardHigh') return buildBoardGlb('high');
+  if (key === 'ground') return buildGroundGlb();
+  return buildShoesGlb();
 }

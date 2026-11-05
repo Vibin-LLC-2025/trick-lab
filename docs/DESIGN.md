@@ -17,7 +17,7 @@ Owner: design agent. Files: `src/styles/tokens.css`, `src/styles/app.css`, this 
 
 ## 2. Scene art direction (pasteable numbers)
 
-Units are metres. The pad top surface is y = 0. Origin is the centre of the pad, under the resting board. The board's long axis is X; the camera looks from +X, +Z (toe side, slightly in front of the nose). Rotation direction is fixed in ADR-10: a kickflip rolls the grip toward the heel side, so the graphic turns toward the viewer first. All colors are sRGB hex; pass them straight to `color=` props.
+Units are metres. The pad top surface is y = 0. Origin is the centre of the pad, under the resting board. The board's long axis is X; the home camera looks down from +Z, centred on X, from above the rider's heels (the rider's own view, ADR-23), with the nose on the right of the stage for the default goofy rider (ADR-24) and on the left for regular (ADR-25, 8.6: the board turns 180 degrees on the pad, the camera does not move). Rotation direction is fixed in ADR-10: in either stance a kickflip rolls the grip toward the heel side, so the graphic turns toward the viewer first. All colors are sRGB hex; pass them straight to `color=` props.
 
 ### Renderer
 
@@ -30,8 +30,8 @@ Units are metres. The pad top surface is y = 0. Origin is the centre of the pad,
 | `dpr` | `[1, 1.5]` |
 | Clear color, dark theme | `#1e2124` (equals `--scene-bg` under `:root[data-theme="dark"]`) |
 | Clear color, light theme | `#d7d3cb` (equals `--scene-bg` under `:root`) |
-| Fog | none |
-| Shadows | none (a flat disc stands in, see below) |
+| Fog | linear `Fog` to the clear color per theme, near `5.5`, far `15` (ground pass, 2026-11-04, ADR-31; was none). See section 10 |
+| Shadows | none on Medium and Low (a flat footprint stands in, see below); real shadows on High (ADR-19) |
 
 `artDirection.ts` should export `clearColor: { light: '#d7d3cb', dark: '#1e2124' }` and the theme test reads the computed `--scene-bg` for each theme and compares.
 
@@ -39,36 +39,41 @@ Units are metres. The pad top surface is y = 0. Origin is the centre of the pad,
 
 | Light | Color | Intensity | Position / target |
 | --- | --- | --- | --- |
-| `scene.environment` (realistic board pass, 2026-11-04) | RoomEnvironment PMREM | `scene.environmentIntensity = 0.55` | n/a, `scene.background` stays the clear color |
-| `ambientLight` | `#dde2e8` (was `#d9dde3`) | `0.3` (was `0.65`) | n/a |
-| `directionalLight` | `#fff1e0` (was `#ffead2`) | `2.2` (was `2.4`) | position `[2.5, 5.0, 3.0]`, target `[0, 0.3, 0]` |
+| `scene.environment` (ground pass, 2026-11-04, ADR-31) | procedural outdoor PMREM (sky gradient, sun disc, concrete below; section 10). Was three's RoomEnvironment at `0.40` | `scene.environmentIntensity = 0.90` | n/a, `scene.background` stays the clear color |
+| `hemisphereLight` (ground pass, 2026-11-04; replaces the `ambientLight` `#dde2e8` at `0.3`) | sky `#dde2e6`, ground `#6b6a66` | `0.35` | n/a |
+| `directionalLight` | `#fff1e0` (was `#ffead2`) | `2.7` (ground pass; was `2.2`, before that `2.4`) | position `[0.9, 6.0, -1.2]` (was `[2.5, 5.0, 3.0]`), target `[0, 0.3, 0]` |
 
-Retuned on 2026-11-04 for the realistic board (section 7): the environment map carries the fill, so the ambient drops and the key light loses some warmth. The key light sits camera-left and high, so whichever face of the deck is up during the flip is lit and the face that is down falls to ambient. That is what makes the alternation grip, graphic, grip legible.
+Retuned on 2026-11-04 for the realistic board (section 7): the environment map carries the fill, so the ambient drops and the key light loses some warmth. The key light sits high, so whichever face of the deck is up during the flip is lit and the face that is down falls to ambient. That is what makes the alternation grip, graphic, grip legible.
+
+Moved on 2026-11-04 (art pass after the rider's-view camera, ADR-23): at `[2.5, 5.0, 3.0]` the light was behind and right of the new camera, so on High the board's shadow fell up and left, under the far rail and partly off the board. At `[0.9, 6.0, -1.2]`, high and a little behind the board and to the right, the shadow falls just below the board and slightly toward the viewer, and the gap between board and shadow reads as the height of the pop. The shadow camera bounds (`ART.shadowMap`) did not need to change.
 
 ### Camera and controls
 
 | Setting | Value |
 | --- | --- |
-| Camera position | `[1.3, 1.5, 1.9]` |
+| Camera position | `[0, 2.552, 1.3]` (0.3 + 2.6 sin 60, 2.6 cos 60: 60 degrees above the horizon over the heel side, ADR-23; was `[1.3, 1.5, 1.9]`). Only its direction is used; the fit sets the distance |
 | Camera target (OrbitControls `target`) | `[0, 0.3, 0]` |
 | `fov` | `36` (vertical) |
 | `near` / `far` | `0.05` / `30` |
 | `minPolarAngle` | `0.25` rad (about 14 degrees, near top-down) |
 | `maxPolarAngle` | `1.25` rad (about 72 degrees, never below the pad) |
-| `minDistance` | `1.6` |
+| `minDistance` | `1.0` (ADR-18) |
 | `maxDistance` | `4.5` |
 | `enablePan` | `false` |
 | `enableDamping` | `false` (damping needs a continuous loop; the app runs `frameloop="demand"`) |
 | `enableZoom` | `true` |
-| Stage fit | changed in the integration pass (2026-11-04, ADR-11): the camera backs off along its view direction until the whole pad and the board at a 0.6 m pop fit the stage with a 5 percent margin (`scene/cameraFit.ts`); zoom-out may pass `maxDistance` up to 1.25 times the fit |
+| Stage fit | the camera backs off along its view direction until the board's flight volume at a 0.6 m pop fits the stage with a 6 percent margin (`scene/cameraFit.ts`, ADR-18, which replaced the whole-pad fit of ADR-11); zoom-out may pass `maxDistance` up to 1.25 times the fit. See 8.2 |
 | Reduced motion | no easing in either mode; "Reset view" snaps |
 
-The default view is about 27 degrees above the horizon, which keeps the whole flight arc (peak 0.6 m) in front of the pad instead of against the clear color. Distance from target is about 2.6 m, so the 0.81 m board fills roughly a third of the stage width at 16:10.
+The default view is the rider's own view (2026-11-04, ADR-23): 60 degrees above the horizon, straight over the heel side, looking down at the deck and the feet as if standing on the board. The deck runs left to right with the nose on the right and the near rail's wheels just showing under it, and the whole flight arc (peak 0.6 m) rises against the pad. The fitted distance is about 2.27 m on desktop stages, so the 0.81 m board at rest fills a little over half the stage width at 1600 x 1000. It was a 3/4 view about 27 degrees up from the toe side and in front of the nose, which showed the board at a slant and the feet from the side.
 
 ### Pad (ground)
 
+Since the ground pass (2026-11-04, ADR-31) the pad is one 1.6 x 1.2 m bay of a concrete ground that runs off into the fog; the slab, its edge lines and the centre mark mesh below are gone, and the bay's joints and its worn centre mark are baked into the ground's textures. Section 10 has the numbers. The other rows are the pad as it was, kept for the history.
+
 | Part | Geometry | Color | Material |
 | --- | --- | --- | --- |
+| Ground (2026-11-04, replaces the three rows below) | one plane `40.0 x 39.6` m on y `0` (25 x 33 bays of `1.6 x 1.2`): `ground.glb` on Medium and High, an untextured plane of the same size on Low | concrete maps tinted to a mean of `#616466`; Low plane `#616466` | `meshStandardMaterial` with colour, normal and roughness maps (Low plane: roughness `0.93`), metalness `0` |
 | Pad slab | box `1.6 x 0.04 x 1.2` (was `3.6 x 0.04 x 2.8`; cut in the integration pass so the whole pad fits the stage, ADR-11), centre `[0, -0.02, 0]` (top at y 0) | `#616466` (was `#6f6a63`) | `meshStandardMaterial`, roughness `0.95`, metalness `0` |
 | Pad edge line | `lineSegments` on `EdgesGeometry` of the slab | `#3e4143` (was `#46423d`) | `lineBasicMaterial` (width is 1px in WebGL regardless) |
 | Centre mark | optional thin box `0.9 x 0.002 x 0.02` at y `0.001` under the resting board | `#525557` (was `#5e5952`) | roughness `1` |
@@ -77,7 +82,7 @@ The pad is a mid concrete gray on purpose: the black grip reads dark against it 
 
 ### Board (primitives only, group origin at the deck centre)
 
-Since 2026-11-04 this primitive board is the Suspense fallback and the "Low" board detail level (section 7). Its numbers stay as written.
+Since 2026-11-04 this primitive board is the Suspense fallback and the "Low" board detail level (section 7). Its numbers stay as written, except the trucks and wheels, which moved to the realistic board's axle line on 2026-11-04 (ADR-27) so the primitive pivots on the same rear wheels in the pop instead of dipping 3 cm into the pad.
 
 | Part | Geometry | Color | Material |
 | --- | --- | --- | --- |
@@ -87,35 +92,39 @@ Since 2026-11-04 this primitive board is the Suspense fallback and the "Low" boa
 | Deck edge (wood) | the four side faces of the deck box, and the wedge sides | `#cdb68c` | roughness `0.7` |
 | Nose wedge | box `0.13 x 0.012 x 0.205`, pivot at the deck end, rotated `+0.33` rad (about 19 degrees) up around Z | same face colors as the deck | |
 | Tail wedge | box `0.13 x 0.012 x 0.205`, pivot at the deck end, rotated `-0.33` rad up around Z | same face colors as the deck | |
-| Trucks (2) | box `0.15 x 0.03 x 0.06`, at `x = ±0.26`, `y = -0.025` | `#a9adb3` | roughness `0.35`, metalness `0.7` |
-| Wheels (4) | cylinder radius `0.027`, height `0.032`, axis along Z, at `x = ±0.26`, `z = ±0.105`, `y = -0.058` | `#efe9dc` | roughness `0.5`, metalness `0` |
+| Trucks (2) | box `0.06 x 0.03 x 0.124` (hanger across the board to the inner wheel faces; was `0.17` long), at `x = ±0.208` (was `±0.26`), `y = -0.025` | `#a9adb3` | roughness `0.35`, metalness `0.7` |
+| Wheels (4) | cylinder radius `0.027`, height `0.032`, axis along Z, at `x = ±0.208`, `z = ±0.078` (was `±0.26`, `±0.105`), `y = -0.058` | `#efe9dc` | roughness `0.5`, metalness `0` |
 
 Resting pose: wheel bottoms touch y 0, so the group sits at y `0.085`. Flight adds `y(t)` to that. The grip top and the graphic bottom contrast at 5.5:1 against each other, so each half turn of the flip is a clear value change, not just a hue change.
 
 If the implementer uses a six-material array on one box, the index order for `BoxGeometry` is `[+X, -X, +Y, -Y, +Z, -Z]`, so pass `[wood, wood, grip, graphic, wood, wood]`. Share the four materials across the deck and both wedges.
 
-### Ground shadow disc (instead of real shadows)
+### Ground shadow footprint (Medium and Low, instead of real shadows)
+
+Was a 0.36 m disc (24 segments, opacity 0.35 to 0.16, scale 1.0 to 0.72), which from the rider's view 60 degrees up read as a big dark circle around the board. Since 2026-11-04 it is a soft footprint the size of the board.
 
 | Property | Value |
 | --- | --- |
-| Geometry | circle, radius `0.36`, 24 segments, flat on the pad at y `0.002`, rotated `-PI/2` around X |
+| Geometry | ellipse, half extents `0.42` along the board and `0.13` across, 40 segments, flat on the pad at y `0.002`: full strength inside `0.55` of the radius, fading to transparent at the rim (vertex alpha) |
 | Color | `#0e0f10` |
-| Material | `meshBasicMaterial`, `transparent`, `depthWrite false` |
-| Opacity at height 0 | `0.35` |
-| Opacity at height 0.6 m | `0.16` (linear in height) |
+| Material | `meshBasicMaterial`, `vertexColors` (alpha), `transparent`, `depthWrite false` |
+| Opacity at height 0 | `0.5` (the core; the soft rim makes it read lighter than the old disc's 0.35) |
+| Opacity at height 0.6 m | `0.2` (linear in height) |
 | Scale at height 0 | `1.0` |
-| Scale at height 0.6 m | `0.72` (linear in height) |
-| Position | follows the board's X and Z, never its rotation |
+| Scale at height 0.6 m | `0.8` (linear in height) |
+| Turn | the board's yaw (FlightDriver copies the board group's `rotation.y` every frame) |
+| Shape in flight | length times `abs(cos pitch)` (shorter as the nose comes up); width times `lerp(0.5, 1, abs(cos roll))` (narrower on the board's edge) |
+| Position | under the deck centre, X and Z fixed |
 
-Under reduced motion the disc is pose-driven like everything else, so it needs no special case.
+Under reduced motion the footprint is pose-driven like everything else, so it needs no special case.
 
 ### Budget check
 
-Pad 2 (slab, edge lines), centre mark 1, deck 1 (or 3 with separate face boxes), wedges 2, trucks 2, wheels 4, shadow disc 1. That is 13 to 15 meshes, well under the 20 draw-call budget, with four shared materials for the board and one each for pad, trucks, wheels and disc.
+Pad 2 (slab, edge lines), centre mark 1, deck 1 (or 3 with separate face boxes), wedges 2, trucks 2, wheels 4, shadow footprint 1. That is 13 to 15 meshes, well under the 20 draw-call budget, with four shared materials for the board and one each for pad, trucks, wheels and footprint. The motion cues (8.7) add one.
 
 ## 3. Slow motion and timeline
 
-- Slow motion is a `.toggle` with `aria-pressed`, label "Slow motion", state text `.toggle__state` reading `1x` or `0.25x`. On state moves the knob right, tints the pill, and the state text goes accent and bold. Key `s`.
+- Speed (2026-11-04, ADR-21, replaces the slow-motion toggle): a native range in its own `.timeline` well above the timeline, label "Speed" and a mono readout `0.25x`. Stops 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25, 1.5, 2. `aria-valuetext` "0.25 times speed" or "normal speed". Always enabled, including while the board is in the air. Keys: `s` toggles normal and the last slow speed, `[` and `]` step one stop (announced).
 - The timeline is a native range, 0 to 100, in its own inset well (`.timeline`) so it reads as a scrubber and not a fourth input. Label "Timeline" on the left, a mono readout on the right: `42% of flight` or `0.22 s of 0.53 s` (either is fine; keep one). `aria-valuetext` says "42 percent of flight".
 - The timeline thumb is square-cornered (3px radius) where the input thumbs are round, so a playhead looks different from a dial.
 - The timeline is disabled while playing (opacity 0.55, `not-allowed` cursor) and enabled when paused or done. Under reduced motion it is always enabled and is the primary way to watch the trick.
@@ -128,22 +137,24 @@ Tone: short, plain, encouraging but honest. Name the trick, say what happened, g
 
 | Case | `.outcome__name` | `.outcome__detail` |
 | --- | --- | --- |
-| Landed | `Kickflip landed` | `365 deg flip, 0 deg shove, 0.53 s in the air.` |
+| Landed | `Kickflip landed` | `365 deg kickflip, 0 deg shove, 0.53 s in the air.` (since ADR-30 each non-zero total names its direction: `365 deg heelflip, 173 deg frontside shove, ...`) |
 | Under-rotated flip | `Kickflip not landed` | `Under-rotated by 48 deg of flip. More flick or more pop gives it time.` |
 | Over-rotated shove | `Pop shove-it not landed` | `Over-rotated by 31 deg of shove. Ease the scoop a little.` |
 | Both axes off | `Varial flip not landed` | `Under-rotated 40 deg of flip, over-rotated 28 deg of shove.` |
 | Nothing set yet (idle) | `Set the board up and pop` | `Pick a preset or move the sliders, then press Pop or Space.` |
 | Ollie (no rotation, landed) | `Ollie landed` | `No rotation, 0.53 s in the air. Add flick or scoop to try a trick.` |
 
-The live announcer uses full words ("365 degrees of flip") while the card uses `deg` and `s`, because the card is scanned and the announcer is heard.
+The live announcer uses full words ("365 degrees of kickflip") while the card uses `deg` and `s`, because the card is scanned and the announcer is heard.
+
+Since the UI redesign (section 9) the "card" is no longer a box: it is the headline of the Outcome section at the top of the results column, and the copy above is unchanged.
 
 ## 5. How the layout works
 
-`.app` is a three-column CSS grid, `288px minmax(0, 1fr) 320px`, with named areas `setup stage results`, height `100dvh`, 12px gap and padding. The stage cell has `min-width: 0; min-height: 0; overflow: hidden; position: relative` so the canvas can fill it and the perf badge can sit absolutely at its top right. The two side columns are flex columns with `overflow-y: auto` and `min-height: 0`, so each scrolls on its own while the stage stays put. Panels inside are `.panel` cards stacked with a 12px gap: Presets, Inputs, Playback on the left; Outcome, Telemetry, Objectives, Event log on the right. Below 960px the grid becomes one column in the order stage, setup, results; the stage gets `aspect-ratio: 16 / 10` with a 260px minimum, and the columns flow with the page. Tab order is DOM order: presets, sliders, playback, results.
+`.app` is a three-column CSS grid, `272px minmax(0, 1fr) 312px` (`--col-setup`, `--col-results`), with named areas `setup stage results`, height `100dvh`, 8px gap and padding. The stage cell has `min-width: 0; min-height: 0; overflow: hidden; position: relative` so the canvas can fill it and the perf badge can sit absolutely at its top right. Each side column is one surface (`--color-surface`, a hairline border, 8px radius) with `overflow-y: auto` and `min-height: 0`, so each scrolls on its own while the stage stays put. Its `.panel`s are sections of that surface split by a hairline, not cards: Setup (presets), Inputs, Playback, View on the left; Outcome, Foot motion, Objectives, Event log on the right. Both columns fit without scrolling at 1600 x 1000 and at 1280 x 800 (measured 2026-11-04). Below 960px the grid becomes one column in the order stage, setup, results; the stage gets `aspect-ratio: 16 / 10` with a 260px minimum, the columns flow with the page, and each column lays its panels out side by side (`repeat(auto-fill, minmax(280px, 1fr))`, three across at 900px, one below about 600px). Tab order is DOM order: presets, sliders, playback, view, results. Details in section 9.
 
 ## 6. Theme note
 
-Tokens live on `:root` (light) with a full override under `:root[data-theme="dark"]`. The app sets `data-theme="dark"` on `<html>` at startup, persists the choice in `localStorage` under `trick-lab.theme`, and offers a toggle (a `.btn--ghost` inside a panel title, key `t`). `color-scheme` is set per theme so native controls and scrollbars follow. The only scene property that follows the theme is the clear color; lights and materials are fixed. Only `.perf-badge` uses literal colors; everything else goes through tokens, so a third theme is one more attribute block.
+Tokens live on `:root` (light) with a full override under `:root[data-theme="dark"]`. The app sets `data-theme="dark"` on `<html>` at startup, persists the choice in `localStorage` under `trick-lab.theme`, and offers a toggle (the "Light theme" switch in the View panel, key `t`). `color-scheme` is set per theme so native controls and scrollbars follow. The only scene property that follows the theme is the clear color; lights and materials are fixed. Only `.perf-badge` uses literal colors; everything else goes through tokens, so a third theme is one more attribute block.
 
 ## 7. Realistic board (2026-11-04)
 
@@ -334,14 +345,14 @@ Wheel material: map `wheel.png`, base `#ffffff`, roughness `0.55`, metalness `0`
 
 | Setting | Value |
 | --- | --- |
-| Environment | `new RoomEnvironment()` through `PMREMGenerator.fromScene(env, 0.04)`, once, assigned to `scene.environment`; dispose the generator and the texture on unmount. Never assign it to `scene.background`: the clear colour stays the theme colour (`--scene-bg`, unchanged: dark `#1e2124`, light `#d7d3cb`) |
-| `scene.environmentIntensity` | `0.55` (`ART.lights.environment.intensity`) |
-| `ambientLight` | `#dde2e8`, intensity `0.3` |
-| `directionalLight` | `#fff1e0`, intensity `2.2`, position `[2.5, 5.0, 3.0]`, target `[0, 0.3, 0]` |
+| Environment | the procedural outdoor scene of section 10 (`src/scene/outdoorEnvironment.ts`; was `new RoomEnvironment()` until the ground pass, 2026-11-04) through `PMREMGenerator.fromScene(env, 0.04)`, once, assigned to `scene.environment`; the generator and the outdoor scene are freed at once, the texture on unmount. Never assign it to `scene.background`: the clear colour stays the theme colour (`--scene-bg`, unchanged: dark `#1e2124`, light `#d7d3cb`) |
+| `scene.environmentIntensity` | `0.90` (ground pass; was `0.40` with the room, designed 0.55) |
+| `hemisphereLight` | sky `#dde2e6`, ground `#6b6a66`, intensity `0.35` (ground pass; was an `ambientLight` `#dde2e8` at `0.3`) |
+| `directionalLight` | `#fff1e0`, intensity `2.7` (ground pass; was `2.2`), position `[0.9, 6.0, -1.2]` (was `[2.5, 5.0, 3.0]`, moved 2026-11-04, see section 2), target `[0, 0.3, 0]` |
 | `toneMappingExposure` | `1.0`, ACES filmic, sRGB output (unchanged) |
-| Pad | `#616466`, edge `#3e4143`, centre mark `#525557` (lead pass 2026-11-04: darkened from #767a7d so the rendered pad reads mid grey with the environment map at 0.40) |
+| Pad | `#616466`, edge `#3e4143`, centre mark `#525557` (lead pass 2026-11-04: darkened from #767a7d so the rendered pad reads mid grey with the environment map at 0.40). Since the ground pass the concrete's mean colour is still `#616466`; the edge and the mark are in its textures (section 10) |
 
-Intent, in on-screen terms (dark theme, default view): pad mid grey near `#7b7a77`, grip near black with visible grain, wheels near white, aluminium a soft grey with a window-shaped highlight, steel bright on the axle ends. If the picture is too flat or too bright, tune `environmentIntensity` between `0.40` and `0.70` before touching anything else; the key and ambient are already balanced against each other. Under `frameloop="demand"`, call `invalidate()` once after the environment is assigned. The Low detail board uses the same lights and environment, so the two levels share one look.
+Intent, in on-screen terms (dark theme, default view): pad mid grey near `#7b7a77` (measured after the ground pass: `#787978` to `#7e7f7e`), grip near black with visible grain, wheels near white, aluminium a soft grey with a window-shaped highlight, steel bright on the axle ends. If the picture is too flat or too bright, tune `environmentIntensity` between `0.40` and `0.70` before touching anything else; the key and ambient are already balanced against each other. Under `frameloop="demand"`, call `invalidate()` once after the environment is assigned. The Low detail board uses the same lights and environment, so the two levels share one look.
 
 ### 7.7 View panel: Board detail control
 
@@ -366,4 +377,228 @@ A native radio group dressed as a segmented control, placed in the View panel di
 
 Behaviour: `checked` follows the ui slice (`boardDetail: 'high' | 'low'`, default `high`, persisted like the theme under `trick-lab.board-detail`); `onChange` on each input sets it. No keyboard shortcut (the letter keys are taken; arrow keys move within the group natively). Not logged to the event contract.
 
-Styling notes (all in `app.css`, section "Segmented control"): the input is visually hidden but keeps its hit area over the label, so it remains focusable and clickable; the label shows the state with an accent tint, an inset accent border, bold weight and a filled dot glyph (hollow when idle), so the state is never colour alone; focus draws the usual 3 px `--color-focus` ring inside the group (the group clips overflow). Contrast: text on `--color-accent-bg` 13.4:1 light and 12.4:1 dark, accent border on surface 6.1:1 and 6.4:1, focus ring on surface 6.1:1 and 8.8:1. Target size 36 px tall by at least 72 px wide meets WCAG 2.2 target size (minimum). Disabled state (if the GLB fails to load and Low is forced) uses `disabled` on both inputs and shows at 55 percent opacity.
+Styling notes (superseded on 2026-11-04 by section 9, which drops the dot glyph and puts the legend and the options on one row; the markup and behaviour here still hold) (all in `app.css`, section "Segmented control"): the input is visually hidden but keeps its hit area over the label, so it remains focusable and clickable; the label shows the state with an accent tint, an inset accent border, bold weight and a filled dot glyph (hollow when idle), so the state is never colour alone; focus draws the usual 3 px `--color-focus` ring inside the group (the group clips overflow). Contrast: text on `--color-accent-bg` 13.4:1 light and 12.4:1 dark, accent border on surface 6.1:1 and 6.4:1, focus ring on surface 6.1:1 and 8.8:1. Target size 36 px tall by at least 72 px wide meets WCAG 2.2 target size (minimum). Disabled state (if the GLB fails to load and Low is forced) uses `disabled` on both inputs and shows at 55 percent opacity.
+
+## 8. Quality tiers, feet and framing (2026-11-04)
+
+Written by the lead's agent (fable) for the quality pass, per `docs/BRIEF-FEET.md`. Section 7.7's "Board detail" control is replaced by the "Quality" control in 8.4; everything else in sections 2 and 7 still holds and is the Medium and Low look.
+
+### 8.1 Renderer per tier (`ART.quality`)
+
+| Tier | antialias | dpr | shadows | anisotropy | powerPreference | Board | Shoes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| High | true (MSAA) | `[1, 2]` | PCF soft, 2048 px map | 16 | `high-performance` | `board-high.glb` | `shoes.glb` |
+| Medium | true | `[1, 1.5]` | none (soft footprint) | 4 | `low-power` | `board.glb` | primitive |
+| Low | false | `[1, 1.5]` | none (soft footprint) | 1 | `low-power` | primitive | primitive |
+
+Shadow map (`ART.shadowMap`): orthographic bounds +-1.0 m around the key light's target, near 1.0, far 12.0, bias -0.0004, normal bias 0.015. The key, ambient and environment numbers in 7.6 are unchanged; the shadow adds the contact under the wheels that the disc only suggested. The pad's centre mark now floats 1.5 mm above the slab (`mark.y` 0.0025) so it no longer z-fights.
+
+### 8.2 Camera framing (`ART.camera.fit`, ADR-18)
+
+Fit box: `reach` 0.4195 (nose tip plus 1 cm), `bottom` 0 (the pad surface under the board), `top` 0.81425 (rest height plus a 0.6 m pop plus the 0.13 m half extent). Margin 6 percent. `minDistance` 1.0 m. The pad is no longer part of the fit.
+
+Rider's view (2026-11-04, ADR-23): the home direction is from `[0, 2.552, 1.3]` to `[0, 0.3, 0]`, 60 degrees up over the heel side. From there the box's depth in Z is its height on screen, so on stages wider than about 0.89 the height binds and the distance is 2.27 m whatever the aspect (2.31 m on the 1600 x 1000 stage from the old 3/4 view); on the 1024 x 768 stage (aspect 0.49) the width binds at 3.43 m (was 4.19 m). The fit box and margin did not change; a 0.6 m 360 flip at its peak stays in frame at both sizes.
+
+### 8.3 Shoes
+
+One right shoe in `shoes.glb`, every number in `src/asset/shoeSpec.ts`. Size `0.285 x 0.105`, sole height `0.024` (equal to `FOOT` in `src/sim/feet.ts`). Colours (sRGB): sole `#e9e5db` with a foxing stripe `#cfc9bb` on the side wall between 55 and 80 percent of the sole height, roughness 0.85; upper `#23262c` canvas (seeded weave, period 4 px, jitter 6), toe cap `#2e3238` from 80 percent of the length, tongue `#1d2025`, heel tab `#3a3e45`, eyelets `#8d9096` (six per side), roughness 0.9; laces `#f1eee7`, radius 2.2 mm, six crossings, roughness 0.8. Textures: `shoe-upper.png` 512 x 512, `shoe-sole.png` 16 x 64, both mipmapped. The primitive shoe (`ART.feet`): a sole slab `0.285 x 0.024 x 0.105` in the sole colour and an upper box `0.245 x 0.07 x 0.081` in the upper colour, set 2 cm back from the toe.
+
+Stance and motion numbers are `STANCE` and `MOTION` in `src/sim/feet.ts` (ADR-17): front foot across the board at x 0.10 at flick 0, turning 50 degrees toward the nose and moving 5 cm forward and 3.5 cm to the heel side by flick 2 rev/s; back foot across the tail pocket at x -0.30, toes 3 cm toward the toe side by scoop 2 rev/s; slide 10 cm, flick 15 cm per unit of normalised flick with 25 degrees of toe dip, scoop drag 12 cm per unit of normalised scoop, hover 12 cm, bail to z -0.26 (front) and -0.24 (back) on the pad.
+
+Stance side (2026-11-04, ADR-24): the rider is goofy, the regular numbers mirrored across z = 0. Nose +X on the rider's right, toe side -Z, heel side +Z, so the bail goes to z +0.26 and +0.24. The front foot is the right shoe as built (unmirrored) and the back foot the mirrored left one; in the rider's view from the heel side the right-hand shoe is the front foot, the one that slides up and flicks.
+
+Mirror setups (2026-11-04, ADR-30). Flick and scoop are signed, so the feet also set up for a heelflip and a frontside scoop (numbers in `STANCE` and `MOTION`, from RESEARCH-FEET.md 1.4 and 1.6 with z mirrored into the goofy frame). Heelflip: the front foot stays across the board just behind the bolts, the ball of the foot on the toe-side rail (centre z -0.033 since ADR-34, was -0.02) with the toes hanging 7 cm over it and the heel at the heel-side rail; it slides 8 cm, then the heel sweeps forward and across the deck to the toe-side pocket of the nose and off it (27 cm, 1.4 times the kickflip's flick) while the toes turn forward and out along the kick (88 to about 66 degrees), toes up and heel down (20 degrees at the peak of the kick) instead of rolling onto the outside edge: heel last (ADR-34). Frontside scoop: the back foot sits a little further back and toward the heel side of the tail (x -0.33, z +0.04 at the preset), square across, and slices the tail forward toward the toe side by the same 10 cm per rev/s as the backside scoop. Hardflip and inward heelflip compose the two; since ADR-35 the hardflip's front foot is set a little more toward the nose (about 37 degrees) and kicks straight forward off the nose (lean (0.90, 0.30, 0.30), held for harder frontside scoops) instead of the varial flip's lean out to the heel side, while the board comes round frontside under it. Copy in `#scene-description`: "Front foot across the board just behind the front bolts, toes hanging over the toe-side edge for a heelflip" and "back foot on its ball toward the heel side of the tail, to scoop frontside". Step copy (8.5): "Front foot slides up the grip toward the nose, 8 cm." / "Front foot kicks forward and out off the toe-side corner of the nose, heel last, 27 cm." (under 11 cm: "Front foot kicks off the toe-side corner of the nose, but only 6 cm: it barely reaches the rail.") / "Back foot slices the tail forward in front of the toes, 9 cm toward the toe side." The bail is unchanged: both feet step off to the heel side. The stance note names both directions: "Flick rolls the grip toward the heel side for a kickflip, toward the toe side for a heelflip; scoop swings the tail behind the heels for backside, counterclockwise seen from above, and in front of the toes for frontside, clockwise." (regular: clockwise for backside, counterclockwise for frontside).
+
+### 8.4 View panel: Quality control and Show feet
+
+The segmented control from 7.7 with three options and the group name "Quality". Markup, exactly:
+
+```html
+<fieldset class="segmented" aria-describedby="quality-hint">
+  <legend class="segmented__legend">Quality</legend>
+  <div class="segmented__options">
+    <label class="segmented__option">
+      <input class="segmented__input" type="radio" name="quality" value="high" />
+      <span class="segmented__label">High</span>
+    </label>
+    <label class="segmented__option">
+      <input class="segmented__input" type="radio" name="quality" value="medium" checked />
+      <span class="segmented__label">Medium</span>
+    </label>
+    <label class="segmented__option">
+      <input class="segmented__input" type="radio" name="quality" value="low" />
+      <span class="segmented__label">Low</span>
+    </label>
+  </div>
+  <p class="segmented__hint" id="quality-hint">Picked for this device. High adds shoes, shadows and a finer board. Low is the simple board, fastest on Chromebooks.</p>
+</fieldset>
+```
+
+The hint's leading "Picked for this device. " appears only while the tier is the automatic pick. If a model fails to load, High and Medium are `disabled` and Low is checked. "Show feet" is a `.toggle` switch (a button with `aria-pressed`, visible label "Feet") in the View panel's `.view-panel__toggles` grid (section 9). Announcements: "Quality high: detailed board, shoes and shadows.", "Quality medium: detailed board, no shadows.", "Quality low: simple board. Fastest.", "Feet shown.", "Feet hidden.".
+
+### 8.5 Foot trails and the Foot motion panel (2026-11-04, ADR-22)
+
+Foot trails are the route each shoe takes through the trick, drawn in the scene. They are hidden by default so a student switches them on when they want them: "Show foot trails" is a `.toggle` switch (visible label "Foot trails") in the View panel's `.view-panel__toggles` grid, after Feet, persisted under `trick-lab.foot-trails` (only a saved "on" shows them). Announcements: "Foot trails shown.", "Foot trails hidden.". The identifiers (`footPathsVisible`, `ART.footPaths`, `FootPaths.tsx`) still say paths; renaming them is a follow-up.
+
+Scene trails (`ART.footPaths`): front foot `#56b4e9`, back foot `#f0e442` (Okabe-Ito sky blue and yellow, distinct under the common colour-vision deficiencies and from the orange deck graphic), the same in both themes and mirrored as `--path-front` and `--path-back` in tokens.css (tested). Tube radius 4.5 mm, 6 sides, traced 4 cm above the sole centre so it leaves from inside the shoe; arrowheads 12 x 32 mm every 0.08 of the airtime from 0.04 wherever the foot moves faster than 0.12 m per unit of progress. Travelled part opaque, the rest at opacity 0.3, the last 0.03 of the airtime behind the foot lifted 45 percent toward white. Unlit and not tone mapped, depth tested, no depth write. With the goofy rider (ADR-24), seen from the heel side the blue front trail is the right-hand one and leaves the nose toward the viewer; the yellow back trail is on the left, on the tail.
+
+DOM: a "Foot motion" panel in the results column after the Outcome section. A legend (`.foot-steps__legend`, `.foot-steps__key`, `.foot-steps__swatch--front` and `--back`) in the panel header, shown as a dot and "Front" or "Back", read as "Front foot, blue trail." and "Back foot, yellow trail."; and an ordered list `.foot-steps` of `.foot-step.foot-step--front|back|both`, each with `.foot-step__who` ("Front foot", "Back foot", "Both feet") and `.foot-step__text` on one line. Since the redesign (section 9) a step is a numbered row with a small dot in its foot's trail colour before the name, never a left bar; the words carry the meaning too. Steps under the playhead get `.foot-step--now`: a filled step number and the surface-2 row tint, plus a visually hidden ", now". Not a live region.
+
+Step copy (from `footSteps` in format.ts, numbers from the feet model): "Back foot snaps the tail down off the ball of the foot: the pop." / "Back foot scoops the tail back behind the heels, 9 cm toward the heel side." (", a light nudge" under 6 cm, ", as hard as it goes" at the cap) / "Front foot drags up the grip on its outside edge toward the nose, 10 cm." / "Front foot flicks forward, out and up off the heel-side corner of the nose, 19 cm." or, under 8 cm, "... but only 4 cm: it barely reaches the rail." / "Both feet lift 8 cm clear while the board turns under them." or, for an ollie, "Both feet stay on the board as it levels out and rises with them." / "Both feet come back over the bolts and land on the grip." or "The board does not come round in time: both feet step off to the heel side, a bail."
+
+The 8.3 stance paragraph is superseded by ADR-20: the numbers are `STANCE` and `MOTION` in `src/sim/feet.ts`, from `docs/RESEARCH-FEET.md` 5.1. The sole heights are no longer fixed (ADR-29, 2026-11-04): each shoe sits 2 mm above whatever part of the board is under it in the board's pose at that moment (the rails and the concave at rest, the tail kick under the back foot, the rail or the wheels of a spinning deck), on either board model, and never below the pad. The hover stays at 12 cm.
+
+### 8.6 Stance control (2026-11-04)
+
+The segmented control from 7.7 with two options and the group name "Stance", in the View panel above Quality. Goofy is the default; the choice is persisted under `trick-lab.stance`, never logged, not cleared by Reset and not in the export. No keyboard shortcut. Markup, exactly:
+
+```html
+<fieldset class="segmented" aria-describedby="stance-hint">
+  <legend class="segmented__legend">Stance</legend>
+  <div class="segmented__options">
+    <label class="segmented__option">
+      <input class="segmented__input" type="radio" name="stance" value="goofy" checked />
+      <span class="segmented__label">Goofy</span>
+    </label>
+    <label class="segmented__option">
+      <input class="segmented__input" type="radio" name="stance" value="regular" />
+      <span class="segmented__label">Regular</span>
+    </label>
+  </div>
+  <p class="segmented__hint" id="stance-hint">Goofy: right foot forward, nose on the right. Regular: left foot forward, nose on the left.</p>
+</fieldset>
+```
+
+It uses the existing `.segmented*` styles, no new CSS. Announcements: "Goofy stance: right foot forward, nose on the right." and "Regular stance: left foot forward, nose on the left.".
+
+What changes in the scene (ADR-25): the camera, lights and pad stay where they are, so the view is still from the rider's heel side. Regular turns the board 180 degrees about Y on the pad (nose on the left of the stage) and mirrors both feet along the board's length: the front foot is the left shoe, on the left, toes still away from the camera; the blue front trail is the left-hand one and still leaves the nose toward the viewer. A kickflip still rolls the grip toward the camera first and a bail still steps toward it; a backside shove-it still swings the tail toward the camera, which is now clockwise seen from above. Switching while a trick is frozen or landed swaps the board and feet in one frame. `#scene-description` names the stance: "Goofy stance, nose to the right, heel side toward the camera. ..." or "Regular stance, nose to the left, heel side toward the camera. Flick rolls the grip toward the heel side; scoop swings the tail toward the heels, clockwise seen from above."
+
+### 8.7 Motion cues (2026-11-04, ADR-26)
+
+Flat arrows on the grip that show how each shoe will move against the deck for the current inputs, before the pop. They lie on the deck (a child of the board group, so they ride with it), 3 mm above whichever grip is higher at that point (the realistic board's kicks and concave, or the primitive's flat deck), and are hidden by the shoes where they pass under them. Shown by default; the View panel's "Show motion cues" switch hides them (`motionCuesVisible`, persisted under `trick-lab.motion-cues`).
+
+| Cue | What it shows | Colour |
+| --- | --- | --- |
+| Front arrow | The front shoe's ball (6 cm ahead of the sole centre toward the toes) through its slide toward the nose and, for a flick, out off the heel-side corner of the nose; the arrowhead is where the shoe leaves. Since ADR-33 the ball offset follows the shoe's own yaw at each sample, so a kickflip's arrow bends out through the pocket as the toes turn toward the heel side. An ollie or a pop shove-it is a straight slide toward the nose; a kickflip bends out toward the heel side; a varial leans forward, a 360 flip out | front `#56b4e9` |
+| Press outline | A rounded outline 14 mm outside the back sole on the tail pocket: where the back foot presses for the pop | back `#f0e442` |
+| Scoop arrow | Only with scoop: an arc about the board's centre (the shove axis), 3.5 cm in front of the back shoe, sweeping toward the heel side by the scoop's sideways distance (9 cm for the pop shove-it preset, 18 cm for the 360 flip) | back `#f0e442` |
+
+Numbers (`ART.motionCues`): ribbon 14 mm wide, arrowhead 42 mm long and 44 mm wide, press outline 9 mm wide, 32 points per arrow, opacity 0.95, unlit and not tone mapped (so the colours match the trails and the Foot motion legend), no depth write, polygon offset toward the camera. One draw call for all of it.
+
+Fade: full before the pop; with a trick in the air they fade out over the first 12 percent of the airtime and stay hidden through the landing (the deck has turned by then, so an arrow riding it would point the wrong way). Scrubbing back to the start or Reset brings them back. With the goofy rider seen from the heel side the blue arrow is on the right and its flick bends toward the viewer; for regular (8.6) the cues mirror with the feet, blue on the left, still bending toward the viewer, and the scoop still sweeps toward the viewer.
+
+Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no new geometry. A heelflip's front arrow bends away from the camera, off the toe-side corner of the nose; a frontside scoop's arc sweeps toward the toe side, still on the nose side of the back shoe so the shoe does not hide it, by the same length as the backside one (9 cm for the frontside shove-it preset). A hardflip shows the kickflip front arrow with the frontside arc.
+
+## 9. UI redesign (2026-11-04)
+
+Written by the design agent (ADR-28). The owner found the columns bulky, without hierarchy, and full of template tells, such as a Foot motion step drawn as a card with a yellow left border. This pass keeps every control, accessible name, announcement and the token palette, and changes how the columns look and are grouped. The `--scene-bg` values are unchanged.
+
+### 9.1 What was removed
+
+- Left-border accents everywhere: the 4 px preset bar, the 5 px outcome bar, the 3 to 6 px Foot motion bars.
+- Uniform cards: every panel was a rounded box with the same padding, border and shadow. Panel shadows, the stage shadow, the dialog's 4 px accent top border and the 2 px title underlines are gone.
+- Inset wells around Speed and Timeline, the tinted box around each telemetry value, and the green row tint on done objectives.
+- A wall of equal orange ghost buttons in the View panel (six of them in a wrapping row).
+- Duplicate results: the telemetry "Outcome" and "Trick" rows repeated the headline.
+- The global `:focus-visible` rule set `border-radius`, so focus changed an element's corners; the ring now follows the element.
+- The inline `style={{ display: 'contents' }}` in ShortcutsDialog (now `.shortcuts dl > div` in app.css).
+
+### 9.2 Hierarchy
+
+1. The stage. The columns are narrower (272 and 312 px, were 288 and 320) and quieter: one surface each, hairline borders, no shadows.
+2. The outcome headline (18 px bold, the largest text in the columns, green or red with a filled tick or cross) and the Pop button (the only filled button in the app, taking the rest of its row).
+3. Values: slider readouts and telemetry numbers in mono with tabular figures.
+4. Labels (13 px medium) and section titles (12 px bold, muted, sentence case). Titles are quieter than labels on purpose: they mark sections, and the controls carry the content.
+5. Hints, notes and the event log (12 px, muted). The log is the lowest: a capped, scrolling mono well with Download in its header.
+
+### 9.3 Layout
+
+Each side column is a `--color-surface` surface with a 1 px `--color-line` border and an 8 px radius. Its panels are sections with 10 px by 14 px padding, each with a 1 px top hairline pulled up 1 px so the column's clip hides the first one. A panel whose header holds actions or a legend wraps its title in `.panel__head` (title left, the rest right). Both columns fit without scrolling at 1600 x 1000 and at 1280 x 800 (setup and results both 782 of 782 px at the smaller size; before, they were 1353 and 1396 px against 976 at the larger). At 960 px and below the columns stack under the stage and each lays its panels out in a grid, `repeat(auto-fill, minmax(280px, 1fr))`, so a 900 px window shows Setup, Inputs and Playback side by side instead of one long column.
+
+### 9.4 Type and numbers
+
+Tokens: `--text-xs` 12 px (titles, hints, keys, units, log), `--text-sm` 13 px (body, labels, controls; the body size), `--text-md` 15 px (telemetry values), `--text-lg` 18 px (the outcome headline and the dialog title). `--text-xl` and `--text-2xl` are removed. `--leading-snug` 1.4 is the body leading. Every number uses `font-variant-numeric: tabular-nums`; slider values, the speed and timeline readouts, telemetry values and the log are mono.
+
+### 9.5 Setup controls
+
+- Presets: a 2 by 2 grid of 32 px chips, label left and key right. Active: accent tint, a 2 px accent border (1 px border plus a 1 px inset), bold, and the key filled with the accent.
+- Sliders: label and value on one row, the track right under them. The input box is a 24 px hit area (`--range-hit`) with a 4 px track and a 16 px thumb; focus rings the thumb (a 2 px surface gap, then 3 px of `--color-focus`). The timeline thumb stays square-cornered.
+- Playback: Pop (`.btn--primary`, 36 px, grows to fill the row), then Pause (`.btn`, outlined, neutral) and Reset (`.btn.btn--danger`, outlined, red text, red tint on hover). Speed and Timeline follow as plain rows like the sliders.
+- View: the header holds Reset view and Shortcuts as `.btn.btn--ghost.btn--sm` in `.view-panel__actions`. Under it is `.view-panel__toggles`, a two-column grid of `.toggle` switches: Feet, Foot trails, Motion cues, Light theme, Perf badge. A switch is a button with `aria-pressed` drawn with a 26 x 16 track (`::before`) and a 10 px knob (`::after`) that moves right when on (position, not colour alone). Its accessible name contains the visible label ("Show feet", "Show foot trails", "Show motion cues"; WCAG 2.5.3). Then come Stance and Quality.
+- Segmented (Stance, Quality): the legend floats left (60 px) so legend and options form one 30 px row; the options share the width inside a 1 px outlined track with 2 px padding. Checked: accent tint, a 1 px inset accent border, bold (the dot glyph is gone). Focus: a 2 px `--color-focus` ring inside the label. The hint sits under the row in 12 px muted text.
+
+Show motion cues (added 2026-11-04): wired to `motionCuesVisible` and `toggleMotionCues` in the ui slice (default on, persisted under `trick-lab.motion-cues`, announced as "Motion cues shown." or "Motion cues hidden.", never logged). It is not in the Shortcuts dialog, which lists only keyed actions; the other scene toggles have no key either.
+
+Signed rate sliders (2026-11-04, ADR-30): Flick and Scoop run from -3 to 3 rev/s, centred on 0. The readout is the magnitude in the mono value, then the unit and the direction word in the small muted unit type: "1.9 rev/s kickflip", "1.9 rev/s heelflip", "0.9 rev/s backside", "0.9 rev/s frontside", and "0.0 rev/s" with no word. aria-valuetext is "1.9 revolutions per second, heelflip"; the visually hidden help adds "right for a kickflip, left for a heelflip" (Flick) and "right for backside, left for frontside" (Scoop). A 2 x 12 px tick in `--color-muted` marks the centre of each signed track (`.field__range[min^="-"]`, no new class; the thumb covers it at 0), and Firefox's fill from the minimum is dropped on those two tracks, since a bar from -3 would read as an amount. The presets grid is still two columns, now four rows of chips (keys 1 to 8). Measured 2026-11-04: at 1600 x 1000 both columns still fit (setup about 880 of 982 px, results 982 of 982 with a landed hardflip); at 1280 x 800 they now scroll inside the column (setup about 880, results about 980, of 782 px), so the 9.3 fit at that size no longer holds (ADR-30).
+
+### 9.6 Results
+
+- Outcome (the section was titled "Telemetry"): the headline `.outcome__name` and `.outcome__detail` (copy in section 4), then `.telemetry`, a four-column strip under a hairline: Airtime, Peak, Flip, Shove (labels shortened from "Peak height", "Flip rotation", "Shove rotation"). Before a trick a value reads "not yet" in muted sans (`.telemetry__v--none`). When a trick is not landed, the axis that missed gets `.telemetry__v--bad`: red, bold, a leading "!" and a visually hidden ", off target".
+- Foot motion: the legend moves into the header as two dots, "Front" and "Back" (read as "Front foot, blue trail." and "Back foot, yellow trail."). The steps are a plain numbered list (a CSS counter). Each row has the step number, a 9 px dot in the foot's trail colour (for both feet, a hard half-and-half dot), the foot's name in semibold, then the sentence on the same line. The step under the playhead gets a filled number (surface-coloured text on a `--color-text` disc) and the surface-2 row tint. There is no weight change, so rows never reflow while the board is in the air. The bail sentence already names the feet, so its foot name is hidden on screen and only read.
+- Objectives: the count is `.panel__count` in the title ("Objectives 1 of 4"). Each row has a 16 px box, filled green with a tick when done, and 3 px of padding. The bonus line is a `.panel__note`.
+- Event log: the count is in the title and Download JSON (`.btn--ghost.btn--sm`) is in the header. A fixed-layout table (time 48 px, type 15ch, payload the rest), 12 px mono, capped at 168 px, focusable so it scrolls by keyboard. One line per event: type and payload clip with an ellipsis and carry the full text in the cell's `title`; the download has everything.
+
+### 9.7 Classes
+
+Added (all in the BRIEF.md contract block): `.panel__head`, `.panel__count`, `.panel__note`, `.btn--sm`, `.view-panel__toggles`, `.telemetry__v--none`.
+Used again: `.toggle` and `.toggle--on` (the View switches), `.view-panel__actions` (the View header actions).
+Removed: `.telemetry__v--good` (no telemetry value is marked good now that the headline says landed) and `.theme-toggle` (never used). `.toggle__state` is still styled and listed in CLAUDE.md, but no component uses it.
+
+Added 2026-11-04 (ADR-30): `.telemetry__dir`, the direction word of a signed total in the results strip, its own line under the number in the field unit's type (12 px sans, normal weight, muted): "365°" over "heelflip", "173°" over "frontside", nothing at 0. The card reads "365 deg heelflip, 173 deg frontside shove, 0.53 s in the air."
+
+### 9.8 Contrast and target sizes
+
+Ratios are WCAG 2.2, light then dark, from the token table in tokens.css. Section titles and hints (muted on surface): 6.01 and 7.09. Switch off: the knob (muted on surface-2) 4.83 and 6.11; the track border (line-strong on surface) 4.06 and 4.21. Switch on: the accent track on surface 6.12 and 6.42; the knob (accent-fg on accent) 6.56 and 7.39. Ghost buttons (accent on surface): 6.12 and 6.42. Outcome name: ok on surface 5.90 and 9.14, bad on surface 6.41 and 7.34. Its glyph: ok-fg on ok 6.32 and 9.41, bad-fg on bad 6.87 and 8.13. The missed value (bad on surface): 6.41 and 7.34. The Foot motion "now" number (surface on text): 15.59 and 13.53. The segmented focus ring on accent-bg: 5.26 and 8.08. The trail dots are decorative (the words carry the foot) and have a line-strong ring so the yellow reads on the light surface. Targets (WCAG 2.2 target size, minimum, 24 px): presets 32 px tall; Pop, Pause and Reset 36 px; switches and header buttons 28 px; segmented options 24 px; slider hit areas 24 px.
+
+## 10. Realistic ground and sky (2026-11-04)
+
+ADR-31. The board used to sit on a 1.6 x 1.2 m grey slab with black edge lines and a centre mark, in a void of the clear colour, lit by a key, an ambient and an indoor room reflection. Now it rests centred in one slab bay of a concrete ground that fades into the background, under a sky. No new dependency, no post-processing, no extra render pass. The ground is one draw call where the pad was three (slab, lines, mark).
+
+### 10.1 Ground asset (`public/models/ground.glb`, numbers in `src/asset/groundSpec.ts`)
+
+| Property | Value |
+| --- | --- |
+| Plane | one quad on y `0`, `40.0 x 39.6` m (25 x 33 bays, both odd, so a bay centre is under the origin and the plane's edges are on joints), 2 triangles, UVs 0 to 1 repeated 25 x 33 times by `KHR_texture_transform` |
+| Bay (one texture tile) | `1.6 x 1.2` m, the old pad |
+| Colour map | `1024 x 1024`, one grey channel around `150`, tinted by the base colour factor so the mean lands on `#616466`; seed `20261131` |
+| Tonal variation | value-noise fBm: `0.4` m cells, 3 octaves, +-9 levels; mottle `0.05` m, 2 octaves, +-4; grain `3.5` mm, +-2.5 |
+| Aggregate | 9,000 specks, radius 0.8 to 2.6 mm, +-14 levels, slightly smoother; those over 2 mm stand `0.05` mm proud |
+| Pits | 1,400, radius 0.6 to 1.8 mm, `0.6` mm deep, -18 levels |
+| Hairline cracks | 5 random walks of 0.18 to 0.5 m, `1.2` mm wide, `0.4` mm deep, -16 levels, stopping at the joint |
+| Expansion joint | along every bay edge: `12` mm wide, `4` mm deep, `3` mm rounded shoulders, -42 levels, roughness `1.0` |
+| Painted centre mark | `0.9 x 0.02` m at the bay centre (where the mark mesh was), +8 levels, worn to a quarter where the wear noise is low, edges ragged by 1.5 mm, roughness `0.8` |
+| Wheel marks | under the four wheels of the resting board (x `+-0.208`, z `+-0.078`): ellipses `35 x 22` mm, -7 levels, roughness -0.12 |
+| Roughness map | `256 x 256`, one grey channel (glTF green is roughness; blue is metalness, times a metallic factor of 0): base `0.93`, worn patches down to `0.78`, `-0.06` around the bay centre, 3,000 dust specks toward `1.0` |
+| Normal map | `1024 x 1024` RGB, tangent space (glTF convention, as the high grip), from the height field in metres, scale `1.0` |
+| Budget | 500 KB, 1 draw call, 64 triangles, 3 textures at 1024 px. Measured: 434.9 KB (colour 277.8 KB, normal 129.6 KB, roughness 24.4 KB), 1, 2, 3; about 11 MB of GPU memory with mips |
+
+Fine per-pixel grain is what PNG cannot compress, so the grain is smooth noise a few texels across, only the larger stones have height, and the roughness map is 256 px. A first cut with grain in the height field had a 775 KB normal map on its own.
+
+### 10.2 Scene (`ART` in `src/scene/artDirection.ts`)
+
+| Property | Value |
+| --- | --- |
+| Ground on Medium and High | `ground.glb` (lazy chunk sharing the GLTF loader, preloaded at once, `dispose={null}`), receives the shadow on High |
+| Ground on Low, and the fallback | an untextured `PlaneGeometry` of the same size in `resources.ts`, `#616466`, roughness `0.93`, one draw call. A ground that fails to load falls back to it without marking the board as failed |
+| Ground anisotropy (`ART.quality[tier].groundAnisotropy`) | High `16`, Medium `8` (the board's Medium is 4; the ground is seen at grazing angles), Low `1` (unused) |
+| Fog | `Fog(clearColor[theme], 5.5, 15)`; the colour equals `--scene-bg` and switches with the theme. Near: the farthest flight-box corner from the farthest camera is 5.3 m. Far: the nearest visible point of the plane edge from the lowest orbit is 16.3 m in the worst case (both tested) |
+| Environment scene | sky dome radius `10`, 48 x 32 segments, zenith `#8d9cae`, horizon `#d0d2d1`, gradient exponent `0.55`; concrete below `#6b6a66` at `0.55`, blended over `0.06` of the radius under the horizon; sun disc `#fff1e0` at `40`, angular radius `0.05` rad, in the key light's direction. PMREM blur `0.04`, `environmentIntensity` `0.90` |
+| Hemisphere light | sky `#dde2e6`, ground `#6b6a66`, `0.35` |
+| Key light | `#fff1e0`, `2.7`, position and target unchanged |
+| Foot trails | no fog (a ShaderMaterial's default); they stay within a metre of the board |
+
+Themes: only the clear colour and the fog colour change. The light theme reads as daylight concrete going to haze, the dark theme as a pool of floodlit concrete fading to night.
+
+### 10.3 Measured on screen (dark theme, home view, `readPixels` over 60 x 50 px blocks)
+
+| Target | Value |
+| --- | --- |
+| Lit ground (target `#7b7a77`) | `#787978` to `#7e7f7e` |
+| Grip | `#2b2929` |
+| Wheel (shaded side) | `#94948f` |
+| High shadow on the ground, mid kickflip | `#40474e` (a first, bluer sky with a stronger key gave `#242b33`, a near-black navy) |
+| Trucks | the aluminium reads as metal with a soft sky-grey highlight (`#bbb8b0` on the hanger, mid kickflip, High) |
+
+The Medium and Low footprint ellipse (section 2) reads correctly on the textured ground and was not changed.
+
+Screenshots: `docs/screenshots/13-ground-high-dark.png`, `14-ground-light.png`, `15-ground-low.png`.

@@ -7,7 +7,10 @@ export function Objectives() {
   return (
     <section className="panel" aria-labelledby="objectives-heading">
       <h2 id="objectives-heading" className="panel__title">
-        Objectives {completed.length} of {OBJECTIVES.length}
+        Objectives{' '}
+        <span className="panel__count">
+          {completed.length} of {OBJECTIVES.length}
+        </span>
       </h2>
       <ol className="objectives">
         {OBJECTIVES.map((o) => {
@@ -23,7 +26,7 @@ export function Objectives() {
           );
         })}
       </ol>
-      <p>Bonus (not scored): land any preset at pop 0.20 m or lower by raising flick or scoop yourself.</p>
+      <p className="panel__note">Bonus (not scored): land any preset at pop 0.20 m or lower by raising flick or scoop yourself.</p>
     </section>
   );
 }

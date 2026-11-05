@@ -2,7 +2,7 @@
 // 19 nested outline rings that wrap from the top spine over the edge to the
 // bottom spine. Pure math plus a three BufferGeometry at the end (no React).
 import { BufferAttribute, BufferGeometry } from 'three';
-import { CONCAVE, DECK, KICK, OUTLINE, RINGS, type DeckGroup } from './spec';
+import { CONCAVE, DECK, DECK_DETAIL, KICK, OUTLINE, RINGS, type DeckGroup, type DetailLevel } from './spec';
 
 const O = OUTLINE;
 
@@ -74,12 +74,12 @@ export function surfaceNormal(x: number, z: number): [number, number, number] {
 }
 
 /**
- * The x positions of one side of a ring (73 points, tail tip to nose tip):
- * 24 sine-spaced tail intervals, 24 uniform middle intervals, 24 sine-spaced
- * nose intervals, so the rounded ends get the density.
+ * The x positions of one side of a ring (3n + 1 points, tail tip to nose tip):
+ * n sine-spaced tail intervals, n uniform middle intervals, n sine-spaced
+ * nose intervals, so the rounded ends get the density. n is 24 on medium
+ * (73 points) and 48 on high (145).
  */
-export function ringXs(d: number): number[] {
-  const n = O.intervals;
+export function ringXs(d: number, n: number = O.intervals): number[] {
   const xs: number[] = [];
   for (let i = n; i >= 0; i--) xs.push(O.tail.join - (O.tail.length - d) * Math.sin((i * Math.PI) / (2 * n)));
   const step = (O.nose.join - O.tail.join) / n;
@@ -88,9 +88,12 @@ export function ringXs(d: number): number[] {
   return xs;
 }
 
-/** Points per side (tips included) and per closed ring. */
-export const SIDE_POINTS = 3 * OUTLINE.intervals + 1;
-export const RING_POINTS = 2 * SIDE_POINTS - 2;
+/** Points per side (tips included) and per closed ring, for n intervals per region. */
+export const sidePoints = (n: number) => 3 * n + 1;
+export const ringPoints = (n: number) => 2 * sidePoints(n) - 2;
+/** The medium counts (73 and 144). */
+export const SIDE_POINTS = sidePoints(OUTLINE.intervals);
+export const RING_POINTS = ringPoints(OUTLINE.intervals);
 
 export interface DeckVertex {
   /** Plan position before the height offset (drives the UVs). */
@@ -100,10 +103,10 @@ export interface DeckVertex {
   position: [number, number, number];
 }
 
-/** Plan point p (0 to RING_POINTS - 1) of a ring: +z side tail to nose, then -z side nose to tail. */
-function planPoint(xs: number[], ring: (typeof RINGS)[number], p: number): [number, number] {
-  const mirrored = p >= SIDE_POINTS;
-  const i = mirrored ? RING_POINTS - p : p;
+/** Plan point p (0 to ringPoints - 1) of a ring: +z side tail to nose, then -z side nose to tail. */
+function planPoint(xs: number[], ring: (typeof RINGS)[number], p: number, n: number): [number, number] {
+  const mirrored = p >= sidePoints(n);
+  const i = mirrored ? ringPoints(n) - p : p;
   const x = xs[i]!;
   const w = ring.spine ? 0 : halfWidth(x, ring.d);
   return [x, mirrored ? -w : w];
@@ -132,23 +135,26 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
  * -z sides of a spine are the same points), and the few triangles that are
  * still zero-area at the spine tips are dropped and counted.
  */
-export function buildDeck(): DeckBuild {
+export function buildDeck(level: DetailLevel = 'medium'): DeckBuild {
+  const { intervals: n, rings } = DECK_DETAIL[level];
+  const RP = ringPoints(n);
+  const SP = sidePoints(n);
   const verts: DeckVertex[] = [];
   /** ids[ring][p] = index into verts. */
   const ids: number[][] = [];
-  for (const ring of RINGS) {
-    const xs = ringXs(ring.d);
+  for (const ring of rings) {
+    const xs = ringXs(ring.d, n);
     const row: number[] = [];
-    for (let p = 0; p < RING_POINTS; p++) {
-      if (ring.spine && p >= SIDE_POINTS) {
-        row.push(row[RING_POINTS - p]!);
+    for (let p = 0; p < RP; p++) {
+      if (ring.spine && p >= SP) {
+        row.push(row[RP - p]!);
         continue;
       }
-      const [px, pz] = planPoint(xs, ring, p);
-      const n = surfaceNormal(px, pz);
+      const [px, pz] = planPoint(xs, ring, p, n);
+      const nrm = surfaceNormal(px, pz);
       const y = midSurface(px, pz);
       row.push(verts.length);
-      verts.push({ px, pz, h: ring.h, position: [px + ring.h * n[0], y + ring.h * n[1], pz + ring.h * n[2]] });
+      verts.push({ px, pz, h: ring.h, position: [px + ring.h * nrm[0], y + ring.h * nrm[1], pz + ring.h * nrm[2]] });
     }
     ids.push(row);
   }
@@ -162,13 +168,13 @@ export function buildDeck(): DeckBuild {
     return Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
   };
 
-  // Stitch bands; band i (ring i to ring i + 1) belongs to RINGS[i].group.
+  // Stitch bands; band i (ring i to ring i + 1) belongs to rings[i].group.
   const bandTris: number[][] = [];
   let dropped = 0;
-  for (let r = 0; r < RINGS.length - 1; r++) {
+  for (let r = 0; r < rings.length - 1; r++) {
     const tris: number[] = [];
-    for (let p = 0; p < RING_POINTS; p++) {
-      const q = (p + 1) % RING_POINTS;
+    for (let p = 0; p < RP; p++) {
+      const q = (p + 1) % RP;
       const a = ids[r]![p]!, b = ids[r]![q]!, c = ids[r + 1]![q]!, d = ids[r + 1]![p]!;
       // Wound so the top faces +Y and, the sheet being continuous, the bottom faces -Y.
       for (const [i, j, k] of [[a, c, b], [a, d, c]] as const) {
@@ -194,7 +200,7 @@ export function buildDeck(): DeckBuild {
     const uv: number[] = [];
     const index: number[] = [];
     bandTris.forEach((tris, band) => {
-      if (RINGS[band]!.group !== group) return;
+      if (rings[band]!.group !== group) return;
       for (const id of tris) {
         let local = remap.get(id);
         if (local === undefined) {

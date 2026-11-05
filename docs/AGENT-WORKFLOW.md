@@ -85,6 +85,18 @@ What went wrong on the way and was caught: the first GLB was 309 KB (over budget
 
 Left open: the pad is lighter than the design intent (`#959696` against `#7b7a77`), a design call; the pivot cup, at the design's numbers, pokes about 8 mm past the end of the baseplate; Low does not free the GLB's GPU memory once loaded; KTX2 (ADR-14); and still no Chromebook measurement.
 
+## Quality and feet pass (2026-11-04)
+
+Dylan asked for a more realistic board (it read pixelated), shoes that move around the board the way a skater's feet do for the trick, and a higher budget for his desktop (RTX 3060) with fallbacks for Chromebooks. Two decisions were taken with him before any code: the feet follow the inputs, not the recognized trick, and there are three quality tiers with the flight framed instead of the pad. The lead's agent (fable) measured the existing scene in a browser first (no antialias, DPR 1.5, no anisotropy, a 3.5 m camera: the board was about 300 px long), wrote `docs/BRIEF-FEET.md`, and split the work: a forked asset-pipeline agent (same context, fable) owned `src/asset`, `scripts` and `public/models`; the lead did the feet model, the store, the scene, the UI and the docs in parallel in the same working tree, with an interface agreed up front (file names, node names, the shoe's origin and size, `FOOT` equal to `SHOE`, per-asset `BUDGETS`).
+
+What the lead did: `src/sim/feet.ts` (pure, allocation-free, 13 tests), `isLanded` shared with recognition, `src/store/quality.ts` (device auto-pick, 6 tests) and the ui slice (quality, feet, a legacy "Low" migration), `artDirection.ts` (`QUALITY`, `shadowMap`, the flight fit, the primitive shoe numbers), `TrickScene` keyed on the tier with a shadow map on High, `Feet.tsx`, `ShoesModel.tsx`, `modelUrls.ts`, FlightDriver posing the shoes, the Quality and Show feet controls, the scene description, ADR-16 to ADR-19, DESIGN.md section 8, CLAUDE.md. Browser checks with `playwright-cli` on all three tiers (numbers in PERF-BUDGET.md), each screenshot opened and read.
+
+What the asset fork did: a detail level through `deck.ts`, `hardware.ts`, `board.ts` and `textures.ts`, `RINGS_HIGH` from the bevel circle, a 28-point wheel profile with a bearing, a grip normal map from the shared height field, `shoeSpec.ts`, `shoe.ts`, `shoeTextures.ts`, a generic `buildGlb`, per-asset budgets and tables, and tests for all of it (80 in its files). It reported three deviations with reasons (normal map at 512 px for the size gate, no wheel print, a round bolt socket) and that `board.glb` is byte for byte unchanged.
+
+Review by the lead before accepting: `npm run verify` (208 tests, 16 files) and `npm run build` green; the `assets:check` tables read; the spec diff read; the review greps from CLAUDE.md run over the scene (no allocation in `useFrame`, no geometry or material JSX, no `Html`, no logging from components); the shoes looked at in the browser, which is the only real review of a procedural shoe.
+
+Left open: timings for High with the shadow pass at DPR 2; the bail ignores the board's yaw; the stance is regular only (goofy would need the mirror and ADR-10's signs flipped together); KTX2; a Chromebook run.
+
 ## Where agents help and where they do not
 
 Agents were fast where the contract was clear: the pure model, store slices, tests, docs scaffolding, pasting design numbers. They need tight rules where plausible code is wrong: per-frame allocations, who writes the pose, demand-loop transitions, live-region behavior, and focus management. Those rules live in `CLAUDE.md` so the next agent starts with them.

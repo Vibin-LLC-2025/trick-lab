@@ -1,17 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { fitDistance, framingPoints } from './cameraFit';
+import { newResetTracker, placeCamera, takeReset } from './cameraPlacement';
 
 const C = ART.camera;
 const TARGET = new Vector3(...C.target);
 const HOME = new Vector3(...C.position);
-const FRAME_POINTS = framingPoints(ART.pad, C.fit);
+const FRAME_POINTS = framingPoints(C.fit);
 
-/** Distance at which the whole pad and the highest flight fit a stage of this aspect. */
+/** Distance at which the board's whole flight fits a stage of this aspect (ADR-18). */
 function useFitDistance() {
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   const d = fitDistance({
@@ -27,24 +28,26 @@ function useFitDistance() {
 
 /**
  * Places the camera at the fitted distance along its current view direction.
- * Runs on resize and on "Reset view" (which first snaps back home). No easing
- * in any mode, so reduced motion needs no special case.
+ * Runs on resize and on "Reset view" (which first snaps back home). Only a
+ * reset nonce newer than the one seen at mount resets (cameraPlacement.ts),
+ * so a resize, a refit or the controls arriving after an earlier reset keep
+ * the student's orbit. No easing in any mode, so reduced motion needs no
+ * special case.
  */
 function FitAndReset({ distance }: { distance: number }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as { target: Vector3; update: () => void } | null;
   const invalidate = useThree((s) => s.invalidate);
   const resetNonce = useTrickStore((s) => s.viewResetNonce);
+  // One tracker per mount, starting at the nonce already handled before it.
+  const [resets] = useState(() => newResetTracker(resetNonce));
 
   useEffect(() => {
-    if (resetNonce > 0) {
-      camera.position.copy(HOME);
-      controls?.target.copy(TARGET);
-    }
-    camera.position.sub(TARGET).setLength(distance).add(TARGET);
+    const reset = takeReset(resets, resetNonce);
+    placeCamera(camera, controls?.target ?? null, { target: TARGET, home: HOME, distance }, reset);
     controls?.update();
     invalidate();
-  }, [distance, camera, controls, invalidate, resetNonce]);
+  }, [distance, camera, controls, invalidate, resetNonce, resets]);
 
   return null;
 }

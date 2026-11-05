@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Box3, type BufferGeometry, Vector3 } from 'three';
-import { buildDeck, halfWidth, kickHeight, midSurface, RING_POINTS, surfaceNormal } from './deck';
-import { CONCAVE, DECK, KICK, OUTLINE, RINGS } from './spec';
+import { buildDeck, halfWidth, kickHeight, midSurface, RING_POINTS, ringPoints, surfaceNormal } from './deck';
+import { CONCAVE, DECK, DECK_DETAIL, KICK, OUTLINE, RINGS } from './spec';
 
 const deck = buildDeck();
 const groups = Object.values(deck.groups);
@@ -202,5 +202,44 @@ describe('deck mesh', () => {
     const vs = Array.from({ length: uv.count }, (_, i) => uv.getY(i));
     expect(Math.min(...vs)).toBeCloseTo(0, 6);
     expect(Math.max(...vs)).toBeCloseTo(1, 6);
+  });
+});
+
+describe('high-detail deck (quality tiers, 2026-11-04)', () => {
+  const high = buildDeck('high');
+  const highGroups = Object.values(high.groups);
+  const { intervals, rings } = DECK_DETAIL.high;
+
+  it('doubles the outline intervals and adds flat rings and bevel steps, with the same groups in the same order', () => {
+    expect(intervals).toBe(48);
+    expect(ringPoints(intervals)).toBe(288);
+    expect(rings.length).toBeGreaterThan(RINGS.length);
+    const groupsInOrder = rings.map((r) => r.group).filter((g, i, a) => i === 0 || g !== a[i - 1]);
+    expect(groupsInOrder).toEqual(['grip', 'wood', 'graphic']);
+    expect(rings[0]!.spine && rings[rings.length - 1]!.spine).toBe(true);
+    // Six bevel steps per side: 0, 18, 36, 54, 72, 90 deg, from the bevel top (inset 4 mm) to the wall (inset 0).
+    const bevel = rings.filter((r) => r.group === 'wood');
+    expect(bevel[0]).toMatchObject({ d: 0.004, h: 0.00575 });
+    expect(bevel[5]).toMatchObject({ d: 0, h: 0.00175 });
+    expect(bevel[6]).toMatchObject({ d: 0, h: -0.00175 });
+  });
+
+  it('has the same size, symmetry and thickness as the medium deck, with more triangles', () => {
+    const box = bounds(highGroups);
+    expect(Math.abs(box.max.x - box.min.x - OUTLINE.length)).toBeLessThan(0.002);
+    expect(Math.abs(box.max.z - box.min.z - OUTLINE.width)).toBeLessThan(0.002);
+    for (const g of highGroups) expect(zSymmetric(g)).toBe(true);
+    const tris = highGroups.reduce((n, g) => n + g.index!.count / 3, 0);
+    expect(tris).toBe((rings.length - 1) * 2 * 288 - high.droppedTriangles);
+    expect(tris).toBeGreaterThan(3 * (19 * 288 - 8));
+    for (const g of highGroups)
+      for (const name of ['position', 'normal', 'uv']) expect(Array.from(g.getAttribute(name).array).every(Number.isFinite), name).toBe(true);
+  });
+
+  it('keeps the grip facing +Y and the graphic facing -Y', () => {
+    const gn = high.groups.grip.getAttribute('normal');
+    for (let i = 0; i < gn.count; i++) expect(gn.getY(i)).toBeGreaterThan(0);
+    const bn = high.groups.graphic.getAttribute('normal');
+    for (let i = 0; i < bn.count; i++) expect(bn.getY(i)).toBeLessThan(0);
   });
 });

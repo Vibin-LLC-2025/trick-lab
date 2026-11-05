@@ -1,0 +1,60 @@
+import { Suspense, lazy, type Ref } from 'react';
+import type { Group } from 'three';
+import { useTrickStore } from '../store';
+import { AssetBoundary } from './Board';
+import { geo, mat } from './resources';
+import { shoesFromModel } from './sceneTier';
+
+const ShoesModel = lazy(() => import('./ShoesModel').then((m) => ({ default: m.ShoesModel })));
+
+/** The primitive shoe: sole slab and upper box (Low, Medium, and the fallback on High). Two draw calls. */
+export function ShoePrimitive() {
+  return (
+    <group>
+      <mesh geometry={geo.shoeSole} material={mat.shoeSole} />
+      <mesh geometry={geo.shoeUpper} material={mat.shoeUpper} />
+    </group>
+  );
+}
+
+/**
+ * One shoe: the GLB on High (with the primitive as the streaming and error
+ * fallback), the primitive otherwise. `mirror` turns the right shoe into the
+ * left one by flipping its width axis; three renders a negative-determinant
+ * transform with the winding reversed, so the faces stay outward.
+ */
+function Shoe({ ref, mirror, shadows }: { ref: Ref<Group>; mirror: boolean; shadows: boolean }) {
+  const high = useTrickStore(shoesFromModel);
+  return (
+    <group ref={ref}>
+      <group scale={[1, 1, mirror ? -1 : 1]}>
+        {high ? (
+          <AssetBoundary fallback={<ShoePrimitive />}>
+            <Suspense fallback={<ShoePrimitive />}>
+              <ShoesModel castShadow={shadows} />
+            </Suspense>
+          </AssetBoundary>
+        ) : (
+          <ShoePrimitive />
+        )}
+      </group>
+    </group>
+  );
+}
+
+/**
+ * The rider's feet (ADR-17). Two outer groups that FlightDriver poses every
+ * frame from the feet model (src/sim/feet.ts). Goofy (ADR-24, the default):
+ * the front foot is the right shoe (unmirrored), the back foot the left
+ * (mirrored). Regular (ADR-25): the front foot is the left shoe, the back
+ * the right. No per-frame code here.
+ */
+export function Feet({ front, back, shadows }: { front: Ref<Group>; back: Ref<Group>; shadows: boolean }) {
+  const regular = useTrickStore((s) => s.stance === 'regular');
+  return (
+    <>
+      <Shoe ref={front} mirror={regular} shadows={shadows} />
+      <Shoe ref={back} mirror={!regular} shadows={shadows} />
+    </>
+  );
+}

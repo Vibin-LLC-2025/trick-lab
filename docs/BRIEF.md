@@ -18,16 +18,28 @@ The simulation computes the flight and the board's rotation, animates it in
 Inputs (all DOM sliders, keyboard friendly):
 
 - Pop: peak height 0.15 to 0.60 m (step 0.05, default 0.35)
-- Flick: flip rate 0 to 3.0 rev/s (step 0.1, default 0)
-- Scoop: shove rate 0 to 3.0 rev/s (step 0.1, default 0)
+- Flick: flip rate -3.0 to 3.0 rev/s (step 0.1, default 0). Signed since
+  2026-11-04 (ADR-30): above 0 a kickflip (the grip turns toward the heel
+  side first), below 0 a heelflip (toward the toe side first).
+- Scoop: shove rate -3.0 to 3.0 rev/s (step 0.1, default 0). Above 0
+  backside (the tail swings behind the heels), below 0 frontside (in front
+  of the toes).
 
-Four trick presets (buttons, also keys 1 to 4) set the sliders to values
-that land the trick with the default pop:
+The two rate sliders are centred on 0. Each shows the magnitude and the
+direction ("1.9 rev/s heelflip", "0.9 rev/s frontside", "0.0 rev/s"), and
+aria-valuetext says "1.9 revolutions per second, heelflip".
 
-- Kickflip: 1 full flip (roll 360 deg about the board's long axis), no shove
-- Pop shove-it: half shove (yaw 180 deg about the vertical axis), no flip
-- Varial flip: 1 flip + half shove (roll 360, yaw 180)
-- 360 flip (tre flip): 1 flip + full shove (roll 360, yaw 360)
+Eight trick presets (buttons, also keys 1 to 8; four until 2026-11-04) set
+the sliders to values that land the trick with the default pop 0.35 m:
+
+1. Kickflip (flick 1.9, scoop 0): 1 full flip (roll 360 deg about the board's long axis), no shove
+2. Heelflip (flick -1.9, scoop 0): 1 flip the other way (roll -360)
+3. Pop shove-it (flick 0, scoop 0.9): backside half shove (yaw 180 deg about the vertical axis), no flip
+4. Frontside shove-it (flick 0, scoop -0.9): frontside half shove (yaw -180)
+5. Varial flip (flick 1.9, scoop 0.9): kickflip + backside half shove
+6. Varial heelflip (flick -1.9, scoop -0.9): heelflip + frontside half shove
+7. Hardflip (flick 1.9, scoop -0.9): kickflip + frontside half shove
+8. 360 flip, tre flip (flick 1.9, scoop 1.9): kickflip + backside full shove
 
 Physics (pure, in `src/sim/flight.ts`, g = 9.81):
 
@@ -35,22 +47,34 @@ Physics (pure, in `src/sim/flight.ts`, g = 9.81):
 - height y(t) = h * (1 - (2t/T - 1)^2)  (parabola, 0 <= t <= T)
 - rollTotal = flick * T * 360 deg, yawTotal = scoop * T * 360 deg
 - roll(t) = rollTotal * t / T, yaw(t) = yawTotal * t / T (constant rate)
-- pitch(t): nose up 18 deg at pop easing to level by 35 percent of T,
+- pitch(t): nose up at pop, easing to level by 35 percent of T (was 18 deg about the deck centre; since 2026-11-04 the board pivots on its rear wheels until the tail strikes the pad at 32.5 deg, ADR-27),
   then level (cosmetic, not part of recognition)
 
 Recognition (pure, in `src/sim/tricks.ts`):
 
-- flips = round(rollTotal / 360), halfShoves = round(yawTotal / 180)
+- rollTotal and yawTotal are signed (ADR-30). flips = round(rollTotal / 360),
+  halfShoves = round(yawTotal / 180), rounded symmetrically
+  (sign(x) * round(|x|)) so a heelflip rounds like its kickflip mirror
 - rollError = rollTotal - flips * 360 (deg), yawError = yawTotal - halfShoves * 180
 - landed if |rollError| <= 30 and |yawError| <= 25
-- name by (flips, halfShoves): (0,0) ollie, (1,0) kickflip, (0,1) pop
-  shove-it, (1,1) varial flip, (1,2) 360 flip, (0,2) 360 shove-it,
-  (2,0) double kickflip, (2,2) double tre; anything else "unnamed
-  (N flips, M half shoves)"
-- if not landed: outcome is "under-rotated" (error < 0) or
-  "over-rotated" (error > 0) on the failing axis, with degrees shown
+- name by signed (flips, halfShoves): (0,0) ollie; (1,0) kickflip; (-1,0)
+  heelflip; (2,0) double kickflip; (-2,0) double heelflip; (0,1) pop
+  shove-it; (0,-1) frontside pop shove-it; (0,2) 360 shove-it; (0,-2)
+  frontside 360 shove-it; (1,1) varial flip; (1,-1) hardflip; (-1,-1)
+  varial heelflip; (-1,1) inward heelflip; (1,2) 360 flip; (1,-2) 360
+  hardflip; (-1,-2) laser flip; (-1,2) 360 inward heelflip; (2,2) double
+  tre; anything else "Unnamed" with direction words, for example
+  "Unnamed (2 heelflips, 1 frontside half shove)"
+- if not landed: outcome is "under-rotated" when the failing axis fell short
+  of its nearest whole turn in its own direction of rotation, "over-rotated"
+  when it went past (a magnitude test, so it reads the same for a heelflip
+  or a frontside shove); failedBy keeps its sign, the copy shows degrees
+- signed totals read as a magnitude and a direction: the card "365 deg
+  heelflip, 173 deg frontside shove", the announcer "365 degrees of heelflip,
+  173 degrees of frontside shove", the strip "365°" over "heelflip"
 - Default presets with pop 0.35 m: T = 0.534 s; flick 1.9 rev/s gives
   rollTotal 365 deg; scoop 0.9 gives yaw 173 deg; scoop 1.9 gives 365 deg.
+  The negative inputs give the same magnitudes with the other sign.
   Verify these in tests and adjust preset numbers if needed so each preset
   lands with the default pop and fails if pop drops to 0.15 m.
 
@@ -66,9 +90,13 @@ the timeline move 1 percent, Page keys 10 percent.
 
 Assessment objectives (checklist, scored on the fly):
 1. Land a kickflip.
-2. Land a pop shove-it.
-3. Land a varial flip.
-4. Land a 360 flip.
+2. Land a heelflip.
+3. Land a pop shove-it.
+4. Land a frontside shove-it.
+5. Land a varial flip.
+6. Land a varial heelflip.
+7. Land a hardflip.
+8. Land a 360 flip.
 Bonus text (not an objective): land any preset at pop 0.20 m or lower by
 raising flick/scoop yourself.
 
@@ -103,7 +131,8 @@ Reset clears inputs to defaults and board pose, keeps the log.
   Board is primitives only (box deck with raised nose and tail wedges,
   two box trucks, four cylinder wheels). Long axis is X. Flip is rotation
   about the board's local X; shove is rotation about world Y. Apply
-  yaw then roll (Euler order 'YXZ') so the flip axis follows the shove.
+  yaw, then the pop pitch, then roll (Euler order 'YZX', ADR-32) so the
+  flip axis follows the shove and stays the pitched long axis.
 - DOM UI in `src/ui/`: `App.tsx`, `Presets.tsx`, `Inputs.tsx` (3 sliders
   with numeric readouts), `Playback.tsx` (pop, slow motion, timeline),
   `Telemetry.tsx`, `Objectives.tsx`, `EventLog.tsx` (cap the panel at the
@@ -112,7 +141,7 @@ Reset clears inputs to defaults and board pose, keeps the log.
 - Layout: canvas fills the stage; left column "setup" (presets, inputs,
   playback); right column "results" (telemetry, objectives, event log).
   Columns stack under the stage below 960 px.
-- Keyboard: Tab order presets, sliders, playback, results. 1 to 4 apply
+- Keyboard: Tab order presets, sliders, playback, results. 1 to 8 apply
   presets, Space pops (unless focus is in a slider or button, where Space
   keeps its native meaning), s toggles slow motion, r resets, p toggles the
   perf badge, ? opens shortcuts, t toggles theme.
@@ -125,11 +154,12 @@ Reset clears inputs to defaults and board pose, keeps the log.
 - Canvas `aria-hidden="true"`, visually hidden `#scene-description`
   kept in sync (board state, inputs, last outcome).
 - One `aria-live="polite"` announcer: preset applied, trick popped,
-  outcome in plain language ("Kickflip landed. 365 degrees of flip,
-  0 degrees of shove, 0.53 seconds in the air."), objective completed,
+  outcome in plain language ("Kickflip landed. 365 degrees of kickflip,
+  0 degrees of shove, 0.53 seconds in the air."; the direction words since
+  ADR-30), objective completed,
   reset.
 - Sliders are native `<input type="range">` with visible labels, units,
-  `aria-valuetext` ("0.35 meters", "1.9 revolutions per second").
+  `aria-valuetext` ("0.35 meters", "1.9 revolutions per second, heelflip").
 - Focus management: after a preset is applied, focus stays on the preset
   button; after a trick resolves, focus is not moved (announcer carries
   the result); after reset, focus moves to the setup heading.
@@ -183,19 +213,25 @@ Reset clears inputs to defaults and board pose, keeps the log.
 ## Markup and class contract for the design agent
 
 The design agent owns `src/styles/tokens.css`, `src/styles/app.css` and
-`docs/DESIGN.md`. Implementation uses these class names exactly:
+`docs/DESIGN.md`. Implementation uses these class names exactly (updated for
+the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 
 ```
 .app, .app__stage, .app__setup, .app__results
 .panel, .panel__title
+.panel__head (title row with actions or a legend), .panel__count (a count in a title), .panel__note (small muted note)
 .presets, .preset, .preset--active, .preset__key (small key hint)
 .inputs, .field, .field__label, .field__value, .field__unit, .field__range
-.playback, .btn, .btn--primary, .btn--ghost, .btn--danger
-.toggle (button with aria-pressed), .toggle--on
+.playback, .btn, .btn--primary, .btn--ghost, .btn--danger, .btn--sm (small header button)
+.toggle (button with aria-pressed, drawn as a switch), .toggle--on, .toggle__state
+.view-panel__actions (View header buttons), .view-panel__toggles (grid of View switches)
+.segmented, .segmented__legend, .segmented__options, .segmented__option, .segmented__input, .segmented__label, .segmented__hint
 .timeline, .timeline__range, .timeline__label
-.telemetry, .telemetry__row, .telemetry__k, .telemetry__v, .telemetry__v--good, .telemetry__v--bad
+.telemetry, .telemetry__row, .telemetry__k, .telemetry__v, .telemetry__v--bad (missed axis), .telemetry__v--none (no value yet), .telemetry__dir (direction word of a signed total, ADR-30)
 .outcome, .outcome--landed, .outcome--bailed, .outcome__name, .outcome__detail
-.objectives, .objective, .objective--done, .objective__check
+.foot-steps, .foot-steps__legend, .foot-steps__key, .foot-steps__swatch, .foot-steps__swatch--front, .foot-steps__swatch--back
+.foot-step, .foot-step--front, .foot-step--back, .foot-step--both, .foot-step--now, .foot-step__who, .foot-step__text
+.objectives, .objective, .objective--done, .objective__check, .objective__text
 .eventlog, .eventlog__row, .eventlog__t, .eventlog__type
 .perf-badge
 .visually-hidden

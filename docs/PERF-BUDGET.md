@@ -1,6 +1,6 @@
 # Performance budget
 
-Target device: a low-end Chromebook (integrated GPU, 4 GB RAM, often throttled). Written 2026-11-04; re-measured 2026-11-04 after the realistic board pass.
+Target device (quality pass, 2026-11-04, ADR-16): a desktop with a real GPU on High; a mid-range laptop on Medium; a low-end Chromebook (integrated GPU, 4 GB RAM, often throttled) on Low, which keeps the original budget below unchanged. Written 2026-11-04; re-measured 2026-11-04 after the realistic board pass and again after the quality pass (last section).
 
 ## Frame budget
 
@@ -123,3 +123,95 @@ Measured 2026-11-04 by the integration agent on a **desktop Chromium, not a Chro
 Reading: the scene costs well under 1 ms of the 16.7 ms frame even at 6x CPU, it renders only while the board is in the air (about one frame per display refresh), and it renders nothing once the board lands. Heap growth tracks the event log, which is kept across resets by design (ADR-7) while the panel renders at most 200 rows (ADR-8).
 
 Bundle at that point (Vite 8.3.5): `index` 244.17 / 76.99 KB, `TrickScene` 945.55 / 250.87 KB, CSS 18.60 / 3.86 KB (minified / gzip).
+
+## Quality pass (2026-11-04): tiers, feet, shadows
+
+Per-tier budget (ADR-16). The Low column is the table at the top of this file, unchanged. "Scene draw calls" is `renderer.info.render.calls`, which on High includes the shadow pass.
+
+| Budget | High | Medium | Low |
+| --- | --- | --- | --- |
+| Scene draw calls | under 40 | under 20 | under 20 |
+| Board asset (`BUDGETS` in spec.ts) | `board-high.glb`: 2.5 MB, 8 calls, 120,000 triangles, 6 textures at 2048 px | `board.glb`: 300 KB, 8 calls, 25,000 triangles, 4 textures at 1024 px | primitive |
+| Shoes | `shoes.glb`: 600 KB, 3 calls per shoe, 30,000 triangles, 2 textures | primitive (2 calls per shoe) | primitive |
+| Renderer | MSAA, DPR up to 2, 16x anisotropy, PCF soft shadow map 2048 px | MSAA, DPR 1.5, 4x anisotropy, disc | no MSAA, DPR 1.5, disc |
+
+### Measured, quality pass (2026-11-04)
+
+Measured by the lead's agent (fable) on the **same desktop as before, not a Chromebook**: Windows 11, headless Chromium through the global `playwright-cli` (sessions `feetcheck` and `highcheck`), RTX 3060 via ANGLE/D3D11, Vite dev server (not the production build: the numbers below are renderer counts, not timings), viewport 1440 x 900, dark theme, feet shown, after the kickflip preset. Headless reports DPR 1, so the DPR 2 path is untested here.
+
+| Measurement | High | Medium | Low |
+| --- | --- | --- | --- |
+| Draw calls at rest and after landing (`renderer.info.render.calls`) | **29** (board 7, two shoes 6, pad 3, plus the shadow pass over the 13 casters) | **15** (board 7, two primitive shoes 4, pad 3, disc 1) | **13** (primitive board 5, shoes 4, pad 3, disc 1) |
+| Triangles | 122,352 (42,736 board plus 2 x 9,214 shoes, counted twice with the shadow pass) | 14,000 | 484 |
+| Geometries / textures on the GPU | 20 / 11 (board 7, shoe 3, primitives 8, pad and disc; textures: 5 board, 2 shoe, PMREM, dfgLUT, shadow map and one more) | 16 / 6 as before | 9 / 1 as before |
+| Antialias, shadow map | on, on | on, off | off, off |
+| Camera distance after the fit (ADR-18) | 2.47 m (was 3.52 m when the pad had to fit) | same | same |
+| Console errors | none (one three.js `Clock` deprecation warning from R3F, pre-existing) | none | none |
+
+What was looked at, each screenshot opened: the kickflip stance from the sliders (front foot turned toward the nose, heel over the far rail; back foot across the tail), the pop (back foot pressing the tail), the flick (front foot off the heel-side rail, toes down, board showing its graphic), the gather and landing on the bolts, and a 360 flip at pop 0.15 m that bails (board on its side, feet on the pad to the heel side).
+
+### Bundle (`npm run build`, 2026-11-04, after the quality pass)
+
+| Chunk | Minified | Gzip |
+| --- | --- | --- |
+| `index` (React, Zustand, DOM UI, the feet model) | 249.94 KB | 79.27 KB |
+| `TrickScene` (three, R3F, drei OrbitControls, scene, RoomEnvironment) | 957.16 KB | 255.33 KB |
+| `BoardModel` (drei useGLTF, GLTFLoader, meshopt decoder), lazy, High and Medium | 72.18 KB | 21.41 KB |
+| `ShoesModel`, lazy, High only | 0.80 KB | 0.48 KB |
+| CSS | 20.65 KB | 4.14 KB |
+| `models/board.glb` / `board-high.glb` / `shoes.glb` (static) | 250.2 KB / 1,709.4 KB / 241.8 KB | n/a |
+
+### Open issues from this pass
+
+1. **No timings yet for High.** Draw calls and triangles are counted; `gl.render` time with the shadow pass and DPR 2 on a real display is still to measure with the production build.
+2. **The bail ignores the board's yaw.** The feet step to fixed heel-side spots in the rest frame, so a board that stopped at a quarter turn can overlap a shoe (visible in the bail screenshot). ADR-17.
+3. **Still no Chromebook numbers.** Low is unchanged, so the earlier measurements stand as the best estimate.
+
+## Foot trails and speed pass (2026-11-04)
+
+Measured on the dev server at 1440 x 900 (headless, DPR 1) with feet and foot trails on, kickflip preset: Low 14 draw calls, Medium 16, High 30 (was 13, 15 and 29: the trails add one call on every tier). No console errors. The trail geometry is a few thousand triangles and is rebuilt only when the shown flight changes (a pop, or a slider move before a pop); the per-frame cost is one uniform write.
+
+Open items from the research (`docs/RESEARCH-FEET.md` section 4, see ADR-20): an eased board rotation for an earlier catch, distinct bails for flip and shove failures, a thinner vulcanised sole.
+
+## Motion cues, tail-pivot pop and shadow pass (2026-11-04)
+
+Measured on the dev server at 1600 x 1000 (headless, DPR 1) with feet, foot trails and motion cues all on, 360 flip preset, `renderer.info.render.calls` after one `gl.render`: **Low 15, Medium 17, High 31** (budgets 20, 20 and 40; was 14, 16 and 30). The cues are one mesh with one material on every tier (ADR-26): unlit, `forceSinglePass` so the double-sided transparent material does not split into two passes, no shadow casting, so the High shadow pass is unchanged. Once a flight has faded them out the material is hidden and the call is skipped (landed: Low 14, Medium 16, High 30 with trails off 29). The cue geometry is under 600 triangles, rebuilt only when flick, scoop, the flight or the stance change. Per frame: one opacity write and one visibility flag for the cues, one rotation and one scale write for the Medium and Low footprint, and the contact lift in `writePose` (a few sines and cosines, no allocation). The frame counter stops on landing on all three tiers. No console errors; the known warnings are PCFSoftShadowMap (falls back to PCF) and the THREE.Clock deprecation from R3F.
+
+## Ground pass (2026-11-04): concrete ground, fog, outdoor environment
+
+ADR-31, DESIGN.md section 10. Measured by the implementation agent (opus) on the same desktop as above, **not a Chromebook**: headless Chromium through the global `playwright-cli` (session `scene-b`), Vite dev server, viewport 1600 x 1000, DPR 1, feet, foot trails and motion cues on, kickflip preset; `renderer.info` read through `?debug` after one `gl.render`, and the perf badge, which agreed on every tier. Both themes gave the same counts.
+
+| Measurement | High | Medium | Low |
+| --- | --- | --- | --- |
+| Draw calls at rest, before the pop (budget) | **29** (40) | **15** (20) | **13** (20) |
+| Same before this pass (previous section) | 31 | 17 | 15 |
+| Draw calls mid kickflip (50 percent), landed, and in a low orbit (cues faded) | 28 | 14 | 12 |
+| Triangles at rest | 125,125 | 16,869 | 3,353 |
+| Same before (derived: the slab and the mark were 24 triangles, the ground is 2; the slab never cast a shadow) | 125,147 | 16,891 | 3,375 |
+| Textures on the GPU (`info.memory.textures`) | 14 (11 before: +3 ground maps) | 9 (6 before) | 2 (unchanged: PMREM and the BRDF LUT) |
+| Geometries on the GPU | 21 | 19 | 11 |
+| `gl.render` time at rest (perf badge, dev server, not a timing run) | 0.3 to 0.4 ms | 0.3 to 0.4 ms | 0.3 to 0.6 ms |
+| Frames rendered in 1.5 s after the landing | 0 | 0 | 0 |
+| Ground download | `ground.glb` 434.9 KB | same | none |
+| Ground GPU memory (estimate, RGBA8 plus mips) | 11.00 MB | 11.00 MB | 0 |
+| Console errors | none | none | none |
+
+The pad was three draw calls (slab, edge lines, mark) and is now one on every tier, the ground plane. The fog adds no pass and no call (it is a shader define). The outdoor environment replaces RoomEnvironment one for one (one PMREM render target, built once per Canvas mount); the hemisphere light replaces the ambient light. With `ground.glb` blocked, Medium shows the untextured plane (15 calls), the Medium board stays loaded and nothing is announced. The shadow footprint on Medium and Low was not changed.
+
+### Bundle (`npm run build`, Vite 8.3.5, 2026-11-04, after the ground pass)
+
+| Chunk | Minified | Gzip |
+| --- | --- | --- |
+| `index` (React, Zustand, DOM UI, the sim; includes the other agent's concurrent ADR-30 work) | 271.56 KB | 86.87 KB |
+| `TrickScene` (three, R3F, drei OrbitControls, scene, the outdoor environment; RoomEnvironment no longer bundled) | 966.60 KB | 258.92 KB |
+| `BoardModel` (drei useGLTF, GLTFLoader, meshopt decoder), lazy, High and Medium | 72.19 KB | 21.44 KB |
+| `GroundModel`, lazy, High and Medium | 0.74 KB | 0.48 KB |
+| `ShoesModel`, lazy, High only | 0.80 KB | 0.49 KB |
+| CSS | 21.65 KB | 4.56 KB |
+| `models/board.glb` / `board-high.glb` / `shoes.glb` / `ground.glb` (static) | 250.2 KB / 1,709.4 KB / 241.8 KB / 434.9 KB | n/a |
+
+### Open issues from this pass
+
+1. **11 MB more texture memory on Medium.** The three ground maps upload as RGBA8 with mips. Medium is the mid-range laptop tier; if that is too much, Medium could take a 512 px colour and normal map (a second ground file) or KTX2 (ADR-14).
+2. **Still no Chromebook numbers.** Low gained nothing but a cheaper ground (one call instead of three), so the earlier Low measurements stand as the best estimate.
+3. **The bay tile repeats.** Every bay has the same cracks and mark. Fog hides it in low orbits; from a high orbit the pattern shows.

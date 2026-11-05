@@ -1,41 +1,60 @@
 import { useEffect } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import type { Mesh } from 'three';
-import { BOARD_GLB, PARTS } from '../asset/spec';
+import type { Mesh, MeshStandardMaterial } from 'three';
+import { PARTS } from '../asset/spec';
 import { useTrickStore } from '../store';
-
-/** Built by `npm run assets` (scripts/build-board.ts) into public/, so Vite serves it as a static file. */
-export const BOARD_URL = `${import.meta.env.BASE_URL}${BOARD_GLB}`;
+import { ART } from './artDirection';
+import { boardUrlFor, SHOES_URL } from './modelUrls';
 
 // useGLTF(path, useDraco, useMeshopt). Draco is off: drei would fetch its
 // decoder from a CDN, which school networks often block. The meshopt decoder
 // ships inside the JS bundle (three-stdlib), so it works offline (ADR-13).
-const DRACO = false;
-const MESHOPT = true;
+export const DRACO = false;
+export const MESHOPT = true;
 
 /**
- * The realistic board from the GLB: seven meshes, one per material, so seven
- * draw calls. Rendered from the cached asset's nodes (the gltfjsx pattern)
- * with each node's transform, which carries the KHR_mesh_quantization
- * dequantization scale and offset.
+ * Sets anisotropic filtering on every texture of a cached GLB's materials,
+ * once. The textures belong to the useGLTF cache, so this sticks for the
+ * page's lifetime; the tier's number comes from artDirection.
+ */
+export function applyAnisotropy(materials: Record<string, unknown>, anisotropy: number) {
+  for (const m of Object.values(materials) as MeshStandardMaterial[]) {
+    for (const map of [m.map, m.normalMap, m.roughnessMap, m.metalnessMap]) {
+      if (map && map.anisotropy !== anisotropy) {
+        map.anisotropy = anisotropy;
+        map.needsUpdate = true;
+      }
+    }
+  }
+}
+
+/**
+ * A board from a GLB: seven meshes, one per material, so seven draw calls.
+ * Rendered from the cached asset's nodes (the gltfjsx pattern) with each
+ * node's transform, which carries the KHR_mesh_quantization dequantization
+ * scale and offset. `url` is the tier's file (modelUrls.ts).
  *
  * `dispose={null}`: the geometries, materials and textures belong to the
- * useGLTF cache, not to this component. Switching to Low or remounting the
- * scene must not dispose them, or the next High would render a disposed
+ * useGLTF cache, not to this component. Switching tiers or remounting the
+ * scene must not dispose them, or the next use would render a disposed
  * asset that has to be re-uploaded (and any second user of the cache would
  * lose it). The cache lives as long as the page.
  */
-export function BoardModel() {
-  const { nodes } = useGLTF(BOARD_URL, DRACO, MESHOPT);
+export function BoardModel({ url, castShadow }: { url: string; castShadow: boolean }) {
+  const { nodes, materials } = useGLTF(url, DRACO, MESHOPT);
   const invalidate = useThree((s) => s.invalidate);
+  const anisotropy = useTrickStore((s) => ART.quality[s.quality].anisotropy);
   // The demand frameloop needs one frame once the model replaces the fallback.
-  useEffect(() => invalidate(), [invalidate]);
+  useEffect(() => {
+    applyAnisotropy(materials, anisotropy);
+    invalidate();
+  }, [invalidate, materials, anisotropy]);
   return (
     <group dispose={null}>
       {PARTS.map(({ node }) => {
         const m = nodes[node] as Mesh | undefined;
-        if (!m) throw new Error(`board.glb has no node "${node}"; run npm run assets`);
+        if (!m) throw new Error(`${url} has no node "${node}"; run npm run assets`);
         return (
           <mesh
             key={node}
@@ -45,6 +64,7 @@ export function BoardModel() {
             position={m.position}
             quaternion={m.quaternion}
             scale={m.scale}
+            castShadow={castShadow}
           />
         );
       })}
@@ -52,7 +72,9 @@ export function BoardModel() {
   );
 }
 
-// Start the download as soon as the scene chunk loads, in parallel with the
-// first render. Skipped when the student chose Low, so a Chromebook on Low
-// never fetches the 250 KB model; switching to High then loads it on demand.
-if (useTrickStore.getState().boardDetail === 'high') useGLTF.preload(BOARD_URL, DRACO, MESHOPT);
+// Start the downloads as soon as the scene chunk loads, in parallel with the
+// first render. Skipped when the student is on Low, so a Chromebook never
+// fetches a model; switching tiers later loads on demand.
+const q = useTrickStore.getState().quality;
+if (q !== 'low') useGLTF.preload(boardUrlFor(q), DRACO, MESHOPT);
+if (q === 'high' && useTrickStore.getState().feetVisible) useGLTF.preload(SHOES_URL, DRACO, MESHOPT);

@@ -5,11 +5,13 @@ import { PRESETS } from '../sim/tricks';
 import { useTrickStore } from '../store';
 import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
+import { FootMotion } from './FootMotion';
 import { Inputs } from './Inputs';
 import { Objectives } from './Objectives';
 import { PerfBadge } from './PerfBadge';
 import { Playback } from './Playback';
 import { Presets } from './Presets';
+import { SceneBoundary } from './SceneBoundary';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Telemetry } from './Telemetry';
 import { ViewPanel } from './ViewPanel';
@@ -52,6 +54,8 @@ function useGlobalShortcuts() {
         if (spaceIsNative(target)) return;
         s.popTrick();
       } else if (e.key === 's' || e.key === 'S') s.toggleSlowMotion();
+      else if (e.key === '[') s.stepRate(-1);
+      else if (e.key === ']') s.stepRate(1);
       else if (e.key === 'r' || e.key === 'R') s.resetSession();
       else if (e.key === 'p' || e.key === 'P') s.togglePerf();
       else if (e.key === 't' || e.key === 'T') s.toggleTheme();
@@ -72,7 +76,10 @@ function useFocusRequests() {
   }, [request]);
 }
 
-/** Mirrors prefers-reduced-motion into the store, which decides whether a pop plays or resolves at once. */
+/**
+ * Mirrors prefers-reduced-motion into the store, which decides whether a pop
+ * plays or resolves at once, and resolves a flight in the air if it turns on.
+ */
 function useReducedMotionSync() {
   const reduced = useReducedMotion();
   const setReducedMotion = useTrickStore((s) => s.setReducedMotion);
@@ -105,13 +112,17 @@ export function App() {
         </aside>
         <section className="app__stage" aria-label="3D skateboard view" aria-describedby="scene-description">
           <SceneDescription />
-          <Suspense fallback={null}>
-            <TrickScene />
-          </Suspense>
+          {/* Suspense covers loading; SceneBoundary covers failure, so a broken 3D view never takes the controls with it. */}
+          <SceneBoundary>
+            <Suspense fallback={null}>
+              <TrickScene />
+            </Suspense>
+          </SceneBoundary>
           <PerfBadge />
         </section>
         <aside className="app__results" aria-label="Results">
           <Telemetry />
+          <FootMotion />
           <Objectives />
           <EventLog />
         </aside>

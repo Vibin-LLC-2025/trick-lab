@@ -74,6 +74,47 @@ export const RINGS: readonly { d: number; h: number; spine?: true; group: DeckGr
   { d: 0.082, h: -0.00575, spine: true, group: 'graphic' },
 ];
 
+/**
+ * Board detail level (quality tiers, 2026-11-04). `medium` is the original
+ * realistic board (public/models/board.glb, the numbers above, byte for byte
+ * unchanged). `high` is the same board with finer tessellation and larger
+ * textures for desktop GPUs (public/models/board-high.glb). Both come from the
+ * same geometry code; only the numbers below differ.
+ */
+export type DetailLevel = 'medium' | 'high';
+
+/**
+ * Edge bevel ring at angle `deg` around the 4 mm bevel circle (0 is the top
+ * of the bevel at inset 0.004, 90 the vertical wall at inset 0). The medium
+ * table above is this at 0, 30, 60 and 90 deg, rounded as DESIGN.md wrote it.
+ */
+function bevelRing(deg: number, sign: 1 | -1, group: DeckGroup): { d: number; h: number; group: DeckGroup } {
+  const a = (deg * Math.PI) / 180;
+  const r = DECK.bevelRadius;
+  const wall = DECK.thickness / 2 - r;
+  return { d: Number((r * (1 - Math.sin(a))).toFixed(6)), h: Number((sign * (wall + r * Math.cos(a))).toFixed(6)), group };
+}
+
+const HIGH_FLAT_INSETS = [0.082, 0.073, 0.064, 0.055, 0.046, 0.038, 0.03, 0.023, 0.016, 0.01];
+const HIGH_BEVEL_DEGS = [0, 18, 36, 54, 72, 90];
+
+/** High-detail ring table: 10 flat rings per face, a six-step bevel per side, same spines and groups. */
+export const RINGS_HIGH: readonly { d: number; h: number; spine?: true; group: DeckGroup }[] = [
+  { d: 0.082, h: 0.00575, spine: true, group: 'grip' },
+  ...HIGH_FLAT_INSETS.map((d) => ({ d, h: 0.00575, group: 'grip' as DeckGroup })),
+  ...HIGH_BEVEL_DEGS.map((deg) => bevelRing(deg, 1, 'wood')),
+  // The bottom of the lower bevel (0 deg, inset 0.004) starts the graphic bands, as ring 13 does above.
+  ...[...HIGH_BEVEL_DEGS].reverse().map((deg) => bevelRing(deg, -1, deg === 0 ? 'graphic' : 'wood')),
+  ...[...HIGH_FLAT_INSETS].reverse().map((d) => ({ d, h: -0.00575, group: 'graphic' as DeckGroup })),
+  { d: 0.082, h: -0.00575, spine: true, group: 'graphic' },
+];
+
+/** Deck tessellation per level: outline intervals per region per side, and the ring table. */
+export const DECK_DETAIL: Record<DetailLevel, { intervals: number; rings: typeof RINGS }> = {
+  medium: { intervals: OUTLINE.intervals, rings: RINGS },
+  high: { intervals: 48, rings: RINGS_HIGH },
+};
+
 /** 7.4 hardware, nose truck. The tail truck mirrors x. */
 export const TRUCK = {
   centerX: 0.208,
@@ -136,6 +177,84 @@ export const WHEEL = {
   ] as readonly (readonly [number, number])[],
 } as const;
 
+/**
+ * Segment counts per level. Medium repeats the counts written inline in TRUCK
+ * and WHEEL above (so the medium GLB is unchanged); high rounds everything
+ * off for a desktop GPU. Nuts stay 6-sided: that is a hexagon.
+ */
+export const HARDWARE_DETAIL = {
+  medium: {
+    roundSegments: TRUCK.roundSegments,
+    pivotCup: TRUCK.pivotCup.segments,
+    kingpin: TRUCK.kingpin.segments,
+    cupWasher: TRUCK.cupWasherTop.segments,
+    bushing: TRUCK.bushingTop.segments,
+    pivot: TRUCK.pivot.segments,
+    axle: TRUCK.axle.segments,
+    speedWasher: TRUCK.speedWashers.segments,
+    nut: 6,
+    bolt: TRUCK.bolts.segments,
+    /** Bolt heads are plain cylinders. */
+    boltSocket: null as null | { radius: number; depth: number },
+    wheelRadial: WHEEL.radialSegments,
+    wheelProfile: WHEEL.profile,
+  },
+  high: {
+    roundSegments: { baseplate: 4, yoke: 4, axleHousing: 4 },
+    pivotCup: 28,
+    kingpin: 24,
+    cupWasher: 32,
+    bushing: 32,
+    pivot: 24,
+    axle: 32,
+    speedWasher: 24,
+    nut: 6,
+    bolt: 16,
+    /** A round socket in each bolt head (an allen head, 4 mm across, 0.8 mm deep). */
+    boltSocket: { radius: 0.002, depth: 0.0008 } as null | { radius: number; depth: number },
+    wheelRadial: 64,
+    /**
+     * High wheel lathe profile, (r, z) with z along the axle, +z outboard:
+     * a 608 bearing (8 mm bore, 22 mm OD: inner race, recessed dark shield,
+     * outer race), the core face, and a six-point rounded lip to the 18 mm
+     * contact patch. 28 points, 27 band segments; WHEEL_HIGH_BAND_KINDS
+     * colours them by index.
+     */
+    wheelProfile: [
+      [0.004, -0.015],
+      [0.006, -0.015],
+      [0.006, -0.0147],
+      [0.0095, -0.0147],
+      [0.0095, -0.015],
+      [0.011, -0.015],
+      [0.011, -0.016],
+      [0.02, -0.016],
+      [0.0225, -0.01585],
+      [0.0243, -0.015],
+      [0.0255, -0.013],
+      [0.0261, -0.0115],
+      [0.02645, -0.01],
+      [0.0265, -0.009],
+      [0.0265, 0.009],
+      [0.02645, 0.01],
+      [0.0261, 0.0115],
+      [0.0255, 0.013],
+      [0.0243, 0.015],
+      [0.0225, 0.01585],
+      [0.02, 0.016],
+      [0.011, 0.016],
+      [0.011, 0.015],
+      [0.0095, 0.015],
+      [0.0095, 0.0147],
+      [0.006, 0.0147],
+      [0.006, 0.015],
+      [0.004, 0.015],
+    ] as readonly (readonly [number, number])[],
+  },
+} as const;
+
+export type HardwareDetail = (typeof HARDWARE_DETAIL)[DetailLevel];
+
 /** 7.1: group height at rest, so the wheel bottoms touch y = 0. */
 export const REST_Y = -(WHEEL.centerY - WHEEL.radius);
 
@@ -161,6 +280,27 @@ export const TEXTURES = {
 } as const;
 
 export type TextureKey = keyof typeof TEXTURES;
+
+/**
+ * High-tier textures (board-high.glb). The grip is RGB with a tangent-space
+ * normal map from the same grain height field; the graphic is the SVG at full
+ * size; the ply and wheel bands are taller so their edges stay crisp close up.
+ */
+export const TEXTURES_HIGH = {
+  grip: { file: 'grip-high.png', width: 1024, height: 1024, wrap: 'repeat', tile: 0.2 },
+  /** Half the colour map's size: the grain normals are derived from a 2 x 2 box-filtered lift field (a full-size map was 2.1 MB of PNG). */
+  gripNormal: { file: 'grip-normal.png', width: 512, height: 512, wrap: 'repeat', tile: 0.2 },
+  deckBottom: { file: 'deck-bottom-high.png', width: 2048, height: 512, wrap: 'clamp' },
+  ply: { file: 'ply-high.png', width: 32, height: 256, wrap: 'clamp' },
+  wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'clamp' },
+} as const;
+
+export type TextureHighKey = keyof typeof TEXTURES_HIGH;
+
+/** Normal map strength for the high grip (glTF normalTexture scale). */
+export const GRIP_NORMAL_SCALE = 0.6;
+/** Height-to-slope factor when turning the grip lift field into normals (per lift unit per pixel). */
+export const GRIP_NORMAL_SLOPE = 0.02;
 
 /** 7.3 grip grit recipe. */
 export const GRIP_RECIPE = {
@@ -191,7 +331,29 @@ export const WHEEL_BANDS = {
   shoulder: '#e4ddcc',
   tread: '#dcd4c2',
   raceRows: 3,
+  /** High tier only: the urethane core face around the bearing is a shade warmer. */
+  core: '#e2dac6',
 } as const;
+
+export type WheelBandKind = 'shield' | 'race' | 'urethane' | 'shoulder' | 'tread' | 'core';
+
+/** High wheel: the band kind of each lathe segment, in HARDWARE_DETAIL.high.wheelProfile order (27 segments). */
+export const WHEEL_HIGH_BAND_KINDS: readonly WheelBandKind[] = [
+  'race', 'race', 'shield', 'race', 'race', 'core', 'core', 'urethane', 'urethane', 'urethane', 'shoulder', 'shoulder', 'shoulder',
+  'tread',
+  'shoulder', 'shoulder', 'shoulder', 'urethane', 'urethane', 'urethane', 'core', 'core', 'race', 'race', 'shield', 'race', 'race',
+];
+
+/** High grip grit: the 7.3 recipe scaled to a 1024 px tile (four times the grains, radii doubled). */
+export const GRIP_RECIPE_HIGH = {
+  ...GRIP_RECIPE,
+  grains: GRIP_RECIPE.grains * 4,
+  grainRadii: GRIP_RECIPE.grainRadii.map(([r, w]) => [r * 2, w] as const),
+  glints: GRIP_RECIPE.glints * 4,
+} as const;
+
+/** High ply stripes: per-column (along the deck) brightness jitter, so the edge reads as wood, not paint. */
+export const PLY_GRAIN = { seed: 20261105, jitter: 5 } as const;
 
 /**
  * Glb node names, one mesh with one primitive each, so one draw call each.
@@ -209,15 +371,40 @@ export const PARTS = [
 
 export type PartName = (typeof PARTS)[number]['node'];
 
-/** BRIEF-BOARD.md budget, checked by scripts/check-assets.ts. */
-export const BUDGET = {
-  drawCalls: 8,
-  triangles: 25000,
-  fileBytes: 300 * 1024,
-  textures: 4,
-  textureMaxSide: 1024,
-  sceneDrawCalls: 20,
-} as const;
+export interface AssetBudget {
+  drawCalls: number;
+  triangles: number;
+  fileBytes: number;
+  textures: number;
+  textureMaxSide: number;
+}
 
-/** Where the build writes and the runtime loads the model (relative to public/). */
+/**
+ * Per-asset budgets, checked by scripts/check-assets.ts (quality tiers,
+ * 2026-11-04). `board` is the BRIEF-BOARD.md Chromebook budget, unchanged.
+ * `boardHigh` and `shoes` are the desktop tier: generous, but still gates.
+ */
+export const BUDGETS = {
+  board: { drawCalls: 8, triangles: 25000, fileBytes: 300 * 1024, textures: 4, textureMaxSide: 1024 },
+  boardHigh: { drawCalls: 8, triangles: 120000, fileBytes: 2.5 * 1024 * 1024, textures: 6, textureMaxSide: 2048 },
+  shoes: { drawCalls: 3, triangles: 30000, fileBytes: 600 * 1024, textures: 2, textureMaxSide: 1024 },
+  /**
+   * The concrete ground (realistic ground pass, 2026-11-04, ADR-31): one
+   * textured plane, loaded on Medium and High only (Low draws an untextured
+   * plane). Colour, normal and roughness maps of one slab bay.
+   */
+  ground: { drawCalls: 1, triangles: 64, fileBytes: 500 * 1024, textures: 3, textureMaxSide: 1024 },
+} as const satisfies Record<string, AssetBudget>;
+
+export type AssetKey = keyof typeof BUDGETS;
+
+/** BRIEF-BOARD.md budget for the medium board, plus the whole-scene draw call cap. */
+export const BUDGET = { ...BUDGETS.board, sceneDrawCalls: 20 } as const;
+
+/** Where the build writes and the runtime loads the models (relative to public/). */
 export const BOARD_GLB = 'models/board.glb';
+export const BOARD_HIGH_GLB = 'models/board-high.glb';
+export const SHOES_GLB = 'models/shoes.glb';
+export const GROUND_GLB = 'models/ground.glb';
+
+export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB };

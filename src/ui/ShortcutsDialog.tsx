@@ -3,11 +3,13 @@ import { useTrickStore } from '../store';
 
 const SHORTCUTS: [string[], string][] = [
   [['Tab'], 'Move through presets, sliders, playback and results'],
-  [['1', '2', '3', '4'], 'Apply the kickflip, pop shove-it, varial flip or 360 flip preset'],
+  // One key cap for the range (an en-dash, as for any numeric range) so the eight keys do not widen the key column.
+  [['1–8'], 'Apply presets 1 to 8, in order: kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, hardflip, 360 flip'],
   [['Space'], 'Pop (when focus is not on a slider or button, where Space keeps its usual job)'],
   [['←', '→'], 'Move the focused slider; on the timeline, 1 percent'],
   [['Page Up', 'Page Down'], 'On the timeline, 10 percent'],
-  [['s'], 'Slow motion on or off'],
+  [['s'], 'Slow motion on or off (back to the last slow speed)'],
+  [['[', ']'], 'One speed step slower or faster, also while the board is in the air'],
   [['r'], 'Reset inputs, board and objectives (the event log is kept)'],
   [['t'], 'Light or dark theme'],
   [['p'], 'Show or hide the performance badge'],
@@ -39,7 +41,7 @@ export function ShortcutsDialog() {
       <h2 id="shortcuts-title">Keyboard shortcuts</h2>
       <dl>
         {SHORTCUTS.map(([keys, what]) => (
-          <div key={what} style={{ display: 'contents' }}>
+          <div key={what}>
             <dt>
               {keys.map((k) => (
                 <kbd key={k}>{k}</kbd>

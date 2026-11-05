@@ -1,31 +1,111 @@
 // Plain-language text for the announcer, aria-valuetext, readouts and the
 // scene description. Pure so the store and the UI phrase things the same way.
-import type { Flight, TrickInputs } from './flight';
-import { ROLL_TOLERANCE, YAW_TOLERANCE, type InputKey, type TrickResult } from './tricks';
+import {
+  flickDistance,
+  FOOT,
+  hoverHeight,
+  MOTION,
+  newFeetPose,
+  RAIL_Z,
+  rateFactor,
+  scoopDistance,
+  STANCE,
+  writeStance,
+  type Stance,
+} from './feet';
+import { computeFlight, type Flight, type TrickInputs } from './flight';
+import {
+  directionWord,
+  FLIP_WORDS,
+  isLanded,
+  isUnderRotated,
+  ROLL_TOLERANCE,
+  SHOVE_WORDS,
+  YAW_TOLERANCE,
+  type InputKey,
+  type TrickResult,
+} from './tricks';
 
 export const INPUT_NAMES: Record<InputKey, string> = { pop: 'Pop', flick: 'Flick', scoop: 'Scoop' };
 export const INPUT_UNITS: Record<InputKey, string> = { pop: 'm', flick: 'rev/s', scoop: 'rev/s' };
 
-/** Number shown next to a slider: pop with 2 decimals, rates with 1. */
-export const displayValue = (key: InputKey, v: number) => (key === 'pop' ? v.toFixed(2) : v.toFixed(1));
+/**
+ * Number shown next to a slider: pop with 2 decimals, rates with 1 and as a
+ * magnitude (ADR-30): the sign is the direction, which inputDirection names.
+ */
+export const displayValue = (key: InputKey, v: number) => (key === 'pop' ? v.toFixed(2) : Math.abs(v).toFixed(1));
 
-/** aria-valuetext: "0.35 meters", "1.9 revolutions per second". */
-export function valueText(key: InputKey, v: number): string {
-  if (key === 'pop') return `${v.toFixed(2)} meters`;
-  const n = Number(v.toFixed(1));
-  return `${n} ${n === 1 ? 'revolution' : 'revolutions'} per second`;
+/**
+ * The direction a signed rate turns, as one word (ADR-30): flick "kickflip"
+ * or "heelflip", scoop "backside" or "frontside"; '' for pop and for a rate
+ * that shows as 0.0. Decided on the shown (rounded) value, so "0.0 rev/s"
+ * never carries a word.
+ */
+export function inputDirection(key: InputKey, v: number): string {
+  if (key === 'pop') return '';
+  return directionWord(key === 'flick' ? FLIP_WORDS : SHOVE_WORDS, Number(v.toFixed(1)));
 }
 
+/** The slider's readout after the number: "rev/s heelflip", "rev/s", "m". */
+export const displayUnit = (key: InputKey, v: number) => {
+  const word = inputDirection(key, v);
+  return word ? `${INPUT_UNITS[key]} ${word}` : INPUT_UNITS[key];
+};
+
+const rateWords = (v: number) => {
+  const n = Math.abs(Number(v.toFixed(1)));
+  return `${n} ${n === 1 ? 'revolution' : 'revolutions'} per second`;
+};
+
+/** aria-valuetext: "0.35 meters", "1.9 revolutions per second, heelflip", "0 revolutions per second". */
+export function valueText(key: InputKey, v: number): string {
+  if (key === 'pop') return `${v.toFixed(2)} meters`;
+  const word = inputDirection(key, v);
+  return word ? `${rateWords(v)}, ${word}` : rateWords(v);
+}
+
+/** One rate in a sentence: "heelflip flick 1.9 revolutions per second", "scoop 0 revolutions per second". */
+const rateClause = (key: 'flick' | 'scoop', v: number) => {
+  const word = inputDirection(key, v);
+  return `${word ? `${word} ` : ''}${key} ${rateWords(v)}`;
+};
+
+/** "pop 0.35 meters, heelflip flick 1.9 revolutions per second, frontside scoop 0.9 revolutions per second". */
 export const describeInputs = (i: TrickInputs) =>
-  `pop ${valueText('pop', i.pop)}, flick ${valueText('flick', i.flick)}, scoop ${valueText('scoop', i.scoop)}`;
+  `pop ${valueText('pop', i.pop)}, ${rateClause('flick', i.flick)}, ${rateClause('scoop', i.scoop)}`;
 
 export const deg = (d: number) => Math.round(d);
 export const seconds = (s: number) => s.toFixed(2);
 const degWord = (d: number) => `${Math.abs(deg(d))} ${Math.abs(deg(d)) === 1 ? 'degree' : 'degrees'}`;
 
-/** "Kickflip landed. 365 degrees of flip, 0 degrees of shove, 0.53 seconds in the air." */
+/**
+ * Signed totals in words (ADR-30): the magnitude, then the direction when it
+ * is not 0. The flip's direction is its trick ("kickflip", "heelflip"), the
+ * shove's its side ("backside", "frontside"). Decided on the rounded degrees,
+ * so a total that shows as 0 has no direction.
+ */
+export const flipDirection = (d: number) => directionWord(FLIP_WORDS, deg(d));
+export const shoveDirection = (d: number) => directionWord(SHOVE_WORDS, deg(d));
+/** Noun for a total on its axis: "heelflip", "frontside shove", or plain "flip", "shove" at 0. */
+const flipNoun = (d: number) => flipDirection(d) || 'flip';
+const shoveNoun = (d: number) => {
+  const w = shoveDirection(d);
+  return w ? `${w} shove` : 'shove';
+};
+
+/**
+ * Telemetry readout for a signed total, in two parts: the magnitude ("365°")
+ * and the direction ("heelflip", "frontside", '' at 0). Read together they
+ * are "365° heelflip"; the row's own label (Flip, Shove) names the axis.
+ */
+export const degReadout = (axis: 'flip' | 'shove', d: number) => ({
+  value: `${Math.abs(deg(d))}°`,
+  dir: axis === 'flip' ? flipDirection(d) : shoveDirection(d),
+});
+
+/** "Heelflip landed. 365 degrees of heelflip, 0 degrees of shove, 0.53 seconds in the air." */
 export function describeResult(r: TrickResult): string {
-  const totals = `${degWord(r.rollTotal)} of flip, ${degWord(r.yawTotal)} of shove, ${seconds(r.airtime)} seconds in the air.`;
+  const totals = `${degWord(r.rollTotal)} of ${flipNoun(r.rollTotal)}, ${degWord(r.yawTotal)} of ${shoveNoun(r.yawTotal)}, ${seconds(r.airtime)} seconds in the air.`;
   if (r.landed) return `${r.name} landed. ${totals}`;
   return `${r.name} not landed: ${r.failedAxis} ${r.outcome} by ${degWord(r.failedBy)}. ${totals}`;
 }
@@ -41,32 +121,159 @@ const HINT: Record<'flip' | 'shove', Record<'under' | 'over', string>> = {
  */
 export function outcomeCard(r: TrickResult): { name: string; detail: string } {
   if (r.landed) {
+    // "No rotation" only when both totals show as 0: an ollie inside the
+    // tolerances can still have turned up to 30 degrees of flip and 25 of
+    // shove, and the card must not contradict the telemetry.
     const detail =
-      r.id === 'ollie'
+      r.id === 'ollie' && deg(r.rollTotal) === 0 && deg(r.yawTotal) === 0
         ? `No rotation, ${seconds(r.airtime)} s in the air. Add flick or scoop to try a trick.`
-        : `${deg(r.rollTotal)} deg flip, ${deg(r.yawTotal)} deg shove, ${seconds(r.airtime)} s in the air.`;
+        : `${Math.abs(deg(r.rollTotal))} deg ${flipNoun(r.rollTotal)}, ${Math.abs(deg(r.yawTotal))} deg ${shoveNoun(r.yawTotal)}, ${seconds(r.airtime)} s in the air.`;
     return { name: `${r.name} landed`, detail };
   }
+  // Under or over against the direction of rotation (ADR-30), not the raw sign of the error.
   const off = [
-    { axis: 'flip' as const, err: r.rollError, fails: Math.abs(r.rollError) > ROLL_TOLERANCE },
-    { axis: 'shove' as const, err: r.yawError, fails: Math.abs(r.yawError) > YAW_TOLERANCE },
+    { axis: 'flip' as const, err: r.rollError, under: isUnderRotated(r.rollTotal, 360), fails: Math.abs(r.rollError) > ROLL_TOLERANCE },
+    { axis: 'shove' as const, err: r.yawError, under: isUnderRotated(r.yawTotal, 180), fails: Math.abs(r.yawError) > YAW_TOLERANCE },
   ].filter((a) => a.fails);
-  const dir = (err: number) => (err < 0 ? 'under' : 'over');
+  const dir = (under: boolean) => (under ? 'under' : 'over');
   const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
+  const failed = r.outcome === 'under-rotated' ? 'under' : 'over';
   const detail =
     off.length === 2
-      ? `${off.map((a, i) => `${i === 0 ? cap(dir(a.err)) : dir(a.err)}-rotated ${Math.abs(deg(a.err))} deg of ${a.axis}`).join(', ')}.`
-      : `${cap(dir(r.failedBy))}-rotated by ${Math.abs(deg(r.failedBy))} deg of ${r.failedAxis}. ${HINT[r.failedAxis!][dir(r.failedBy)]}`;
+      ? `${off.map((a, i) => `${i === 0 ? cap(dir(a.under)) : dir(a.under)}-rotated ${Math.abs(deg(a.err))} deg of ${a.axis}`).join(', ')}.`
+      : `${cap(failed)}-rotated by ${Math.abs(deg(r.failedBy))} deg of ${r.failedAxis}. ${HINT[r.failedAxis!][failed]}`;
   return { name: `${r.name} not landed`, detail };
 }
 
-/** Text equivalent of the 3D view for #scene-description. */
 /**
- * The rotation convention in words (ADR-10), so a screen-reader user gets the
- * same directions a sighted user sees from the default camera.
+ * The stance and rotation convention in words (ADR-10, ADR-24, ADR-25), so a
+ * screen-reader user gets the same directions a sighted user sees from the
+ * default camera, which is on the heel side in both stances.
  */
-export const STANCE_NOTE =
-  'Regular stance, nose to the right, toe side toward the camera. Flick rolls the grip toward the heel side, the kickflip direction. Scoop spins the tail behind the heels, clockwise seen from above, the backside shove-it direction.';
+export const STANCE_NOTE: Record<Stance, string> = {
+  goofy:
+    'Goofy stance, nose to the right, heel side toward the camera. Flick rolls the grip toward the heel side for a kickflip, toward the toe side for a heelflip; scoop swings the tail behind the heels for backside, counterclockwise seen from above, and in front of the toes for frontside, clockwise.',
+  regular:
+    'Regular stance, nose to the left, heel side toward the camera. Flick rolls the grip toward the heel side for a kickflip, toward the toe side for a heelflip; scoop swings the tail behind the heels for backside, clockwise seen from above, and in front of the toes for frontside, counterclockwise.',
+};
+
+/**
+ * The stance the feet take for these inputs (src/sim/feet.ts), in words. The
+ * shoes follow the inputs, so this is also what a sighted student sees change
+ * as the sliders move. Computed in the goofy frame; the words are relative to
+ * the rider, so they hold for regular too.
+ */
+export function describeFeet(inputs: TrickInputs): string {
+  const p = writeStance(newFeetPose(), inputs);
+  // Goofy yaw (ADR-24): across is +87 and turning toward the nose lowers it.
+  const turn = Math.round(STANCE.front.yawAcross - p.front.yaw);
+  // The toe points along (cos yaw, 0, -sin yaw), so the heel sits half a shoe the other way, toward +Z.
+  const heelZ = p.front.z + (FOOT.length / 2) * Math.sin((p.front.yaw * Math.PI) / 180);
+  const front =
+    inputDirection('flick', inputs.flick) === 'heelflip'
+      ? 'Front foot across the board just behind the front bolts, toes hanging over the toe-side edge for a heelflip'
+      : turn < 3
+        ? 'Front foot across the board just behind the front bolts'
+        : `Front foot just behind the front bolts, turned ${turn} degrees toward the nose${heelZ > RAIL_Z ? ' with the heel over the heel-side edge' : ''}`;
+  const scoop = inputDirection('scoop', inputs.scoop);
+  const back =
+    scoop === 'backside'
+      ? 'back foot on its ball across the tail, toes toward the toe-side edge to scoop'
+      : scoop === 'frontside'
+        ? 'back foot on its ball toward the heel side of the tail, to scoop frontside'
+        : 'back foot on its ball across the tail, heel up';
+  return `${front}; ${back}.`;
+}
+
+/** One step of the foot motion, timed in fractions of the airtime (the phases of src/sim/feet.ts). */
+export interface FootStep {
+  foot: 'front' | 'back' | 'both';
+  text: string;
+  start: number;
+  end: number;
+}
+
+const cm = (m: number) => `${Math.round(m * 100)} cm`;
+
+/**
+ * The foot motion as ordered steps (DESIGN.md 8.5): the text equivalent of
+ * the foot trails and a coaching script, from the same feet model, so a weak
+ * flick reads "only 4 cm, it barely reaches the rail" and a trick that will
+ * not land ends in a bail step. Takes the flight being shown, or before a pop
+ * the flight the live inputs would make. Landing uses the flight's own
+ * landing test (isLanded), never the recognized trick.
+ */
+export function footSteps(s: { flight: Flight | null; pop: number; flick: number; scoop: number }): FootStep[] {
+  const flight = s.flight ?? computeFlight({ pop: s.pop, flick: s.flick, scoop: s.scoop });
+  const i = flight.inputs;
+  const M = MOTION;
+  // Magnitudes for the amounts, the signs for the direction (ADR-30).
+  const f = Math.min(1, rateFactor(i.flick));
+  const sc = Math.min(1, rateFactor(i.scoop));
+  const heel = i.flick < 0;
+  const steps: FootStep[] = [
+    { foot: 'back', text: 'Back foot snaps the tail down off the ball of the foot: the pop.', start: 0, end: M.pop.end },
+  ];
+  if (i.scoop !== 0) {
+    const d = scoopDistance(i);
+    const how = d >= M.scoop.max ? ', as hard as it goes' : d < 0.06 ? ', a light nudge' : '';
+    steps.push({
+      foot: 'back',
+      text:
+        i.scoop > 0
+          ? `Back foot scoops the tail back behind the heels, ${cm(d)} toward the heel side${how}.`
+          : `Back foot slices the tail forward in front of the toes, ${cm(d)} toward the toe side${how}.`,
+      start: 0,
+      end: M.scoop.end + M.scoop.endScoop * sc,
+    });
+  }
+  const slide = Math.max(M.slide.min, M.slide.distance + (heel ? M.slide.distanceHeel : M.slide.distanceFlick) * f);
+  steps.push({
+    foot: 'front',
+    text: heel
+      ? `Front foot slides up the grip toward the nose, ${cm(slide)}.`
+      : `Front foot drags up the grip on its outside edge toward the nose, ${cm(slide)}.`,
+    start: 0,
+    end: M.slide.end + M.slide.endFlick * f,
+  });
+  if (i.flick !== 0) {
+    const d = flickDistance(i);
+    // A heelflip's heel starts at the far rail, so its kick is scaled by heelReach (ADR-34); so is "weak".
+    const weak = 0.08 * (heel ? M.flick.heelReach : 1);
+    const text = heel
+      ? d < weak
+        ? `Front foot kicks off the toe-side corner of the nose, but only ${cm(d)}: it barely reaches the rail.`
+        : `Front foot kicks forward and out off the toe-side corner of the nose, heel last, ${cm(d)}.`
+      : d < weak
+        ? `Front foot flicks off the heel-side corner of the nose, but only ${cm(d)}: it barely reaches the rail.`
+        : `Front foot flicks forward, out and up off the heel-side corner of the nose, ${cm(d)}.`;
+    steps.push({ foot: 'front', text, start: M.flick.start, end: M.flick.end });
+  }
+  const hover = hoverHeight(i);
+  steps.push(
+    hover < 0.03
+      ? { foot: 'both', text: 'Both feet stay on the board as it levels out and rises with them.', start: M.flick.end, end: M.gather.end }
+      : { foot: 'both', text: `Both feet lift ${cm(hover)} clear while the board turns under them.`, start: M.flick.end, end: M.gather.end },
+  );
+  const landed = isLanded(flight.rollTotal, flight.yawTotal);
+  steps.push(
+    landed
+      ? { foot: 'both', text: 'Both feet come back over the bolts and land on the grip.', start: M.gather.end, end: 1 }
+      : { foot: 'both', text: 'The board does not come round in time: both feet step off to the heel side, a bail.', start: M.bail.start, end: 1 },
+  );
+  return steps;
+}
+
+/** Where the feet are during and after a flight. */
+function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done'; progress: number; flight: Flight | null }): string {
+  if (!s.flight || s.status === 'idle') return '';
+  if (s.status === 'done' && s.progress >= 1) {
+    return isLanded(s.flight.rollTotal, s.flight.yawTotal)
+      ? 'Feet landed on the bolts.'
+      : 'Feet stepped off to the heel side and landed on the pad: a bail.';
+  }
+  return 'Feet in the air above the board.';
+}
 
 export function describeScene(s: {
   status: 'idle' | 'playing' | 'paused' | 'done';
@@ -76,6 +283,9 @@ export function describeScene(s: {
   pop: number;
   flick: number;
   scoop: number;
+  feetVisible?: boolean;
+  /** Goofy when left out (ADR-25). */
+  stance?: Stance;
 }): string {
   const board =
     s.status === 'playing'
@@ -87,7 +297,9 @@ export function describeScene(s: {
             ? 'Skateboard back on the pad at its landing pose.'
             : `Skateboard frozen at ${Math.round(s.progress * 100)} percent of the flight.`
           : 'Skateboard resting flat on a concrete pad, grip side up.';
+  const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
-  const last = s.result ? `Last trick: ${describeResult(s.result)}` : 'No trick popped yet.';
-  return `${board} ${STANCE_NOTE} ${inputs} ${last}`;
+  // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
+  const last = s.result ? `Last trick: ${describeResult(s.result)}` : s.flight ? 'Waiting for this trick to land.' : 'No trick popped yet.';
+  return `${board}${feet} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }
