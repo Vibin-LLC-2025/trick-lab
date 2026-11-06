@@ -13,6 +13,7 @@ import { Playback } from './Playback';
 import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { Skate } from './Skate';
 import { Telemetry } from './Telemetry';
 import { ViewPanel } from './ViewPanel';
 
@@ -73,6 +74,7 @@ function useFocusRequests() {
   const request = useTrickStore((s) => s.focusRequest);
   useEffect(() => {
     if (request?.kind === 'setup-heading') document.getElementById('setup-heading')?.focus();
+    else if (request?.kind === 'skate-heading') document.getElementById('skate-heading')?.focus();
   }, [request]);
 }
 
@@ -121,6 +123,7 @@ export function App() {
           <PerfBadge />
         </section>
         <aside className="app__results" aria-label="Results">
+          <Skate />
           <Telemetry />
           <FootMotion />
           <Objectives />

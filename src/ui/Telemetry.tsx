@@ -1,4 +1,5 @@
 import { degReadout, outcomeCard, seconds, spinReadout } from '../sim/format';
+import { skateActive } from '../sim/skate';
 import { useTrickStore } from '../store';
 
 const NONE = 'not yet';
@@ -6,6 +7,8 @@ const NONE = 'not yet';
 function OutcomeCard() {
   const result = useTrickStore((s) => s.result);
   const status = useTrickStore((s) => s.status);
+  const cpu = useTrickStore((s) => s.flightBy === 'computer');
+  const inGame = useTrickStore((s) => skateActive(s.skate));
 
   // No role="status" here: the single Announcer is the live region, so the
   // result is not read twice.
@@ -13,7 +16,7 @@ function OutcomeCard() {
     const card = outcomeCard(result);
     return (
       <div className={`outcome ${result.landed ? 'outcome--landed' : 'outcome--bailed'}`}>
-        <p className="outcome__name">{card.name}</p>
+        <p className="outcome__name">{cpu ? `Computer: ${card.name}` : card.name}</p>
         <p className="outcome__detail">{card.detail}</p>
       </div>
     );
@@ -21,11 +24,13 @@ function OutcomeCard() {
   const inAir = status === 'playing' || status === 'paused';
   return (
     <div className="outcome">
-      <p className="outcome__name">{inAir ? 'In the air' : 'Set the board up and pop'}</p>
+      <p className="outcome__name">{inAir ? (cpu ? "The computer's trick is in the air" : 'In the air') : 'Set the board up and pop'}</p>
       <p className="outcome__detail">
         {inAir
           ? 'The result shows when the board lands.'
-          : 'Pick a preset or move the sliders, then press Pop or Space.'}
+          : inGame
+            ? 'Move the sliders, then press Pop or Space.'
+            : 'Pick a preset or move the sliders, then press Pop or Space.'}
       </p>
     </div>
   );

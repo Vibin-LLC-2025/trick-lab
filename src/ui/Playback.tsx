@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { computerTurn } from '../sim/skate';
 import { SPEEDS, speedIndex, speedLabel, speedText, useTrickStore } from '../store';
 
 /**
@@ -97,6 +98,9 @@ export function Playback() {
   const resetSession = useTrickStore((s) => s.resetSession);
   const announce = useTrickStore((s) => s.announce);
   const playing = status === 'playing';
+  // On the computer's turn in a game of SKATE (ADR-43) the same button and key start its go.
+  const cpuTurn = useTrickStore((s) => computerTurn(s.skate));
+  const popLabel = cpuTurn ? "Computer's go" : 'Pop';
   const pausable = status === 'playing' || status === 'paused';
 
   return (
@@ -109,12 +113,12 @@ export function Playback() {
         <button
           type="button"
           className="btn btn--primary"
-          aria-label="Pop"
+          aria-label={popLabel}
           aria-keyshortcuts="Space"
           aria-disabled={playing || undefined}
           onClick={popTrick}
         >
-          Pop <kbd aria-hidden="true">Space</kbd>
+          {popLabel} <kbd aria-hidden="true">Space</kbd>
         </button>
         <button
           type="button"

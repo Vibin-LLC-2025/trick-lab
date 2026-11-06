@@ -3,6 +3,7 @@ import { createAssessmentSlice, type Clock } from './assessment';
 import { createInputsSlice } from './inputs';
 import { createPlaybackSlice } from './playback';
 import { createPlayhead, type Playhead } from './playhead';
+import { createSkateSlice, type Random } from './skate';
 import { createUiSlice } from './ui';
 import type { TrickState } from './types';
 
@@ -11,21 +12,24 @@ export { animates } from './playback';
 export { effectiveQuality } from './quality';
 export { liveProgress, type Playhead } from './playhead';
 
+export type { Random } from './skate';
 export type { TrickState, TrickEvent, EventType, FocusTarget, Theme, Quality, Stance, CameraView, PlaybackStatus, PlaybackRate } from './types';
 
 /**
- * Factory so tests can inject a deterministic clock and get an isolated store.
+ * Factory so tests can inject a deterministic clock and the computer's random
+ * numbers (the game of SKATE, ADR-43), and get an isolated store.
  * Each store gets its own live playhead (playhead.ts), as `store.playhead`:
  * one mutable object, made here before any frame can run, never replaced,
  * and outside the reactive state, so two stores never share it.
  */
-export const createTrickStore = (now: Clock = () => performance.now()) => {
+export const createTrickStore = (now: Clock = () => performance.now(), random: Random = () => Math.random()) => {
   const playhead: Playhead = createPlayhead();
   const store = create<TrickState>()((...a) => ({
     ...createInputsSlice(...a),
     ...createPlaybackSlice(playhead)(...a),
     ...createAssessmentSlice(now, playhead)(...a),
     ...createUiSlice(...a),
+    ...createSkateSlice(random)(...a),
   }));
   return Object.assign(store, { playhead });
 };

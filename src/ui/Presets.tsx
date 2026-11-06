@@ -1,4 +1,5 @@
 import { PRESETS } from '../sim/tricks';
+import { skateActive } from '../sim/skate';
 import { useTrickStore } from '../store';
 
 /**
@@ -8,6 +9,8 @@ import { useTrickStore } from '../store';
 export function Presets() {
   const active = useTrickStore((s) => s.activePreset);
   const applyPreset = useTrickStore((s) => s.applyPreset);
+  // Off in a game of SKATE (ADR-43): aria-disabled, so the buttons stay focusable and explain themselves.
+  const off = useTrickStore((s) => skateActive(s.skate));
 
   return (
     <section className="panel" aria-labelledby="setup-heading">
@@ -24,6 +27,8 @@ export function Presets() {
             className={`preset${active === p.id ? ' preset--active' : ''}`}
             aria-pressed={active === p.id}
             aria-keyshortcuts={p.key}
+            aria-disabled={off || undefined}
+            aria-describedby={off ? 'presets-off' : undefined}
             onClick={() => applyPreset(p.id)}
           >
             {p.label}
@@ -33,6 +38,11 @@ export function Presets() {
           </button>
         ))}
       </div>
+      {off && (
+        <p className="panel__note" id="presets-off">
+          Presets are off during a game of SKATE.
+        </p>
+      )}
     </section>
   );
 }

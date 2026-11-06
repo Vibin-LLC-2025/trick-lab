@@ -318,6 +318,8 @@ export function describeScene(s: {
   legsVisible?: boolean;
   /** Goofy when left out (ADR-25). */
   stance?: Stance;
+  /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
+  flightBy?: 'you' | 'computer';
 }): string {
   const board =
     s.status === 'playing'
@@ -333,6 +335,13 @@ export function describeScene(s: {
   const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
-  const last = s.result ? `Last trick: ${describeResult(s.result)}` : s.flight ? 'Waiting for this trick to land.' : 'No trick popped yet.';
+  const cpu = s.flightBy === 'computer';
+  const last = s.result
+    ? `${cpu ? "The computer's last trick" : 'Last trick'}: ${describeResult(s.result)}`
+    : s.flight
+      ? cpu
+        ? "Waiting for the computer's trick to land."
+        : 'Waiting for this trick to land.'
+      : 'No trick popped yet.';
   return `${board}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

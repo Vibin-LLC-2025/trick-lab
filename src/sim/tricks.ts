@@ -92,6 +92,14 @@ const NAMED: Record<string, { id: TrickId; name: string }> = {
   '2,2': { id: 'double-tre', name: 'Double tre' },
 };
 
+/** Every named trick with its signed flips and half shoves, in table order. The game of SKATE calls from it (ADR-43). */
+export const NAMED_TRICKS: readonly { id: TrickId; name: string; flips: number; halfShoves: number }[] = Object.entries(NAMED).map(
+  ([key, trick]) => {
+    const [flips = 0, halfShoves = 0] = key.split(',').map(Number);
+    return { ...trick, flips, halfShoves };
+  },
+);
+
 /** Direction words per axis (ADR-30): the flip by its trick, the shove by its side. */
 export const FLIP_WORDS = { positive: 'kickflip', negative: 'heelflip' } as const;
 export const SHOVE_WORDS = { positive: 'backside', negative: 'frontside' } as const;

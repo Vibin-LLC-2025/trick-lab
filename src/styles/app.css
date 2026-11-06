@@ -1075,6 +1075,78 @@ a {
   border-color: var(--color-ok);
 }
 
+/* ---------- Game of SKATE (ADR-43, DESIGN.md 11) ----------
+   Markup: <dl class="skate__score"><div class="skate__row"><dt class="skate__who">You</dt>
+     <dd class="skate__letters"><span class="skate__letter skate__letter--got">S</span>...</dd></div></dl>
+     <p class="skate__call">What to do now</p> <div class="skate__actions"><button class="btn">...</button></div>
+   A letter you have is a filled bad-red tile in bold; one you do not is a
+   dashed outline with a muted letter, so the count never rests on colour. */
+
+.skate__score {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.skate__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.skate__who {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.skate__letters {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.skate__letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1;
+  color: var(--color-muted);
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
+.skate__letter--got {
+  border-style: solid;
+  border-color: var(--color-bad);
+  background: var(--color-bad);
+  color: var(--color-bad-fg);
+  font-weight: var(--weight-bold);
+}
+
+.skate__call {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
+.skate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Presets are off during a game: still focusable (aria-disabled), visibly dimmed. */
+.preset[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ---------- Event log ----------
    Markup: <div class="eventlog"><table><thead>...</thead><tbody><tr class="eventlog__row"><td class="eventlog__t">1240</td><td class="eventlog__type">trick.popped</td><td>{...}</td></tr></tbody></table></div>
    Lowest in the hierarchy: small mono text in a capped, scrollable well. */

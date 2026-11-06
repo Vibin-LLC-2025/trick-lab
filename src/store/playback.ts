@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { computeFlight } from '../sim/flight';
 import { describeInputs, describeResult } from '../sim/format';
+import { skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
 import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
@@ -12,6 +13,7 @@ export const initialPlayback = () => ({
   rate: 1,
   slowRate: DEFAULT_SLOW,
   flight: null,
+  flightBy: 'you' as const,
   result: null,
   scrubFrom: null,
 });
@@ -40,9 +42,11 @@ export const createPlaybackSlice =
       const s = get();
       if (!s.flight || s.result) return;
       const result = recognize(s.flight);
+      const by = s.flightBy;
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
       s.log('trick.resolved', {
+        by,
         trick: result.id,
         name: result.name,
         landed: result.landed,
@@ -52,8 +56,9 @@ export const createPlaybackSlice =
         airtime: round(result.airtime, 3),
       });
 
-      const out = [...lead, describeResult(result)];
-      const fresh = newlyCompleted(result, s.completed);
+      // The computer's tricks (a game of SKATE, ADR-43) are announced as its own and never complete an objective.
+      const out = [...lead, by === 'computer' ? `The computer's trick: ${describeResult(result)}` : describeResult(result)];
+      const fresh = by === 'you' ? newlyCompleted(result, s.completed) : [];
       if (fresh.length > 0) {
         const completed = [...s.completed, ...fresh];
         set({ completed });
@@ -63,6 +68,7 @@ export const createPlaybackSlice =
         }
         out.push(`${completed.length} of ${OBJECTIVES.length} objectives done.`);
       }
+      out.push(...s.scoreSkate(result, by));
       s.announce(out.join(' '));
     };
 
@@ -76,7 +82,15 @@ export const createPlaybackSlice =
           s.announce('The board is still in the air.');
           return;
         }
-        const inputs = { pop: s.pop, flick: s.flick, scoop: s.scoop };
+        // In a game a paused trick must land before the next pop: no do-overs (ADR-43).
+        if (skateActive(s.skate) && inFlight(s)) {
+          s.announce('This trick has not landed yet. Press Resume to finish it.');
+          return;
+        }
+        // On the computer's turn in a game of SKATE it pops its own inputs; the sliders stay the student's.
+        const go = s.computerGo();
+        const by = go ? ('computer' as const) : ('you' as const);
+        const inputs = go ? go.inputs : { pop: s.pop, flick: s.flick, scoop: s.scoop };
         const flightId = s.flightId + 1;
         // The new flight owns the playhead from its first frame.
         head.flightId = flightId;
@@ -86,11 +100,12 @@ export const createPlaybackSlice =
           progress: 0,
           flight: computeFlight(inputs),
           flightId,
+          flightBy: by,
           result: null,
           scrubFrom: null,
         });
-        s.log('trick.popped', { ...inputs, preset: s.activePreset });
-        const lead = `Popped with ${describeInputs(inputs)}.`;
+        s.log('trick.popped', go ? { by, ...inputs, preset: null, call: go.call } : { by, ...inputs, preset: s.activePreset });
+        const lead = go ? go.lead : `Popped with ${describeInputs(inputs)}.`;
         // Reduced motion, or no 3D view: no playback at all. Resolve now and
         // leave the board at its final pose; the timeline steps through the flight.
         if (!animates(s)) resolve([lead]);

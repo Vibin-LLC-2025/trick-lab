@@ -661,3 +661,13 @@ Themes: only the clear colour and the fog colour change. The light theme reads a
 The Medium and Low footprint ellipse (section 2) reads correctly on the textured ground and was not changed.
 
 Screenshots: `docs/screenshots/13-ground-high-dark.png`, `14-ground-light.png`, `15-ground-low.png`.
+
+## 11. Game of SKATE panel (2026-11-06, ADR-43)
+
+The first panel of the results column, titled "Game of SKATE", with the session's wins in `.panel__count` ("won 1 of 2") once a game has finished.
+
+- **Between games:** a `.panel__note` with the rules in one breath, a `.segmented` group "Computer" (Easy, Normal, Hard) with its hint, then `.skate__actions` holding Start game (`.btn--primary`).
+- **In a game:** `.skate__score`, a `dl` with one `.skate__row` per player: the name (`.skate__who`, 72 px column) and five `.skate__letter` tiles in `.skate__letters`, 24 x 24 px, mono 13 px. A letter not yet earned is a 1 px dashed `--color-line-strong` outline with a muted letter; an earned one is `.skate__letter--got`, solid `--color-bad` with bold `--color-bad-fg` text (6.87 light, 8.13 dark), so the count reads from fill and weight, not colour alone. The tiles are `aria-hidden`; a visually hidden "S K" or "no letters" reads instead. Under them, the last rule message in `.panel__note`, then what to do now in `.skate__call` (13 px semibold, `--color-text`). Quit game (`.btn--ghost.btn--sm`) sits in `.panel__head`.
+- **Game over:** the same score, then Play again (`.btn--primary`) and Back to practice (`.btn`) in `.skate__actions`.
+- **Presets in a game:** `aria-disabled="true"` at 0.55 opacity with a not-allowed cursor, like a disabled `.btn`, and a `.panel__note` under the grid.
+- **Pop:** the label changes to "Computer's go" on the computer's turn; nothing else about the button changes.

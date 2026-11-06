@@ -13,6 +13,7 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 ## Features
 
 - **Physics you can see.** Airtime, height, flip and shove come from a small, pure, unit-tested model. Change one slider and the result changes for a visible reason.
+- **A game of SKATE.** Play the computer: when one of you lands a trick, the other has to copy it, and a missed copy is a letter. The computer goes through the same physics as you, missing its aim more on Easy and less on Hard.
 - **Real trick recognition.** 15 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Seven presets, seven objectives, scored as you go.
 - **A rider, not a floating board.** Shoes and legs follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails.
 - **Accessible first.** Every action has a keyboard shortcut and a DOM control, a live region describes each pop and outcome in plain language, and reduced motion turns playback into a scrubbable timeline.
@@ -60,11 +61,11 @@ The trick names follow the sign of each input (ADR-30): flick positive is the ki
 ## Architecture
 
 ```
-src/sim/     pure physics (flight.ts), feet (feet.ts) and legs (legs.ts), recognition, presets, objectives (tricks.ts), text (format.ts)
-src/store/   one Zustand store: inputs, playback, assessment, ui slices; export.ts
+src/sim/     pure physics (flight.ts), feet (feet.ts) and legs (legs.ts), recognition, presets, objectives (tricks.ts), text (format.ts), the game of SKATE (skate.ts)
+src/store/   one Zustand store: inputs, playback, assessment, ui, skate slices; export.ts
 src/asset/   pure board, shoe and ground geometry and textures (deck outline, kicks, concave, cast trucks, wheel lathe, grip noise), every number in spec.ts, shoeSpec.ts and groundSpec.ts
 src/scene/   R3F: TrickScene (Canvas), Pad, Board (BoardModel GLB or BoardPrimitive), Feet, Legs, FootPaths, FlightDriver, SceneCamera, SceneEnvironment, PerfProbe, artDirection, resources
-src/ui/      DOM: presets, sliders, playback, telemetry, objectives, event log, announcer, dialogs
+src/ui/      DOM: the game of SKATE, presets, sliders, playback, telemetry, objectives, event log, announcer, dialogs
 scripts/     build-board.ts (npm run assets), check-assets.ts (npm run assets:check), lib/ (build, PNG encoder, inspect, budget)
 public/models/            the generated, committed GLBs: board.glb (Medium), board-high.glb and shoes.glb (High), ground.glb (the concrete ground, Medium and High)
 ```
@@ -127,7 +128,7 @@ The lead wrote the brief; a design agent (fable) wrote the tokens, styles and sc
 
 ## What this is not
 
-Not a skateboarding game, not a rigid-body simulation, not measured on a real Chromebook yet, and not a shipped product.
+Not a full skateboarding game (the game of SKATE is a small one on top of the lab), not a rigid-body simulation, not measured on a real Chromebook yet, and not a shipped product.
 
 ## Why skateboarding
 
