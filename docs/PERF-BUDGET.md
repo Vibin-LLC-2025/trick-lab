@@ -465,7 +465,7 @@ Checked in the browser (RTX 3060, High by the device's pick): smooth tricks kept
 
 ### Step 14: everything, before and after
 
-Before is 87ccd92 (the `skate-game` head the plan started from, measured 2026-11-08 in the baseline above), after is 2d396d4 (all of Phases A to D with their reviews). The same script (`scripts/measure/measure.js`), the same machine (RTX 3060, Chromium), the same session for both, 1440 x 900, cache off, each build served by `serve.ts` with gzip like GitHub Pages. Eight runs: each build in both themes with the feet on and off, every tier, the welcome screen, the lab and the game. Each build at its own defaults: the legs were on by default before (ADR-37) and are off after (ADR-48). The full JSON and tables are in the run's scratch output; the numbers below are copied from them.
+Before is 87ccd92 (the `skate-game` head the plan started from, measured 2026-11-08 in the baseline above), after is 2d396d4 (all of Phases A to D with their reviews). The same script (`scripts/measure/measure.js`), the same machine (RTX 3060, Chromium), the same session for both, 1440 x 900, cache off, each build served by `serve.ts` with gzip like GitHub Pages. Eight runs: each build in both themes with the feet on and off, every tier, the welcome screen, the lab and the game. Each build at its own defaults: the legs were on by default before (ADR-37) and are off after (ADR-48). The numbers below are copied from the script's output (its JSON was not committed).
 
 **Loading** (dark theme, feet on; full speed is the range over both themes):
 
