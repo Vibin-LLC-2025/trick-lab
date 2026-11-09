@@ -1,5 +1,7 @@
 # Plan: look, feel and performance (2026-11-08)
 
+**Status, 2026-11-09: done.** All 16 steps, one commit each, on the branch `look-feel-perf` off `skate-game` (the recommended choice below), with `npm run verify` passing at every step. Decisions are ADR-48 to ADR-59 in `docs/DECISIONS.md`; the before-and-after numbers are in `docs/PERF-BUDGET.md` (step 14). After each phase a gpt-6.1-sol reviewer at high effort reviewed the work, and every finding was fixed and re-checked until it agreed (review fixes are their own commits, noted in the ADRs' Update paragraphs). The text below is the plan as written.
+
 The owner's goal: the game should look, feel and run as well as possible. This plan came out of a full review of the project on 2026-11-08 (docs, source, and the production build in a real browser) and the owner's answers to eight questions. It is the agreed gameplan; nothing in it has been started yet. Each step is one commit, `npm run verify` passes at every step, and each decision gets its own ADR (ADR-48 onward) with DESIGN.md, PERF-BUDGET.md, ASSET-PIPELINE.md and CLAUDE.md updated wherever a rule changes.
 
 ## The owner's decisions (2026-11-08)
@@ -16,7 +18,7 @@ The owner's goal: the game should look, feel and run as well as possible. This p
 | Pace | All at once: do every part, then show the result |
 | The newer renderer and post-processing | Add them if they help (they do; see "Why the new renderer" below) |
 
-Still open: whether the work goes on a new branch off `skate-game` (recommended, so `skate-game` can be merged and go live on its own) or on `skate-game` itself.
+Still open when written: whether the work goes on a new branch off `skate-game` (recommended, so `skate-game` can be merged and go live on its own) or on `skate-game` itself. It went on a new branch, `look-feel-perf`.
 
 ## Baseline (measured 2026-11-08)
 
