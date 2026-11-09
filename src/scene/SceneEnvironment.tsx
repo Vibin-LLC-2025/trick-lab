@@ -83,8 +83,9 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
   }, [get]);
 
   // Hidden until warmUp has compiled it; set imperatively, so no React state.
+  // Named so scripts/measure can tell when the lit scene first draws (ADR-48).
   return (
-    <group ref={content} visible={false}>
+    <group ref={content} name="scene-content" visible={false}>
       {children}
     </group>
   );

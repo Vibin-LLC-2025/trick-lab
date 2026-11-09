@@ -40,6 +40,21 @@ The board budget is enforced on the committed GLB by `npm run assets:check`, whi
 4. Memory panel: heap snapshot after load, after 10 pops, after 10 pop/reset cycles. Geometry count (`info.memory.geometries`) must stay flat.
 5. `?debug` exposes the R3F store as `window.__trickLab`; call `window.__trickLab.get()` for the live state (`gl.info`, `scene`, `controls`).
 
+## How to measure (2026-11-09, ADR-48)
+
+Every change from `docs/PLAN-LOOK-FEEL-PERF.md` on reports before and after from one script, `scripts/measure/measure.js`, run by the global `playwright-cli` against a production build (Playwright is not a project dependency):
+
+```
+npm run build && npx vite preview --port 4173 --strictPort
+playwright-cli -s=measure open "http://localhost:4173/?tiers=high,medium,low&nets=full,10,3"
+playwright-cli -s=measure --raw run-code --filename=scripts/measure/measure.js > measure.json
+playwright-cli -s=measure close
+```
+
+The options are the query of the page the session is on (tiers, networks, screens, feet, legs, theme, viewport, the preset, the number of timed tricks, the base path; the script's header lists them). The result is JSON with a `markdown` field holding the two tables used below. For each tier it loads the welcome screen with the HTTP cache off at full speed and at 10 and 3 Mbps (Chromium's own throttling, 60 ms latency) and records first contentful paint, the first frame of the lit 3D scene, the frame where every model of the tier is on screen, and the bytes by kind. Then, at full speed on each screen, the draw calls and triangles (the most over half a second of frames after a forced frame), and in the lab, after one untimed trick, `gl.render` CPU time and GPU time (`EXT_disjoint_timer_query_webgl2`, where the browser exposes it) over four tricks, and the frames drawn in the 1.5 s after the last landing's own frame (must be 0). Where the welcome preview loops (Medium and High) it times three seconds of it too. It reads the renderer through `?debug` and sets each load's storage from the URL (the `m-*` parameters, applied by an init script before the app runs), so nothing in the app changes for it.
+
+Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
+
 ## Measured, realistic board pass (2026-11-04)
 
 Measured by the implementation agent (opus) on a **desktop Chromium, not a Chromebook**: Windows 11, headless Chromium driven by the global `playwright-cli` (session `board-impl`), the same RTX 3060 machine as below, a display loop of about 100 Hz. Production build served by `vite preview`, viewport 1440 x 900, dark theme, storage cleared. `renderer.info` read through `?debug` after forcing a frame; "6x CPU" is CDP `Emulation.setCPUThrottlingRate`. Treat these as the best case. A Chromebook run is still owed.
@@ -246,3 +261,55 @@ Measured on the production build (`vite preview`, 1440 x 900, `?debug`, `gl.info
 | Low | off | 7 (demand) | 8 | 8 |
 
 All under the gates: 40 on High (the shadow pass counts), 20 on Medium and Low. The game and lab add one call over the welcome screen for the motion cues, which the preview hides.
+
+## Look, feel and performance plan (2026-11-09)
+
+Measured with `scripts/measure/measure.js` (above) on the same desktop as every section here, **not a Chromebook**: Windows 11, headless Chromium 156 through the global `playwright-cli`, an RTX 3060 through ANGLE and Direct3D 11, production build from `vite preview`, 1440 x 900, DPR 1, dark theme, feet on, the app's default legs, HTTP cache off. "Before" is commit 87ccd92 (the plan's starting point) built and served from a scratch worktree in the same session.
+
+### Baseline (before step 1; legs on by default)
+
+| Tier | Network | UI (FCP) | First 3D frame | All models on screen | JS | Models |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | full speed | 0.05 s | 0.52 s | 0.79 s | 375.5 KB | 2777.2 KB |
+| high | 10 Mbps | 0.28 s | 0.69 s | 3.12 s | 375.5 KB | 2777.2 KB |
+| high | 3 Mbps | 0.48 s | 1.39 s | 9.17 s | 375.5 KB | 2777.2 KB |
+| medium | full speed | 0.05 s | 0.53 s | 0.76 s | 374.5 KB | 714.7 KB |
+| medium | 10 Mbps | 0.29 s | 0.69 s | 1.56 s | 374.5 KB | 714.7 KB |
+| medium | 3 Mbps | 0.49 s | 1.39 s | 3.50 s | 374.5 KB | 714.7 KB |
+| low | full speed | 0.05 s | 0.45 s | none | 352.4 KB | 0 KB |
+| low | 10 Mbps | 0.28 s | 0.69 s | none | 352.4 KB | 0 KB |
+| low | 3 Mbps | 0.49 s | 1.41 s | none | 352.4 KB | 0 KB |
+
+| Tier | Screen | Draw calls | Triangles | Frameloop | Textures | gl.render CPU, median / p95 | GPU, median / p95 | Idle frames after the landing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| high | home | 30 | 164,206 | always | 16 | 0.6 / 1.9 ms | 3.29 / 5.65 ms |  |
+| high | lab | 31 | 164,307 | demand | 16 | 0.5 / 1 ms | 2.62 / 4.03 ms | 0 |
+| high | skate | 30 | 164,206 | demand | 16 |  |  |  |
+| medium | home | 15 | 18,446 | always | 10 | 0.3 / 1.1 ms | 2.64 / 4 ms |  |
+| medium | lab | 16 | 18,547 | demand | 10 | 0.2 / 0.5 ms | 1.27 / 3.02 ms | 0 |
+| medium | skate | 15 | 18,446 | demand | 10 |  |  |  |
+| low | home | 13 | 4,562 | demand | 3 |  |  |  |
+| low | lab | 14 | 4,663 | demand | 3 | 0.3 / 0.6 ms | 0.89 / 0.97 ms | 0 |
+| low | skate | 13 | 4,562 | demand | 3 |  |  |  |
+
+Against the plan's own baseline (2026-11-08, measured by hand): the same draw calls and triangles, and the same load times within 0.05 s (High at 3 Mbps: first 3D frame 1.39 s, every model 9.17 s, the plan had 1.42 and 9.51 s for the board and all models).
+
+### Step 1: shoes only, heading focus, earlier downloads, release (ADR-48)
+
+| Tier | Screen | Draw calls before | After | Triangles before | After |
+| --- | --- | --- | --- | --- | --- |
+| High | welcome (loop) | 30 | **27** | 164,206 | 161,838 |
+| High | lab | 31 | **28** | 164,307 | 161,939 |
+| Medium | welcome (loop) | 15 | **13** | 18,446 | 16,846 |
+| Medium | lab | 16 | **14** | 18,547 | 16,947 |
+| Low | welcome | 13 | **11** | 4,562 | 2,962 |
+| Low | lab | 14 | **12** | 4,663 | 3,063 |
+
+| Tier | Network | First 3D frame before | After | Every model on screen before | After |
+| --- | --- | --- | --- | --- | --- |
+| High | 10 Mbps | 0.69 s | 0.69 s | 3.12 s | 3.02 s |
+| High | 3 Mbps | 1.39 s | 1.40 s | 9.17 s | 9.10 s |
+| Medium | 10 Mbps | 0.69 s | 0.68 s | 1.56 s | 1.47 s |
+| Medium | 3 Mbps | 1.39 s | 1.39 s | 3.50 s | 3.42 s |
+
+The legs were two draw calls on every tier plus the shanks' shadow pass on High. GPU time over the looping welcome preview did not move beyond noise (High 3.29 to 3.54 ms, Medium 2.64 to 2.70 ms, medians). The models now start downloading when the 3D code arrives (High's request at 1.27 s instead of 1.43 s at 3 Mbps), which brings every model in 0.07 to 0.1 s sooner; starting them when the page opens, as first tried, delayed the first 3D frame to 3.51 s at 3 Mbps for 0.2 s on the models (ADR-48). JS: the first chunk is unchanged, the 3D chunk 0.7 KB larger. With `board-high.glb` loaded, a move to Medium frees it after a second and a move back loads it again (checked in the browser by its second resource entry); no console errors, only R3F's known `THREE.Clock` deprecation warning.
