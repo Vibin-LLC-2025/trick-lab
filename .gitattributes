@@ -1,0 +1,3 @@
+# The Basis transcoder is three's file, served as is and checked byte for byte
+# against node_modules by npm run assets:check (ADR-49): never convert its line endings.
+public/basis/** binary
