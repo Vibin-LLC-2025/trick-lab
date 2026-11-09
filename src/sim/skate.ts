@@ -414,3 +414,31 @@ export function skateInstruction(g: SkateGame): string {
       return '';
   }
 }
+
+/** The game screen's turn card and stage chip (ADR-46): whose go it is, what they are doing, and the trick. */
+export interface TurnView {
+  who: SkatePlayer;
+  /** "Your turn" or "Computer's turn". */
+  title: string;
+  /** What the player up is doing, said before the trick: "Copy the computer's", "Your set", "Going for", "Copying your". */
+  label: string;
+  /** The trick in play, or null while the student has not called one yet. */
+  trick: string | null;
+}
+
+/** The turn card's words for a game in play; null between games and once one is over. */
+export function turnView(g: SkateGame): TurnView | null {
+  const trick = g.call?.name ?? null;
+  switch (g.phase) {
+    case 'computer-set':
+      return { who: 'computer', title: "Computer's turn", label: 'Going for', trick };
+    case 'computer-copy':
+      return { who: 'computer', title: "Computer's turn", label: 'Copying your', trick };
+    case 'you-copy':
+      return { who: 'you', title: 'Your turn', label: "Copy the computer's", trick };
+    case 'you-set':
+      return { who: 'you', title: 'Your turn', label: 'Your set', trick };
+    default:
+      return null;
+  }
+}

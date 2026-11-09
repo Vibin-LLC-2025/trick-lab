@@ -194,6 +194,35 @@ a {
     height: clamp(220px, 62.5vw, 560px);
   }
 
+  /* In a game the student scrolls down to the sliders and Pop: the stage
+     stays pinned at the top, so the trick is in view when it pops (ADR-46).
+     Half the width but never more than 40% of the height, so a phone held
+     sideways keeps most of the screen for the controls. The page background
+     shows round it as it sticks. */
+  :root {
+    --stage-sticky-h: clamp(150px, min(50vw, 40vh), 420px);
+  }
+
+  .app[data-screen="skate"] .app__stage {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: var(--stage-sticky-h);
+    box-shadow: 0 0 0 var(--space-2) var(--color-bg);
+  }
+
+  /* Focus never hides under the pinned stage (WCAG 2.4.11): scrolling a
+     focused control into view leaves the stage's height and its ring clear,
+     whether the page scrolls it (scroll-padding) or the element asks for it
+     (scroll-margin). */
+  :root:has(.app[data-screen="skate"]) {
+    scroll-padding-top: calc(var(--stage-sticky-h) + var(--space-4));
+  }
+
+  .app[data-screen="skate"] .app__play * {
+    scroll-margin-top: calc(var(--stage-sticky-h) + var(--space-4));
+  }
+
   /* The panels of each column sit side by side where there is room. */
   .app__setup,
   .app__results,
@@ -1372,13 +1401,6 @@ a {
   font-weight: var(--weight-bold);
 }
 
-.skate__call {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  line-height: var(--leading-snug);
-  color: var(--color-text);
-}
-
 .skate__actions {
   display: flex;
   flex-wrap: wrap;
@@ -1422,6 +1444,222 @@ a {
 
 .skate__guide-list dt {
   color: var(--color-muted);
+}
+
+/* ---------- Game screen (ADR-46, DESIGN.md 11) ----------
+   The player up is marked in the letters (a filled dot and bold name), and
+   the turn card is tinted for them: the accent tint for you, the inset grey
+   for the computer. The words say it too, so colour is never the only cue. */
+
+.skate__row--up .skate__who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--weight-bold);
+}
+
+.skate__row--up .skate__who::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+/* Markup: <section class="panel turn turn--you"><p class="turn__news">...</p>
+     <h2 class="turn__who">Your turn</h2><p class="turn__task"><span class="turn__label">Copy the
+     computer's</span><span class="turn__trick">Kickflip</span></p><p class="turn__note">...</p>
+     <p class="turn__status">...</p><div class="turn__timer"></div>...</section> */
+
+.turn--you {
+  background: var(--color-accent-bg);
+}
+
+.turn--computer {
+  background: var(--color-surface-2);
+}
+
+.turn--over.turn--won {
+  background: var(--color-ok-bg);
+}
+
+.turn--over.turn--lost {
+  background: var(--color-bad-bg);
+}
+
+.turn__news {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
+.turn__who {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+/* The heading receives focus when a game starts, ends or is quit (tabindex="-1"). */
+.turn__who[tabindex] {
+  border-radius: var(--radius-sm);
+}
+
+.turn--you .turn__who {
+  color: var(--color-accent);
+}
+
+.turn--won .turn__who {
+  color: var(--color-ok);
+}
+
+.turn--lost .turn__who {
+  color: var(--color-bad);
+}
+
+.turn__task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.turn__label {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.turn__trick {
+  font-size: 1.75rem; /* 28px, the largest text in the column: the trick in play */
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.turn__note {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bad);
+  color: var(--color-bad-fg);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.turn__status {
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
+/* The computer's countdown: a 4 px bar that fills over --skate-turn-delay.
+   Decorative (aria-hidden); "Goes in a moment." says it in words. Hidden
+   under reduced motion, where it would only flash full. */
+.turn__timer {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.turn__timer::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--color-line-strong);
+  transform-origin: left center;
+  animation: turn-timer var(--skate-turn-delay) linear forwards;
+}
+
+@keyframes turn-timer {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn__timer {
+    display: none;
+  }
+}
+
+.skate__rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: 1.4em;
+  list-style: decimal;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
+.skate__rules li::marker {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.skate__controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skate__pop {
+  width: 100%;
+  min-height: 44px;
+  font-size: var(--text-md);
+}
+
+.skate__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* Whose turn, large, over the stage's top-left corner. Decorative
+   (aria-hidden): the turn card says the same in the DOM. */
+.turn-chip {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: calc(100% - 2 * var(--space-3));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.turn-chip--you {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+.turn-chip__who {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.turn-chip__trick {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
 }
 
 /* Presets are off during a game: still focusable (aria-disabled), visibly dimmed. */
@@ -1526,6 +1764,42 @@ a {
 
 .perf-badge[hidden] {
   display: none;
+}
+
+/* ---------- Leave a game dialog (native <dialog>, ADR-46) ----------
+   Markup: <dialog class="confirm"><h2 class="confirm__title">Leave this game?</h2>
+     <p class="confirm__text">...</p><div class="confirm__actions"><button class="btn btn--primary">
+     Keep playing</button><button class="btn btn--danger">Leave game</button></div></dialog> */
+
+.confirm {
+  width: min(92vw, 400px);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+.confirm::backdrop {
+  background: rgba(18, 20, 22, 0.6);
+}
+
+.confirm__title {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.confirm__text {
+  margin-bottom: var(--space-4);
+  color: var(--color-muted);
+}
+
+.confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 /* ---------- Shortcuts dialog (native <dialog>) ----------

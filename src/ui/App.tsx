@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { describeScene } from '../sim/format';
+import { skateActive } from '../sim/skate';
 import { PRESETS } from '../sim/tricks';
 import { previewCanPlay, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
 import { Announcer } from './Announcer';
@@ -14,7 +15,7 @@ import { Playback } from './Playback';
 import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
 import { ShortcutsDialog } from './ShortcutsDialog';
-import { Skate } from './Skate';
+import { LeaveDialog, Skate, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
 import { TopBar } from './TopBar';
 import { PreviewToggle } from './Utilities';
@@ -44,26 +45,30 @@ const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
 /**
  * The keys each screen answers to (ADR-45), each backed by a DOM control on
  * that screen. The theme and the shortcuts dialog work everywhere. The game
- * adds Space and the speed keys but not the presets (off in a game) or
- * Reset (it would end the game). The lab has them all, and the perf badge,
- * whose switch is in its View panel. The welcome screen has nothing to pop.
+ * adds Space (Pop or the computer's go) and s (its Slow motion switch, ADR-46),
+ * but not the presets (off in a game), Reset (it would end the game) or the
+ * speed steps (the game has no speed slider). The lab has them all, and the
+ * perf badge, whose switch is in its View panel. The welcome screen has
+ * nothing to pop.
  */
 const EVERYWHERE = ['t', 'T', '?'];
-const PLAY = [' ', 's', 'S', '[', ']'];
+const PLAY = [' ', 's', 'S'];
 export const SCREEN_KEYS: Record<Screen, ReadonlySet<string>> = {
   home: new Set(EVERYWHERE),
   skate: new Set([...EVERYWHERE, ...PLAY]),
-  lab: new Set([...EVERYWHERE, ...PLAY, 'p', 'P', 'r', 'R', ...PRESET_BY_KEY.keys()]),
+  lab: new Set([...EVERYWHERE, ...PLAY, '[', ']', 'p', 'P', 'r', 'R', ...PRESET_BY_KEY.keys()]),
 };
 
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useTrickStore.getState();
-      // The modal dialog owns the keyboard while it is open.
-      if (s.shortcutsOpen) return;
+      // A modal dialog owns the keyboard while it is open.
+      if (s.shortcutsOpen || s.skateLeave) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
       if (!SCREEN_KEYS[s.screen].has(e.key)) return;
+      // The game's Pop and Slow motion are on screen only while a game is in play (ADR-46).
+      if (s.screen === 'skate' && !skateActive(s.skate) && PLAY.includes(e.key)) return;
       const target = document.activeElement;
       if (isTyping(target)) return;
 
@@ -185,9 +190,6 @@ export function App() {
         {screen === 'skate' && (
           <main className="app__play" aria-label="Game">
             <Skate />
-            <Telemetry />
-            <Inputs />
-            <Playback />
           </main>
         )}
         <section
@@ -204,6 +206,7 @@ export function App() {
           </SceneBoundary>
           <PerfBadge />
           {canPause && <PreviewToggle />}
+          {screen === 'skate' && <TurnChip />}
         </section>
         {screen === 'lab' && (
           <aside className="app__results" aria-label="Results">
@@ -216,6 +219,7 @@ export function App() {
       </div>
       <Announcer />
       <ShortcutsDialog />
+      <LeaveDialog />
     </>
   );
 }

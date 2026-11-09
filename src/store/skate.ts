@@ -18,7 +18,11 @@ import {
   type SkateGame,
 } from '../sim/skate';
 import { inFlight } from './playback';
+import { readPref, savePref } from './prefs';
 import type { SkateSlice, TrickState } from './types';
+
+/** The computer goes on its own (ADR-46). */
+export const SKATE_AUTO_KEY = 'trick-lab.skate-auto';
 
 /** A source of numbers in [0, 1). The store takes one so tests can script the coin flip and the computer. */
 export type Random = () => number;
@@ -43,6 +47,8 @@ export const createSkateSlice =
   (random: Random): StateCreator<TrickState, [], [], SkateSlice> =>
   (set, get) => ({
     ...initialSkate(),
+    skateAuto: readPref(SKATE_AUTO_KEY) !== 'off',
+    skateLeave: null,
 
     setSkateLevel: (level) => {
       const { skate } = get();
@@ -65,11 +71,41 @@ export const createSkateSlice =
       const first = coinFlip(random);
       // The computer picks its call as soon as its set turn begins, so the student sees it before it pops.
       const skate = withComputerCall(startSkateGame(s.skate.level, first), random);
-      set({ skate, skateMessage: '' });
+      const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
+      // A fresh game starts with the board on the pad and no result from before (ADR-46). The speed is kept.
+      set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you' });
       s.log('skate.started', { level: skate.level, first });
       s.requestFocus({ kind: 'skate-heading' });
-      const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
       s.announce(`Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level. ${flip} ${skateInstruction(skate)}`);
+    },
+
+    toggleSkateAuto: () => {
+      const skateAuto = !get().skateAuto;
+      savePref(SKATE_AUTO_KEY, skateAuto ? 'on' : 'off');
+      set({ skateAuto });
+      get().announce(skateAuto ? 'The computer goes on its own.' : "The computer waits for you: press Computer's go or Space.");
+    },
+
+    requestLeave: (target) => {
+      const s = get();
+      if (s.screen === 'skate' && skateActive(s.skate)) {
+        set({ skateLeave: target });
+        return;
+      }
+      if (target === 'setup') s.quitSkate();
+      else s.setScreen(target);
+    },
+
+    confirmLeave: () => {
+      const target = get().skateLeave;
+      if (!target) return;
+      set({ skateLeave: null });
+      if (target === 'setup') get().quitSkate();
+      else get().setScreen(target);
+    },
+
+    cancelLeave: () => {
+      if (get().skateLeave) set({ skateLeave: null });
     },
 
     callSkateTrick: (id) => {
@@ -141,7 +177,10 @@ export const createSkateSlice =
       if (game.phase === 'over' && game.winner) {
         const winner = game.winner;
         s.log('skate.ended', { winner, reason: 'spelled', ...score(game) });
-        set({ skateRecord: { ...s.skateRecord, [winner]: s.skateRecord[winner] + 1 } });
+        // A leave still asked for has nothing left to end: the dialog closes, and the result takes focus (ADR-46).
+        set({ skateRecord: { ...s.skateRecord, [winner]: s.skateRecord[winner] + 1 }, skateLeave: null });
+        // The turn controls give way to the result, so focus goes to its heading rather than to the page (ADR-46).
+        s.requestFocus({ kind: 'skate-heading' });
       } else if (step.letterTo) {
         out.push(`Letters: you ${lettersText(game.letters.you)}, computer ${lettersText(game.letters.computer)}.`);
       }

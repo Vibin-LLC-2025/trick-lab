@@ -159,14 +159,15 @@ describe('welcome screen (ADR-45)', () => {
     const user = await setup();
     await user.click(screen.getByRole('button', { name: 'Play a game of SKATE' }));
     await user.click(screen.getByRole('button', { name: 'Start game' }));
-    screen.getByRole('heading', { level: 2, name: 'Game of SKATE' }).focus();
-    await user.keyboard('r1');
+    screen.getByRole('heading', { level: 2, name: /turn$/ }).focus();
+    await user.keyboard('r1[[');
     expect(useTrickStore.getState().skate.phase).not.toBe('off');
     expect(types()).not.toContain('session.reset');
     expect(types()).not.toContain('preset.applied');
+    expect(useTrickStore.getState().rate).toBe(1);
   });
 
-  it('leaving a game in play ends it, logged as quit', async () => {
+  it('leaving a game in play (once confirmed) ends it, logged as quit', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.75); // the computer wins the coin flip
     const user = await setup();
     await user.click(screen.getByRole('button', { name: 'Play a game of SKATE' }));
@@ -175,6 +176,7 @@ describe('welcome screen (ADR-45)', () => {
     expect(useTrickStore.getState().status).toBe('playing');
 
     await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Practice lab' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Leave this game?' })).getByRole('button', { name: 'Leave game' }));
     const s = useTrickStore.getState();
     expect(s.screen).toBe('lab');
     expect(s.skate.phase).toBe('off');

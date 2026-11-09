@@ -22,6 +22,7 @@ import {
   startSkateGame,
   trickGuide,
   turnOf,
+  turnView,
   withComputerCall,
   type SkateGame,
   type SkatePhase,
@@ -323,6 +324,22 @@ describe('the rules', () => {
     expect(skateInstruction(game('off'))).toBe('');
     expect(lettersText(0)).toBe('no letters');
     expect(lettersText(3)).toBe('S K A');
+  });
+});
+
+describe('the turn card (ADR-46)', () => {
+  it('says whose turn, what they are doing and the trick, in every phase of a game', () => {
+    expect(turnView(game('computer-set', { call: kickCall }))).toEqual({ who: 'computer', title: "Computer's turn", label: 'Going for', trick: 'Kickflip' });
+    expect(turnView(game('computer-copy', { call: kickCall }))).toEqual({ who: 'computer', title: "Computer's turn", label: 'Copying your', trick: 'Kickflip' });
+    expect(turnView(game('you-copy', { call: kickCall }))).toEqual({ who: 'you', title: 'Your turn', label: "Copy the computer's", trick: 'Kickflip' });
+    expect(turnView(game('you-set'))).toEqual({ who: 'you', title: 'Your turn', label: 'Your set', trick: null });
+    expect(turnView(game('you-set', { call: kickCall }))?.trick).toBe('Kickflip');
+    expect(turnView(game('off'))).toBeNull();
+    expect(turnView(game('over', { winner: 'you' }))).toBeNull();
+    // Whose turn agrees with turnOf, which the store and the auto turns use.
+    for (const phase of ['computer-set', 'computer-copy', 'you-copy', 'you-set'] as const) {
+      expect(turnView(game(phase, { call: kickCall }))?.who).toBe(turnOf(game(phase, { call: kickCall })));
+    }
   });
 });
 

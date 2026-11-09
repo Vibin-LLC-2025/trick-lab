@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { isStance } from '../sim/feet';
 import { animates, inFlight } from './playback';
+import { readPref, savePref } from './prefs';
 import { detectQuality, effectiveQuality, isQuality } from './quality';
 import type { CameraView, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
 
@@ -60,21 +61,8 @@ export function applyTheme(theme: Theme) {
   }
 }
 
-const read = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const save = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Blocked storage: the choice still applies for this session.
-  }
-};
+const read = readPref;
+const save = savePref;
 
 /**
  * The saved tier wins; a legacy "Low" board detail becomes Low; otherwise the
@@ -163,7 +151,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // A trick in the air lands now, as under reduced motion (ADR-6), so no
       // screen inherits a flight it has no controls to finish.
       if (inFlight(get())) get().land();
-      set({ screen, shortcutsOpen: false });
+      set({ screen, shortcutsOpen: false, skateLeave: null });
       get().requestFocus({ kind: 'screen-heading' });
     },
     togglePreview: () => {

@@ -1,4 +1,7 @@
+import { useEffect, useRef } from 'react';
+import { outcomeCard } from '../sim/format';
 import {
+  computerTurn,
   GUIDE_TIP,
   lettersText,
   openTricks,
@@ -7,19 +10,67 @@ import {
   SKATE_LEVELS,
   SKATE_WORD,
   skateActive,
-  skateInstruction,
   trickGuide,
+  turnView,
   type SkateCall,
   type SkatePlayer,
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
-import { useTrickStore } from '../store';
+import { useTrickStore, type TrickState } from '../store';
+import { Inputs } from './Inputs';
+import { Toggle } from './Toggle';
 
-/** Five letter tiles; the ones a player has are filled. Read as text by the hidden label. */
-function Letters({ who, count }: { who: SkatePlayer; count: number }) {
+/**
+ * How long the computer waits before it takes its go on its own (ADR-46):
+ * long enough to read the last result and see what it is going for. Must
+ * equal --skate-turn-delay in tokens.css, which times the countdown bar (tested).
+ */
+export const COMPUTER_DELAY_MS = 2200;
+
+/**
+ * Whether the computer's wait is running (ADR-46): it is up on the game
+ * screen, nothing is in the air, auto is on and no dialog is open. Shared by
+ * the timer and the countdown bar, so the two always start together.
+ */
+const computerWaiting = (s: TrickState) =>
+  s.screen === 'skate' &&
+  computerTurn(s.skate) &&
+  s.skateAuto &&
+  s.status !== 'playing' &&
+  s.status !== 'paused' &&
+  !s.shortcutsOpen &&
+  s.skateLeave === null;
+
+/** The turn a wait belongs to: a new turn, a landing or a second try starts a new wait. */
+const turnKey = (s: TrickState) => `${s.skate.phase}|${s.flightId}|${s.skate.secondTry}`;
+
+/**
+ * The computer's go comes on its own (ADR-46): while its wait runs, it pops
+ * after COMPUTER_DELAY_MS. The same action as its button and Space, so the
+ * store decides everything. The wait starts over on every new turn and
+ * landing, and whenever it was held (a dialog) and runs again. The callback
+ * checks once more, so a wait held in the same tick never pops.
+ */
+function useComputerTurns() {
+  const waiting = useTrickStore(computerWaiting);
+  const turn = useTrickStore(turnKey);
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setTimeout(() => {
+      if (computerWaiting(useTrickStore.getState())) useTrickStore.getState().popTrick();
+    }, COMPUTER_DELAY_MS);
+    return () => clearTimeout(id);
+  }, [waiting, turn]);
+}
+
+/** Five letter tiles; the ones a player has are filled. Read as text by the hidden label. The player up is marked. */
+function Letters({ who, count, up }: { who: SkatePlayer; count: number; up: boolean }) {
   return (
-    <div className="skate__row">
-      <dt className="skate__who">{who === 'you' ? 'You' : 'Computer'}</dt>
+    <div className={`skate__row${up ? ' skate__row--up' : ''}`}>
+      <dt className="skate__who">
+        {who === 'you' ? 'You' : 'Computer'}
+        {up && <span className="visually-hidden">, up now</span>}
+      </dt>
       <dd className="skate__letters">
         {SKATE_WORD.split('').map((l, i) => (
           <span key={l} className={`skate__letter${i < count ? ' skate__letter--got' : ''}`} aria-hidden="true">
@@ -29,6 +80,30 @@ function Letters({ who, count }: { who: SkatePlayer; count: number }) {
         <span className="visually-hidden">{lettersText(count)}</span>
       </dd>
     </div>
+  );
+}
+
+function Scoreboard() {
+  const game = useTrickStore((s) => s.skate);
+  const requestLeave = useTrickStore((s) => s.requestLeave);
+  const up = turnView(game)?.who ?? null;
+  return (
+    <section className="panel" aria-labelledby="skate-letters-heading">
+      <div className="panel__head">
+        <h2 id="skate-letters-heading" className="panel__title">
+          Letters
+        </h2>
+        {skateActive(game) && (
+          <button type="button" className="btn btn--ghost btn--sm" aria-haspopup="dialog" onClick={() => requestLeave('setup')}>
+            Quit game
+          </button>
+        )}
+      </div>
+      <dl className="skate__score">
+        <Letters who="you" count={game.letters.you} up={up === 'you'} />
+        <Letters who="computer" count={game.letters.computer} up={up === 'computer'} />
+      </dl>
+    </section>
   );
 }
 
@@ -84,98 +159,298 @@ function CallPicker() {
   );
 }
 
+/** What the player up should do now, or what the computer is doing. */
+function TurnStatus() {
+  const game = useTrickStore((s) => s.skate);
+  const status = useTrickStore((s) => s.status);
+  const auto = useTrickStore((s) => s.skateAuto);
+  const waiting = useTrickStore(computerWaiting);
+  const turn = useTrickStore(turnKey);
+  const inAir = status === 'playing' || status === 'paused';
+
+  if (computerTurn(game)) {
+    if (inAir) return <p className="turn__status">In the air.</p>;
+    if (!auto) return <p className="turn__status">Press Computer&apos;s go or Space when you&apos;re ready.</p>;
+    return (
+      <>
+        <p className="turn__status">Goes in a moment.</p>
+        {/* Shown only while the wait runs, keyed on its turn, so the bar starts with every new wait (after a dialog too).
+            Decorative: the text above says it. */}
+        {waiting && <div key={turn} className="turn__timer" aria-hidden="true" />}
+      </>
+    );
+  }
+  if (game.phase === 'you-copy') return <p className="turn__status">Set the sliders the way the guide says, then press Pop.</p>;
+  return (
+    <p className="turn__status">
+      {game.call
+        ? "Land it and the computer has to copy it. Miss, and it's the computer's turn to set."
+        : 'Call the trick you will try. Land it and the computer has to copy it.'}
+    </p>
+  );
+}
+
 /**
- * The game of SKATE against the computer (ADR-43). Between games: the rules,
- * the computer's level and Start. In a game: both players' letters, what just
- * happened and what to do next. Every action is a button; the turns run on
- * the Pop button and Space. The Announcer speaks each change, so nothing
- * here is a live region.
+ * The turn card (ADR-46): what just happened, whose go it is (the heading,
+ * the focus target when a game starts), the trick in big type, what to do,
+ * and for the student the call picker and the guide. Colour and the word
+ * both say whose turn it is.
  */
-export function Skate() {
+function TurnCard() {
   const game = useTrickStore((s) => s.skate);
   const message = useTrickStore((s) => s.skateMessage);
+  const view = turnView(game);
+  if (!view) return null;
+  return (
+    <section className={`panel turn turn--${view.who}`} aria-labelledby="skate-heading">
+      {message && <p className="turn__news">{message}</p>}
+      {/* Focus target when a game starts (tabIndex -1: focusable by script, not in tab order; Space still pops from here). */}
+      <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
+        {view.title}
+      </h2>
+      <p className="turn__task">
+        <span className="turn__label">{view.label}</span>
+        <span className="turn__trick">{view.trick ?? 'Call a trick'}</span>
+      </p>
+      {game.secondTry && <p className="turn__note">Last letter: second try</p>}
+      <TurnStatus />
+      {game.phase === 'you-set' && <CallPicker />}
+      {view.who === 'you' && game.call && <Guide call={game.call} />}
+    </section>
+  );
+}
+
+/** The sliders, Pop (or the computer's go) and the game's two switches. */
+function Controls() {
+  const status = useTrickStore((s) => s.status);
+  const cpu = useTrickStore((s) => computerTurn(s.skate));
+  const popTrick = useTrickStore((s) => s.popTrick);
+  const slow = useTrickStore((s) => s.rate < 1);
+  const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
+  const auto = useTrickStore((s) => s.skateAuto);
+  const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
+  const label = cpu ? "Computer's go" : 'Pop';
+  return (
+    <>
+      <Inputs />
+      <section className="panel" aria-label="Pop">
+        <div className="skate__controls">
+          {/* aria-disabled, not disabled: the button stays focusable and explains itself. */}
+          <button
+            type="button"
+            className="btn btn--primary skate__pop"
+            aria-label={label}
+            aria-keyshortcuts="Space"
+            aria-disabled={status === 'playing' || undefined}
+            onClick={popTrick}
+          >
+            {label} <kbd aria-hidden="true">Space</kbd>
+          </button>
+          <div className="skate__toggles">
+            <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
+            <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** The last trick's result, said as whose it was. Hidden until the first trick of the game. */
+function LastTrick() {
+  const result = useTrickStore((s) => s.result);
+  const inAir = useTrickStore((s) => s.status === 'playing' || s.status === 'paused');
+  const cpu = useTrickStore((s) => s.flightBy === 'computer');
+  if (!result && !inAir) return null;
+  const who = cpu ? 'Computer' : 'You';
+  // No role="status": the single Announcer is the live region, so the result is not read twice.
+  return (
+    <section className="panel" aria-labelledby="skate-last-heading">
+      <h2 id="skate-last-heading" className="panel__title">
+        Last trick
+      </h2>
+      {result && !inAir ? (
+        <div className={`outcome ${result.landed ? 'outcome--landed' : 'outcome--bailed'}`}>
+          <p className="outcome__name">{`${who}: ${outcomeCard(result).name}`}</p>
+          <p className="outcome__detail">{outcomeCard(result).detail}</p>
+        </div>
+      ) : (
+        <div className="outcome">
+          <p className="outcome__name">In the air</p>
+          <p className="outcome__detail">The result shows when the board lands.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const RULES = [
+  'A coin flip decides who sets first.',
+  'The setter calls a trick, then tries to land it.',
+  'Landed: the other player has to copy it. Miss the copy and take a letter.',
+  'Missed: no letter, and the other player sets next.',
+  'On your last letter you get a second try.',
+  'No trick can be set twice. Spell S K A T E and you lose.',
+];
+
+/** Between games: how to play, the computer's level and Start. */
+function Setup() {
+  const level = useTrickStore((s) => s.skate.level);
   const record = useTrickStore((s) => s.skateRecord);
   const setLevel = useTrickStore((s) => s.setSkateLevel);
   const start = useTrickStore((s) => s.startSkate);
-  const quit = useTrickStore((s) => s.quitSkate);
-  const active = skateActive(game);
   const played = record.you + record.computer;
-
   return (
-    <section className="panel" aria-labelledby="skate-heading">
-      <div className="panel__head">
-        {/* Focus target when a game starts or ends (tabIndex -1: focusable by script, not in tab order). */}
-        <h2 id="skate-heading" className="panel__title" tabIndex={-1}>
-          Game of SKATE
-          {played > 0 && (
-            <span className="panel__count">
-              {' '}
-              won {record.you} of {played}
-            </span>
-          )}
-        </h2>
-        {active && (
-          <button type="button" className="btn btn--ghost btn--sm" onClick={quit}>
-            Quit game
-          </button>
-        )}
+    <section className="panel turn turn--setup" aria-labelledby="skate-heading">
+      {/* Focus target after quitting (tabIndex -1). */}
+      <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
+        How to play
+      </h2>
+      <ol className="skate__rules">
+        {RULES.map((r) => (
+          <li key={r}>{r}</li>
+        ))}
+      </ol>
+      <fieldset className="segmented" aria-describedby="skate-level-hint">
+        <legend className="segmented__legend">Computer</legend>
+        <div className="segmented__options">
+          {SKATE_LEVEL_ORDER.map((l) => (
+            <label key={l} className="segmented__option">
+              <input className="segmented__input" type="radio" name="skate-level" value={l} checked={level === l} onChange={() => setLevel(l)} />
+              <span className="segmented__label">{SKATE_LEVELS[l].label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="segmented__hint" id="skate-level-hint">
+          {SKATE_LEVELS[level].hint}
+        </p>
+      </fieldset>
+      <div className="skate__actions">
+        <button type="button" className="btn btn--primary" onClick={start}>
+          Start game
+        </button>
       </div>
-
-      {game.phase === 'off' ? (
-        <>
-          <p className="panel__note">
-            Play the computer. When one of you lands a trick, the other has to copy it. Miss a copy and you get a letter.
-            Spell S K A T E and you lose.
-          </p>
-          <fieldset className="segmented" aria-describedby="skate-level-hint">
-            <legend className="segmented__legend">Computer</legend>
-            <div className="segmented__options">
-              {SKATE_LEVEL_ORDER.map((level) => (
-                <label key={level} className="segmented__option">
-                  <input
-                    className="segmented__input"
-                    type="radio"
-                    name="skate-level"
-                    value={level}
-                    checked={game.level === level}
-                    onChange={() => setLevel(level)}
-                  />
-                  <span className="segmented__label">{SKATE_LEVELS[level].label}</span>
-                </label>
-              ))}
-            </div>
-            <p className="segmented__hint" id="skate-level-hint">
-              {SKATE_LEVELS[game.level].hint}
-            </p>
-          </fieldset>
-          <div className="skate__actions">
-            <button type="button" className="btn btn--primary" onClick={start}>
-              Start game
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <dl className="skate__score">
-            <Letters who="you" count={game.letters.you} />
-            <Letters who="computer" count={game.letters.computer} />
-          </dl>
-          {message && <p className="panel__note">{message}</p>}
-          <p className="skate__call">{skateInstruction(game)}</p>
-          {game.phase === 'you-set' && <CallPicker />}
-          {(game.phase === 'you-copy' || game.phase === 'you-set') && game.call && <Guide call={game.call} />}
-          {game.phase === 'over' && (
-            <div className="skate__actions">
-              <button type="button" className="btn btn--primary" onClick={start}>
-                Play again
-              </button>
-              <button type="button" className="btn" onClick={quit}>
-                Back to practice
-              </button>
-            </div>
-          )}
-        </>
+      {played > 0 && (
+        <p className="panel__note">
+          This session: you won {record.you} of {played}.
+        </p>
       )}
     </section>
+  );
+}
+
+/** The end of a game: who won, the session's record, play again or change the level. Focus lands on its heading. */
+function GameOver() {
+  const game = useTrickStore((s) => s.skate);
+  const message = useTrickStore((s) => s.skateMessage);
+  const record = useTrickStore((s) => s.skateRecord);
+  const start = useTrickStore((s) => s.startSkate);
+  const quit = useTrickStore((s) => s.quitSkate);
+  const won = game.winner === 'you';
+  const level = SKATE_LEVELS[game.level].label.toLowerCase();
+  return (
+    <section className={`panel turn turn--over turn--${won ? 'won' : 'lost'}`} aria-labelledby="skate-heading">
+      {message && <p className="turn__news">{message}</p>}
+      <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
+        {won ? 'You win!' : 'The computer wins'}
+      </h2>
+      <p className="turn__status">
+        {won ? `You beat the computer on ${level}.` : `It spelled SKATE on you this time, on ${level}.`} This session: you {record.you}, computer{' '}
+        {record.computer}.
+      </p>
+      <div className="skate__actions">
+        <button type="button" className="btn btn--primary" onClick={start}>
+          Play again
+        </button>
+        <button type="button" className="btn" onClick={quit}>
+          Change level
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The game screen's column (ADR-46, DESIGN.md 11): between games, how to
+ * play and Start; in a game, only what the game needs: both players'
+ * letters, the turn card, the sliders and Pop, and the last trick; at the
+ * end, who won. The computer's go comes on its own unless switched off.
+ */
+export function Skate() {
+  useComputerTurns();
+  const phase = useTrickStore((s) => s.skate.phase);
+  if (phase === 'off') return <Setup />;
+  if (phase === 'over') {
+    return (
+      <>
+        <GameOver />
+        <Scoreboard />
+      </>
+    );
+  }
+  return (
+    <>
+      <Scoreboard />
+      <TurnCard />
+      <Controls />
+      <LastTrick />
+    </>
+  );
+}
+
+/** Whose turn it is, large, over the stage (ADR-46). Decorative: the turn card says the same in the DOM. */
+export function TurnChip() {
+  // Select the game, then derive: a selector that builds a new object would re-render forever.
+  const game = useTrickStore((s) => s.skate);
+  const view = turnView(game);
+  if (!view) return null;
+  return (
+    <p className={`turn-chip turn-chip--${view.who}`} aria-hidden="true">
+      <span className="turn-chip__who">{view.title}</span>
+      {view.trick && <span className="turn-chip__trick">{view.trick}</span>}
+    </p>
+  );
+}
+
+/** Asks before a game in play is left (ADR-46). Native modal dialog: focus is trapped, Esc keeps playing, focus returns to the opener. */
+export function LeaveDialog() {
+  const target = useTrickStore((s) => s.skateLeave);
+  const confirm = useTrickStore((s) => s.confirmLeave);
+  const cancel = useTrickStore((s) => s.cancelLeave);
+  const ref = useRef<HTMLDialogElement>(null);
+  const open = target !== null;
+
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    // jsdom lacks showModal/close; fall back to the open attribute.
+    if (open && !d.open) {
+      if (typeof d.showModal === 'function') d.showModal();
+      else d.setAttribute('open', '');
+    } else if (!open && d.open) {
+      if (typeof d.close === 'function') d.close();
+      else d.removeAttribute('open');
+    }
+  }, [open]);
+
+  const quitting = target === 'setup';
+  return (
+    <dialog ref={ref} className="confirm" aria-labelledby="leave-title" aria-describedby="leave-text" onClose={cancel}>
+      <h2 id="leave-title" className="confirm__title">
+        {quitting ? 'Quit this game?' : 'Leave this game?'}
+      </h2>
+      <p id="leave-text" className="confirm__text">
+        The game ends here and both players&apos; letters are cleared.
+      </p>
+      <div className="confirm__actions">
+        {/* Keep playing first, so showModal focuses it: the safe choice is the default. */}
+        <button type="button" className="btn btn--primary" onClick={cancel}>
+          Keep playing
+        </button>
+        <button type="button" className="btn btn--danger" onClick={confirm}>
+          {quitting ? 'Quit game' : 'Leave game'}
+        </button>
+      </div>
+    </dialog>
   );
 }

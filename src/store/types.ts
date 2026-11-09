@@ -176,17 +176,32 @@ export interface UiSlice {
   requestFocus: (target: FocusTarget) => void;
 }
 
-/** The game of SKATE against the computer (ADR-43, real-game rules ADR-44). Rules in sim/skate.ts. */
+/** Where leaving a game in play would go (ADR-46): another screen, or back to the game's own start. */
+export type LeaveTarget = Screen | 'setup';
+
+/** The game of SKATE against the computer (ADR-43, real-game rules ADR-44, game screen ADR-46). Rules in sim/skate.ts. */
 export interface SkateSlice {
   skate: SkateGame;
+  /** The computer takes its go on its own after a short wait (ADR-46). Persisted under trick-lab.skate-auto, default on. Not logged. */
+  skateAuto: boolean;
+  /** A leave asked for while a game is in play, waiting for the student to confirm it (ADR-46); null otherwise. Not logged. */
+  skateLeave: LeaveTarget | null;
   /** What the last attempt did in the game, in plain words; '' before the first. */
   skateMessage: string;
   /** Games won this session, per player. Cleared by reset. */
   skateRecord: Record<SkatePlayer, number>;
   /** Picks the computer's level; only between games. Not logged (skate.started carries it). */
   setSkateLevel: (level: SkateLevel) => void;
-  /** Starts a game: letters cleared, a coin flip picks who sets first. Logged and announced; focus goes to the game's heading. */
+  /** Starts a game: letters cleared, the board back on the pad, a coin flip picks who sets first. Logged and announced; focus goes to the game's heading. */
   startSkate: () => void;
+  /** The computer goes on its own, or waits for "Computer's go". Persisted and announced. */
+  toggleSkateAuto: () => void;
+  /** Leaves the game for a screen or its own start. With a game in play it asks first (skateLeave); otherwise it goes now. */
+  requestLeave: (target: LeaveTarget) => void;
+  /** The student confirmed the leave: the game ends (logged as quit) and the screen changes. */
+  confirmLeave: () => void;
+  /** The student kept playing. */
+  cancelLeave: () => void;
   /** The student calls the trick they will set (ADR-44): only on their set turn, never a trick already set this game. Announced, not logged (their trick.popped carries the call). */
   callSkateTrick: (id: TrickId) => void;
   /** Ends a game in play (logged as quit), or closes a finished one, back to practice. */

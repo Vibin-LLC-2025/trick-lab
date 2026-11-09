@@ -14,11 +14,12 @@ const OTHER: Record<Exclude<Screen, 'home'>, { screen: Screen; label: string }> 
  * and a way across to the other mode.
  */
 export function TopBar({ screen }: { screen: Exclude<Screen, 'home'> }) {
-  const setScreen = useTrickStore((s) => s.setScreen);
+  // Leaving a game in play asks first (ADR-46); from the lab it just goes.
+  const go = useTrickStore((s) => s.requestLeave);
   const other = OTHER[screen];
   return (
     <header className="topbar">
-      <button type="button" className="btn btn--ghost btn--sm topbar__home" onClick={() => setScreen('home')}>
+      <button type="button" className="btn btn--ghost btn--sm topbar__home" onClick={() => go('home')}>
         <span aria-hidden="true">&larr;</span> Home
       </button>
       <h1 id="screen-heading" className="topbar__title" tabIndex={-1}>
@@ -28,7 +29,7 @@ export function TopBar({ screen }: { screen: Exclude<Screen, 'home'> }) {
         <ShortcutsButton />
         <ThemeToggle />
         <nav aria-label="Modes">
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setScreen(other.screen)}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => go(other.screen)}>
             {other.label}
           </button>
         </nav>

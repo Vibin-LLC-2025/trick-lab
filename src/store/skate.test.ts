@@ -289,6 +289,97 @@ describe('game of SKATE', () => {
     expect(said(store)).toMatch(/The game of SKATE ended\.$/);
   });
 
+  it('a new game starts with the board on the pad and no result from before, keeping the speed', () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().applyPreset('kickflip');
+    store.getState().popTrick();
+    store.getState().land();
+    store.getState().toggleSlowMotion();
+    expect(store.getState().result).not.toBeNull();
+    store.getState().startSkate();
+    const s = store.getState();
+    expect(s).toMatchObject({ status: 'idle', progress: 0, flight: null, result: null, flightBy: 'you' });
+    expect(s.rate).toBeLessThan(1);
+    expect(s.skateMessage).toBe('Coin flip: the computer sets first.');
+  });
+
+  it('leaving a game in play waits for a yes; between games it just goes', () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().setScreen('skate');
+    store.getState().startSkate();
+    store.getState().requestLeave('home');
+    expect(store.getState().skateLeave).toBe('home');
+    expect(store.getState().screen).toBe('skate');
+    store.getState().cancelLeave();
+    expect(store.getState().skateLeave).toBeNull();
+    expect(store.getState().skate.phase).toBe('you-set');
+    expect(types(store)).not.toContain('skate.ended');
+
+    store.getState().requestLeave('setup');
+    store.getState().confirmLeave();
+    expect(store.getState().screen).toBe('skate');
+    expect(store.getState().skate.phase).toBe('off');
+    expect(store.getState().events.at(-1)).toMatchObject({ type: 'skate.ended', payload: { reason: 'quit' } });
+
+    store.getState().requestLeave('lab');
+    expect(store.getState().skateLeave).toBeNull();
+    expect(store.getState().screen).toBe('lab');
+    // A confirm with nothing pending does nothing.
+    store.getState().confirmLeave();
+    expect(store.getState().screen).toBe('lab');
+  });
+
+  it('a screen change (the back button) clears a leave still waiting for its answer', () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().setScreen('skate');
+    store.getState().startSkate();
+    store.getState().requestLeave('home');
+    store.getState().setScreen('lab');
+    expect(store.getState().skateLeave).toBeNull();
+    expect(store.getState().skate.phase).toBe('off');
+  });
+
+  it('the computer going on its own is a saved, announced switch, not logged', () => {
+    localStorage.clear();
+    const store = makeStore();
+    expect(store.getState().skateAuto).toBe(true);
+    store.getState().toggleSkateAuto();
+    expect(store.getState().skateAuto).toBe(false);
+    expect(localStorage.getItem('trick-lab.skate-auto')).toBe('off');
+    expect(makeStore().getState().skateAuto).toBe(false);
+    store.getState().toggleSkateAuto();
+    expect(said(store)).toBe('The computer goes on its own.');
+    expect(types(store)).toEqual([]);
+    localStorage.clear();
+  });
+
+  it('the end of a game moves focus to its result, since the turn controls are gone', () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().startSkate();
+    store.setState({ skate: { ...store.getState().skate, letters: { you: 0, computer: 4 }, secondTry: true, phase: 'computer-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 } } });
+    const before = store.getState().focusRequest?.nonce ?? 0;
+    store.aim.value = 0.999;
+    pop(store);
+    expect(store.getState().skate.winner).toBe('you');
+    expect(store.getState().focusRequest).toMatchObject({ kind: 'skate-heading' });
+    expect(store.getState().focusRequest!.nonce).toBeGreaterThan(before);
+  });
+
+  it('a leave still waiting for its answer is dropped when the game ends behind it', () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().setScreen('skate');
+    store.getState().startSkate();
+    store.setState({ skate: { ...store.getState().skate, letters: { you: 0, computer: 4 }, secondTry: true, phase: 'computer-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 } } });
+    store.aim.value = 0.999;
+    store.getState().popTrick();
+    store.getState().requestLeave('home');
+    expect(store.getState().skateLeave).toBe('home');
+    store.getState().land();
+    expect(store.getState().skate.phase).toBe('over');
+    expect(store.getState().skateLeave).toBeNull();
+    expect(store.getState().screen).toBe('skate');
+  });
+
   it('the level changes only between games', () => {
     const store = makeStore();
     store.getState().startSkate();
