@@ -4,7 +4,21 @@
    green and a "bad" red for outcomes, and a cool blue focus ring that never
    collides with the accent, so "selected" and "focused" stay distinct.
    Contrast ratios below are WCAG 2.2 computed values (sRGB relative luminance).
-   Targets: 4.5:1 normal text, 3:1 large text and UI parts. */
+   Targets: 4.5:1 normal text, 3:1 large text and UI parts.
+   Skate style (ADR-57, 2026-11-09): one display face for headlines, the
+   SKATE letters and the celebration, and the deck graphic's orange as a
+   fill for stickers and stripes. */
+
+/* Bungee (SIL Open Font License 1.1, Copyright 2023 The Bungee Project
+   Authors; the license is fonts/OFL.txt), its Latin subset, served from our
+   own origin: no font CDN, school networks block them. One weight. */
+@font-face {
+  font-family: "Bungee";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/bungee-latin-400-normal.woff2") format("woff2");
+}
 
 :root {
   color-scheme: light;
@@ -27,6 +41,13 @@
   --color-bad-fg: #ffffff;      /* on bad 6.87 */
   --color-bad-bg: #f9dcd8;      /* bailed card tint: text on it 12.93, bad on it 5.32, muted on it 4.98 */
   --color-focus: #0b5fa5;       /* ring, cobalt: on bg 5.52, on surface 6.14, on surface-2 4.93, on accent-bg 5.26 */
+  /* The deck graphic's orange (ART.board.graphic.color, ADR-57): fills and
+     stripes only (stickers, the celebration, the top bar's edge, the
+     student's turn card). Never text on the page and never the only cue:
+     on bg 2.94 and on surface 3.27 in light, so it is decoration there. */
+  --color-brand: #ea5a30;       /* on bg 2.94 (decorative), on surface 3.27 */
+  --color-brand-fg: #1b0c06;    /* text on brand 5.45 */
+  --color-sticker-edge: #ffffff; /* a sticker's die-cut edge; on brand-fg 19.06 as the trick sticker's text */
 
   /* 3D stage clear color, per theme. Must equal ART.clearColor for the active
      theme in src/scene/artDirection.ts (a test asserts it), and paints
@@ -37,7 +58,11 @@
   --path-front: #56b4e9;
   --path-back: #f0e442;
 
-  /* Type: system stack, no webfonts */
+  /* Type: the system stack for all text; the display face (Bungee, above)
+     for headlines, the SKATE letters and the celebration only (ADR-57).
+     Arial Black stands in while it loads. It has one weight: set
+     font-weight 400 and font-synthesis none wherever it is used. */
+  --font-display: "Bungee", "Arial Black", var(--font-sans);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   /* Type scale (UI redesign 2026-11-04, DESIGN.md 9): 12 px for section
@@ -124,6 +149,9 @@
   --color-bad-fg: #2b0906;      /* on bad 8.13 */
   --color-bad-bg: #3a1715;      /* bailed card tint: text on it 13.07, bad on it 7.09, muted on it 6.85 */
   --color-focus: #7cc4ff;       /* ring, sky: on bg 9.84, on surface 8.83, on surface-2 7.60, on accent-bg 8.08 */
+  --color-brand: #ea5a30;       /* the same orange: on bg 5.28, on surface 4.73 */
+  --color-brand-fg: #1b0c06;    /* text on brand 5.45 */
+  --color-sticker-edge: #f1ece3; /* off-white, so the edge does not glare on grip tape; on brand-fg 16.20 */
 
   /* Dark stage clear color (ADR-52): the golden-hour haze on the horizon. */
   --scene-bg: #e8c6a2;

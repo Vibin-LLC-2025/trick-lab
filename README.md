@@ -181,3 +181,5 @@ Two-axis rotation is a clean, very visual physics lesson: the student changes on
 ## License
 
 [MIT](LICENSE). Copyright (c) 2026 Vibin LLC.
+
+The headline font, Bungee, is Copyright 2023 The Bungee Project Authors and licensed under the [SIL Open Font License 1.1](src/styles/fonts/OFL.txt).

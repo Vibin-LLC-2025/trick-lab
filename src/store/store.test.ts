@@ -155,6 +155,29 @@ describe('pop and resolve', () => {
   });
 });
 
+// ADR-57: a landed trick in the lab is the student's to celebrate; the store marks it, once per landing.
+describe('the celebration (lab)', () => {
+  it('marks each landed trick with a new nonce and its name, and never a bail; logs and announces nothing more', () => {
+    const store = makeStore();
+    expect(store.getState().celebration).toBeNull();
+    store.getState().applyPreset('kickflip');
+    store.getState().popTrick();
+    expect(store.getState().celebration).toBeNull();
+    store.getState().land();
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip' });
+    expect(types(store)).toEqual(['preset.applied', 'trick.popped', 'trick.resolved', 'objective.completed']);
+    store.getState().popTrick();
+    store.getState().land();
+    expect(store.getState().celebration).toEqual({ nonce: 2, trick: 'Kickflip' });
+    // Too low a pop bails: no celebration.
+    store.getState().setInput('pop', 0.15);
+    store.getState().popTrick();
+    store.getState().land();
+    expect(store.getState().result?.landed).toBe(false);
+    expect(store.getState().celebration?.nonce).toBe(2);
+  });
+});
+
 describe('playback controls', () => {
   it('syncProgress only applies while playing and is not logged', () => {
     const store = makeStore();

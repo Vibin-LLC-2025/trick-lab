@@ -169,6 +169,7 @@ export const createSkateSlice =
       if (!step.message) return [];
       const game = withComputerCall(step.game, random);
       set({ skate: game, skateMessage: step.message });
+      if (by === 'you' && step.made) s.celebrate(result.name);
       if (step.set) s.log('skate.set', { by, trick: step.set.id });
       if (step.letterTo) {
         s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });

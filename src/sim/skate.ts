@@ -243,6 +243,8 @@ export interface SkateStep {
   letterTo: SkatePlayer | null;
   /** A trick that was just set (landed by the setter), to be copied. */
   set: SkateCall | null;
+  /** The attempt counted: the setter landed the trick they called, or the copier copied it (ADR-57: the store celebrates the student's). */
+  made: boolean;
   /** What happened, in plain words. What to do next is skateInstruction of the new game. */
   message: string;
 }
@@ -265,11 +267,11 @@ function letter(g: SkateGame, who: SkatePlayer, missed: string, next: SkatePhase
       who === 'you'
         ? `${missed} You got ${got}. That spells SKATE: the computer wins.`
         : `${missed} The computer got ${got}. That spells SKATE: you win!`;
-    return { game, letterTo: who, set: null, message };
+    return { game, letterTo: who, set: null, made: false, message };
   }
   const game: SkateGame = { ...g, phase: next, letters, call: null, secondTry: false };
   const message = who === 'you' ? `${missed} You got ${got}.` : `${missed} The computer got ${got}.`;
-  return { game, letterTo: who, set: null, message };
+  return { game, letterTo: who, set: null, made: false, message };
 }
 
 /** A copier on their last letter (S K A T) gets a second try at the copy after a first miss. */
@@ -286,7 +288,7 @@ const lastLetterRetry = (g: SkateGame, who: SkatePlayer) => g.letters[who] === S
  */
 export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): SkateStep {
   const same = (c: SkateCall | null) => c !== null && r.landed && r.id === c.id;
-  const none = (message: string): SkateStep => ({ game: g, letterTo: null, set: null, message });
+  const none = (message: string): SkateStep => ({ game: g, letterTo: null, set: null, made: false, message });
 
   switch (g.phase) {
     case 'computer-set': {
@@ -297,6 +299,7 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
           game: { ...g, phase: 'you-copy', used: markUsed(g.used, call.id), lastCall: call.id },
           letterTo: null,
           set: call,
+          made: true,
           message: `The computer landed ${a(call.name)}.`,
         };
       }
@@ -304,6 +307,7 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
         game: { ...g, phase: 'you-set', call: null, lastCall: call.id },
         letterTo: null,
         set: null,
+        made: false,
         message: `The computer missed ${the(call.name)}, so it's your turn to set.`,
       };
     }
@@ -311,11 +315,11 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
       if (by !== 'you' || !g.call) return none('');
       const call = g.call;
       if (same(call)) {
-        return { game: { ...g, phase: 'computer-set', call: null, secondTry: false }, letterTo: null, set: null, message: `You copied ${the(call.name)}!` };
+        return { game: { ...g, phase: 'computer-set', call: null, secondTry: false }, letterTo: null, set: null, made: true, message: `You copied ${the(call.name)}!` };
       }
       const missed = r.landed ? `You landed ${landedAs(r)}, but the trick to copy was ${a(call.name)}.` : `You missed ${the(call.name)}.`;
       if (lastLetterRetry(g, 'you')) {
-        return { game: { ...g, secondTry: true }, letterTo: null, set: null, message: `${missed} You're on your last letter, so you get a second try.` };
+        return { game: { ...g, secondTry: true }, letterTo: null, set: null, made: false, message: `${missed} You're on your last letter, so you get a second try.` };
       }
       return letter(g, 'you', missed, 'computer-set');
     }
@@ -327,13 +331,14 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
           game: { ...g, phase: 'computer-copy', used: markUsed(g.used, call.id) },
           letterTo: null,
           set: call,
+          made: true,
           message: `You landed your ${call.name.toLowerCase()}!`,
         };
       }
       const message = r.landed
         ? `You landed ${landedAs(r)}, but you called ${a(call.name)}, so it doesn't count. The computer sets next.`
         : `You missed your ${call.name.toLowerCase()}. The computer sets next.`;
-      return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, message };
+      return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, made: false, message };
     }
     case 'computer-copy': {
       if (by !== 'computer' || !g.call) return none('');
@@ -343,12 +348,13 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
           game: { ...g, phase: 'you-set', call: null, secondTry: false },
           letterTo: null,
           set: null,
+          made: true,
           message: `The computer copied your ${call.name.toLowerCase()}.`,
         };
       }
       const missed = `The computer missed your ${call.name.toLowerCase()}.`;
       if (lastLetterRetry(g, 'computer')) {
-        return { game: { ...g, secondTry: true }, letterTo: null, set: null, message: `${missed} It's on its last letter, so it gets a second try.` };
+        return { game: { ...g, secondTry: true }, letterTo: null, set: null, made: false, message: `${missed} It's on its last letter, so it gets a second try.` };
       }
       return letter(g, 'computer', missed, 'you-set');
     }

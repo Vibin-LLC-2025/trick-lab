@@ -140,6 +140,9 @@ a {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--scene-bg); /* equals the scene clear colour, so resize gaps do not flash */
+  /* Its size comes from the grid or a fixed height, never its content: a size
+     container, so the celebration scales with the stage (ADR-57). */
+  container-type: size;
 }
 
 .app__stage canvas {
@@ -365,14 +368,19 @@ a {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  /* The deck's orange along its foot (ADR-57), decoration only. */
+  box-shadow: inset 0 -3px 0 var(--color-brand);
 }
 
 .topbar__title {
   flex: 1 1 auto;
   min-width: 0;
   font-size: var(--text-md);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: var(--leading-tight);
+  letter-spacing: 0.02em;
   color: var(--color-text);
 }
 
@@ -428,10 +436,14 @@ a {
 .home__title {
   margin-top: calc(-1 * var(--space-3));
   font-size: var(--text-display);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: 1.05;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--color-text);
+  /* An offset print in the deck's orange (ADR-57): decoration behind the 14:1 text. */
+  text-shadow: 0.06em 0.06em 0 var(--color-brand);
 }
 
 .home__lede {
@@ -487,7 +499,9 @@ a {
 
 .choice__title {
   font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: var(--leading-tight);
 }
 
@@ -1487,23 +1501,51 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   border: 1px dashed var(--color-line-strong);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: 1;
   color: var(--color-muted);
-  transition: background-color var(--dur-base) var(--ease-out);
 }
 
+/* An earned letter is a sticker (ADR-57): the red fill (bad-fg on bad, 6.87
+   light, 8.13 dark), a die-cut edge, a little shadow, and each letter at its
+   own slight tilt, as if slapped on. */
 .skate__letter--got {
-  border-style: solid;
-  border-color: var(--color-bad);
+  border: 2px solid var(--color-sticker-edge);
   background: var(--color-bad);
   color: var(--color-bad-fg);
-  font-weight: var(--weight-bold);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: rotate(var(--tilt, 0deg));
+}
+
+.skate__letter:nth-child(1) { --tilt: -6deg; }
+.skate__letter:nth-child(2) { --tilt: 4deg; }
+.skate__letter:nth-child(3) { --tilt: -3deg; }
+.skate__letter:nth-child(4) { --tilt: 5deg; }
+.skate__letter:nth-child(5) { --tilt: -4deg; }
+
+/* Just earned: stamps in once, from big and turned to its tilt, with a little bounce. */
+.skate__letter--new {
+  animation: skate-stamp 480ms var(--ease-out) both;
+}
+
+@keyframes skate-stamp {
+  0% { opacity: 0; transform: scale(2.4) rotate(calc(var(--tilt, 0deg) - 20deg)); }
+  55% { opacity: 1; transform: scale(0.9) rotate(var(--tilt, 0deg)); }
+  78% { transform: scale(1.06) rotate(var(--tilt, 0deg)); }
+  100% { transform: scale(1) rotate(var(--tilt, 0deg)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skate__letter--new {
+    animation: none;
+  }
 }
 
 .skate__actions {
@@ -1579,6 +1621,8 @@ a {
 
 .turn--you {
   background: var(--color-accent-bg);
+  /* The deck's orange down its left edge (ADR-57): decoration; "Your turn" says it in words. */
+  box-shadow: inset 4px 0 0 var(--color-brand);
 }
 
 .turn--computer {
@@ -1602,9 +1646,10 @@ a {
 
 .turn__who {
   font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
   color: var(--color-text);
 }
 
@@ -1632,10 +1677,11 @@ a {
 }
 
 .turn__trick {
-  font-size: 1.75rem; /* 28px, the largest text in the column: the trick in play */
-  font-weight: var(--weight-bold);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-size: 1.5rem; /* 24px in the display face (was 28px bold): still the largest text in the column, the trick in play; wide letters, so a long name wraps */
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
+  line-height: 1.15;
   color: var(--color-text);
 }
 
@@ -1758,7 +1804,9 @@ a {
 
 .turn-chip__trick {
   font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal); /* the display face has one weight (ADR-57) */
+  font-synthesis: none;
   line-height: var(--leading-tight);
 }
 
@@ -1984,5 +2032,85 @@ a {
     transition-duration: 0ms !important;
     animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---------- The celebration (ADR-57, DESIGN.md 14.7) ----------
+   Markup: <div class="celebration" aria-hidden="true" [data-calm]><span class="celebration__shout">Landed!</span>
+     <span class="celebration__trick">Kickflip</span></div>, inside .app__stage, over the 3D view.
+   Two stickers stamp in near the top of the stage, hold and fade; the
+   component removes them after 1800 ms. Calm (reduced motion): the same
+   stickers, still, with no movement and no fade. */
+.celebration {
+  position: absolute;
+  top: 10cqh;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(var(--space-1), 1.5cqh, var(--space-2));
+  width: max-content;
+  max-width: calc(100% - 2 * var(--space-4));
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
+}
+
+.celebration__shout,
+.celebration__trick {
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal);
+  font-synthesis: none;
+  line-height: 1.05;
+  border: 3px solid var(--color-sticker-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  transform: rotate(var(--tilt));
+  animation:
+    celebration-stamp 320ms var(--ease-out) both,
+    celebration-out 300ms ease-in 1500ms both;
+}
+
+/* "Landed!" on the deck's orange: brand-fg on brand 5.45, 9 % of the stage's
+   height, 17 to 44 px, so a short phone stage keeps the board in view. */
+.celebration__shout {
+  --tilt: -4deg;
+  padding: 0.12em 0.45em;
+  font-size: clamp(1.0625rem, 9cqh, 2.75rem);
+  background: var(--color-brand);
+  color: var(--color-brand-fg);
+}
+
+/* The trick, on near-black: sticker-edge on brand-fg 19.06 light, 16.20 dark; 12 to 15 px. */
+.celebration__trick {
+  --tilt: 3deg;
+  padding: 0.25em 0.7em;
+  font-size: clamp(var(--text-xs), 3.5cqh, var(--text-md));
+  border-width: 2px;
+  background: var(--color-brand-fg);
+  color: var(--color-sticker-edge);
+  animation-delay: 90ms, 1500ms;
+}
+
+@keyframes celebration-stamp {
+  0% { opacity: 0; transform: scale(1.8) rotate(calc(var(--tilt) - 12deg)); }
+  60% { opacity: 1; transform: scale(0.94) rotate(var(--tilt)); }
+  100% { opacity: 1; transform: scale(1) rotate(var(--tilt)); }
+}
+
+@keyframes celebration-out {
+  from { opacity: 1; transform: rotate(var(--tilt)); }
+  to { opacity: 0; transform: translateY(-8px) rotate(var(--tilt)); }
+}
+
+.celebration[data-calm] .celebration__shout,
+.celebration[data-calm] .celebration__trick {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebration__shout,
+  .celebration__trick {
+    animation: none;
   }
 }

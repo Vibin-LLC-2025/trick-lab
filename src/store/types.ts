@@ -148,6 +148,14 @@ export interface UiSlice {
    * announced (the picture is decorative; the scene description is the text).
    */
   stageReady: boolean;
+  /**
+   * The student's last landing worth a cheer (ADR-57): any landed trick in
+   * the lab, and in a game a set landed as called or a copy made. `nonce`
+   * goes up by one each time, so the stage's celebration plays once per
+   * landing. Null until the first. Not persisted, not logged, not exported,
+   * not announced (the result's announcement already says it landed).
+   */
+  celebration: { nonce: number; trick: string } | null;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
   /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs, default off (ADR-48). Not logged, not exported. */
@@ -195,6 +203,8 @@ export interface UiSlice {
   setSceneUnavailable: () => void;
   /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */
   setStageReady: () => void;
+  /** Internal: marks a landing to celebrate. Called from store actions only (the landing's resolution and the game's scoring). */
+  celebrate: (trick: string) => void;
   announce: (message: string) => void;
   requestFocus: (target: FocusTarget) => void;
 }

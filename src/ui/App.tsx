@@ -14,6 +14,7 @@ import { PerfBadge } from './PerfBadge';
 import { Playback, Replay } from './Playback';
 import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
+import { Celebration } from './Celebration';
 import { StageStill } from './StageStill';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { LeaveDialog, Skate, TurnChip } from './Skate';
@@ -212,6 +213,8 @@ export function App() {
           <PerfBadge />
           {canPause && <PreviewToggle />}
           {screen === 'skate' && <TurnChip />}
+          {/* The student's landed trick, over the stage (ADR-57); never on the welcome preview. */}
+          {screen !== 'home' && <Celebration />}
         </section>
         {screen === 'lab' && (
           <aside className="app__results" aria-label="Results">

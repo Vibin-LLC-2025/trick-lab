@@ -299,8 +299,25 @@ describe('the rules', () => {
 
   it('an attempt by the player who is not up changes nothing', () => {
     const g = game('you-copy', { call: kickCall });
-    expect(afterAttempt(g, 'computer', kickflip)).toMatchObject({ game: g, message: '' });
+    expect(afterAttempt(g, 'computer', kickflip)).toMatchObject({ game: g, message: '', made: false });
     expect(afterAttempt(game('off'), 'you', kickflip).message).toBe('');
+  });
+
+  // ADR-57: the store celebrates the student's attempts that count, and only those.
+  it('marks an attempt made only when a set lands as called or a copy lands the same trick', () => {
+    const made = (phase: Parameters<typeof game>[0], by: 'you' | 'computer', r: typeof kickflip, extra = {}) =>
+      afterAttempt(game(phase, { call: kickCall, ...extra }), by, r).made;
+    expect(made('computer-set', 'computer', kickflip)).toBe(true);
+    expect(made('computer-set', 'computer', heelflip)).toBe(false);
+    expect(made('you-copy', 'you', kickflip)).toBe(true);
+    expect(made('you-copy', 'you', heelflip)).toBe(false);
+    expect(made('you-copy', 'you', kickflipBail)).toBe(false);
+    expect(made('you-copy', 'you', kickflipBail, { letters: { you: 4, computer: 0 } })).toBe(false);
+    expect(made('you-set', 'you', kickflip)).toBe(true);
+    expect(made('you-set', 'you', heelflip)).toBe(false);
+    expect(made('you-set', 'you', kickflipBail)).toBe(false);
+    expect(made('computer-copy', 'computer', kickflip)).toBe(true);
+    expect(made('computer-copy', 'computer', kickflipBail)).toBe(false);
   });
 
   it('says what to do in every phase, in plain words', () => {

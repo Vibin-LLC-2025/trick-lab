@@ -156,6 +156,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     boardAssetFailed: false,
     sceneUnavailable: false,
     stageReady: false,
+    celebration: null,
     feetVisible: readFeetVisible(),
     legsVisible: readLegsVisible(),
     footPathsVisible: readFootPathsVisible(),
@@ -271,6 +272,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setStageReady: () => {
       if (!get().stageReady) set({ stageReady: true });
     },
+    celebrate: (trick) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick } }),
     announce: (message) => set({ announcement: { message, nonce: ++nonce } }),
     requestFocus: (target) => set({ focusRequest: { ...target, nonce: ++nonce } }),
   };

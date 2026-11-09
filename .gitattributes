@@ -3,3 +3,5 @@
 public/basis/** binary
 # The loading pictures (ADR-56) are WebP renders: never diffed or converted as text.
 public/stills/** binary
+# The display face (ADR-57): a font file, never converted as text.
+src/styles/fonts/*.woff2 binary

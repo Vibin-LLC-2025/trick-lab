@@ -387,3 +387,38 @@ describe('game of SKATE', () => {
     expect(store.getState().skate.level).toBe('normal');
   });
 });
+
+// ADR-57: the stage celebrates the student's attempts that count; the store decides which.
+describe('the celebration in a game', () => {
+  it("celebrates the student's copy and set that count, never a miss, a wrong trick or the computer's", () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().startSkate();
+    // The computer lands its heelflip: its trick, not the student's to celebrate.
+    pop(store);
+    expect(store.getState().skate.phase).toBe('you-copy');
+    expect(store.getState().celebration).toBeNull();
+    // A kickflip is a landing, but not the heelflip to copy: a letter, no celebration.
+    const kick = presetById('kickflip').inputs;
+    tryInputs(store, kick.flick, kick.scoop);
+    expect(store.getState().skate.letters.you).toBe(1);
+    expect(store.getState().celebration).toBeNull();
+    // The computer sets its next trick and lands it; the student copies it this time.
+    pop(store);
+    const call = store.getState().skate.call!;
+    expect(store.getState().skate.phase).toBe('you-copy');
+    const copy = presetById(call.id as PresetId).inputs;
+    tryInputs(store, copy.flick, copy.scoop);
+    expect(store.getState().skate.letters.you).toBe(1);
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: call.name });
+    // Nothing about it is logged.
+    expect(types(store).filter((t) => t.includes('celebrat'))).toEqual([]);
+  });
+
+  it("celebrates the student's own set when it lands as called", () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().startSkate();
+    callAndSet(store, 'kickflip');
+    expect(store.getState().skate.phase).toBe('computer-copy');
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip' });
+  });
+});

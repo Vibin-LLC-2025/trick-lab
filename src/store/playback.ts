@@ -68,6 +68,8 @@ export const createPlaybackSlice =
         }
         out.push(`${completed.length} of ${OBJECTIVES.length} objectives done.`);
       }
+      // A landing in the lab is the student's to celebrate; in a game, only a set or copy that counts (scoreSkate).
+      if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name);
       out.push(...s.scoreSkate(result, by));
       s.announce(out.join(' '));
     };

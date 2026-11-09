@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { outcomeCard } from '../sim/format';
 import {
   computerTurn,
@@ -63,8 +63,25 @@ function useComputerTurns() {
   }, [waiting, turn]);
 }
 
-/** Five letter tiles; the ones a player has are filled. Read as text by the hidden label. The player up is marked. */
+/** How long a newly earned letter's stamp runs (app.css `skate-stamp`); after it the letter is a plain sticker. */
+export const STAMP_MS = 480;
+
+/**
+ * Five letter tiles; the ones a player has are stickers (ADR-57). A letter
+ * earned while this is on screen stamps in once (`skate__letter--new`, no
+ * movement under reduced motion); letters already there when it mounts do
+ * not, and a new game (fewer letters) starts clean. Read as text by the
+ * hidden label. The player up is marked.
+ */
 function Letters({ who, count, up }: { who: SkatePlayer; count: number; up: boolean }) {
+  // Letters this row has already shown; any beyond them stamp in.
+  const [shown, setShown] = useState(count);
+  if (count < shown) setShown(count);
+  useEffect(() => {
+    if (count <= shown) return;
+    const id = setTimeout(() => setShown(count), STAMP_MS);
+    return () => clearTimeout(id);
+  }, [count, shown]);
   return (
     <div className={`skate__row${up ? ' skate__row--up' : ''}`}>
       <dt className="skate__who">
@@ -73,7 +90,11 @@ function Letters({ who, count, up }: { who: SkatePlayer; count: number; up: bool
       </dt>
       <dd className="skate__letters">
         {SKATE_WORD.split('').map((l, i) => (
-          <span key={l} className={`skate__letter${i < count ? ' skate__letter--got' : ''}`} aria-hidden="true">
+          <span
+            key={l}
+            className={`skate__letter${i < count ? ' skate__letter--got' : ''}${i >= shown && i < count ? ' skate__letter--new' : ''}`}
+            aria-hidden="true"
+          >
             {l}
           </span>
         ))}
