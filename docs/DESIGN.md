@@ -405,11 +405,13 @@ Written by the lead's agent (fable) for the quality pass, per `docs/BRIEF-FEET.m
 
 ### 8.1 Renderer per tier (`ART.quality`)
 
-| Tier | antialias | dpr | shadows | anisotropy | powerPreference | Board | Shoes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| High | true (MSAA) | `[1, 2]` | PCF (radius 3), 2048 px map | 16 | `high-performance` | `board-high.glb` | `shoes.glb` |
-| Medium | true | `[1, 1.5]` | none (projected footprints) | 4 | `low-power` | `board.glb` | primitive |
-| Low | false | `[1, 1.5]` | none (projected footprints) | 1 | `low-power` | primitive | primitive |
+| Tier | renderer (ADR-50) | antialias | dpr | shadows | anisotropy | powerPreference | Board | Shoes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| High | WebGPURenderer | true (MSAA) | `[1, 2]` | PCF (radius 3), 2048 px map | 16 | `high-performance` | `board-high.glb` | `shoes.glb` |
+| Medium | WebGPURenderer | true | `[1, 1.5]` | none (projected footprints) | 4 | `low-power` | `board.glb` | primitive |
+| Low | WebGLRenderer | false | `[1, 1.5]` | none (projected footprints) | 1 | `low-power` | primitive | primitive |
+
+Since 2026-11-09 (ADR-50) Medium and High draw with three's WebGPURenderer (on its WebGL2 backend where WebGPU is missing, and with WebGLRenderer if it cannot start); the six kickflip poses, the foot trails, the legs, regular stance and the Medium footprints look the same on both renderers in side-by-side screenshots.
 
 Shadow map (`ART.shadowMap`, since 2026-11-05, ADR-38): `PCFShadowMap` (was a PCFSoft request, which r187 replaced by PCF at radius 1), radius 3 texels, 2048 px. The orthographic camera is fitted to two caster boxes, `[-0.6, 0, -0.43]` to `[0.6, 1.0, 0.43]` and `[-0.37, 1.0, -0.4]` to `[0.37, 1.36, 0]`, and to where their shadows reach the pad, plus 0.03 m: left -0.768, right 0.768, bottom -0.787, top 0.889, near 4.70, far 6.46 (texels of 0.82 mm). Bias -0.0002, normal bias 0.002 (was +-1.0 m, near 1.0, far 12.0, bias -0.0004, normal bias 0.015). The key, ambient and environment numbers in 7.6 are unchanged; the shadow adds the contact under the wheels that the disc only suggested. The pad's centre mark now floats 1.5 mm above the slab (`mark.y` 0.0025) so it no longer z-fights.
 

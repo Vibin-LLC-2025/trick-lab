@@ -31,7 +31,12 @@
 //   landing's own frame (must be 0). Where the welcome preview loops, the same
 //   times over a few seconds of it: the GPU's clocks settle there, so its
 //   numbers vary less from run to run than a single trick's.
-// It reads the renderer through ?debug (window.__trickLab, TrickScene.tsx).
+// It reads the renderer through ?debug (window.__trickLab, TrickScene.tsx)
+// and, from ADR-50 on, PerfProbe's numbers (window.__trickLabPerf), which
+// count frames and draw calls the same way on WebGLRenderer and
+// WebGPURenderer; older builds fall back to WebGLRenderer's info. GPU time
+// is a WebGL timer query per frame, or on WebGPURenderer its timestamp
+// queries (trackTimestamp under ?debug), resolved once per drawn frame.
 // Nothing here changes the app; the page's storage is set from the query of
 // each load by an init script (m-* parameters, below) and cleared first.
 async (page) => {
@@ -77,7 +82,7 @@ async (page) => {
       const lab = window.__trickLab;
       if (lab) {
         const s = lab.get();
-        const frame = s.gl.info.render.frame;
+        const frame = window.__trickLabPerf ? window.__trickLabPerf.frames : s.gl.info.render.frame;
         // Builds before ADR-48 did not name the group: it is the scene's one group with meshes in it.
         const content =
           s.scene.getObjectByName('scene-content') ??
@@ -166,12 +171,14 @@ async (page) => {
       const t0 = performance.now();
       while (performance.now() - t0 < 500) {
         await new Promise((r) => requestAnimationFrame(r));
-        calls = Math.max(calls, s.gl.info.render.calls);
-        triangles = Math.max(triangles, s.gl.info.render.triangles);
+        const p = window.__trickLabPerf;
+        calls = Math.max(calls, p ? p.drawCalls : s.gl.info.render.calls);
+        triangles = Math.max(triangles, p ? p.triangles : s.gl.info.render.triangles);
       }
       return {
         calls,
         triangles,
+        renderer: s.gl.isWebGPURenderer ? (s.gl.backend && s.gl.backend.isWebGPUBackend ? 'WebGPU' : 'WebGPU on WebGL2') : 'WebGL',
         frameloop: s.frameloop,
         dpr: s.viewport.dpr,
         antialias: s.gl.getContextAttributes ? s.gl.getContextAttributes().antialias : null,
@@ -185,6 +192,32 @@ async (page) => {
     page.evaluate(() => {
       const s = window.__trickLab.get();
       const gl = s.gl;
+      if (gl.isWebGPURenderer) {
+        // Timestamp queries, resolved once per frame PerfProbe drew (the resolve sums every pass of it).
+        const timed = gl.backend && gl.backend.trackTimestamp && gl.hasFeature('timestamp-query');
+        window.__times = { cpu: [], gpu: [], pending: [], ext: timed };
+        if (gl.__measured) return;
+        gl.__measured = true;
+        const render = gl.render.bind(gl);
+        gl.render = (scene, camera) => {
+          const c0 = performance.now();
+          render(scene, camera);
+          window.__times.cpu.push(performance.now() - c0);
+        };
+        if (!timed) return;
+        let seen = window.__trickLabPerf.frames;
+        const poll = async () => {
+          const f = window.__trickLabPerf.frames;
+          if (f !== seen) {
+            seen = f;
+            const ms = await gl.resolveTimestampsAsync('render');
+            if (typeof ms === 'number' && ms > 0) window.__times.gpu.push(ms);
+          }
+          requestAnimationFrame(poll);
+        };
+        requestAnimationFrame(poll);
+        return;
+      }
       const ctx = gl.getContext();
       const ext = ctx.getExtension && ctx.getExtension('EXT_disjoint_timer_query_webgl2');
       window.__times = { cpu: [], gpu: [], pending: [], ext: !!ext };
@@ -251,9 +284,10 @@ async (page) => {
     const times = await readTimes();
     // The landing itself asks for one frame (the store changed); then nothing may draw.
     await page.waitForTimeout(300);
-    const frames0 = await page.evaluate(() => window.__trickLab.get().gl.info.render.frame);
+    const framesNow = () => (window.__trickLabPerf ? window.__trickLabPerf.frames : window.__trickLab.get().gl.info.render.frame);
+    const frames0 = await page.evaluate(framesNow);
     await page.waitForTimeout(1500);
-    const idleFrames = await page.evaluate((f0) => window.__trickLab.get().gl.info.render.frame - f0, frames0);
+    const idleFrames = (await page.evaluate(framesNow)) - frames0;
     return { ...times, idleFrames };
   };
 
@@ -301,13 +335,13 @@ async (page) => {
       const s = (ms) => (ms === null || ms === 'none' ? (ms === 'none' ? 'none' : 'timed out') : `${(ms / 1000).toFixed(2)} s`);
       md.push(`| ${r.tier} | ${l.net === 'full' ? 'full speed' : `${l.net} Mbps`} | ${s(l.fcp)} | ${s(l.firstFrame)} | ${s(l.models)} | ${kb(l.bytes.js)} KB | ${kb(l.bytes.models)} KB |`);
     }
-  md.push('', '| Tier | Screen | Draw calls | Triangles | Frameloop | Textures | gl.render CPU, median / p95 | GPU, median / p95 | Idle frames after the landing |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  md.push('', '| Tier | Screen | Renderer | Draw calls | Triangles | Frameloop | Textures | gl.render CPU, median / p95 | GPU, median / p95 | Idle frames after the landing |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   // Times: the lab's are over the timed tricks, the welcome screen's over its looping preview.
   for (const r of out.rows)
     for (const [screen, c] of Object.entries(r.screens)) {
       const t = c.trick;
       const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} ms` : x ?? '');
-      md.push(`| ${r.tier} | ${screen} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t && t.idleFrames !== undefined ? t.idleFrames : ''} |`);
+      md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t && t.idleFrames !== undefined ? t.idleFrames : ''} |`);
     }
   out.markdown = md.join('\n');
   return out;

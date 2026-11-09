@@ -23,10 +23,15 @@ export const SCENE_BG: Record<Theme, string> = { dark: '#1e2124', light: '#d7d3c
  * Renderer settings per quality tier (ADR-16, 2026-11-04). The Canvas is
  * keyed on the tier because antialias and powerPreference are constructor
  * options. Low is the original Chromebook setup, unchanged.
+ * `renderer` (ADR-50, 2026-11-09): Medium and High draw with three's
+ * WebGPURenderer (WebGPU, or its own WebGL2 backend where WebGPU is missing),
+ * the home of the effects; Low keeps WebGLRenderer, which starts faster on a
+ * Chromebook and is proven there.
  */
 export const QUALITY: Record<
   Quality,
   {
+    renderer: 'webgpu' | 'webgl';
     antialias: boolean;
     dpr: readonly [number, number];
     shadows: boolean;
@@ -41,9 +46,9 @@ export const QUALITY: Record<
     powerPreference: 'high-performance' | 'low-power';
   }
 > = {
-  high: { antialias: true, dpr: [1, 2], shadows: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
-  medium: { antialias: true, dpr: [1, 1.5], shadows: false, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
-  low: { antialias: false, dpr: [1, 1.5], shadows: false, anisotropy: 1, groundAnisotropy: 1, powerPreference: 'low-power' },
+  high: { renderer: 'webgpu', antialias: true, dpr: [1, 2], shadows: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
+  medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: false, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
+  low: { renderer: 'webgl', antialias: false, dpr: [1, 1.5], shadows: false, anisotropy: 1, groundAnisotropy: 1, powerPreference: 'low-power' },
 };
 
 export const ART = {

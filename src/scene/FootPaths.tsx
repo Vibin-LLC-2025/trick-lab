@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from 'react';
+import { useThree } from '@react-three/fiber';
 import { computeFlight } from '../sim/flight';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { buildFootPaths } from './footPathGeometry';
-import { mat } from './resources';
+import { isNodeRenderer } from './rendererKind';
+import { shaderMat } from './resources';
 
 const REST_Y = ART.board.restY;
 
@@ -23,6 +25,8 @@ export function FootPaths() {
   const scoop = useTrickStore((s) => (s.flight ? 0 : s.scoop));
   // Regular mirrors the feet along X (ADR-25), so the trails rebuild on a stance change.
   const stance = useTrickStore((s) => s.stance);
+  // The GLSL material on WebGLRenderer, its TSL twin on WebGPURenderer (ADR-50).
+  const nodeRenderer = useThree((s) => isNodeRenderer(s.gl));
 
   const geometry = useMemo(() => {
     const inputs = flight?.inputs ?? { pop, flick, scoop };
@@ -30,5 +34,5 @@ export function FootPaths() {
   }, [flight, pop, flick, scoop, stance]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
-  return <mesh geometry={geometry} material={mat.footPath} position={[0, REST_Y, 0]} renderOrder={2} />;
+  return <mesh geometry={geometry} material={shaderMat('footPath', nodeRenderer)} position={[0, REST_Y, 0]} renderOrder={2} />;
 }

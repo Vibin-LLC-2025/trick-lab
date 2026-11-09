@@ -2,6 +2,13 @@
 // module load; static parts are merged so each material is one draw call.
 // TrickScene calls disposeSharedResources() on unmount; three.js re-uploads a
 // disposed resource on next use, so a remount is safe.
+//
+// Two renderers (ADR-50): Low draws with three's WebGLRenderer, Medium and
+// High with its WebGPURenderer. Every material here works on both except the
+// two ShaderMaterials (GLSL), whose TSL twins live in nodeRenderer.ts and are
+// registered here (setNodeMaterials) when that renderer starts; shaderMat()
+// picks the one for the renderer in use. Both read the same `uniforms`, the
+// values FlightDriver writes each frame.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
@@ -82,6 +89,22 @@ function groundPlane() {
 
 const S = ART.shadow;
 
+/**
+ * The values FlightDriver writes every frame (no allocation), read by the
+ * GLSL materials below and by their TSL twins (nodeRenderer.ts, ADR-50): one
+ * object per value, mutated, never replaced.
+ * - `pathProgress`: the foot trails' playhead, 0 to 1.
+ * - `board`: the board's ground footprint, centre x and z, cos and sin of its yaw.
+ * - `boardSize`: its soft half extents (x y) and contact half extents (z w).
+ * - `boardOpacity`: the soft and the contact opacity.
+ */
+export const uniforms = {
+  pathProgress: { value: 0 },
+  board: new THREE.Vector4(0, 0, 1, 0),
+  boardSize: new THREE.Vector4(S.halfLength, S.halfWidth, S.halfLength, S.halfWidth),
+  boardOpacity: new THREE.Vector2(0, 0),
+};
+
 /** Instances in the ground shadow mesh (ADR-38): board soft, board contact, front foot, back foot. */
 export const SHADOW_INSTANCES = 4;
 
@@ -144,9 +167,9 @@ const shadowMaterial = () =>
     uniforms: {
       uColor: { value: new THREE.Color(S.color) },
       uCore: { value: S.core },
-      uBoard: { value: new THREE.Vector4(0, 0, 1, 0) },
-      uBoardSize: { value: new THREE.Vector4(S.halfLength, S.halfWidth, S.halfLength, S.halfWidth) },
-      uBoardOpacity: { value: new THREE.Vector2(0, 0) },
+      uBoard: { value: uniforms.board },
+      uBoardSize: { value: uniforms.boardSize },
+      uBoardOpacity: { value: uniforms.boardOpacity },
     },
     transparent: true,
     depthWrite: false,
@@ -209,7 +232,7 @@ const FP = ART.footPaths;
 const footPathMaterial = () =>
   new THREE.ShaderMaterial({
     uniforms: {
-      uProgress: { value: 0 },
+      uProgress: uniforms.pathProgress,
       uGhost: { value: FP.ghost },
       uHead: { value: FP.head.width },
       uLighten: { value: FP.head.lighten },
@@ -479,7 +502,28 @@ export const mat = {
   }),
 };
 
+/** The materials written as shaders: a GLSL ShaderMaterial in `mat`, a TSL twin for the WebGPURenderer. */
+export type ShaderKey = 'footPath' | 'shadow';
+
+/** The TSL twins (ADR-50), registered by nodeRenderer.ts when a WebGPURenderer starts; null until then. */
+const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null };
+
+/** nodeRenderer.ts hands over a fresh pair for each WebGPURenderer it makes; the last pair is freed. */
+export function setNodeMaterials(m: Record<ShaderKey, THREE.Material>) {
+  for (const key of Object.keys(nodeMat) as ShaderKey[]) {
+    if (nodeMat[key] !== m[key]) nodeMat[key]?.dispose();
+    nodeMat[key] = m[key];
+  }
+}
+
+/** The shader material for the renderer in use: the TSL twin on a WebGPURenderer, the GLSL one otherwise. */
+export const shaderMat = (key: ShaderKey, nodeRenderer: boolean): THREE.Material => (nodeRenderer ? (nodeMat[key] ?? mat[key]) : mat[key]);
+
 export function disposeSharedResources() {
   Object.values(geo).forEach((g) => g.dispose());
   Object.values(mat).forEach((m) => m.dispose());
+  for (const key of Object.keys(nodeMat) as ShaderKey[]) {
+    nodeMat[key]?.dispose();
+    nodeMat[key] = null;
+  }
 }

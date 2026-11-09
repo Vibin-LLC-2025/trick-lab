@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Canvas, useThree, type RootState } from '@react-three/fiber';
-import { PCFShadowMap, type DirectionalLight } from 'three';
+import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
 import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
@@ -9,6 +9,7 @@ import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwan
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
+import { perfStats } from './perfStats';
 import { rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
@@ -70,16 +71,55 @@ function Lights({ shadows }: { shadows: boolean }) {
   );
 }
 
+const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+
 /**
- * `?debug` in the URL exposes the R3F state as `window.__trickLab` for
- * measuring renderer.info from a browser script (docs/PERF-BUDGET.md); without
- * it nothing is attached.
+ * `?debug` in the URL exposes the R3F state as `window.__trickLab` and
+ * PerfProbe's numbers as `window.__trickLabPerf`, for measuring from a
+ * browser script (docs/PERF-BUDGET.md, scripts/measure); without it nothing
+ * is attached.
  */
 function onCreated(state: RootState) {
   noteRenderer(state.gl);
-  if (new URLSearchParams(window.location.search).has('debug')) {
-    (window as unknown as { __trickLab?: RootState }).__trickLab = state;
+  if (DEBUG) {
+    const w = window as unknown as { __trickLab?: RootState; __trickLabPerf?: typeof perfStats };
+    w.__trickLab = state;
+    w.__trickLabPerf = perfStats;
   }
+}
+
+/** The WebGPURenderer path (ADR-50) is its own chunk: Low never downloads it. */
+const loadNodeRenderer = () => import('./nodeRenderer');
+
+type Tier = ReturnType<typeof rendererFor>;
+type GlDefaults = { canvas: unknown };
+
+/** Today's renderer: Low, and wherever the WebGPURenderer cannot start. */
+function webglRenderer(canvas: GlDefaults['canvas'], Q: Tier) {
+  const gl = new WebGLRenderer({ canvas: canvas as HTMLCanvasElement, powerPreference: Q.powerPreference, antialias: Q.antialias });
+  gl.toneMappingExposure = ART.renderer.exposure;
+  return gl;
+}
+
+/**
+ * The renderer factory for a tier (ADR-50). Medium and High: a
+ * WebGPURenderer, awaited until initialised, as R3F requires. If its chunk
+ * cannot load or it cannot start, the tier still draws, with WebGLRenderer
+ * and the GLSL materials. R3F applies tone mapping and colour space to
+ * whatever comes back.
+ */
+function rendererFactory(Q: Tier) {
+  return async ({ canvas }: GlDefaults) => {
+    if (Q.renderer === 'webgpu') {
+      try {
+        const m = await loadNodeRenderer();
+        return await m.createNodeRenderer(canvas as HTMLCanvasElement, Q, DEBUG);
+      } catch (error) {
+        console.warn('trick-lab: the WebGPU renderer did not start; using WebGLRenderer.', error);
+      }
+    }
+    return webglRenderer(canvas, Q);
+  };
 }
 
 /**
@@ -110,6 +150,10 @@ export default function TrickScene() {
   }, [quality]);
   const Q = useTrickStore(rendererFor);
   const C = ART.camera;
+  // Medium and High: one factory per tier, which R3F calls once per Canvas (keyed on the tier).
+  // Low: today's WebGLRenderer from props, as before ADR-50 (a factory delays its first frame).
+  const factory = useCallback((defaults: GlDefaults) => rendererFactory(Q)(defaults), [Q]);
+  const gl = Q.renderer === 'webgpu' ? factory : { powerPreference: Q.powerPreference, antialias: Q.antialias, toneMappingExposure: ART.renderer.exposure };
 
   return (
     <Canvas
@@ -119,10 +163,10 @@ export default function TrickScene() {
       frameloop={playing ? 'always' : 'demand'}
       // PCF, not the deprecated PCFSoft (ADR-38); softness is ART.shadowMap.radius.
       shadows={Q.shadows ? { type: PCFShadowMap } : false}
-      // R3F 9 passes the renderer options to the constructor and then applies
-      // them as properties, so toneMappingExposure takes effect (checked in the
-      // browser by the integration pass, 2026-11-04).
-      gl={{ powerPreference: Q.powerPreference, antialias: Q.antialias, toneMappingExposure: ART.renderer.exposure }}
+      // WebGPURenderer on Medium and High, WebGLRenderer on Low and as the fallback (ADR-50).
+      // R3F 9 passes props to the WebGLRenderer constructor and then applies them as
+      // properties, so toneMappingExposure takes effect (checked 2026-11-04).
+      gl={gl}
       onCreated={onCreated}
       camera={{ position: [...C.position], fov: C.fov, near: C.near, far: C.far }}
     >

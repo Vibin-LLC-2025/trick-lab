@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useThree } from '@react-three/fiber';
-import { PMREMGenerator, type Group } from 'three';
+import { PMREMGenerator, type Group, type Texture } from 'three';
 import { ART } from './artDirection';
 import { outdoorEnvironment } from './outdoorEnvironment';
+import { isNodeRenderer } from './rendererKind';
 
 /**
  * Reflections and image-based fill (DESIGN.md 7.6 and 10). Without an
@@ -39,7 +40,7 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    let target: ReturnType<PMREMGenerator['fromScene']> | null = null;
+    let target: { texture: Texture; dispose: () => void } | null = null;
 
     const reveal = () => {
       if (cancelled) return;
@@ -55,15 +56,25 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
       gl.compileAsync(scene, camera).then(reveal, reveal);
     };
 
-    const prefilter = () => {
+    const prefilter = async () => {
       if (cancelled) return;
       const { gl, scene } = get();
       const E = ART.lights.environment;
-      const pmrem = new PMREMGenerator(gl);
       const outdoor = outdoorEnvironment();
-      target = pmrem.fromScene(outdoor.scene, E.blur);
+      if (isNodeRenderer(gl)) {
+        // The WebGPURenderer has its own PMREMGenerator (ADR-50); its chunk is already loaded.
+        const { prefilterEnvironment } = await import('./nodeRenderer');
+        if (cancelled) {
+          outdoor.dispose();
+          return;
+        }
+        target = prefilterEnvironment(gl, outdoor.scene, E.blur);
+      } else {
+        const pmrem = new PMREMGenerator(gl);
+        target = pmrem.fromScene(outdoor.scene, E.blur);
+        pmrem.dispose();
+      }
       outdoor.dispose();
-      pmrem.dispose();
       scene.environment = target.texture;
       scene.environmentIntensity = E.intensity;
       timer = setTimeout(precompile, 0);

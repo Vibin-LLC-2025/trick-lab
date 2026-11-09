@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Matrix4, MathUtils, Vector3, type Bone, type Vector2, type Vector4, type Group, type InstancedBufferAttribute, type InstancedMesh } from 'three';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Matrix4, MathUtils, Vector3, type Bone, type Group, type InstancedBufferAttribute, type InstancedMesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
@@ -14,7 +14,8 @@ import { newFlightClock, noteStoreChange, tickFlightClock } from './flightClock'
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
-import { geo, mat, SHADOW_INSTANCES } from './resources';
+import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
+import { isNodeRenderer } from './rendererKind';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
@@ -23,8 +24,8 @@ const REST_Y = ART.board.restY;
 const D2R = MathUtils.DEG2RAD;
 /** The store's live playhead (store/playhead.ts): the one cursor the flight clock advances. */
 const head = useTrickStore.playhead;
-/** The foot paths' playhead, a shared uniform (resources.ts). */
-const pathProgress = mat.footPath.uniforms.uProgress!;
+/** The foot paths' playhead, a shared uniform value (resources.ts) both renderers' materials read. */
+const pathProgress = uniforms.pathProgress;
 /** The ground shadows' per-instance opacity (resources.ts, ADR-38). */
 const shadowOpacity = geo.shadow.getAttribute('aOpacity') as InstancedBufferAttribute;
 
@@ -42,11 +43,10 @@ function applyFootprint(mesh: InstancedMesh, i: number, f: Footprint) {
 }
 
 /** The board's two footprints for the feet's union in the shadow shader (resources.ts); the uniform objects are mutated, never replaced. */
-const shadowUniforms = mat.shadow.uniforms;
 function applyBoardUniforms(board: Footprint, contact: Footprint) {
-  (shadowUniforms.uBoard!.value as Vector4).set(board.x, board.z, Math.cos(board.yaw), Math.sin(board.yaw));
-  (shadowUniforms.uBoardSize!.value as Vector4).set(board.halfLength, board.halfWidth, contact.halfLength, contact.halfWidth);
-  (shadowUniforms.uBoardOpacity!.value as Vector2).set(board.opacity, contact.opacity);
+  uniforms.board.set(board.x, board.z, Math.cos(board.yaw), Math.sin(board.yaw));
+  uniforms.boardSize.set(board.halfLength, board.halfWidth, contact.halfLength, contact.halfWidth);
+  uniforms.boardOpacity.set(board.opacity, contact.opacity);
 }
 
 /**
@@ -117,6 +117,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const legsVisible = useTrickStore((s) => s.legsVisible);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
+  // The shadow footprints' material for the renderer in use (ADR-50).
+  const nodeRenderer = useThree((s) => isNodeRenderer(s.gl));
 
   // A pop or a resume starts a new run of the clock even when no paused
   // frame came in between, so the next frame advances by 0, not by the wait.
@@ -205,7 +207,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       {/* Projected footprints stand in for shadows on Medium and Low (ADR-38); High has real ones (ADR-19). */}
       {/* Not frustum culled: the instances move, and three would keep the bounds of the first frame. */}
       {!shadows && (
-        <instancedMesh ref={shadow} args={[geo.shadow, mat.shadow, SHADOW_INSTANCES]} renderOrder={1} frustumCulled={false} />
+        <instancedMesh ref={shadow} args={[geo.shadow, shaderMat('shadow', nodeRenderer), SHADOW_INSTANCES]} renderOrder={1} frustumCulled={false} />
       )}
       {/* The cues and trails are a plan for the student's inputs, so the welcome screen's preview has neither. */}
       <Board ref={board} shadows={shadows}>
