@@ -462,3 +462,48 @@ Checked in the browser: the font loads from the app's own path; the celebration 
 The rule: on the device's own tier, the first 3 samples, each the frames of playing flights covering at least 250 ms (in 2 intervals or more; one trick, or several short ones pooled), are judged by their median frame interval (the first frame after a pop, a resume, any playback change or a hidden tab left out, and single stalls over a second); 2 of them over 40 ms (under 25 frames a second) drop the tier one step, said in the landing's announcement and saved as `trick-lab.quality-step` for later visits. The cost while a flight plays is one store read and one array write per frame in PerfProbe (no allocation), and one median per landing, outside the frame loop.
 
 Checked in the browser (RTX 3060, High by the device's pick): smooth tricks kept High. With 45 ms of main-thread work forced into every animation frame, and after the Phase D review with 65 ms (about 15 frames a second, which the first rule's 12-frame minimum missed), the third trick stepped the scene to Medium with the announcement, and the next visit started on Medium (`board.glb`, View showing Medium). CPU throttling at 20x alone did not trigger it, rightly: about 0.6 ms of CPU per frame becomes about 12 ms, still smooth. The measurement script always sets a tier, so it never steps down.
+
+### Step 14: everything, before and after
+
+Before is 87ccd92 (the `skate-game` head the plan started from, measured 2026-11-08 in the baseline above), after is 2d396d4 (all of Phases A to D with their reviews). The same script (`scripts/measure/measure.js`), the same machine (RTX 3060, Chromium), the same session for both, 1440 x 900, cache off, each build served by `serve.ts` with gzip like GitHub Pages. Eight runs: each build in both themes with the feet on and off, every tier, the welcome screen, the lab and the game. Each build at its own defaults: the legs were on by default before (ADR-37) and are off after (ADR-48). The full JSON and tables are in the run's scratch output; the numbers below are copied from them.
+
+**Loading** (dark theme, feet on; full speed is the range over both themes):
+
+| Tier | Network | Picture (after) | First 3D frame, before | after | All models on screen, before | after | Picture lifts |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| High | full speed | 0.07 to 0.24 s | 0.47 to 0.48 s | 1.04 to 1.19 s | 0.75 s | **1.04 to 1.19 s** | 1.10 to 1.24 s |
+| High | 10 Mbps | 0.42 s | 0.67 s | 1.73 s | 2.93 s | **1.75 s** | 1.91 s |
+| High | 3 Mbps | 1.00 s | 1.37 s | 4.34 s | 8.63 s | **5.06 s** | 5.09 s |
+| Medium | full speed | 0.05 s | 0.47 to 0.50 s | 0.99 s | 0.73 s | **0.99 s** | 1.02 s |
+| Medium | 10 Mbps | 0.44 s | 0.69 s | 1.57 s | 1.45 s | **1.57 s** | 1.60 s |
+| Medium | 3 Mbps | 0.81 s | 1.39 s | 3.52 s | 3.38 s | **3.97 s** | 3.98 s |
+| Low | full speed | 0.05 s | 0.46 to 0.47 s | 0.45 s | none | none | 0.52 s |
+| Low | 10 Mbps | 0.42 s | 0.69 s | 0.71 s | none | none | 0.73 s |
+| Low | 3 Mbps | 0.80 s | 1.40 s | 1.50 s | none | none | 1.53 s |
+
+| Downloads | Before | After |
+| --- | --- | --- |
+| JavaScript, High and Medium | 375 KB | 595 KB (the WebGPURenderer and the effects, ADR-50 and ADR-51) |
+| JavaScript, Low | 352 KB | 362 KB |
+| Models, High (feet on / off) | 2,585 / 2,106 KB | **755 / 588 KB** (KTX2, ADR-49) |
+| Models, Medium | 661 KB | **273 KB** |
+| Loading picture | none | 26 KB |
+| Display face | none | 14 KB |
+| GPU texture memory, estimate (`assets:check`), High / Medium | 33.5 / 14.7 MB | **8.4 / 3.7 MB** |
+
+**Drawing** (the most draw calls seen over half a second; the lab's GPU time is the median over four tricks, the welcome screen's over its looping preview; GPU time is WebGL timer queries before, WebGPU timestamps after, and after includes the post-processing):
+
+| Tier | Feet | Draw calls home / lab, before | after | Triangles in the lab, before | after | GPU per frame in the lab, before | after | Welcome loop GPU, before | after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| High | on | 30 / 31 | 30 / 31 | 164,307 | 163,961 | 2.78 to 3.71 ms | **0.92 to 1.84 ms** | 3.73 to 3.80 ms | **1.11 to 1.18 ms** |
+| High | off | 15 / 16 | 18 / 19 | 95,079 | 97,101 | 2.53 to 2.71 ms | 1.64 to 1.70 ms | 2.83 to 3.03 ms | 1.18 to 1.44 ms |
+| Medium | on | 15 / 16 | 16 / 17 | 18,547 | 18,969 | 1.36 to 1.37 ms | 1.38 to 1.51 ms | 2.49 to 2.53 ms | 1.31 to 1.77 ms |
+| Medium | off | 9 / 10 | 12 / 13 | 14,615 | 16,637 | 1.21 ms | 0.39 to 1.25 ms | 1.50 to 1.53 ms | 1.51 to 1.64 ms |
+| Low | on | 13 / 14 | **9 / 10** | 4,663 | 10,487 | 0.90 ms | 0.96 to 1.00 ms | still | still |
+| Low | off | 7 / 8 | **5 / 6** | 731 | 8,155 | 0.69 to 0.70 ms | 0.91 ms | still | still |
+
+Every tier is inside its gate (Low and Medium under 20, High under 40), the game screen draws the same as the welcome screen, gl.render's CPU time stays 0.2 to 0.8 ms, and every tier draws **0 frames** in the 1.5 s after a landing, before and after.
+
+**What it adds up to, against the plan's expectations.** High downloads 755 KB of models instead of 2.6 MB (expected about 1 MB) and keeps 8.4 MB of textures on the GPU instead of 33.5 (expected about 10). The stage is never blank and never shows the stand-in board on any connection: the loading picture is up from 0.05 to 1.0 s and lifts 20 to 50 ms after the tier's scene is complete. High draws in a third to a half of the GPU time with occlusion, motion blur, glow and the grade added. Idle frames and the draw-call gates hold.
+
+**The cost.** The WebGPURenderer and its effects are 220 KB more JavaScript, which Medium and High load and start before their first 3D frame. So on those tiers the 3D scene itself comes later: at full speed the complete scene is about 0.3 s later than before (1.0 to 1.2 s, was 0.73 to 0.75 s), and on Medium at 3 Mbps 0.6 s later (3.97 s, was 3.38). The loading picture covers that time; on High at 10 and 3 Mbps the complete scene still comes much sooner than before, since its models are a third of the size. Low, which never loads the WebGPU chunk, is unchanged within 0.1 s.
