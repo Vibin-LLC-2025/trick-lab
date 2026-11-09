@@ -1,10 +1,10 @@
 // How every GLB is loaded and freed (BoardModel, ShoesModel, GroundModel).
 // Part of the lazy model chunk: a student on Low never downloads it.
 import { useGLTF } from '@react-three/drei';
-import { LoaderUtils, Mesh, Texture, type Material, type WebGLRenderer } from 'three';
+import { LoaderUtils, Material, Mesh, Texture, type WebGLRenderer } from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { BASIS_DIR } from '../asset/spec';
-import { onReleaseModels, takePrefetched, whenRenderer } from './modelCache';
+import { isUnwanted, onReleaseModels, RELEASE_AFTER_MS, takePrefetched, whenRenderer } from './modelCache';
 
 // useGLTF(path, useDraco, useMeshopt, extendLoader). Draco is off: drei would
 // fetch its decoder from a CDN, which school networks often block. The meshopt
@@ -41,6 +41,46 @@ const textureSupport = () =>
     }),
   ]).then(() => undefined));
 
+/** The part of a glTF material definition that names textures. */
+interface MaterialDef {
+  name?: string;
+  pbrMetallicRoughness?: { baseColorTexture?: unknown; metallicRoughnessTexture?: unknown };
+  normalTexture?: unknown;
+  occlusionTexture?: unknown;
+  emissiveTexture?: unknown;
+}
+
+/** The material slots a glTF file can ask a texture for, and where three's material keeps it. */
+const TEXTURE_SLOTS: readonly [(def: MaterialDef) => unknown, string][] = [
+  [(d) => d.pbrMetallicRoughness?.baseColorTexture, 'map'],
+  [(d) => d.normalTexture, 'normalMap'],
+  [(d) => d.pbrMetallicRoughness?.metallicRoughnessTexture, 'roughnessMap'],
+  [(d) => d.occlusionTexture, 'aoMap'],
+  [(d) => d.emissiveTexture, 'emissiveMap'],
+];
+
+/**
+ * The textures a loaded model asked for but did not get. three-stdlib's
+ * GLTFLoader turns a texture that fails to load or decode (a corrupt KTX2,
+ * a transcoder error) into a missing map and still reports the model as
+ * loaded; the board would then show without its textures and nobody would
+ * be told. Read through the parser's material associations, so a material
+ * the loader cloned (vertex colours) is checked too.
+ */
+export function missingTextures(gltf: Pick<GLTF, 'parser'>): string[] {
+  const json = gltf.parser.json as { materials?: MaterialDef[] };
+  const missing: string[] = [];
+  for (const [object, ref] of gltf.parser.associations) {
+    if (!(object instanceof Material) || ref.materials === undefined) continue;
+    const def = json.materials?.[ref.materials];
+    if (!def) continue;
+    for (const [asks, key] of TEXTURE_SLOTS) {
+      if (asks(def) && !(object as unknown as Record<string, unknown>)[key]) missing.push(`${def.name ?? ref.materials}.${key}`);
+    }
+  }
+  return [...new Set(missing)];
+}
+
 /** What each URL loaded, so a release can free it. */
 const loaded = new Map<string, GLTF>();
 const patched = new WeakSet<GLTFLoader>();
@@ -59,8 +99,19 @@ export function shareEarlyDownloads(loader: GLTFLoader) {
   const load = loader.load.bind(loader);
   loader.load = (url, onLoad, onProgress, onError) => {
     const done = (gltf: GLTF) => {
+      // A model missing a texture is a failed model: AssetBoundary falls back and says so.
+      const missing = missingTextures(gltf);
+      if (missing.length) {
+        disposeModel(gltf);
+        onError?.(new Error(`${url}: textures did not load (${missing.join(', ')})`) as unknown as ErrorEvent);
+        return;
+      }
       loaded.set(url, gltf);
       onLoad(gltf);
+      // Finished after the student moved to a tier that never shows it (a slow
+      // link, or a model failing first): freed like the others once the tier
+      // has settled, unless the student has come back to a tier that needs it.
+      if (isUnwanted(url)) setTimeout(() => isUnwanted(url) && releaseLoaded([url]), RELEASE_AFTER_MS);
     };
     const early = takePrefetched(url);
     // The download runs meanwhile; only the parse waits for the renderer.

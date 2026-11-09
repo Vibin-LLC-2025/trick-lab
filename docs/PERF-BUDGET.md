@@ -45,13 +45,13 @@ The board budget is enforced on the committed GLB by `npm run assets:check`, whi
 Every change from `docs/PLAN-LOOK-FEEL-PERF.md` on reports before and after from one script, `scripts/measure/measure.js`, run by the global `playwright-cli` against a production build (Playwright is not a project dependency):
 
 ```
-npm run build && node scripts/measure/serve.mjs dist 4173
+npm run build && npx tsx scripts/measure/serve.ts dist 4173
 playwright-cli -s=measure open "http://localhost:4173/?tiers=high,medium,low&nets=full,10,3"
 playwright-cli -s=measure --raw run-code --filename=scripts/measure/measure.js > measure.json
 playwright-cli -s=measure close
 ```
 
-`scripts/measure/serve.mjs` serves the build the way GitHub Pages, the live host, does: gzip for HTML, CSS, JS, JSON, SVG, `.wasm` and `.glb` (checked against Pages on 2026-11-09) and `Cache-Control: max-age=600`. `vite preview` gzips the JS, CSS and HTML but sends `.glb` and `.wasm` uncompressed, which overstates the model download; the baseline and step 1 tables were taken through it, before the server existed, and the step 3 section compares gzipped runs.
+`scripts/measure/serve.ts` serves the build the way GitHub Pages, the live host, does: gzip for HTML, CSS, JS, JSON, SVG, `.wasm` and `.glb` (checked against Pages on 2026-11-09) and `Cache-Control: max-age=600`. `vite preview` gzips the JS, CSS and HTML but sends `.glb` and `.wasm` uncompressed, which overstates the model download; the baseline and step 1 tables were taken through it, before the server existed, and the step 3 section compares gzipped runs.
 
 The options are the query of the page the session is on (tiers, networks, screens, feet, legs, theme, viewport, the preset, the number of timed tricks, the base path; the script's header lists them). The result is JSON with a `markdown` field holding the two tables used below. For each tier it loads the welcome screen with the HTTP cache off at full speed and at 10 and 3 Mbps (Chromium's own throttling, 60 ms latency) and records first contentful paint, the first frame of the lit 3D scene, the frame where every model of the tier is on screen, and the bytes by kind. Then, at full speed on each screen, the draw calls and triangles (the most over half a second of frames after a forced frame), and in the lab, after one untimed trick, `gl.render` CPU time and GPU time (`EXT_disjoint_timer_query_webgl2`, where the browser exposes it) over four tricks, and the frames drawn in the 1.5 s after the last landing's own frame (must be 0). Where the welcome preview loops (Medium and High) it times three seconds of it too. It reads the renderer through `?debug` and sets each load's storage from the URL (the `m-*` parameters, applied by an init script before the app runs), so nothing in the app changes for it.
 
@@ -318,7 +318,7 @@ The legs were two draw calls on every tier plus the shanks' shadow pass on High.
 
 ### Step 3: KTX2 textures (ADR-49)
 
-Measured through `scripts/measure/serve.mjs` (gzip like GitHub Pages), so the bytes are what a student downloads. "Before" is step 2 (b063522) from the scratch worktree, served the same way in the same session. Models and JS are gzipped transfer sizes; the transcoder (`basis_transcoder.wasm`, 242 KB gzipped, plus its 15 KB JS, in the JS column) is fetched once and then cached.
+Measured through `scripts/measure/serve.ts` (gzip like GitHub Pages), so the bytes are what a student downloads. "Before" is step 2 (b063522) from the scratch worktree, served the same way in the same session. Models and JS are gzipped transfer sizes; the transcoder (`basis_transcoder.wasm`, 242 KB gzipped, plus its 15 KB JS, in the JS column) is fetched once and then cached.
 
 | Tier | Network | Every model on screen before | After | Models before | After | JS before | After |
 | --- | --- | --- | --- | --- | --- | --- | --- |

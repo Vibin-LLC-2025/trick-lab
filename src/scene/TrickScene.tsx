@@ -5,7 +5,7 @@ import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
-import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels } from './modelCache';
+import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted } from './modelCache';
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
@@ -100,9 +100,12 @@ export default function TrickScene() {
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);
   // A move down a tier frees the models the new tier never shows (ADR-48),
-  // once the old tier's Canvas is gone. A quick move back up cancels it.
+  // once the old tier's Canvas is gone; one still loading is freed when it
+  // finishes (gltf.ts). A quick move back up cancels both.
   useEffect(() => {
-    const id = setTimeout(() => releaseModels(modelsUnusedBy(quality)), RELEASE_AFTER_MS);
+    const unused = modelsUnusedBy(quality);
+    setUnwanted(unused);
+    const id = setTimeout(() => releaseModels(unused), RELEASE_AFTER_MS);
     return () => clearTimeout(id);
   }, [quality]);
   const Q = useTrickStore(rendererFor);

@@ -449,6 +449,8 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 
 **Consequence.** The scene description has no legs sentence by default (it comes back with the switch). A tier change down and back up re-reads the model from the HTTP cache. `modelCache.test.ts` covers the tier lists, the shared download, the fallbacks, the single patch and the release.
 
+**Update (Phase A review, 2026-11-09).** A model still loading when the student moved down a tier was skipped by the release and stayed cached once it finished. TrickScene now marks the new tier's unused models at once (`setUnwanted`, before the delayed release), and a model that finishes while marked is freed `RELEASE_AFTER_MS` later unless the student has come back to a tier that shows it. The same covers a failure that forces Low.
+
 ## ADR-49: KTX2 (Basis Universal ETC1S) textures in every GLB (2026-11-09)
 
 **Context.** Step 3 of `docs/PLAN-LOOK-FEEL-PERF.md`. On High the models were 2.8 MB, almost all of it PNG textures, and they took about 34 MB of GPU memory as RGBA8. The owner approved a build tool to shrink them. BRIEF-BOARD.md had ruled out KTX2 because it seemed to need the native `toktx` binary; `ktx2-encoder` (MIT) runs Basis Universal as WASM in Node, so no system install is needed.
@@ -466,3 +468,5 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Not adopted.** WebP: the smallest first download on Medium (280 KB against 331 KB plus the transcoder), but no GPU memory saving, which is what a mid-range laptop runs out of first, and a larger High download. UASTC: 1.8 to 3.6 times the bytes for no visible gain here. Lower ETC1S quality: block steps on the deck graphic.
 
 **Consequence.** `npm run assets` takes about 13 s instead of under 2 (the encoder is single-threaded WASM). Anything that reads the GLBs' textures must expect `image/ktx2`.
+
+**Update (Phase A review, 2026-11-09).** three-stdlib's GLTFLoader turns a texture that fails to load or decode into a missing map and still reports the model as loaded, so a corrupt KTX2 would have shown an untextured board with nothing said. The loader patch now checks every material slot the file asks a texture for (`missingTextures`, through the parser's material associations) and fails the model when one is empty, disposing the partial result; AssetBoundary then shows the simple board and announces it. Tested with the real GLTFLoader on the committed `board-high.glb`, its KTX2 loads stubbed to succeed and to fail; in the browser, blocking `basis/` gave the simple board and the announcement. The measurement server is now `scripts/measure/serve.ts` (run with `tsx`), on loopback only, and checks that a request stays inside its folder by the resolved path rather than a string prefix (an encoded `..` reached a sibling folder that shared the prefix); `serve.test.ts` covers the escapes.

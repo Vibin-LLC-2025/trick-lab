@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // ADR-48 (2026-11-09): the tier's GLBs download as soon as the 3D code
 // arrives, the loader parses those downloads instead of fetching again, and a
 // move down a tier frees the models it no longer shows. ADR-49: the loader
@@ -6,12 +7,16 @@
 // GLTFLoader's load, parse and setKTX2Loader, and the renderer a stand-in
 // with the extension list KTX2Loader asks, since the real ones would need a
 // real GLB and a WebGL context.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, Mesh, MeshStandardMaterial, Scene, Texture } from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+// The loader drei's useGLTF builds, with the meshopt decoder it gives it: the real one, for the texture check.
+import { GLTFLoader, MeshoptDecoder } from 'three-stdlib';
 import { useGLTF } from '@react-three/drei';
-import { noteRenderer, prefetchModels, releaseModels, takePrefetched } from './modelCache';
-import { disposeModel, shareEarlyDownloads } from './gltf';
+import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted, takePrefetched } from './modelCache';
+import { disposeModel, missingTextures, shareEarlyDownloads } from './gltf';
 import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL } from './modelUrls';
 
 type Loader = Parameters<typeof shareEarlyDownloads>[0];
@@ -22,8 +27,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  setUnwanted([]);
 });
 
 function stubFetch(ok = true) {
@@ -34,11 +41,14 @@ function stubFetch(ok = true) {
   return fetch;
 }
 
+/** A loader result's parser with no materials: nothing asked for, nothing missing. */
+const noTextures = () => ({ json: {}, associations: new Map() });
+
 /** A loader with GLTFLoader's load, parse and setKTX2Loader: parse hands back a scene named after the bytes. */
 function fakeLoader() {
-  const load = vi.fn((_url: string, onLoad: (g: unknown) => void) => onLoad({ scene: new Scene(), from: 'network' }));
+  const load = vi.fn((_url: string, onLoad: (g: unknown) => void) => onLoad({ scene: new Scene(), parser: noTextures(), from: 'network' }));
   const parse = vi.fn((data: ArrayBuffer, path: string, onLoad: (g: unknown) => void) =>
-    onLoad({ scene: new Scene(), from: new TextDecoder().decode(data), path }),
+    onLoad({ scene: new Scene(), parser: noTextures(), from: new TextDecoder().decode(data), path }),
   );
   const setKTX2Loader = vi.fn();
   const loader = { load, parse, setKTX2Loader } as unknown as Loader;
@@ -148,6 +158,58 @@ describe('the loader shares the early downloads', () => {
   });
 });
 
+describe('a model whose textures did not load (review of Phase A, 2026-11-09)', () => {
+  // Vitest runs from the project root.
+  const GLB = resolve(process.cwd(), 'public', 'models', 'board-high.glb');
+
+  /** The committed board through the real GLTFLoader, its KTX2 textures answered by `ktx2Load`. */
+  async function loadBoard(ktx2Load: (onLoad: (t: Texture) => void, onError: (e: unknown) => void) => void) {
+    // Copied into this realm's ArrayBuffer: the loader checks `instanceof ArrayBuffer`, and Node's file buffer is another realm's under jsdom.
+    const file = readFileSync(GLB);
+    const bytes = new ArrayBuffer(file.byteLength);
+    new Uint8Array(bytes).set(file);
+    vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(bytes) }));
+    // jsdom has no object URLs; the loader makes one per embedded image.
+    vi.stubGlobal('URL', Object.assign(class extends URL {}, { createObjectURL: () => 'blob:test', revokeObjectURL: () => {} }));
+    vi.spyOn(KTX2Loader.prototype, 'load').mockImplementation(function (this: KTX2Loader, _url, onLoad, _progress, onError) {
+      ktx2Load(onLoad as (t: Texture) => void, (e) => onError?.(e as ErrorEvent));
+    });
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder());
+    shareEarlyDownloads(loader as unknown as Loader);
+    noteRenderer(fakeRenderer);
+    const url = `/models/board-high-${Math.random()}.glb`;
+    prefetchModels([url]);
+    return loadWith(loader as unknown as Loader, url);
+  }
+
+  it('accepts the committed board when every texture loads, with every map in place', async () => {
+    const gltf = await loadBoard((onLoad) => onLoad(new Texture()));
+    expect(missingTextures(gltf as never)).toEqual([]);
+    let maps = 0;
+    (gltf.scene as Scene).traverse((o) => {
+      if (o instanceof Mesh && o.material.map) maps++;
+    });
+    expect(maps).toBeGreaterThan(0);
+  });
+
+  it('fails the whole model when a texture does not load, so AssetBoundary shows the simple board', async () => {
+    let n = 0;
+    await expect(loadBoard((onLoad, onError) => (n++ === 2 ? onError(new Error('corrupt KTX2')) : onLoad(new Texture())))).rejects.toThrow(
+      /textures did not load \(.+\)/,
+    );
+  });
+
+  it('names each material slot the file asked a texture for but did not get', () => {
+    const asked = new MeshStandardMaterial({ map: new Texture() });
+    const parser = {
+      json: { materials: [{ name: 'Grip', pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 1 } }] },
+      associations: new Map([[asked, { materials: 0 }]]),
+    };
+    expect(missingTextures({ parser } as never)).toEqual(['Grip.normalMap']);
+  });
+});
+
 describe('releasing a model', () => {
   it('disposes each geometry, material and texture once and closes the decoded images', () => {
     class FakeBitmap {
@@ -182,5 +244,46 @@ describe('releasing a model', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     releaseModels(['/models/freed.glb']);
     expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  /** A loader whose model arrives when the test says. */
+  function slowLoader() {
+    let finish: () => void = () => {};
+    const load = vi.fn((_url: string, onLoad: (g: unknown) => void) => {
+      finish = () => onLoad({ scene: new Scene(), parser: noTextures() });
+    });
+    const loader = { load, parse: vi.fn(), setKTX2Loader: vi.fn() } as unknown as Loader;
+    shareEarlyDownloads(loader);
+    noteRenderer(fakeRenderer);
+    return { loader, load, finish: () => finish() };
+  }
+
+  it('frees a model that finishes loading after the student moved to a tier without it', async () => {
+    vi.useFakeTimers();
+    const clear = vi.spyOn(useGLTF, 'clear');
+    const { loader, load, finish } = slowLoader();
+    const done = loadWith(loader, '/models/slow.glb');
+    await vi.waitFor(() => expect(load).toHaveBeenCalled());
+    setUnwanted(['/models/slow.glb']);
+    releaseModels(['/models/slow.glb']);
+    expect(clear).not.toHaveBeenCalled();
+    finish();
+    await done;
+    vi.advanceTimersByTime(RELEASE_AFTER_MS);
+    expect(clear).toHaveBeenCalledWith('/models/slow.glb');
+  });
+
+  it('keeps a late model the student came back for before it was freed', async () => {
+    vi.useFakeTimers();
+    const clear = vi.spyOn(useGLTF, 'clear');
+    const { loader, load, finish } = slowLoader();
+    const done = loadWith(loader, '/models/back.glb');
+    await vi.waitFor(() => expect(load).toHaveBeenCalled());
+    setUnwanted(['/models/back.glb']);
+    finish();
+    await done;
+    setUnwanted([]);
+    vi.advanceTimersByTime(RELEASE_AFTER_MS);
+    expect(clear).not.toHaveBeenCalled();
   });
 });

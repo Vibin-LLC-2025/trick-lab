@@ -67,6 +67,23 @@ export function noteRenderer(r: object) {
 export const whenRenderer = (): Promise<object> =>
   renderer ? Promise.resolve(renderer) : new Promise((resolve) => waiting.push(resolve));
 
+let unwanted: ReadonlySet<string> = new Set();
+
+/**
+ * The models the tier in use never shows. TrickScene sets it at once on every
+ * tier change (the release itself waits RELEASE_AFTER_MS), so a model that
+ * finishes loading after the student moved down a tier is freed too, and one
+ * the student came back for in time is kept. Early downloads of these are
+ * dropped straight away.
+ */
+export function setUnwanted(urls: readonly string[]) {
+  unwanted = new Set(urls);
+  for (const url of urls) pending.delete(url);
+}
+
+/** Whether the tier in use never shows `url`. */
+export const isUnwanted = (url: string) => unwanted.has(url);
+
 type Release = (urls: readonly string[]) => void;
 let release: Release | null = null;
 
