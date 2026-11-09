@@ -151,6 +151,8 @@ export interface UiSlice {
   stance: Stance;
   /** Motion cues: arrows on the deck showing how each shoe will move against the board for the set inputs (ADR-26). Persisted under trick-lab.motion-cues, default on. Not logged. */
   motionCuesVisible: boolean;
+  /** Motion blur on High while a trick plays at normal speed (ADR-51). Persisted under trick-lab.motion-blur, default on. Not logged, not reset, not exported. */
+  motionBlur: boolean;
   /**
    * Goes to a screen (ADR-45). Leaving the game ends it (a game in play is
    * logged as quit), a trick in the air lands at once, as under reduced
@@ -178,6 +180,8 @@ export interface UiSlice {
   setStance: (stance: Stance) => void;
   /** Shows or hides the motion cues. */
   toggleMotionCues: () => void;
+  /** Turns motion blur on or off, persisted and announced. */
+  toggleMotionBlur: () => void;
   /** Called by the scene's error boundary when the board model cannot load. */
   setBoardAssetFailed: () => void;
   /** Called by SceneBoundary when the 3D view cannot render: announces once and resolves a flight in the air. */

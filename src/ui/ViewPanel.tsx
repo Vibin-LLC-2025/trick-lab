@@ -148,6 +148,10 @@ export function ViewPanel() {
   const toggleFootPaths = useTrickStore((s) => s.toggleFootPaths);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
   const toggleMotionCues = useTrickStore((s) => s.toggleMotionCues);
+  const motionBlur = useTrickStore((s) => s.motionBlur);
+  const toggleMotionBlur = useTrickStore((s) => s.toggleMotionBlur);
+  // Only High blurs (ADR-51): elsewhere the switch would do nothing, so it is not shown.
+  const blurTier = useTrickStore((s) => effectiveQuality(s) === 'high');
 
   return (
     <FoldPanel
@@ -167,6 +171,7 @@ export function ViewPanel() {
         {feetVisible && <Toggle label="Legs" name="Show legs" pressed={legsVisible} onClick={toggleLegs} />}
         <Toggle label="Foot trails" name="Show foot trails" pressed={footPathsVisible} onClick={toggleFootPaths} />
         <Toggle label="Motion cues" name="Show motion cues" pressed={motionCuesVisible} onClick={toggleMotionCues} />
+        {blurTier && <Toggle label="Motion blur" name="Motion blur" pressed={motionBlur} onClick={toggleMotionBlur} />}
         <Toggle label="Perf badge" pressed={perfVisible} keys="p" onClick={togglePerf} />
       </div>
       <CameraControl />

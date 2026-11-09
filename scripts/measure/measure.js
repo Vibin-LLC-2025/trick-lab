@@ -198,20 +198,17 @@ async (page) => {
         window.__times = { cpu: [], gpu: [], pending: [], ext: timed };
         if (gl.__measured) return;
         gl.__measured = true;
-        const render = gl.render.bind(gl);
-        gl.render = (scene, camera) => {
-          const c0 = performance.now();
-          render(scene, camera);
-          window.__times.cpu.push(performance.now() - c0);
-        };
-        if (!timed) return;
+        // A frame can be several render calls (the effects' passes, ADR-51): PerfProbe times the whole frame.
         let seen = window.__trickLabPerf.frames;
         const poll = async () => {
           const f = window.__trickLabPerf.frames;
           if (f !== seen) {
             seen = f;
-            const ms = await gl.resolveTimestampsAsync('render');
-            if (typeof ms === 'number' && ms > 0) window.__times.gpu.push(ms);
+            window.__times.cpu.push(window.__trickLabPerf.renderMs);
+            if (timed) {
+              const ms = await gl.resolveTimestampsAsync('render');
+              if (typeof ms === 'number' && ms > 0) window.__times.gpu.push(ms);
+            }
           }
           requestAnimationFrame(poll);
         };

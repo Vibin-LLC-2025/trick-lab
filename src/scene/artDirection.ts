@@ -54,6 +54,50 @@ export const QUALITY: Record<
 export const ART = {
   clearColor: SCENE_BG,
   renderer: { exposure: 1.0 },
+  /**
+   * Post-processing (ADR-51, 2026-11-09), on the WebGPURenderer only: one
+   * scene pass writing colour, normals and (High) velocity at once (MRT, so
+   * the scene is drawn once), ambient occlusion from that pass's depth and
+   * normals, and one composite pass that blurs by velocity, darkens by the
+   * occlusion, adds a glow round the brightest highlights, tone maps and
+   * grades. Low has none. Every pass counts against the draw-call gates
+   * (40, 20, 20): High 28 for the scene and its shadow map plus the occlusion
+   * pass and the composite; three's BloomNode alone would add twelve passes,
+   * so the glow is a few taps inside the composite instead.
+   * - `tiers`: what each tier runs. `ao` is the occlusion's resolution
+   *   (1 full, 0.5 half), null for none. Half on High too: at full
+   *   resolution High's frame took 7.3 ms of GPU at 2560 x 1440, at half
+   *   2.8 ms, with the same contact shading in side-by-side crops.
+   * - `ao`: GTAONode's settings, metres where they are lengths: a radius the
+   *   size of a truck, a thickness that stops thin parts (the deck) shading
+   *   what is far behind them; `strength` mixes it in (1 is all of it).
+   * - `motionBlur`: `shutter` scales the frame's motion (0.5 is a 180 degree
+   *   shutter), `samples` taps along it. Only while a trick plays at normal
+   *   speed (sceneTier.ts motionBlurOn).
+   * - `glow`: linear radiance above `threshold` spreads over two rings of
+   *   `taps`, `radius` as a fraction of the stage's height, times `strength`.
+   * - `grade`: after tone mapping, in display space. `contrast` and
+   *   `saturation` round 1; the shadows lean `shadowTint`, the highlights
+   *   `highlightTint` (multipliers); `vignette` darkens by up to `strength`
+   *   from `start` to `end` of the distance to a corner.
+   */
+  post: {
+    tiers: {
+      high: { ao: 0.5, motionBlur: true, glow: true },
+      medium: { ao: 0.5, motionBlur: false, glow: false },
+      low: null,
+    } as Record<Quality, { ao: number | null; motionBlur: boolean; glow: boolean } | null>,
+    ao: { radius: 0.12, thickness: 0.25, distanceExponent: 1.5, scale: 1, samples: 16, strength: 0.75 },
+    motionBlur: { shutter: 0.5, samples: 12 },
+    glow: { threshold: 1.1, strength: 0.18, radius: [0.004, 0.011] as readonly [number, number], taps: 8 },
+    grade: {
+      contrast: 1.05,
+      saturation: 1.06,
+      shadowTint: v(0.98, 1.0, 1.03),
+      highlightTint: v(1.03, 1.0, 0.97),
+      vignette: { strength: 0.16, start: 0.55, end: 1.15 },
+    },
+  },
   quality: QUALITY,
   /**
    * Linear fog to the clear colour (ground pass, 2026-11-04, ADR-31), so the

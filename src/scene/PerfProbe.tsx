@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { perfStats } from './perfStats';
+import { frame, perfStats } from './perfStats';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
 
 /**
@@ -14,7 +14,9 @@ export function PerfProbe() {
   useFrame(({ gl, scene, camera }) => {
     if (isNodeRenderer(gl)) gl.info.reset();
     const t0 = performance.now();
-    gl.render(scene, camera);
+    // Through the effects where the tier has them (ADR-51), straight otherwise.
+    if (frame.render) frame.render();
+    else gl.render(scene, camera);
     perfStats.renderMs = performance.now() - t0;
     perfStats.frames += 1;
     perfStats.drawCalls = drawCallsOf(gl);

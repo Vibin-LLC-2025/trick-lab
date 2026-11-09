@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
 import { previewAnimates, useTrickStore } from '../store';
@@ -9,8 +9,9 @@ import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwan
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
-import { perfStats } from './perfStats';
-import { rendererFor, sceneTier } from './sceneTier';
+import { frame, perfStats } from './perfStats';
+import { isNodeRenderer } from './rendererKind';
+import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
 import { disposeSharedResources } from './resources';
@@ -91,6 +92,53 @@ function onCreated(state: RootState) {
 /** The WebGPURenderer path (ADR-50) is its own chunk: Low never downloads it. */
 const loadNodeRenderer = () => import('./nodeRenderer');
 
+type Effects = Awaited<ReturnType<typeof loadNodeRenderer>>['createEffects'] extends (...a: never[]) => infer E ? E : never;
+
+/**
+ * The post-processing (ADR-51) on a tier that has it, on the WebGPURenderer
+ * (on WebGLRenderer, Low or the fallback, there is none). Built once per
+ * Canvas from the node renderer's chunk, which is already loaded, handed to
+ * PerfProbe through `frame.render`, freed on unmount. Motion blur follows the
+ * store (motionBlurOn), one uniform set when that changes, never per frame.
+ */
+function PostEffects() {
+  const get = useThree((s) => s.get);
+  const tier = useTrickStore(effectsFor);
+  const blurOn = useTrickStore(motionBlurOn);
+  const made = useRef<Effects | null>(null);
+
+  useEffect(() => {
+    const { gl, scene, camera } = get();
+    if (!tier || !isNodeRenderer(gl)) return;
+    let cancelled = false;
+    let effects: Effects | null = null;
+    loadNodeRenderer().then(
+      (m) => {
+        if (cancelled) return;
+        effects = m.createEffects(gl as never, scene, camera, tier);
+        effects.setMotionBlur(motionBlurOn(useTrickStore.getState()));
+        made.current = effects;
+        frame.render = effects.render;
+        get().invalidate();
+      },
+      (error: unknown) => console.warn('trick-lab: the effects did not start; drawing without them.', error),
+    );
+    return () => {
+      cancelled = true;
+      if (effects) {
+        if (frame.render === effects.render) frame.render = null;
+        effects.dispose();
+      }
+      made.current = null;
+    };
+  }, [get, tier]);
+
+  useEffect(() => {
+    made.current?.setMotionBlur(blurOn);
+  }, [blurOn]);
+  return null;
+}
+
 type Tier = ReturnType<typeof rendererFor>;
 type GlDefaults = { canvas: unknown };
 
@@ -161,8 +209,9 @@ export default function TrickScene() {
       aria-hidden="true"
       dpr={[...Q.dpr]}
       frameloop={playing ? 'always' : 'demand'}
-      // PCF, not the deprecated PCFSoft (ADR-38); softness is ART.shadowMap.radius.
-      shadows={Q.shadows ? { type: PCFShadowMap } : false}
+      // PCF, not the deprecated PCFSoft (ADR-38); softness is ART.shadowMap.radius. Always an
+      // object: R3F turns `false` into a PCFSoft type, which the WebGPURenderer warns about.
+      shadows={{ enabled: Q.shadows, type: PCFShadowMap }}
       // WebGPURenderer on Medium and High, WebGLRenderer on Low and as the fallback (ADR-50).
       // R3F 9 passes props to the WebGLRenderer constructor and then applies them as
       // properties, so toneMappingExposure takes effect (checked 2026-11-04).
@@ -182,6 +231,7 @@ export default function TrickScene() {
       </SceneEnvironment>
       <SceneCamera />
       <InvalidateOnStoreChange />
+      <PostEffects />
       <PerfProbe />
     </Canvas>
   );

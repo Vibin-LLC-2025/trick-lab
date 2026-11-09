@@ -719,3 +719,20 @@ Up front: Setup, Inputs, Playback (Pop, Pause, Reset) on the left and the Outcom
 ### 14.1 Focus on headings (ADR-48)
 
 The headings that a store action focuses (after a screen change `#screen-heading` in the top bar or on the welcome screen, after reset `#setup-heading`, when a game starts, ends or is quit `#skate-heading`) are not controls, so they no longer take the control ring: on a heading that fills its row the ring was a full-width box that read as a text field. Instead, under `:focus-visible`, the words get a 3 px underline in `--color-focus` (cobalt on light, sky on dark; the same 3:1-plus ratios as the ring, section 9.8), 0.22 em below the baseline, with no skip-ink so it reads as one bar. Under forced colours the system outline (`Highlight`, 2 px, 2 px off) stays. Selectors: `:is(.topbar__title, .home__title, .panel__title, .turn__who)[tabindex]:focus-visible`.
+
+### 14.2 Post-processing (ADR-51)
+
+High and Medium draw through a short chain on the WebGPURenderer; Low draws as before. Numbers in `ART.post`.
+
+| | High | Medium | Low |
+| --- | --- | --- | --- |
+| Ambient occlusion (GTAO) | half resolution | half resolution | none |
+| Motion blur | while a trick plays at normal speed, with the switch on | none | none |
+| Glow round the brightest highlights | yes | none | none |
+| Grade and vignette | yes | yes | none |
+
+- **Occlusion**: radius 0.12 m, thickness 0.25 m, distance exponent 1.5, 16 samples, mixed in at 0.75. The look: shoes sit into the grip, the trucks shade the graphic, the wheels meet the ground; a cast shadow is left as it was.
+- **Motion blur**: a 180 degree shutter, 12 taps along each pixel's motion. A full-speed flip reads as a spin instead of a strobe; in slow motion, paused or scrubbing every frame is sharp, because there the point is to see each moment.
+- **Glow**: radiance above 1.1 (the sun's highlights on the trucks and bolts) spreads over two rings of eight taps at 0.4 and 1.1 percent of the stage's height, times 0.18.
+- **Grade** (after tone mapping): contrast 1.05 and saturation 1.06 round the middle; shadows multiplied by (0.98, 1.00, 1.03), highlights by (1.03, 1.00, 0.97), blended by luminance from 0.2 to 0.8. **Vignette**: up to 16 percent darker from 55 to 115 percent of the distance to a corner.
+- **View panel**: a "Motion blur" switch (`.toggle`, after Motion cues), shown on High only. Announcements: "Motion blur on.", "Motion blur off."

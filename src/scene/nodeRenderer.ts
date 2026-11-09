@@ -9,6 +9,9 @@ import { attribute, float, Fn, If, length, max, mix, positionWorld, select, smoo
 import { ART, type QUALITY } from './artDirection';
 import { setNodeMaterials, uniforms } from './resources';
 
+// The effects ride in this chunk (ADR-51).
+export { createEffects, type Effects } from './effects';
+
 const S = ART.shadow;
 const FP = ART.footPaths;
 

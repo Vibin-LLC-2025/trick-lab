@@ -523,6 +523,33 @@ describe('feet', () => {
   });
 });
 
+// ADR-51 (2026-11-09): motion blur, on High only.
+describe('motion blur switch', () => {
+  const button = () => screen.queryByRole('button', { name: 'Motion blur' });
+
+  it('is shown on High only, pressed by default, and switches, persisted and announced, never logged', async () => {
+    useTrickStore.setState({ quality: 'medium' });
+    const user = await setup();
+    expect(button()).toBeNull();
+    act(() => useTrickStore.getState().setQuality('high'));
+    expect(button()).toHaveAttribute('aria-pressed', 'true');
+    await user.click(button()!);
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(localStorage.getItem('trick-lab.motion-blur')).toBe('off');
+    expect(announcer()).toHaveTextContent('Motion blur off.');
+    expect(useTrickStore.getState().events).toEqual([]);
+  });
+
+  it('goes when a model failure drops the scene to Low, keeping the setting', async () => {
+    useTrickStore.setState({ quality: 'high' });
+    await setup();
+    expect(button()).not.toBeNull();
+    act(() => useTrickStore.getState().setBoardAssetFailed());
+    expect(button()).toBeNull();
+    expect(useTrickStore.getState().motionBlur).toBe(true);
+  });
+});
+
 // ADR-37 (2026-11-05): the legs, a view preference next to Feet.
 describe('legs', () => {
   const button = () => screen.getByRole('button', { name: 'Show legs' });

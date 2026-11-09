@@ -16,6 +16,8 @@ export const LEGS_KEY = 'trick-lab.legs';
 export const PATHS_KEY = 'trick-lab.foot-trails';
 export const STANCE_KEY = 'trick-lab.stance';
 export const CUES_KEY = 'trick-lab.motion-cues';
+/** Motion blur on High (ADR-51). */
+export const MOTION_BLUR_KEY = 'trick-lab.motion-blur';
 /** The camera preset (ADR-38). */
 export const CAMERA_VIEW_KEY = 'trick-lab.camera-view';
 /** The welcome screen's preview, paused or not (ADR-45). */
@@ -98,6 +100,8 @@ export const readLegsVisible = (): boolean => read(LEGS_KEY) === 'on';
 export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 /** Motion cues are on until the student switches them off (ADR-26). */
 export const readMotionCuesVisible = (): boolean => read(CUES_KEY) !== 'off';
+/** Motion blur is on until the student switches it off (ADR-51). */
+export const readMotionBlur = (): boolean => read(MOTION_BLUR_KEY) !== 'off';
 /** Goofy unless regular was saved (ADR-25). */
 export const readStance = (): Stance => {
   const saved = read(STANCE_KEY);
@@ -156,6 +160,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     footPathsVisible: readFootPathsVisible(),
     stance: readStance(),
     motionCuesVisible: readMotionCuesVisible(),
+    motionBlur: readMotionBlur(),
 
     setScreen: (screen) => {
       const s = get();
@@ -237,6 +242,12 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       save(CUES_KEY, motionCuesVisible ? 'on' : 'off');
       set({ motionCuesVisible });
       get().announce(motionCuesVisible ? 'Motion cues shown.' : 'Motion cues hidden.');
+    },
+    toggleMotionBlur: () => {
+      const motionBlur = !get().motionBlur;
+      save(MOTION_BLUR_KEY, motionBlur ? 'on' : 'off');
+      set({ motionBlur });
+      get().announce(motionBlur ? 'Motion blur on.' : 'Motion blur off.');
     },
     setStance: (stance) => {
       if (get().stance === stance) return;

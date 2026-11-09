@@ -369,3 +369,20 @@ The first 3D frame comes later on Medium and High: the node renderer chunk (170 
 The look: six poses of a kickflip on High from the detail camera (rest, rising, edge-on, inverted, the catch, landed), a regular-stance kickflip at 40 percent with legs and foot trails on, and Medium's projected footprints, each side by side on the two renderers: the same board, shoes, graphic, legs, trails and shadows, with no visible difference.
 
 **Go.** The new renderer is two to three times cheaper on the GPU, looks the same, ran without an error on every tier, and starts later only by what the loading picture of step 10 covers (0.4 s more on the time to every model at 3 Mbps). Phase B goes on with it.
+
+### Step 6: post-processing (ADR-51)
+
+"Before" is step 5 (b4afb13: the WebGPURenderer, no effects) from the scratch worktree; "after" is the effects with the occlusion at half resolution on both tiers. GPU time per frame, medians then p95:
+
+| Tier | View | 1440 x 900 before | After | 2560 x 1440 before | After |
+| --- | --- | --- | --- | --- | --- |
+| High | welcome preview, looping | 1.05 / 2.10 ms | 1.25 / 1.97 ms | 1.05 / 1.77 ms | 2.82 / 3.41 ms |
+| High | lab, four kickflips (motion blur on) | 0.79 / 1.70 ms | 1.84 / 2.56 ms | 0.85 / 2.16 ms | 2.88 / 3.01 ms |
+| Medium | welcome preview, looping | 0.79 / 1.57 ms | 1.44 / 1.57 ms | 0.46 / 1.18 ms | 2.62 / 3.15 ms |
+| Medium | lab, four kickflips | 0.52 / 2.29 ms | 1.31 / 1.44 ms | 0.85 / 1.31 ms | 3.01 / 3.21 ms |
+
+With the occlusion at full resolution on High, as first built, High took 2.62 and 2.95 ms at 1440 x 900 and 7.34 and 6.49 ms at 2560 x 1440; half resolution and 8-bit normals brought that to the numbers above. With every effect on, High still costs less GPU time than the WebGLRenderer did with none (3.35 ms on the looping preview at 1440 x 900, steps 4 and 5). `gl.render` CPU time, now the whole chain, 0.5 to 0.8 ms.
+
+Draw calls: High 29 on the welcome screen and 30 in the lab (gate 40), Medium 15 and 16 (gate 20), Low 11 and 12 (unchanged, no effects); the occlusion pass and the composite replace the renderer's own output pass. Frames after a landing: 0 on every tier. Loading did not move beyond run-to-run spread: the node renderer chunk grew by 6.6 KB gzipped (176.4 KB), and the first 3D frame and every model on screen stayed within 0.1 s of step 5 at full speed, 10 and 3 Mbps; Low's first frame 0.46 s, 0.70 s and 1.42 s. Console: no errors on any tier.
+
+Looked at in the browser: the occlusion drawn alone (contact where shoes meet the grip, round the trucks, under the deck and wheels; none in cast shadows), the six poses with and without the chain, half and full resolution occlusion side by side, and a kickflip and a 360 flip at normal speed (blurred along their motion) against the same 360 flip in slow motion (sharp).

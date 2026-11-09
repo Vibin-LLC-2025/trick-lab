@@ -22,3 +22,17 @@ export const shoesFromModel = (s: TierState) => effectiveQuality(s) === 'high';
 
 /** The textured ground GLB on Medium and High; the plain plane on Low. */
 export const groundTextured = (s: TierState) => effectiveQuality(s) !== 'low';
+
+/** The post-processing the tier runs (ADR-51): occlusion and the grade on Medium, those plus motion blur and the glow on High, none on Low. */
+export const effectsFor = (s: TierState) => ART.post.tiers[effectiveQuality(s)];
+
+type BlurState = TierState & Pick<TrickState, 'motionBlur' | 'status' | 'rate' | 'reducedMotion'>;
+
+/**
+ * Motion blur runs (ADR-51) only where it shows speed: on a tier that has it,
+ * with the switch on, while a trick plays at normal speed. Off in slow motion
+ * (the point there is to see each moment), while paused or scrubbing, and
+ * under reduced motion.
+ */
+export const motionBlurOn = (s: BlurState) =>
+  effectsFor(s)?.motionBlur === true && s.motionBlur && s.status === 'playing' && s.rate === 1 && !s.reducedMotion;

@@ -366,6 +366,26 @@ describe('quality and feet (ui slice)', () => {
     localStorage.clear();
   });
 
+  it('turns motion blur on by default; the switch persists and announces it, without logging (ADR-51)', () => {
+    localStorage.clear();
+    const store = makeStore();
+    expect(store.getState().motionBlur).toBe(true);
+    store.getState().toggleMotionBlur();
+    expect(store.getState().motionBlur).toBe(false);
+    expect(localStorage.getItem('trick-lab.motion-blur')).toBe('off');
+    expect(said(store)).toBe('Motion blur off.');
+    store.getState().toggleMotionBlur();
+    expect(store.getState().motionBlur).toBe(true);
+    expect(localStorage.getItem('trick-lab.motion-blur')).toBe('on');
+    expect(said(store)).toBe('Motion blur on.');
+    expect(store.getState().events).toEqual([]);
+    localStorage.setItem('trick-lab.motion-blur', 'off');
+    expect(makeStore().getState().motionBlur).toBe(false);
+    localStorage.setItem('trick-lab.motion-blur', 'nonsense');
+    expect(makeStore().getState().motionBlur).toBe(true);
+    localStorage.clear();
+  });
+
   it('hides the foot trails by default; showing them persists and announces it, without logging', () => {
     localStorage.clear();
     const store = makeStore();
