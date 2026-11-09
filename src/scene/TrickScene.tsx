@@ -12,6 +12,7 @@ import { PerfProbe } from './PerfProbe';
 import { frame, perfStats } from './perfStats';
 import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
 import { isNodeRenderer } from './rendererKind';
+import { readinessOf } from './rootReadiness';
 import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
@@ -138,9 +139,14 @@ function PostEffects() {
         effects.setMotionBlur(motionBlurOn(useTrickStore.getState()));
         made.current = effects;
         frame.render = effects.render;
+        // A startup publication of this root (rootReadiness.ts), as is giving up below.
+        readinessOf(scene).effects = true;
         get().invalidate();
       },
-      (error: unknown) => console.warn('trick-lab: the effects did not start; drawing without them.', error),
+      (error: unknown) => {
+        readinessOf(scene).effects = true;
+        console.warn('trick-lab: the effects did not start; drawing without them.', error);
+      },
     );
     return () => {
       cancelled = true;

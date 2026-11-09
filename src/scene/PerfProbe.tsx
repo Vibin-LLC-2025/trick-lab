@@ -1,9 +1,13 @@
-import { useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { addAfterEffect, useFrame, useThree } from '@react-three/fiber';
 import { useTrickStore } from '../store';
 import { flightPace, noteFramesStoreChange, recordFrame } from './flightPace';
+import { allShown } from './modelCache';
+import { modelsFor } from './modelUrls';
 import { frame, perfStats, trickFrames } from './perfStats';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
+import { isReady, readinessOf } from './rootReadiness';
+import { effectsFor, sceneTier } from './sceneTier';
 
 /**
  * Takes over rendering (a positive useFrame priority disables R3F's own
@@ -18,8 +22,39 @@ import { drawCallsOf, isNodeRenderer } from './rendererKind';
  * the store reads the pace at a landing (flightPace, registered here) and
  * decides whether to step down. A playback change in the store or a hidden
  * tab ends the run of frames, so the frame that spans it is not recorded.
+ *
+ * Its one after-effect (R3F's addAfterEffect, after the frame's render, not a
+ * useFrame) decides when this Canvas has finished starting up
+ * (rootReadiness.ts): it numbers the root on mount and sets `ready` after the
+ * first frame it drew with every startup publication done.
  */
 export function PerfProbe() {
+  const get = useThree((s) => s.get);
+  // Whether this root drew since its after-effect last ran (the loop runs it for every root's frame).
+  const drew = useRef(false);
+  useEffect(() => {
+    const { scene, gl } = get();
+    const r = readinessOf(scene);
+    perfStats.root += 1;
+    r.root = perfStats.root;
+    perfStats.ready = false;
+    const stop = addAfterEffect(() => {
+      if (!drew.current) return;
+      drew.current = false;
+      if (r.ready || r.root !== perfStats.root) return;
+      const s = useTrickStore.getState();
+      const startup = {
+        stageReady: s.stageReady,
+        effectsWanted: effectsFor(s) !== null && isNodeRenderer(gl),
+        modelsShown: () => allShown(modelsFor(sceneTier(s), s.feetVisible)),
+      };
+      if (isReady(r, startup)) {
+        r.ready = true;
+        perfStats.ready = true;
+      }
+    });
+    return stop;
+  }, [get]);
   useEffect(() => {
     // A new Canvas is a new tier: its evidence starts empty.
     trickFrames.count = 0;
@@ -53,6 +88,7 @@ export function PerfProbe() {
     perfStats.triangles = gl.info.render.triangles;
     perfStats.geometries = gl.info.memory.geometries;
     perfStats.textures = gl.info.memory.textures;
+    drew.current = true;
   }, 1);
   return null;
 }

@@ -12,6 +12,10 @@ export const frame: { render: (() => void) | null } = { render: null };
 
 export const perfStats = {
   frames: 0,
+  /** The Canvas (R3F root) drawing now, numbered from 1 per mount (rootReadiness.ts). */
+  root: 0,
+  /** Whether that root has finished starting up (rootReadiness.ts). */
+  ready: false,
   renderMs: 0,
   drawCalls: 0,
   triangles: 0,

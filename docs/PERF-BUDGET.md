@@ -55,6 +55,15 @@ playwright-cli -s=measure close
 
 The options are the query of the page the session is on (tiers, networks, screens, feet, legs, theme, viewport, the preset, the number of timed tricks, the base path; the script's header lists them). The result is JSON with a `markdown` field holding the two tables used below. For each tier it loads the welcome screen with the HTTP cache off at full speed and at 10 and 3 Mbps (Chromium's own throttling, 60 ms latency) and records first contentful paint, the first frame of the lit 3D scene, the frame where every model of the tier is on screen, and the bytes by kind. Then, at full speed on each screen, the draw calls and triangles (the most over half a second of frames after a forced frame), and in the lab, after one untimed trick, `gl.render` CPU time and GPU time (`EXT_disjoint_timer_query_webgl2`, where the browser exposes it) over four tricks, and the frames drawn in the 1.5 s after the last landing's own frame (must be 0). Where the welcome preview loops (Medium and High) it times three seconds of it too. It reads the renderer through `?debug` and sets each load's storage from the URL (the `m-*` parameters, applied by an init script before the app runs), so nothing in the app changes for it.
 
+**From 2026-11-09 (PLAN-PLAY-POLISH-REACH step 1)** the script also:
+- makes each load one of three visits: **cold** (a fresh browser context, cache off), **http** (the same context, its HTTP cache filled at full speed, then loaded on the network) and **sw** (the same context once a build's service worker is active; a build without `sw.js` reports it unavailable). The cold and http loads carry `?nosw`;
+- loads each tier once, unmeasured, first (`warm=on`, the default): the GPU process keeps compiled shaders across contexts, so a run's first High load is 0.4 to 0.7 s slower than every later one. `warm=off` shows a browser's very first load;
+- classifies requests by pathname, so `?v=` versions and hashed names still count, and lists every request with its bytes;
+- counts every switch combination's draw calls (`switches=all`, the default): on the welcome screen feet and legs, in the lab over a 360 flip feet, legs, foot trails and motion cues. The most seen per tier is the draw-call ledger's number;
+- reads landings from the store (`window.__trickLabStore` under `?debug`), not the frameloop: the endpoint is the frame that draws the landing; counted are the frames from it to the point where R3F reports no pending frame (at most the one the landing's write queued) and the frames after that point over 1.5 s (must be 0);
+- measures a Canvas once it is ready: `__trickLabPerf.root` numbers each Canvas mount and `__trickLabPerf.ready` says when that root's startup is finished (`src/scene/rootReadiness.ts`: revealed, its effects made, every model on screen, `stageReady` published);
+- reports the Chromium-only probes (throttling, CPU slowdown, the cache switch) as unavailable in other browsers. GPU time is reported only where the browser exposes a timer.
+
 Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
 
 ## Measured, realistic board pass (2026-11-04)
@@ -511,3 +520,21 @@ Every tier is inside its gate (Low and Medium under 20, High under 40), the game
 **What it adds up to, against the plan's expectations.** High downloads 755 KB of models instead of 2.6 MB (expected about 1 MB) and keeps 8.4 MB of textures on the GPU instead of 33.5 (expected about 10). The stage shows the stand-in board or a blank 3D view on no connection, with two limits. The loading picture arrives 0.05 to 1.0 s into the load, with the page's own first paint: about 0.3 s after it at 3 Mbps (0.1 to 0.15 s at 10 Mbps, none at full speed), so for that moment the stage is its plain background colour. And a trick popped before the models are in lifts the picture so the trick can be seen, on the stand-in board if need be (ADR-56). The picture lifts 11 to 153 ms after the tier's scene is complete (the 153 ms on High at 10 Mbps; 11 to 75 ms everywhere else). With the feet on, High draws in a third to a half of the GPU time with occlusion, motion blur, glow and the grade added (with them off, in about two thirds). Idle frames and the draw-call gates hold.
 
 **The cost.** The WebGPURenderer and its effects are 220 KB more JavaScript, which Medium and High load and start before their first 3D frame, and their textures need the 242 KB transcoder (step 3). So on those tiers the 3D scene itself comes later: at full speed the complete scene is about 0.3 s later than before (1.0 to 1.2 s, was 0.73 to 0.75 s), and on Medium at 3 Mbps 0.6 s later (3.97 s, was 3.38). The loading picture covers that time; on High at 10 and 3 Mbps the complete scene still comes much sooner than before, since its models are a third of the size. Low, which never loads the WebGPU chunk, is unchanged within 0.1 s.
+
+## Play, polish and reach plan (2026-11-09)
+
+The plan is `docs/PLAN-PLAY-POLISH-REACH.md`. Its baseline is a0a2c86, the end of the look, feel and performance plan.
+
+### Step 1: the measurement, upgraded
+
+The new script (above) on a0a2c86's build, 2026-11-09, dark theme, feet on, warmed up, served by `serve.ts`. The cold loads reproduce the step 14 tables within run-to-run noise (0.1 s): High 1.04 / 1.79 / 4.93 s at full speed, 10 and 3 Mbps (step 14: 1.04 to 1.19 / 1.75 / 5.06), Medium 1.02 / 1.67 / 4.04 (0.99 / 1.57 / 3.97), Low 0.45 / 0.75 / 1.53 (0.45 / 0.71 / 1.50); the same bytes (JavaScript 595 / 594 / 362 KB, models 755 / 273 / 0 KB) and the same draw calls and triangles. GPU times came out lower than step 14's (High 0.66 ms, Medium 0.46 ms in the lab), and so did a0a2c86's own script run in the same session (0.92 and 0.72 ms): the GPU's state, not the build. A visit from the HTTP cache downloads nothing and shows the complete scene in 0.97 to 1.06 s at any speed on Medium and High (0.40 s on Low).
+
+Draw calls in the lab during a 360 flip, every switch combination (motion cues are on by default, so "defaults" is feet and cues):
+
+| Tier | Feet off | Defaults | + foot trails | + legs | Everything on | Gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| High | 18 to 20 | 31 | 32 | 34 | **35** | under 40 |
+| Medium | 12 to 14 | 17 | 18 | 19 | **20** | under 20: broken |
+| Low | 5 to 7 | 10 | 11 | 12 | **13** | under 20 |
+
+The welcome screen draws at most 33 / 18 / 11 (feet and legs on). Landings: 0 frames after the idle point on every tier. a0a2c86's build has no store under `?debug`, so its frames to the idle point are not counted; on this step's build they are 1, the frame the landing's write queues.

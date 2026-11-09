@@ -5,6 +5,7 @@ import { PMREMGenerator, type Group, type Texture } from 'three';
 import { ART } from './artDirection';
 import { outdoorEnvironment } from './outdoorEnvironment';
 import { isNodeRenderer } from './rendererKind';
+import { readinessOf } from './rootReadiness';
 import { rendererFor } from './sceneTier';
 
 /**
@@ -73,6 +74,8 @@ export function SceneEnvironment({ children, onReveal }: { children?: ReactNode;
     const reveal = () => {
       if (cancelled) return;
       revealed.current = true;
+      // A startup publication of this root (rootReadiness.ts).
+      readinessOf(get().scene).revealed = true;
       if (content.current) content.current.visible = true;
       onRevealRef.current?.();
       // frameloop is "demand": ask for the frame that shows the lit scene.
