@@ -11,67 +11,72 @@
 // values FlightDriver writes each frame.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildDeck } from '../asset/deck';
+import { PLANE_BAYS } from '../asset/groundSpec';
 import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
 import { FOOTPRINT } from '../asset/shoeSpec';
+import { TRUCK, WHEEL } from '../asset/spec';
+import { hexToRgb } from '../asset/textures';
 import { LEG } from '../sim/legs';
 import { ART } from './artDirection';
 
-type Box = { size: readonly [number, number, number]; at: readonly [number, number, number]; rotZ?: number };
+const B = ART.board;
 
-/** Several static boxes baked into one geometry: one draw call instead of N. */
-function mergedBoxes(boxes: Box[]) {
-  const parts = boxes.map(({ size, at, rotZ = 0 }) => {
-    const g = new THREE.BoxGeometry(size[0], size[1], size[2]);
-    g.rotateZ(rotZ);
-    g.translate(at[0], at[1], at[2]);
-    return g;
-  });
+/** Paints every vertex of a geometry one colour (sRGB hex, stored linear), so parts that share a material merge into one draw call. */
+function painted(g: THREE.BufferGeometry, hex: string) {
+  const c = new THREE.Color(hex);
+  const n = g.getAttribute('position').count;
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) c.toArray(colors, i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.deleteAttribute('uv');
+  return g;
+}
+
+function mergedParts(parts: THREE.BufferGeometry[]) {
   const merged = mergeGeometries(parts)!;
   parts.forEach((g) => g.dispose());
   return merged;
 }
-
-const D = ART.board.deck;
 
 /**
- * The deck as three segments (tail kick, flat middle, nose kick), each a box
- * tilted about Z. `offset` pushes a segment along its own normal, which is how
- * the grip (+) and graphic (-) skins sit on the faces of the wood core.
+ * The primitive board's deck (ADR-54): the real deck mesh (deck.ts, the
+ * Medium GLB's: the outline, the kicks and the concave), grip, wood and
+ * graphic coloured per vertex. One draw call.
  */
-function deckSegments(thickness: number, width: number, lengthTrim: number, offset: number): Box[] {
-  const half = D.flatLength / 2;
-  const k = D.kick;
-  const seg = (cx: number, cy: number, angle: number, length: number): Box => ({
-    size: [length - lengthTrim, thickness, width],
-    at: [cx - Math.sin(angle) * offset, cy + Math.cos(angle) * offset, 0],
-    rotZ: angle,
-  });
-  const kx = half + (Math.cos(k.angle) * k.length) / 2;
-  const ky = (Math.sin(k.angle) * k.length) / 2;
-  return [seg(-kx, ky, -k.angle, k.length), seg(0, 0, 0, D.flatLength), seg(kx, ky, k.angle, k.length)];
+function primitiveDeck() {
+  const { groups } = buildDeck('medium');
+  return mergedParts([painted(groups.grip, B.grip.color), painted(groups.wood, B.wood.color), painted(groups.graphic, B.graphic.color)]);
 }
 
-const skinOffset = D.thickness / 2 + D.skin.thickness / 2;
-const skinWidth = D.width - D.skin.inset * 2;
-
-const T = ART.board.trucks;
-const W = ART.board.wheels;
-
-function wheels() {
-  const parts = [
-    [W.x, W.z],
-    [W.x, -W.z],
-    [-W.x, W.z],
-    [-W.x, -W.z],
-  ].map(([x, z]) => {
-    const g = new THREE.CylinderGeometry(W.radius, W.radius, W.width, 16);
-    g.rotateX(Math.PI / 2); // axle along Z
-    g.translate(x!, W.y, z!);
-    return g;
-  });
-  const merged = mergeGeometries(parts)!;
-  parts.forEach((g) => g.dispose());
-  return merged;
+/**
+ * The primitive board's trucks and wheels (ADR-54), at the GLB's own places
+ * (spec.ts): per truck a baseplate, a yoke down to the axle and the axle
+ * housing across, and four wheels, coloured per vertex. One draw call. Every
+ * part sits inside the envelopes the feet's clearance test uses.
+ */
+function primitiveHardware() {
+  const BP = TRUCK.baseplate;
+  const AX = TRUCK.axleHousing;
+  const parts: THREE.BufferGeometry[] = [];
+  const box = (size: readonly [number, number, number], x: number, y: number, z: number, hex: string) => {
+    const g = new THREE.BoxGeometry(size[0], size[1], size[2]);
+    g.translate(x, y, z);
+    parts.push(painted(g, hex));
+  };
+  const plateBottom = BP.center[1] - BP.size[1] / 2;
+  for (const s of [1, -1]) {
+    box(BP.size, s * BP.center[0], BP.center[1], BP.center[2], B.trucks.color);
+    box([AX.size[0], plateBottom - AX.center[1], AX.size[0] * 1.4], s * AX.center[0], (plateBottom + AX.center[1]) / 2, 0, B.trucks.color);
+    box(AX.size, s * AX.center[0], AX.center[1], AX.center[2], B.trucks.color);
+    for (const z of [WHEEL.centerZ, -WHEEL.centerZ]) {
+      const w = new THREE.CylinderGeometry(WHEEL.radius, WHEEL.radius, WHEEL.width, B.wheels.segments);
+      w.rotateX(Math.PI / 2);
+      w.translate(s * WHEEL.centerX, WHEEL.centerY, z);
+      parts.push(painted(w, B.wheels.color));
+    }
+  }
+  return mergedParts(parts);
 }
 
 const G = ART.ground;
@@ -338,11 +343,6 @@ function primitiveUpper() {
   return loftFacing(rows, { r: mid, p: Math.floor(M / 2), out: [0, 1, 0] }).geometry;
 }
 
-function mergedParts(parts: THREE.BufferGeometry[]) {
-  const merged = mergeGeometries(parts)!;
-  parts.forEach((g) => g.dispose());
-  return merged;
-}
 
 const shoeSole = primitiveSole();
 const shoeUpper = primitiveUpper();
@@ -447,28 +447,70 @@ export const geo = {
     legSegment(thighProfile(), LEG_BONES.frontThigh, true),
     legSegment(thighProfile(), LEG_BONES.backThigh, true),
   ]),
-  deckWood: mergedBoxes(deckSegments(D.thickness, D.width, 0, 0)),
-  deckGrip: mergedBoxes(deckSegments(D.skin.thickness, skinWidth, D.skin.inset * 2, skinOffset)),
-  deckGraphic: mergedBoxes(deckSegments(D.skin.thickness, skinWidth, D.skin.inset * 2, -skinOffset)),
-  trucks: mergedBoxes([
-    { size: T.size, at: [T.x, T.y, 0] },
-    { size: T.size, at: [-T.x, T.y, 0] },
-  ]),
-  wheels: wheels(),
+  /** The primitive board (fallback, Low; ADR-54): the deck, and the trucks with the wheels. Two draw calls. */
+  boardDeck: primitiveDeck(),
+  boardHardware: primitiveHardware(),
   ground: groundPlane(),
   shadow: shadowFootprint(),
 };
 
-const B = ART.board;
 const std = (color: string, roughness: number, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 
+const LOW = ART.low;
+
+/** Low's light, in `ART.low.gradient`'s steps (a toon material reads it nearest, so the steps stay hard). */
+function toonGradient() {
+  const steps = LOW.gradient;
+  const t = new THREE.DataTexture(new Uint8Array(steps.map((v) => Math.round(v * 255))), steps.length, 1, THREE.RedFormat);
+  t.minFilter = THREE.NearestFilter;
+  t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * Low's ground (ADR-54): the slab colour with a dark joint along each edge,
+ * half a joint on each side, so repeated once per bay (ground.ts's bays) the
+ * joints fall between bays and a bay is centred under the board.
+ */
+function jointTexture() {
+  const n = LOW.ground.texture;
+  const half = Math.max(1, Math.round((LOW.ground.joint.width * n) / 2));
+  // sRGB bytes straight from the design's hex: the texture is marked sRGB below.
+  const slab = hexToRgb(LOW.ground.color);
+  const joint = hexToRgb(LOW.ground.joint.color);
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const c = x < half || x >= n - half || y < half || y >= n - half ? joint : slab;
+      data.set([c[0]!, c[1]!, c[2]!, 255], (y * n + x) * 4);
+    }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(PLANE_BAYS.x, PLANE_BAYS.z);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Textures the materials below hold, freed with them. */
+const tex = { toon: toonGradient(), joints: jointTexture() };
+
 export const mat = {
-  grip: std(B.grip.color, B.grip.roughness),
-  graphic: std(B.graphic.color, B.graphic.roughness),
-  wood: std(B.wood.color, B.wood.roughness),
-  trucks: std(T.color, T.roughness, T.metalness),
-  wheels: std(W.color, W.roughness),
+  /** The primitive board on the fallback (Medium, High while a GLB streams or if it fails): one standard material, per-vertex colour. */
+  boardPrimitive: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: B.primitive.roughness, metalness: B.primitive.metalness }),
+  // Low (ADR-54): toon shaded, flat clean colours.
+  toonBoard: new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: tex.toon }),
+  toonSole: new THREE.MeshToonMaterial({ color: ART.feet.sole.color, gradientMap: tex.toon }),
+  toonUpper: new THREE.MeshToonMaterial({ color: ART.feet.upper.color, gradientMap: tex.toon }),
+  toonGround: new THREE.MeshToonMaterial({ map: tex.joints, gradientMap: tex.toon }),
   ground: std(G.color, G.roughness),
   shoeSole: std(FT.sole.color, FT.sole.roughness),
   shoeUpper: std(FT.upper.color, FT.upper.roughness),
@@ -528,6 +570,7 @@ export const shaderMat = (key: ShaderKey, nodeRenderer: boolean): THREE.Material
 export function disposeSharedResources() {
   Object.values(geo).forEach((g) => g.dispose());
   Object.values(mat).forEach((m) => m.dispose());
+  Object.values(tex).forEach((t) => t.dispose());
   for (const key of Object.keys(nodeMat) as ShaderKey[]) {
     nodeMat[key]?.dispose();
     nodeMat[key] = null;

@@ -762,3 +762,11 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 
 - **Deck print**: a clear lacquer, clearcoat 0.6 at roughness 0.22, High only.
 - **Shoe upper**: a suede sheen, `#62666d` at roughness 0.55, High only (the shoes are High only).
+
+### 14.5 Low, designed (ADR-54)
+
+- **Shading**: toon, three steps of light (0.42, 0.72, 1). Board, shoes and ground only; the sky, trails, cues and footprints as on every tier.
+- **Board**: the real deck (the Medium GLB's mesh) with grip `#141416`, wood `#cdb68c`, graphic `#ea5a30`; trucks `#a9adb3` (baseplate, yoke, axle housing); wheels `#efe9dc`. Two draw calls.
+- **Shoes**: sole `#e9e5db`, upper `#23262c` (ART.feet), toon.
+- **Ground**: slab `#888d94` with joints `#6a6f76` about 2 cm wide (0.012 of a bay), one 256 px tile per bay.
+- **Edges**: MSAA at DPR 1. **No environment map.**

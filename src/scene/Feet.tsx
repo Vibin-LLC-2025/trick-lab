@@ -3,16 +3,21 @@ import type { Group } from 'three';
 import { useTrickStore } from '../store';
 import { AssetBoundary } from './Board';
 import { geo, mat } from './resources';
-import { shoesFromModel } from './sceneTier';
+import { sceneTier, shoesFromModel } from './sceneTier';
 
 const ShoesModel = lazy(() => import('./ShoesModel').then((m) => ({ default: m.ShoesModel })));
 
-/** The primitive shoe: the footprint sole and the silhouette upper (Low, Medium, and the fallback on High; ADR-39). Two draw calls. */
+/**
+ * The primitive shoe: the footprint sole and the silhouette upper (Low,
+ * Medium, and the fallback on High; ADR-39). Two draw calls. Toon shaded on
+ * Low (ADR-54).
+ */
 export function ShoePrimitive() {
+  const low = useTrickStore(sceneTier) === 'low';
   return (
     <group>
-      <mesh geometry={geo.shoeSole} material={mat.shoeSole} />
-      <mesh geometry={geo.shoeUpper} material={mat.shoeUpper} />
+      <mesh geometry={geo.shoeSole} material={low ? mat.toonSole : mat.shoeSole} />
+      <mesh geometry={geo.shoeUpper} material={low ? mat.toonUpper : mat.shoeUpper} />
     </group>
   );
 }

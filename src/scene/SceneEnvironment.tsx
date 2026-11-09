@@ -5,6 +5,7 @@ import { PMREMGenerator, type Group, type Texture } from 'three';
 import { ART } from './artDirection';
 import { outdoorEnvironment } from './outdoorEnvironment';
 import { isNodeRenderer } from './rendererKind';
+import { rendererFor } from './sceneTier';
 
 /**
  * Reflections and image-based fill (DESIGN.md 7.6 and 10). Without an
@@ -40,6 +41,8 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
   const content = useRef<Group>(null);
   // The environment is the theme's sky (ADR-52): a theme change prefilters it again.
   const theme = useTrickStore((s) => s.theme);
+  // Low is toon shaded and builds no environment (ADR-54): it only warms up and reveals.
+  const environment = useTrickStore((s) => rendererFor(s).environment);
   // The warm-up (hidden content, compile, reveal) runs once per Canvas; a theme change only swaps the map.
   const revealed = useRef(false);
   // The map in use. A theme change keeps showing it until the next one is ready, then frees it.
@@ -79,6 +82,13 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
 
     const prefilter = async () => {
       if (cancelled) return;
+      if (!environment) {
+        // Low (ADR-54): no map, and no async warm-up either. With nothing drawn while it
+        // waits, the parallel compile reported ready only about 0.5 s later (measured
+        // 2026-11-09); Low's few programs compile in its first frame instead.
+        if (!revealed.current) reveal();
+        return;
+      }
       const { gl, scene } = get();
       const E = ART.lights.environment;
       const outdoor = outdoorEnvironment(theme);
@@ -111,7 +121,7 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [get, theme]);
+  }, [get, theme, environment]);
 
   // Hidden until warmUp has compiled it; set imperatively, so no React state.
   // Named so scripts/measure can tell when the lit scene first draws (ADR-48).

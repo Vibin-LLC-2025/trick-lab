@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import tokens from '../styles/tokens.css?raw';
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { CONCRETE, PLANE } from '../asset/groundSpec';
-import { REST_Y, WHEEL } from '../asset/spec';
+import { OUTLINE, REST_Y, WHEEL } from '../asset/spec';
 import { ART, SCENE_BG } from './artDirection';
 import { fitDistance, framingPoints } from './cameraFit';
 import { geo } from './resources';
@@ -45,8 +45,13 @@ describe('rest height (realistic board pass)', () => {
     expect(B.restY).toBe(REST_Y);
     // GLB wheels: centre -0.05775, radius 0.0265 (src/asset/spec.ts, tested against the built geometry).
     expect(B.restY + WHEEL.centerY - WHEEL.radius).toBeCloseTo(0, 9);
-    // Primitive board (fallback and Low): its own DESIGN.md section 2 numbers, lifted by primitiveLift.
-    expect(B.restY + B.primitiveLift + B.wheels.y - B.wheels.radius).toBeCloseTo(0, 9);
+    // Primitive board (fallback and Low, ADR-54): built at the GLB's coordinates, so its wheels touch too.
+    geo.boardHardware.computeBoundingBox();
+    expect(B.restY + geo.boardHardware.boundingBox!.min.y).toBeCloseTo(0, 6);
+    geo.boardDeck.computeBoundingBox();
+    // The deck mesh: its caps reach within a millimetre past the outline's tips.
+    expect(geo.boardDeck.boundingBox!.max.x).toBeCloseTo(OUTLINE.noseTip, 2);
+    expect(geo.boardDeck.boundingBox!.min.x).toBeCloseTo(OUTLINE.tailTip, 2);
   });
 
   it('frames the longer nose and the board at any roll at the top of a 0.6 m pop', () => {

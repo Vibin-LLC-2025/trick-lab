@@ -13,13 +13,12 @@
 import * as THREE from 'three';
 import { halfWidth, midSurface } from '../asset/deck';
 import { DECK, OUTLINE } from '../asset/spec';
+import { primitiveDeckTop } from '../sim/boardVolume';
 import { motionCues, type CuePoint, type MotionCueSpec, type Stance } from '../sim/feet';
 import type { TrickInputs } from '../sim/flight';
 import { ART } from './artDirection';
 
 const C = ART.motionCues;
-const PB = ART.board;
-const PD = PB.deck;
 
 /** Grip top of the realistic board at (x, z); off the outline it keeps the edge's height. */
 function glbGripTop(x: number, z: number) {
@@ -29,21 +28,14 @@ function glbGripTop(x: number, z: number) {
   return midSurface(xc, zc) + DECK.thickness / 2;
 }
 
-/** Grip top of the primitive board (Low and the fallback): flat middle, straight kicks. */
-function primitiveGripTop(x: number) {
-  const top = PD.thickness / 2 + PD.skin.thickness;
-  const half = PD.flatLength / 2;
-  const ax = Math.abs(x);
-  const y = ax <= half ? top : (ax - half) * Math.tan(PD.kick.angle) + top / Math.cos(PD.kick.angle);
-  return y + PB.primitiveLift;
-}
-
 /**
- * Height of a cue point: above whichever board is higher there, plus `lift`,
- * so the same geometry sits on the GLB (High, Medium) and the primitive (Low,
- * fallback) without sinking into either. Their grips differ by at most 1 cm.
+ * Height of a cue point: the deck top the feet stand on, plus `lift`. That is
+ * the sim's rule (src/sim/boardVolume.ts deckTop): the higher of the real
+ * deck's grip and the legacy primitive deck it keeps pinned, so the cues meet
+ * the soles. Since ADR-54 the drawn primitive is the real deck, at most 1 cm
+ * under that, which the shoes already stand above.
  */
-export const cueHeight = (x: number, z: number) => Math.max(glbGripTop(x, z), primitiveGripTop(x)) + C.lift;
+export const cueHeight = (x: number, z: number) => Math.max(glbGripTop(x, z), primitiveDeckTop(x)) + C.lift;
 
 /** Collected triangles: positions, colours, index. */
 class Builder {

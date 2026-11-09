@@ -531,3 +531,18 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 - Factors only, no texture: the files grow by under 0.1 KB and the asset budgets do not move. The loaders turn both into a physical material on either renderer.
 
 **Measured** (High, 1440 x 900 and 2560 x 1440, against step 7 in the same session): draw calls unchanged (30 and 31); GPU time unchanged within noise (the welcome loop 1.38 to 1.25 ms and 2.56 to 2.49 ms; the lab 1.11 and 2.82 ms both times). The six poses side by side: the print reads lacquered, the shoes read suede. Kept.
+
+## ADR-54: Low, designed: toon shading, the real deck, smooth edges, no environment map (2026-11-09)
+
+**Context.** Step 9 of `docs/PLAN-LOOK-FEEL-PERF.md`. The owner chose "simple but finished" for Low: a deliberate flat style, not a broken-looking High. Low was plain grey, a board of boxes, and jagged edges (no antialiasing at DPR 1.5).
+
+**Decision.**
+- **Toon shading** (`ART.low`): every Low material is a `MeshToonMaterial` over three steps of light (0.42, 0.72, 1), so a surface is lit, half lit or in shade, in the board's and the shoes' own colours. Medium and the fallback keep standard materials. The sky dome, the trails, the cues and the footprints are unchanged.
+- **The primitive board is the real deck** (`BoardPrimitive`, `geo.boardDeck` and `geo.boardHardware` in resources.ts): the Medium GLB's deck mesh (`buildDeck`: outline, kicks, concave) and the trucks (baseplate, yoke, axle housing) and wheels at the GLB's own places (spec.ts), coloured per vertex: two draw calls instead of five, built at the GLB's coordinates, so it rests on the pad with no lift (`primitiveLift` and the old DESIGN.md section 2 box numbers are gone). It is still the Medium and High fallback while a GLB streams, there with one standard material. The sim's board volume keeps the legacy primitive deck it pinned (src/sim/boardVolume.ts, so the feet keep their poses); the new primitive is inside it where the feet reach (tested), and the motion cues still drape by the sim's deck top.
+- **Smooth edges**: MSAA at DPR 1 instead of none at DPR 1.5 (`ART.quality.low`).
+- **No environment map on Low** (`environment: false`): toon materials do not use one, and its build was the largest single startup task on a throttled Chromebook (ADR-31's PMREM; 188 ms at 4x CPU here). Low also skips the asynchronous warm-up: started with nothing drawn, the parallel shader compile reported ready only about 0.5 s later on this machine (measured), so SceneEnvironment reveals Low at once and its few programs compile in its first frame (one task of 70 to 98 ms at 4x CPU).
+- **Slab joints** on the ground plane: a 256 px texture, the slab colour with a joint along each edge (about 2 cm), repeated once per bay, so the board still rests centred in a bay; mipmapped, so far joints fade into the slab.
+
+**Result.** Low draws 10 calls in the lab (was 13; gate 20) and downloads no model; see PERF-BUDGET.md, step 9, for the startup.
+
+**Consequence.** `primitiveLift` is gone from ART; the tests that read it (rest height, clearance, the sim's volume, the flight's contact) now read the built geometry or the asset's numbers.

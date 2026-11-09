@@ -396,3 +396,19 @@ The lit concrete, measured in the detail view's empty ground (mean of 200 x 120 
 ### Step 8: clearcoat and sheen on High (ADR-53)
 
 High, against step 7 (6e462ee) in the same session, draw calls 30 and 31 both times. GPU time, medians then p95: welcome loop 1.38 / 2.29 to 1.25 / 1.57 ms at 1440 x 900 and 2.56 / 2.69 to 2.49 / 2.69 ms at 2560 x 1440; lab 1.11 / 2.03 to 1.11 / 2.42 ms and 2.82 / 3.15 to 2.82 / 2.95 ms. No change beyond noise.
+
+### Step 9: Low, designed (ADR-54)
+
+Low against step 8 (6edd17d), three runs each, the welcome screen's first lit frame with the loads at 4x CPU (`cpu=4`, CDP throttling: a rough Chromebook stand-in that does nothing to the GPU):
+
+| | Before | After |
+| --- | --- | --- |
+| First lit frame, full speed | 0.87, 0.58, 0.59 s | 0.59, 0.52, 0.51 s |
+| First lit frame, 3 Mbps | 1.50, 1.53, 1.53 s | 1.47, 1.50, 1.48 s |
+| Draw calls in the lab | 13 | **10** (the board 2, was 5) |
+| Triangles in the lab | 5,083 | 10,487 (the real deck mesh) |
+| GPU per frame in the lab | 0.73 to 0.76 ms | 0.98 to 0.99 ms (MSAA and the deck) |
+| Frames after a landing | 0 | 0 |
+| Startup long tasks over 50 ms (4x CPU) | the PMREM, 188 ms | the first frame's compile, 70 to 98 ms |
+
+The first version of this step kept the asynchronous warm-up without the environment map, and Low's lit scene came 0.5 s later at any CPU speed (the parallel compile, with nothing drawn, reported ready late); it now reveals at once. The measurement script's first-frame watcher also counts a frame drawn in the tick where the content first shows: on a demand loop with nothing else to draw it used to wait for a later frame and report the first frame late.

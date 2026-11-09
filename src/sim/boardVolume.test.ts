@@ -115,18 +115,15 @@ describe('the pinned board', () => {
     expect(BOARD.hardware.hanger.y[1]).toBe(TRUCK.deckBottom);
   });
 
-  it('copies the primitive board of ART.board and holds every vertex of it (Low and the fallback)', () => {
-    const PB = ART.board;
-    const P = BOARD.primitive;
-    expect(P.lift).toBeCloseTo(PB.primitiveLift, 12);
-    expect(P.flatLength).toBe(PB.deck.flatLength);
-    expect(P.halfThickness).toBeCloseTo(PB.deck.thickness / 2 + PB.deck.skin.thickness, 12);
-    expect(P.halfWidth).toBeCloseTo(PB.deck.width / 2, 12);
-    expect(P.kick).toEqual(PB.deck.kick);
-    // BoardPrimitive lifts its group by primitiveLift.
-    for (const g of [geo.deckWood, geo.deckGrip, geo.deckGraphic, geo.trucks, geo.wheels]) {
-      for (const [x, y, z] of vertices(g, PB.primitiveLift)) expect(insideBoard(x, y, z, 1e-6)).toBe(true);
-    }
+  it('holds every vertex of the scene primitive board (Low and the fallback, ADR-54)', () => {
+    // Since ADR-54 the drawn primitive is the real deck mesh with the trucks and wheels as
+    // the GLB's envelopes, at the GLB's coordinates (no lift); the legacy primitive deck
+    // stays in BOARD, pinned, so the feet keep their poses.
+    for (const [x, y, z] of vertices(geo.boardHardware, 0)) expect(insideBoard(x, y, z, 1e-5)).toBe(true);
+    // The deck is the Medium GLB's own mesh: its facets stand up to 0.4 mm off this analytic
+    // volume, inside half the feet's clearance margin; its nose and tail caps run past the
+    // outline tips (|x| over 0.39 m), where the volume narrows to nothing and no sole reaches.
+    for (const [x, y, z] of vertices(geo.boardDeck, 0)) if (Math.abs(x) < 0.39) expect(insideBoard(x, y, z, CLEARANCE.margin / 2)).toBe(true);
   });
 
   it('takes the deck top of whichever board is higher, as the motion cues drape (cueHeight)', () => {

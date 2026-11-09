@@ -48,8 +48,6 @@ describe('motion cue geometry (DESIGN.md 8.7)', () => {
         if (Math.abs(z) < 0.08 && Math.abs(x) < 0.38) {
           expect(y - (midSurface(x, z) + DECK.thickness / 2)).toBeGreaterThanOrEqual(C.lift - 1e-6); // float32 positions
         }
-        // And above the primitive board's flat grip.
-        expect(y).toBeGreaterThan(ART.board.deck.thickness / 2 + ART.board.deck.skin.thickness + ART.board.primitiveLift);
         // Flat: no cue is more than 6 cm up, even on the kicks.
         expect(y).toBeLessThan(0.06);
       }

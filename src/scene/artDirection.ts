@@ -4,7 +4,7 @@
 // Units are metres. The pad top surface is y = 0; the board's long axis is X.
 
 import { BAY, CONCRETE, PLANE, ROUGHNESS } from '../asset/groundSpec';
-import { OUTLINE, REST_Y, TRUCK, WHEEL } from '../asset/spec';
+import { OUTLINE, REST_Y } from '../asset/spec';
 import { FOOT } from '../sim/feet';
 import { NeutralToneMapping, type ToneMapping } from 'three';
 import type { Quality, Theme } from '../store';
@@ -26,7 +26,8 @@ export const SCENE_BG: Record<Theme, string> = { dark: '#e8c6a2', light: '#dde4e
 /**
  * Renderer settings per quality tier (ADR-16, 2026-11-04). The Canvas is
  * keyed on the tier because antialias and powerPreference are constructor
- * options. Low is the original Chromebook setup, unchanged.
+ * options. Low was the original Chromebook setup until ADR-54 (2026-11-09):
+ * MSAA at DPR 1 instead of none at DPR 1.5, so its edges are smooth.
  * `renderer` (ADR-50, 2026-11-09): Medium and High draw with three's
  * WebGPURenderer (WebGPU, or its own WebGL2 backend where WebGPU is missing),
  * the home of the effects; Low keeps WebGLRenderer, which starts faster on a
@@ -37,6 +38,11 @@ export const QUALITY: Record<
   {
     renderer: 'webgpu' | 'webgl';
     antialias: boolean;
+    /**
+     * The prefiltered environment map (ADR-54): High and Medium. Low is toon
+     * shaded, which a map would not light, and skips building it.
+     */
+    environment: boolean;
     dpr: readonly [number, number];
     shadows: boolean;
     anisotropy: number;
@@ -50,9 +56,9 @@ export const QUALITY: Record<
     powerPreference: 'high-performance' | 'low-power';
   }
 > = {
-  high: { renderer: 'webgpu', antialias: true, dpr: [1, 2], shadows: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
-  medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: false, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
-  low: { renderer: 'webgl', antialias: false, dpr: [1, 1.5], shadows: false, anisotropy: 1, groundAnisotropy: 1, powerPreference: 'low-power' },
+  high: { renderer: 'webgpu', antialias: true, dpr: [1, 2], shadows: true, environment: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
+  medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: false, environment: true, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
+  low: { renderer: 'webgl', antialias: true, dpr: [1, 1], shadows: false, environment: false, anisotropy: 1, groundAnisotropy: 1, powerPreference: 'low-power' },
 };
 
 export const ART = {
@@ -414,40 +420,35 @@ export const ART = {
      */
     restY: REST_Y,
     /**
-     * The primitive board (Suspense fallback and Low detail) below keeps its
-     * DESIGN.md section 2 numbers, whose wheel bottoms sit at -0.085. It is
-     * lifted by the difference so its wheels touch the pad at the new rest height.
+     * The primitive board (the Suspense and error fallback, and Low; ADR-54,
+     * 2026-11-09): the real deck mesh (src/asset/deck.ts, the Medium GLB's)
+     * and the trucks and wheels as the GLB's own envelopes (baseplate, axle
+     * housing, wheels from spec.ts), so it sits on the pad at the same rest
+     * height with no lift. Coloured per vertex, two draw calls (was five
+     * boxes and cylinders from DESIGN.md section 2). `roughness` and
+     * `metalness` are its one standard material's (the fallback); Low draws
+     * it toon shaded (ART.low).
      */
-    primitiveLift: 0.085 - REST_Y,
-    deck: {
-      // DESIGN.md gives the deck 0.81 m overall. The flat middle here is
-      // 0.81 - 2 * 0.13 so that the two kick wedges bring it to 0.81 m.
-      flatLength: 0.55,
-      thickness: 0.012,
-      width: 0.205,
-      kick: { length: 0.13, angle: 0.33 },
-      /** Grip and graphic are thin skins on the top and bottom faces. */
-      skin: { thickness: 0.002, inset: 0.005 },
-    },
-    grip: { color: '#141416', roughness: 1.0 },
-    graphic: { color: '#ea5a30', roughness: 0.45 },
-    wood: { color: '#cdb68c', roughness: 0.7 },
-    trucks: {
-      // DESIGN.md lists 0.15 x 0.03 x 0.06; the hanger is laid across the
-      // board (along Z) here so it reaches the wheels.
-      // Tail-pivot pass (2026-11-04, ADR-27): the trucks and wheels moved from
-      // x 0.26 and z 0.105 to the realistic board's axles (TRUCK.centerX,
-      // WHEEL.centerZ), so the primitive pivots on the same rear wheels in the
-      // pop and does not dip 3 cm into the pad. The hanger reaches the inner
-      // wheel faces: 2 * (0.078 - 0.016) = 0.124.
-      size: v(0.06, 0.03, 2 * (WHEEL.centerZ - 0.016)),
-      x: TRUCK.centerX,
-      y: -0.025,
-      color: '#a9adb3',
-      roughness: 0.35,
-      metalness: 0.7,
-    },
-    wheels: { radius: 0.027, width: 0.032, x: WHEEL.centerX, z: WHEEL.centerZ, y: -0.058, color: '#efe9dc', roughness: 0.5 },
+    grip: { color: '#141416' },
+    graphic: { color: '#ea5a30' },
+    wood: { color: '#cdb68c' },
+    trucks: { color: '#a9adb3' },
+    wheels: { color: '#efe9dc', segments: 16 },
+    primitive: { roughness: 0.6, metalness: 0.15 },
+  },
+  /**
+   * Low, designed (ADR-54, 2026-11-09): flat, toon-like shading in clean
+   * colours instead of a cut-down High. Every Low material is a toon one
+   * (MeshToonMaterial) over `gradient`'s steps of light, so a surface is lit,
+   * half lit or in shade; colours are the board's and the shoes' own. The
+   * ground is `ground.color` with dark slab joints (`joint`: colour and width
+   * as a fraction of a bay, about 2 cm), a 256 px texture repeated once per bay, so the
+   * board still rests centred in a bay. No environment map on Low (about 80
+   * ms of startup on a throttled Chromebook, measured 2026-11-04).
+   */
+  low: {
+    gradient: [0.42, 0.72, 1] as readonly number[],
+    ground: { color: '#888d94', joint: { color: '#6a6f76', width: 0.012 }, texture: 256 },
   },
   /**
    * The primitive shoes (Low and Medium, and the Suspense fallback on High):

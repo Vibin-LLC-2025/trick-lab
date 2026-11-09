@@ -277,9 +277,8 @@ describe('tail-pivot pop', () => {
     const flat = WHEEL.profile.filter(([r]) => r === WHEEL.radius).map(([, z]) => z);
     expect(CONTACT.wheel.z[0]).toBeCloseTo(WHEEL.centerZ + Math.min(...flat), 9);
     expect(CONTACT.wheel.z[1]).toBeCloseTo(WHEEL.centerZ + Math.max(...flat), 9);
-    // The primitive board (Low, fallback) has its axles on the same line, so it pivots on the same wheels.
-    expect(ART.board.wheels.x).toBe(CONTACT.wheel.x);
-    expect(ART.board.wheels.y - ART.board.wheels.radius + ART.board.primitiveLift).toBeCloseTo(-CONTACT.restY, 6);
+    // The primitive board (Low, fallback) is built from WHEEL itself since ADR-54, so it pivots on the
+    // same wheels; its wheels on the pad are tested in src/scene/artDirection.test.ts.
   });
 
   it('puts the tail contact where the built deck meets the pad at the strike, within 1 mm', () => {

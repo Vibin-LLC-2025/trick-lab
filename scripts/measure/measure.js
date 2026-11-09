@@ -18,6 +18,7 @@
 //   pops    4                     tricks timed in the lab, after one untimed pop that warms the GPU up
 //   loop    3                     seconds of the welcome preview timed where it loops (Medium, High)
 //   base    /                     the app's base path (/trick-lab/ for a Pages build)
+//   cpu     1                     CPU slowdown for the loads (4 is a rough Chromebook stand-in; GPU unchanged)
 //
 // What it records, per tier:
 // - loading, per network: first contentful paint (the UI), the first frame of
@@ -54,6 +55,7 @@ async (page) => {
   const pops = Number(opts.get('pops') ?? 4);
   const loopSeconds = Number(opts.get('loop') ?? 3);
   const base = opts.get('base') ?? '/';
+  const cpu = Number(opts.get('cpu') ?? 1);
   const origin = new URL(page.url()).origin;
   const HASH = { home: '', lab: '#/lab', skate: '#/skate' };
   // The GLB meshes are named after their nodes (BoardModel, ShoesModel, GroundModel).
@@ -78,22 +80,31 @@ async (page) => {
     }
     const want = (q.get('m-models') ?? '').split(',').filter(Boolean);
     const m = (window.__measure = { firstFrame: null, models: want.length ? null : 'none', seen: {} });
+    let previous = -1;
     const watch = () => {
       const lab = window.__trickLab;
       if (lab) {
         const s = lab.get();
         const frame = window.__trickLabPerf ? window.__trickLabPerf.frames : s.gl.info.render.frame;
+        // A frame drawn since the last tick may already show what this tick first sees: on a demand
+        // loop (Low, an idle screen) no later frame may come for a long time, so it counts.
+        const drawn = previous >= 0 && frame > previous;
+        previous = frame;
         // Builds before ADR-48 did not name the group: it is the scene's one group with meshes in it.
         const content =
           s.scene.getObjectByName('scene-content') ??
           s.scene.children.find((o) => o.isGroup && o.children.some((c) => c.isMesh || c.isGroup));
         if (m.firstFrame === null && content && content.visible) {
-          if (m.seen.content === undefined) m.seen.content = frame;
-          else if (frame > m.seen.content) m.firstFrame = performance.now();
+          if (m.seen.content === undefined) {
+            m.seen.content = frame;
+            if (drawn) m.firstFrame = performance.now();
+          } else if (frame > m.seen.content) m.firstFrame = performance.now();
         }
         if (m.models === null && content && content.visible && want.every((n) => s.scene.getObjectByName(n))) {
-          if (m.seen.models === undefined) m.seen.models = frame;
-          else if (frame > m.seen.models) m.models = performance.now();
+          if (m.seen.models === undefined) {
+            m.seen.models = frame;
+            if (drawn) m.models = performance.now();
+          } else if (frame > m.seen.models) m.models = performance.now();
         }
       }
       if (m.firstFrame === null || m.models === null) requestAnimationFrame(watch);
@@ -130,9 +141,11 @@ async (page) => {
 
   const loading = async (tier, net) => {
     await throttle(net);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
     await page.goto(urlFor(tier, 'home'), { waitUntil: 'commit' });
     let timedOut = false;
     await settle(120_000).catch(() => (timedOut = true));
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     return page.evaluate(
       ({ tier, net, timedOut }) => {
         const m = window.__measure;
@@ -325,7 +338,7 @@ async (page) => {
 
   // A table per section, ready for PERF-BUDGET.md.
   const md = [];
-  md.push(`Measured ${out.when.slice(0, 10)}, ${out.viewport}, ${out.gpu}, feet ${feet}, legs ${out.legs}, ${theme} theme, cache off.`);
+  md.push(`Measured ${out.when.slice(0, 10)}, ${out.viewport}, ${out.gpu}, feet ${feet}, legs ${out.legs}, ${theme} theme, cache off${cpu > 1 ? `, loads at ${cpu}x CPU` : ''}.`);
   md.push('', '| Tier | Network | UI (FCP) | First 3D frame | All models on screen | JS | Models |', '| --- | --- | --- | --- | --- | --- | --- |');
   for (const r of out.rows)
     for (const l of r.loading) {

@@ -3,8 +3,10 @@
 // each shoe, the mirrored left shoe), no part of a sole is inside the board
 // and no part of the board is inside a shoe, for every preset in both
 // stances through the whole flight, and no sole goes below the pad. The board
-// volume here is built from src/asset (deck.ts, spec.ts) and ART.board
-// directly, independent of the sim's pinned copy in src/sim/boardVolume.ts.
+// volume here is built from src/asset (deck.ts, spec.ts) directly,
+// independent of the sim's pinned copy in src/sim/boardVolume.ts. Since
+// ADR-54 the primitive board (Low, fallback) is the same deck mesh with the
+// trucks and wheels as these same envelopes, so it is covered too.
 import { describe, expect, it } from 'vitest';
 import { Euler, Group, Matrix4, Object3D, Vector3 } from 'three';
 import { halfWidth, midSurface } from '../asset/deck';
@@ -17,41 +19,20 @@ import { setBoardRotation } from './boardPose';
 import { geo } from './resources';
 
 const HT = DECK.thickness / 2;
-const PB = ART.board;
-const PD = PB.deck;
 
 /** Hardware boxes [x0, x1, y0, y1, zHalf] for the nose truck, from spec.ts and ART.board (the tail mirrors x). */
 const AX = TRUCK.axleHousing;
 const BP = TRUCK.baseplate;
 const nutR = Math.max(TRUCK.axleNuts.radius, TRUCK.speedWashers.radius);
 const BOXES: [number, number, number, number, number][] = [
-  // Hanger: baseplate length, down to the axle housing's bottom, across the housing (or the primitive hanger).
-  [BP.center[0] - BP.size[0] / 2, BP.center[0] + BP.size[0] / 2, AX.center[1] - AX.size[1] / 2, TRUCK.deckBottom, Math.max(AX.size[2], PB.trucks.size[2]) / 2],
-  // Wheels: either board's wheel radius about the axle, pad to top, out to the outer face.
-  [
-    WHEEL.centerX - Math.max(WHEEL.radius, PB.wheels.radius),
-    WHEEL.centerX + Math.max(WHEEL.radius, PB.wheels.radius),
-    -REST_Y,
-    Math.max(WHEEL.centerY + WHEEL.radius, PB.wheels.y + PB.wheels.radius + PB.primitiveLift),
-    WHEEL.centerZ + WHEEL.width / 2,
-  ],
+  // Hanger: baseplate length, down to the axle housing's bottom, across the housing.
+  [BP.center[0] - BP.size[0] / 2, BP.center[0] + BP.size[0] / 2, AX.center[1] - AX.size[1] / 2, TRUCK.deckBottom, AX.size[2] / 2],
+  // Wheels: the wheel radius about the axle, pad to top, out to the outer face.
+  [WHEEL.centerX - WHEEL.radius, WHEEL.centerX + WHEEL.radius, -REST_Y, WHEEL.centerY + WHEEL.radius, WHEEL.centerZ + WHEEL.width / 2],
   // Axle ends with the nuts.
   [AX.center[0] - nutR, AX.center[0] + nutR, AX.center[1] - nutR, AX.center[1] + nutR, TRUCK.axle.length / 2],
 ];
 
-/** The primitive deck's three boxes in the x-y plane: centre, tilt, half length, half thickness (core plus a skin). */
-const PRIM = (() => {
-  const half = PD.flatLength / 2;
-  const k = PD.kick;
-  const kx = half + (Math.cos(k.angle) * k.length) / 2;
-  const ky = (Math.sin(k.angle) * k.length) / 2 + PB.primitiveLift;
-  const ht = PD.thickness / 2 + PD.skin.thickness;
-  return [
-    { cx: 0, cy: PB.primitiveLift, a: 0, hl: half, ht },
-    { cx: kx, cy: ky, a: k.angle, hl: k.length / 2, ht },
-    { cx: -kx, cy: ky, a: -k.angle, hl: k.length / 2, ht },
-  ];
-})();
 
 /** Inside the board (board frame), with a tolerance: points less than `tol` deep do not count. */
 function insideBoard(x: number, y: number, z: number, tol: number): boolean {
@@ -62,21 +43,12 @@ function insideBoard(x: number, y: number, z: number, tol: number): boolean {
       if (x > lo + tol && x < hi - tol && y > y0 + tol && y < y1 - tol && Math.abs(z) < zh - tol) return true;
     }
   }
-  if (Math.abs(z) < PD.width / 2 - tol) {
-    for (const b of PRIM) {
-      const dx = x - b.cx;
-      const dy = y - b.cy;
-      const u = dx * Math.cos(b.a) + dy * Math.sin(b.a);
-      const v = -dx * Math.sin(b.a) + dy * Math.cos(b.a);
-      if (Math.abs(u) < b.hl - tol && Math.abs(v) < b.ht - tol) return true;
-    }
-  }
   if (x <= OUTLINE.tailTip + tol || x >= OUTLINE.noseTip - tol) return false;
   if (Math.abs(z) >= halfWidth(x) - tol) return false;
   return Math.abs(y - midSurface(x, z)) < HT - tol;
 }
 
-/** Board surface points (board frame): the deck's top and bottom faces and rails, every box's faces, the primitive deck's faces. */
+/** Board surface points (board frame): the deck's top and bottom faces and rails, and every box's faces. */
 const BOARD_POINTS: Vector3[] = (() => {
   const pts: Vector3[] = [];
   for (let x = OUTLINE.tailTip; x <= OUTLINE.noseTip; x += 0.005) {
@@ -102,16 +74,6 @@ const BOARD_POINTS: Vector3[] = (() => {
       const hi = s > 0 ? x1 : -x0;
       boxFaces((u, v, w) => new Vector3(lo + (hi - lo) * u, y0 + (y1 - y0) * v, -zh + 2 * zh * w), [steps(hi - lo), steps(y1 - y0), steps(2 * zh)]);
     }
-  }
-  for (const b of PRIM) {
-    boxFaces(
-      (u, v, w) => {
-        const lu = (2 * u - 1) * b.hl;
-        const lv = (2 * v - 1) * b.ht;
-        return new Vector3(b.cx + lu * Math.cos(b.a) - lv * Math.sin(b.a), b.cy + lu * Math.sin(b.a) + lv * Math.cos(b.a), (w - 0.5) * PD.width);
-      },
-      [steps(2 * b.hl), 2, steps(PD.width)],
-    );
   }
   return pts;
 })();

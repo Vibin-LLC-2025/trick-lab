@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 import { useTrickStore } from '../store';
 import { AssetBoundary } from './Board';
 import { geo, mat } from './resources';
-import { groundTextured } from './sceneTier';
+import { groundTextured, sceneTier } from './sceneTier';
 
 /**
  * The textured ground is its own lazy chunk (it shares the GLTF loader with
@@ -15,9 +15,14 @@ const loadGroundModel = () => import('./GroundModel');
 if (useTrickStore.getState().quality !== 'low') loadGroundModel().catch(() => {});
 const GroundModel = lazy(() => loadGroundModel().then((m) => ({ default: m.GroundModel })));
 
-/** The untextured ground: the concrete's mean colour, the GLB's size, one draw call. */
+/**
+ * The plain ground, the GLB's size, one draw call: on Low toon shaded with its
+ * slab joints (ADR-54), on Medium and High (while the GLB streams or if it
+ * fails) the concrete's mean colour.
+ */
 function GroundPlane({ receiveShadow }: { receiveShadow: boolean }) {
-  return <mesh geometry={geo.ground} material={mat.ground} receiveShadow={receiveShadow} />;
+  const low = useTrickStore(sceneTier) === 'low';
+  return <mesh geometry={geo.ground} material={low ? mat.toonGround : mat.ground} receiveShadow={receiveShadow} />;
 }
 
 /**
