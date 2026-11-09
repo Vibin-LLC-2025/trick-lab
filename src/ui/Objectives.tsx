@@ -1,17 +1,13 @@
 import { OBJECTIVES } from '../sim/tricks';
 import { useTrickStore } from '../store';
+import { FoldPanel } from './Fold';
 
+/** The seven objectives, a section that opens (ADR-47); the count shows on its button either way. */
 export function Objectives() {
   const completed = useTrickStore((s) => s.completed);
 
   return (
-    <section className="panel" aria-labelledby="objectives-heading">
-      <h2 id="objectives-heading" className="panel__title">
-        Objectives{' '}
-        <span className="panel__count">
-          {completed.length} of {OBJECTIVES.length}
-        </span>
-      </h2>
+    <FoldPanel fold="objectives" title="Objectives" count={`${completed.length} of ${OBJECTIVES.length}`}>
       <ol className="objectives">
         {OBJECTIVES.map((o) => {
           const done = completed.includes(o.id);
@@ -27,6 +23,6 @@ export function Objectives() {
         })}
       </ol>
       <p className="panel__note">Bonus (not scored): land any preset at pop 0.20 m or lower by raising flick or scoop yourself.</p>
-    </section>
+    </FoldPanel>
   );
 }

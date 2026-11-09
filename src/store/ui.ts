@@ -3,7 +3,7 @@ import { isStance } from '../sim/feet';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
 import { detectQuality, effectiveQuality, isQuality } from './quality';
-import type { CameraView, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
+import type { CameraView, LabFold, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
 
 export const THEME_KEY = 'trick-lab.theme';
 export const QUALITY_KEY = 'trick-lab.quality';
@@ -20,8 +20,24 @@ export const CUES_KEY = 'trick-lab.motion-cues';
 export const CAMERA_VIEW_KEY = 'trick-lab.camera-view';
 /** The welcome screen's preview, paused or not (ADR-45). */
 export const PREVIEW_KEY = 'trick-lab.preview';
+/** The lab's open sections (ADR-47), as a JSON list of their ids. */
+export const LAB_FOLDS_KEY = 'trick-lab.lab-folds';
 
 export const SCREENS: readonly Screen[] = ['home', 'skate', 'lab'];
+
+export const LAB_FOLDS: readonly LabFold[] = ['replay', 'view', 'numbers', 'feet', 'objectives', 'log'];
+
+/** All closed, but any saved as open. A broken or foreign value counts as nothing saved. */
+export function readLabFolds(): Record<LabFold, boolean> {
+  const folds = Object.fromEntries(LAB_FOLDS.map((f) => [f, false])) as Record<LabFold, boolean>;
+  try {
+    const saved: unknown = JSON.parse(readPref(LAB_FOLDS_KEY) ?? '[]');
+    if (Array.isArray(saved)) for (const f of saved) if (LAB_FOLDS.includes(f as LabFold)) folds[f as LabFold] = true;
+  } catch {
+    // Not JSON: start closed.
+  }
+  return folds;
+}
 const HASHES: Record<Screen, string> = { home: '', skate: '#/skate', lab: '#/lab' };
 
 /** The URL hash for a screen (ADR-45): none for home, #/skate and #/lab. */
@@ -123,6 +139,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
   return {
     screen: readScreen(),
     previewPaused: read(PREVIEW_KEY) === 'paused',
+    labFolds: readLabFolds(),
     perfVisible: false,
     shortcutsOpen: false,
     theme: readTheme(),
@@ -159,6 +176,11 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       save(PREVIEW_KEY, previewPaused ? 'paused' : 'on');
       set({ previewPaused });
       get().announce(previewPaused ? 'Preview paused.' : 'Preview playing.');
+    },
+    toggleLabFold: (fold) => {
+      const labFolds = { ...get().labFolds, [fold]: !get().labFolds[fold] };
+      save(LAB_FOLDS_KEY, JSON.stringify(LAB_FOLDS.filter((f) => labFolds[f])));
+      set({ labFolds });
     },
     togglePerf: () => set((s) => ({ perfVisible: !s.perfVisible })),
     setShortcutsOpen: (open) => set({ shortcutsOpen: open }),

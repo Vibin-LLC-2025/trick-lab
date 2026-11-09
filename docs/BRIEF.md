@@ -111,7 +111,10 @@ screen under a top bar with Home; the URL hash follows the screen. The game
 screen (ADR-46) shows only the game: both players' letters, a turn card that
 says whose turn it is and the trick in large type, the sliders and Pop, and
 the last trick; the computer takes its go on its own after a short wait
-(a switch turns that off), and leaving a game in play asks first.
+(a switch turns that off), and leaving a game in play asks first. The lab
+(ADR-47) shows the presets, sliders, Pop and the outcome up front; speed and
+timeline, view settings, flight numbers, foot motion, objectives and the event
+log are sections that open, closed at first and remembered.
 
 Game of SKATE (added 2026-11-06, ADR-43; real-game rules 2026-11-08,
 ADR-44): an optional mode against the computer. A coin flip picks who sets
@@ -264,6 +267,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .turn, .turn--you, .turn--computer, .turn--setup, .turn--over, .turn--won, .turn--lost, .turn__news, .turn__who, .turn__task, .turn__label, .turn__trick, .turn__note, .turn__status, .turn__timer (the game's turn card, ADR-46)
 .turn-chip, .turn-chip--you, .turn-chip--computer, .turn-chip__who, .turn-chip__trick (whose turn, over the stage, ADR-46)
 .confirm, .confirm__title, .confirm__text, .confirm__actions (leave a game dialog, ADR-46)
+.fold, .fold--part, .fold__heading, .fold__heading--sub, .fold__toggle, .fold__body (the lab's sections that open, ADR-47)
 .skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
 .app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)
 .home, .home__eyebrow, .home__title, .home__lede, .home__choices, .home__utilities, .home__hint, .choice, .choice--primary, .choice__title, .choice__text, .preview-toggle (welcome screen, ADR-45)

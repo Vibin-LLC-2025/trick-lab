@@ -11,7 +11,7 @@ import { Home } from './Home';
 import { Inputs } from './Inputs';
 import { Objectives } from './Objectives';
 import { PerfBadge } from './PerfBadge';
-import { Playback } from './Playback';
+import { Playback, Replay } from './Playback';
 import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -181,9 +181,11 @@ export function App() {
         {/* Each screen's controls are its one main landmark; the stage and the results are beside them. */}
         {screen === 'lab' && (
           <main className="app__setup" aria-label="Setup">
+            {/* Up front: presets, sliders and Pop. The rest opens when wanted (ADR-47). */}
             <Presets />
             <Inputs />
             <Playback />
+            <Replay />
             <ViewPanel />
           </main>
         )}

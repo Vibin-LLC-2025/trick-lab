@@ -1,4 +1,5 @@
 import { effectiveQuality, useTrickStore, type CameraView, type Quality, type Stance } from '../store';
+import { FoldPanel } from './Fold';
 import { Toggle } from './Toggle';
 
 const CAMERA_OPTIONS: { value: CameraView; label: string }[] = [
@@ -130,7 +131,7 @@ function QualityControl() {
  * always contains the visible label (WCAG 2.5.3, label in name).
  */
 /**
- * Reset view in the header, then what the scene shows (feet, legs
+ * A section that opens (ADR-47). Reset view in the header, then what the scene shows (feet, legs
  * while the feet are shown, trails, motion cues) and the perf badge as switches (the theme and the
  * shortcuts moved to the top bar, ADR-45), then
  * the camera preset (ADR-38), stance and quality (DESIGN.md 9). Each is also reachable without a pointer.
@@ -149,17 +150,17 @@ export function ViewPanel() {
   const toggleMotionCues = useTrickStore((s) => s.toggleMotionCues);
 
   return (
-    <section className="panel" aria-labelledby="view-heading">
-      <div className="panel__head">
-        <h2 id="view-heading" className="panel__title">
-          View
-        </h2>
+    <FoldPanel
+      fold="view"
+      title="View"
+      actions={
         <div className="view-panel__actions">
           <button type="button" className="btn btn--ghost btn--sm" onClick={resetView}>
             Reset view
           </button>
         </div>
-      </div>
+      }
+    >
       <div className="view-panel__toggles">
         <Toggle label="Feet" name="Show feet" pressed={feetVisible} onClick={toggleFeet} />
         {/* The legs stand in the shoes (ADR-37): no feet, nothing to show, so no switch. */}
@@ -171,6 +172,6 @@ export function ViewPanel() {
       <CameraControl />
       <StanceControl />
       <QualityControl />
-    </section>
+    </FoldPanel>
   );
 }

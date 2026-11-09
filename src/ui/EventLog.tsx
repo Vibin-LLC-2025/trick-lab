@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTrickStore } from '../store';
 import { buildExport, exportFilename } from '../store/export';
+import { FoldPanel } from './Fold';
 
 /** The panel renders only the latest rows so DOM size stays flat in long sessions. Export has everything. */
 export const LOG_PANEL_ROWS = 200;
@@ -18,7 +19,26 @@ function download() {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/** The event log, a section that opens (ADR-47). Its count and Download JSON stay in the header, open or not. */
 export function EventLog() {
+  const count = useTrickStore((s) => s.events.length);
+  return (
+    <FoldPanel
+      fold="log"
+      title="Event log"
+      count={count}
+      actions={
+        <button type="button" className="btn btn--ghost btn--sm" onClick={download} disabled={count === 0}>
+          Download JSON
+        </button>
+      }
+    >
+      <Entries />
+    </FoldPanel>
+  );
+}
+
+function Entries() {
   const events = useTrickStore((s) => s.events);
   const scroller = useRef<HTMLDivElement>(null);
   const shown = events.length > LOG_PANEL_ROWS ? events.slice(-LOG_PANEL_ROWS) : events;
@@ -29,15 +49,7 @@ export function EventLog() {
   }, [events.length]);
 
   return (
-    <section className="panel" aria-labelledby="eventlog-heading">
-      <div className="panel__head">
-        <h2 id="eventlog-heading" className="panel__title">
-          Event log <span className="panel__count">{events.length}</span>
-        </h2>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={download} disabled={events.length === 0}>
-          Download JSON
-        </button>
-      </div>
+    <>
       {events.length > LOG_PANEL_ROWS && (
         <p className="panel__note">
           Showing the latest {LOG_PANEL_ROWS} of {events.length} events. The download has all of them.
@@ -70,6 +82,6 @@ export function EventLog() {
           </tbody>
         </table>
       </div>
-    </section>
+    </>
   );
 }

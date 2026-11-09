@@ -37,6 +37,12 @@ export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } 
  * browser's back button and a bookmark work.
  */
 export type Screen = 'home' | 'skate' | 'lab';
+/**
+ * The lab's sections that open and close (ADR-47): speed and timeline, view
+ * settings, the flight numbers, foot motion, objectives and the event log.
+ * Presets, sliders, Pop and the outcome are always shown.
+ */
+export type LabFold = 'replay' | 'view' | 'numbers' | 'feet' | 'objectives' | 'log';
 export type Theme = 'dark' | 'light';
 /**
  * Quality tier (ADR-16). High: the detailed board, shoes and shadows for a
@@ -114,6 +120,8 @@ export interface UiSlice {
   screen: Screen;
   /** The welcome screen's preview is paused (WCAG 2.2.2): it shows the still pose. Persisted under trick-lab.preview. Not logged. */
   previewPaused: boolean;
+  /** Which of the lab's sections are open (ADR-47). All closed at first; persisted under trick-lab.lab-folds. Not logged, not reset. */
+  labFolds: Record<LabFold, boolean>;
   perfVisible: boolean;
   shortcutsOpen: boolean;
   theme: Theme;
@@ -151,6 +159,8 @@ export interface UiSlice {
   setScreen: (screen: Screen) => void;
   /** Pauses or plays the welcome screen's preview, persisted and announced. */
   togglePreview: () => void;
+  /** Opens or closes one of the lab's sections, persisted. Not announced: the button's expanded state says it. */
+  toggleLabFold: (fold: LabFold) => void;
   togglePerf: () => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleTheme: () => void;

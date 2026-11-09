@@ -194,8 +194,9 @@ a {
     height: clamp(220px, 62.5vw, 560px);
   }
 
-  /* In a game the student scrolls down to the sliders and Pop: the stage
-     stays pinned at the top, so the trick is in view when it pops (ADR-46).
+  /* In a game or the lab the student scrolls down to the sliders and Pop:
+     the stage stays pinned at the top, so the trick is in view when it pops
+     (ADR-46; the lab since ADR-47).
      Half the width but never more than 40% of the height, so a phone held
      sideways keeps most of the screen for the controls. The page background
      shows round it as it sticks. */
@@ -203,7 +204,7 @@ a {
     --stage-sticky-h: clamp(150px, min(50vw, 40vh), 420px);
   }
 
-  .app[data-screen="skate"] .app__stage {
+  .app:not([data-screen="home"]) .app__stage {
     position: sticky;
     top: 0;
     z-index: 1;
@@ -215,11 +216,11 @@ a {
      focused control into view leaves the stage's height and its ring clear,
      whether the page scrolls it (scroll-padding) or the element asks for it
      (scroll-margin). */
-  :root:has(.app[data-screen="skate"]) {
+  :root:has(.app:not([data-screen="home"])) {
     scroll-padding-top: calc(var(--stage-sticky-h) + var(--space-4));
   }
 
-  .app[data-screen="skate"] .app__play * {
+  .app:not([data-screen="home"]) :is(.app__play, .app__setup, .app__results) * {
     scroll-margin-top: calc(var(--stage-sticky-h) + var(--space-4));
   }
 
@@ -232,6 +233,82 @@ a {
     align-items: start;
     overflow: clip;
   }
+}
+
+/* ---------- Sections that open (ADR-47, DESIGN.md 13) ----------
+   Markup: <section class="panel fold"><div class="panel__head"><h2 class="panel__title fold__heading">
+     <button class="fold__toggle" aria-expanded="false" aria-controls="fold-log">Event log
+     <span class="panel__count">12</span></button></h2>...actions</div><div class="fold__body" hidden>...</div></section>
+   The heading's button is the whole title row: the title in the panel
+   title's type, a chevron that turns when open (position, not colour), and
+   a 28 px hit area. A part inside a panel (.fold--part) uses an h3 in 13 px. */
+
+.fold__heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fold__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--control-h);
+  margin-block: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fold__toggle:hover {
+  color: var(--color-text);
+}
+
+/* The chevron: a small bordered corner, right when closed, down when open. */
+.fold__toggle::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-inline: 2px 3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.fold__toggle[aria-expanded="true"]::before {
+  transform: rotate(45deg);
+}
+
+.fold__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fold__body[hidden] {
+  display: none;
+}
+
+.fold--part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-line);
+}
+
+.fold__heading--sub {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-muted);
 }
 
 /* ---------- Top bar (ADR-45, DESIGN.md 12) ----------
@@ -707,9 +784,9 @@ a {
      <button class="btn btn--primary">Pop <kbd>Space</kbd></button>
      <button class="btn">Pause</button>
      <button class="btn btn--danger">Reset</button>
-     <div class="timeline"> Speed ... </div>
-     <div class="timeline"> Timeline ... </div>
    </div>
+   and, in the Speed and timeline section (ADR-47), <div class="playback">
+     <div class="timeline"> Speed ... </div><div class="timeline"> Timeline ... </div></div>
    Pop is the one filled button in the app and takes the rest of its row.
    Pause and Reset are quiet outlined secondaries. */
 
@@ -722,10 +799,6 @@ a {
 
 .playback > .timeline {
   flex-basis: 100%;
-}
-
-.playback > .btn + .timeline {
-  margin-top: var(--space-1);
 }
 
 .btn {
@@ -1172,6 +1245,16 @@ a {
   line-height: var(--leading-tight);
   color: var(--color-text);
   white-space: nowrap;
+}
+
+/* Air spin, the last row, names both rates: it takes the whole width and
+   wraps there (before 2026-11-08 it sat in one column and ran off the edge). */
+.telemetry__row:last-child {
+  grid-column: 1 / -1;
+}
+
+.telemetry__row:last-child .telemetry__v {
+  white-space: normal;
 }
 
 .telemetry__v--none {

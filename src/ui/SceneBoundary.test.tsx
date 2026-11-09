@@ -34,8 +34,10 @@ let error: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   localStorage.clear();
-  // The store reads its screen from the hash when it is created: these are the lab's tests (ADR-45).
+  // The store reads its screen from the hash when it is created: these are the lab's tests (ADR-45),
+  // with the timeline's section open (ADR-47).
   window.history.replaceState(null, '', '#/lab');
+  localStorage.setItem('trick-lab.lab-folds', JSON.stringify(['replay', 'numbers']));
   document.documentElement.dataset.theme = 'dark';
   // React reports a caught error on console.error, the boundary on console.warn; keep the run quiet.
   error = vi.spyOn(console, 'error').mockImplementation(() => {});

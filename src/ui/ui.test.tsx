@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useTrickStore } from '../store';
+import { LAB_FOLDS, useTrickStore } from '../store';
 import { App } from './App';
 import { KEY_SCRUB_SETTLE_MS } from './Playback';
 
@@ -37,8 +37,9 @@ async function setup() {
 
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
-  // These are the lab's tests (the welcome screen and the game have their own, ADR-45).
-  useTrickStore.setState({ screen: 'lab' });
+  // These are the lab's tests (the welcome screen and the game have their own, ADR-45), with
+  // every section open: they test what is inside (Lab.test.tsx tests the opening, ADR-47).
+  useTrickStore.setState({ screen: 'lab', labFolds: Object.fromEntries(LAB_FOLDS.map((f) => [f, true])) as Record<(typeof LAB_FOLDS)[number], boolean> });
   document.documentElement.dataset.theme = 'dark';
   localStorage.clear();
 });

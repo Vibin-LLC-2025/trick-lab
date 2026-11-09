@@ -417,3 +417,20 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Not adopted.** A countdown in seconds (the bar and "Goes in a moment." say enough without making the student watch numbers). Showing the telemetry grid in the game: the owner chose the essentials; the outcome line keeps the one number that teaches (how far off a miss was). A confirmation on the browser's Back: it cannot be held without fighting the browser.
 
 **Consequence.** `.skate__call` is gone (the turn card replaces it). Tests: `src/ui/Skate.test.tsx` (keyboard start and focus, the computer's call before its go, the copy with the guide, the auto turn with fake timers and its holds, the call picker, Slow motion, both leave dialogs, the end), `src/store/skate.test.ts` (the clean start, the leave flow, the auto switch, focus at the end), `src/sim/skate.test.ts` (`turnView`).
+
+## ADR-47: The lab, tidied: the essentials up front, the rest opens (2026-11-08)
+
+**Context.** The owner found the lab overwhelming: two columns of panels all open at once. They chose to keep every tool but show only the presets, the sliders, Pop and the result up front, with the view settings, the foot steps, the objectives and the history in sections that open.
+
+**Decision.**
+- **Up front.** Setup (the presets), Inputs, Playback (Pop, Pause, Reset) and the Outcome card. Nothing else is open on a first visit.
+- **Sections that open**, all closed at first: Speed and timeline (split out of Playback), View, Flight numbers (the telemetry grid, a part of the Outcome panel under an h3), Foot motion, Objectives and Event log. Each is the disclosure pattern: the section's heading holds a button with `aria-expanded` and `aria-controls`, so heading navigation still finds every section and a screen reader hears expanded or collapsed (a `details` element was not used: a heading inside `summary` loses its heading role in some screen readers). The body renders only while open, so a closed section costs nothing (the event log's 200 rows, the foot steps).
+- **What stays visible closed.** Objectives and Event log keep their counts on the button ("Objectives 1 of 7", "Event log 12"); Download JSON and Reset view stay in their headers; the Foot motion legend shows with the steps.
+- **Remembered.** `labFolds` in the ui slice, persisted under `trick-lab.lab-folds` as a list of open sections (anything else is ignored), not logged, not reset, not announced (the button's state says it).
+- **No lost scrub.** The timeline commits a keyboard scrub still settling when it unmounts (its section closes, or the screen changes), so its `playback.scrubbed` event is kept.
+- **Phones.** The lab gets the game's sticky stage and scroll padding (ADR-46), so the board stays in view while the student scrolls to the presets, sliders and Pop.
+- **Small fixes on the way.** Air spin, the telemetry grid's last row, spans the full width and wraps there instead of running past its column. The lab's Pop no longer carries the game's "Computer's go" label (the game has its own Pop since ADR-46), and the Outcome card drops its in-game wording.
+
+**Not adopted.** Removing panels (the owner chose to keep every tool). Tabs for the results column: they would hide the outcome behind a choice. Opening a section automatically (for example Objectives on a completion): the announcement already says it, and a moving layout is not friendly.
+
+**Consequence.** The lab's UI tests open every section first (they test the content); `src/ui/Lab.test.tsx` tests what is up front, opening by keyboard, persistence, counts while closed, the scrub on close and bad saved values.

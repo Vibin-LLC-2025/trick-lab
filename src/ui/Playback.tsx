@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { computerTurn } from '../sim/skate';
 import { SPEEDS, speedIndex, speedLabel, speedText, useTrickStore } from '../store';
+import { FoldPanel } from './Fold';
 
 /**
  * A run of arrow or Page key presses is one scrub gesture: commit once the
@@ -26,8 +26,12 @@ function Timeline() {
     if (settle.current) clearTimeout(settle.current);
     settle.current = setTimeout(commitNow, KEY_SCRUB_SETTLE_MS);
   };
+  // Unmounting (the section closes, the screen changes) mid-gesture commits it, so its event is not lost.
   useEffect(() => () => {
-    if (settle.current) clearTimeout(settle.current);
+    if (settle.current) {
+      clearTimeout(settle.current);
+      useTrickStore.getState().commitScrub();
+    }
   }, []);
   // Scrubbable when paused or done (always the case under reduced motion,
   // where a pop resolves at once). Native range keys: arrows 1 percent,
@@ -98,9 +102,6 @@ export function Playback() {
   const resetSession = useTrickStore((s) => s.resetSession);
   const announce = useTrickStore((s) => s.announce);
   const playing = status === 'playing';
-  // On the computer's turn in a game of SKATE (ADR-43) the same button and key start its go.
-  const cpuTurn = useTrickStore((s) => computerTurn(s.skate));
-  const popLabel = cpuTurn ? "Computer's go" : 'Pop';
   const pausable = status === 'playing' || status === 'paused';
 
   return (
@@ -113,12 +114,11 @@ export function Playback() {
         <button
           type="button"
           className="btn btn--primary"
-          aria-label={popLabel}
           aria-keyshortcuts="Space"
           aria-disabled={playing || undefined}
           onClick={popTrick}
         >
-          {popLabel} <kbd aria-hidden="true">Space</kbd>
+          Pop <kbd aria-hidden="true">Space</kbd>
         </button>
         <button
           type="button"
@@ -131,9 +131,19 @@ export function Playback() {
         <button type="button" className="btn btn--danger" aria-keyshortcuts="r" onClick={resetSession}>
           Reset
         </button>
+      </div>
+    </section>
+  );
+}
+
+/** Speed and the timeline, a section that opens (ADR-47): the replay tools, not needed to pop. */
+export function Replay() {
+  return (
+    <FoldPanel fold="replay" title="Speed and timeline">
+      <div className="playback">
         <Speed />
         <Timeline />
       </div>
-    </section>
+    </FoldPanel>
   );
 }

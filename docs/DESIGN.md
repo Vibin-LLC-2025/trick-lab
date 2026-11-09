@@ -700,3 +700,14 @@ Over the game and the lab: a 44 px `--color-surface` strip with the column borde
 - **Lab:** the top bar over the three columns of section 9, unchanged inside.
 - **Game:** the top bar over the stage and one game column (`.app__play`, `--col-play` 360 px, the same surface as the side columns); its content is section 11.
 - **Below 960 px:** everything stacks: the top bar, the stage, then the columns.
+
+## 13. The lab, tidied (2026-11-08, ADR-47)
+
+Up front: Setup, Inputs, Playback (Pop, Pause, Reset) on the left and the Outcome card on the right. The rest are sections that open, all closed at first and remembered.
+
+- **Left:** Speed and timeline, then View (Reset view stays in its header).
+- **Right:** Flight numbers (inside the Outcome panel, under a 1 px `--color-line` hairline, an h3), then Foot motion (the legend shows when open), Objectives (its count on the button) and Event log (its count on the button, Download JSON in the header).
+- **The button** (`.fold__toggle` inside `.fold__heading`): the whole title row, in the panel title's type (12 px bold, muted, the text colour on hover), at least 28 px tall, with a chevron drawn from a 6 px bordered corner, pointing right when closed and down when open (turned by `transform`, so position, not colour, carries the state). `.fold__heading--sub` is the h3 of a part inside a panel (`.fold--part`).
+- **The body** (`.fold__body`) is a column with 8 px gaps, `hidden` while closed.
+- **Phones:** the lab's stage sticks to the top like the game's (section 11).
+- **Telemetry:** Air spin, the last row, spans the grid's full width and wraps there.
