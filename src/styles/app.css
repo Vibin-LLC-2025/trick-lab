@@ -78,20 +78,38 @@ a {
 }
 
 /* ---------- App shell ----------
-   Three columns: setup (left), stage (centre), results (right). Each side
-   column is one surface and scrolls on its own; the stage holds still.
-   Below 960px everything stacks under the stage. */
+   Three screens (ADR-45, DESIGN.md 12), one grid, picked by data-screen:
+   - home: the welcome text (left) beside the preview stage (right).
+   - lab: the top bar over setup (left), stage (centre), results (right).
+   - skate: the top bar over the stage (left) and the game column (right).
+   Each side column is one surface and scrolls on its own; the stage holds
+   still. Below 960px everything stacks under the stage. */
 
 .app {
   display: grid;
   grid-template-columns: var(--col-setup) minmax(0, 1fr) var(--col-results);
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: "setup stage results";
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "top top top"
+    "setup stage results";
   height: 100vh;
   height: 100dvh;
   gap: var(--space-2);
   padding: var(--space-2);
   background: var(--color-bg);
+}
+
+.app[data-screen="skate"] {
+  grid-template-columns: minmax(0, 1fr) var(--col-play);
+  grid-template-areas:
+    "top top"
+    "stage play";
+}
+
+.app[data-screen="home"] {
+  grid-template-columns: minmax(0, var(--col-intro)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "intro stage";
 }
 
 .app__stage {
@@ -112,7 +130,8 @@ a {
 }
 
 .app__setup,
-.app__results {
+.app__results,
+.app__play {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -133,30 +152,255 @@ a {
   grid-area: results;
 }
 
+.app__play {
+  grid-area: play;
+}
+
 @media (max-width: 960px) {
-  .app {
+  .app,
+  .app[data-screen="skate"],
+  .app[data-screen="home"] {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: none;
+    height: auto;
+    min-height: 100dvh;
+    align-content: start;
+  }
+
+  .app {
     grid-template-areas:
+      "top"
       "stage"
       "setup"
       "results";
-    height: auto;
-    min-height: 100dvh;
   }
 
+  .app[data-screen="skate"] {
+    grid-template-areas:
+      "top"
+      "stage"
+      "play";
+  }
+
+  .app[data-screen="home"] {
+    grid-template-areas:
+      "stage"
+      "intro";
+  }
+
+  /* 16:10 of the width, but never wider than the screen: a min-height with
+     an aspect ratio would push the width past a phone's 390 px. */
   .app__stage {
-    aspect-ratio: 16 / 10;
-    min-height: 260px;
+    height: clamp(220px, 62.5vw, 560px);
   }
 
   /* The panels of each column sit side by side where there is room. */
   .app__setup,
-  .app__results {
+  .app__results,
+  .app__play {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     align-items: start;
     overflow: clip;
+  }
+}
+
+/* ---------- Top bar (ADR-45, DESIGN.md 12) ----------
+   Markup: <header class="topbar"><button class="btn btn--ghost btn--sm topbar__home">Home</button>
+     <h1 class="topbar__title">Practice lab</h1><nav class="topbar__actions">...</nav></header>
+   One surface strip over the game and the lab: Home on the left, the
+   screen's one h1, the other mode on the right. */
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.topbar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+/* The title receives focus after a screen change (tabindex="-1"). */
+.topbar__title[tabindex] {
+  border-radius: var(--radius-sm);
+}
+
+.topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* ---------- Welcome screen (ADR-45, DESIGN.md 12) ----------
+   Markup: <main class="home"><p class="home__eyebrow">...</p><h1 class="home__title">Trick Lab</h1>
+     <p class="home__lede">...</p><div class="home__choices"><button class="choice choice--primary">
+     <span class="choice__title">Play a game of SKATE</span><span class="choice__text">...</span></button>
+     ...</div><p class="home__hint">...</p></main>
+   The text column sits beside the preview stage. Two large choices, the
+   game first and filled with the accent, the lab outlined; both full width
+   so neither reads as the small print. */
+
+.home {
+  grid-area: intro;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* Centred by auto margins, not justify-content: they collapse to 0 when the
+   text is taller than a short window, so the top is never clipped out of
+   reach of the scroll. */
+.home > :first-child {
+  margin-top: auto;
+}
+
+.home > :last-child {
+  margin-bottom: auto;
+}
+
+.home__eyebrow {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.home__title {
+  margin-top: calc(-1 * var(--space-3));
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+/* The title receives focus when the student comes back (tabindex="-1"). */
+.home__title[tabindex] {
+  border-radius: var(--radius-sm);
+}
+
+.home__lede {
+  max-width: 36em;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--color-muted);
+}
+
+.home__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 88px;
+  padding: var(--space-4) var(--space-4);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+
+.choice:hover {
+  border-color: var(--color-accent);
+}
+
+.choice:active {
+  transform: translateY(1px);
+}
+
+.choice--primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+.choice--primary:hover {
+  filter: brightness(1.08);
+}
+
+.choice__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+
+.choice__text {
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* Muted on the outlined choice; the filled one keeps accent-fg for contrast. */
+.choice:not(.choice--primary) .choice__text {
+  color: var(--color-muted);
+}
+
+.home__utilities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.home__hint {
+  flex: 1 0 100%;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  color: var(--color-muted);
+}
+
+/* Pause or play the welcome screen's preview (WCAG 2.2.2): over the stage's
+   bottom-left corner, on the surface so it reads against the concrete. */
+/* .btn comes later in this file and sets a transparent background, so these
+   carry the .btn class too. */
+.btn.preview-toggle {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn.preview-toggle:hover {
+  background: var(--color-surface-2);
+}
+
+@media (max-width: 960px) {
+  .home {
+    padding: var(--space-5) var(--space-4);
   }
 }
 

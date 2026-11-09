@@ -251,6 +251,21 @@ export const ART = {
         ),
         target: v(0, 0.25, 0),
       },
+      /**
+       * The welcome screen's preview (ADR-45, 2026-11-08), not a student
+       * choice: a three-quarter view from the heel side, 28 degrees above the
+       * horizon (polar 62 degrees, inside the orbit limits) and 35 degrees
+       * round toward the goofy nose, so the flip, the shove and both shoes
+       * read at once. The orbit is off on the welcome screen.
+       */
+      showcase: {
+        position: v(
+          2 * Math.cos((28 * Math.PI) / 180) * Math.sin((35 * Math.PI) / 180),
+          0.28 + 2 * Math.sin((28 * Math.PI) / 180),
+          2 * Math.cos((28 * Math.PI) / 180) * Math.cos((35 * Math.PI) / 180),
+        ),
+        target: v(0, 0.28, 0),
+      },
     },
   },
   /**
@@ -501,6 +516,23 @@ export const ART = {
     edgeWidth: 0.5,
     /** Height at which the "top" values apply (the highest pop). */
     topHeight: 0.6,
+  },
+  /**
+   * The welcome screen's preview (ADR-45, 2026-11-08): preset tricks on a
+   * loop, in slow motion. Each holds `holdBefore` seconds on the pad, plays
+   * its airtime at `rate` (0.5 is half speed), then holds `holdAfter` seconds
+   * at its landing. One frame advances at most `maxStep` seconds, so a
+   * background tab never skips a trick. Reduced motion, the Low tier and a
+   * failed 3D view show `still`: trick `trick` of the list caught at
+   * `progress` of its flight.
+   */
+  showcase: {
+    tricks: ['kickflip', '360-flip', 'heelflip', 'varial-flip', 'frontside-pop-shove-it', 'varial-heelflip'],
+    rate: 0.5,
+    holdBefore: 0.7,
+    holdAfter: 1.1,
+    maxStep: 0.1,
+    still: { trick: 0, progress: 0.45 },
   },
   /**
    * Motion cues (DESIGN.md 8.7, ADR-26): flat arrows on the grip that show

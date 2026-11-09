@@ -21,6 +21,7 @@ async function setup() {
 
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
+  useTrickStore.setState({ screen: 'skate' });
   localStorage.clear();
   // 0.25 wins the coin flip for the student, makes the computer hit its aim (skate.test.ts) and pick the heelflip first on Normal.
   vi.spyOn(Math, 'random').mockReturnValue(0.25);
@@ -43,16 +44,16 @@ describe('game of SKATE panel', () => {
 
     within(panel()).getByRole('button', { name: 'Start game' }).focus();
     await user.keyboard('{Enter}');
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Game of SKATE' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Game of SKATE', level: 2 }));
     expect(announcer()).toHaveTextContent('Game of SKATE started, hard level. Coin flip: you set first.');
     expect(within(panel()).getByRole('button', { name: 'Quit game' })).toBeInTheDocument();
     expect(within(panel()).queryByRole('radio')).toBeNull();
     // Both players start clean; the letters read as text.
     expect(within(panel()).getAllByText('no letters')).toHaveLength(2);
-    // Presets stay focusable but are off, and say why.
-    const kickflip = screen.getByRole('button', { name: /^Kickflip/ });
-    expect(kickflip).toHaveAttribute('aria-disabled', 'true');
-    expect(kickflip).toHaveAccessibleDescription('Presets are off during a game of SKATE.');
+    // The game screen has no presets (they would give the answer away), and keys 1 to 7 do nothing there.
+    expect(screen.queryByRole('group', { name: 'Trick presets' })).toBeNull();
+    await user.keyboard('1');
+    expect(useTrickStore.getState().events.map((e) => e.type)).not.toContain('preset.applied');
   });
 
   it("runs the computer's go on Space, then the student's copy on the Pop button", async () => {
@@ -119,15 +120,15 @@ describe('game of SKATE panel', () => {
     expect(within(again).queryByRole('option', { name: /^Ollie/ })).toBeNull();
   });
 
-  it('quits back to practice and keeps focus in the panel', async () => {
+  it('quits a game back to the start of the game screen and keeps focus in the panel', async () => {
     const user = await setup();
     within(panel()).getByRole('button', { name: 'Start game' }).focus();
     await user.keyboard('{Enter}');
     within(panel()).getByRole('button', { name: 'Quit game' }).focus();
     await user.keyboard('{Enter}');
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Game of SKATE' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Game of SKATE', level: 2 }));
     expect(within(panel()).getByRole('button', { name: 'Start game' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Kickflip/ })).not.toHaveAttribute('aria-disabled');
-    expect(announcer()).toHaveTextContent('Game of SKATE ended. Back to practice: presets are on again.');
+    expect(announcer()).toHaveTextContent('Game of SKATE ended.');
+    expect(useTrickStore.getState().events.at(-1)).toMatchObject({ type: 'skate.ended', payload: { reason: 'quit' } });
   });
 });

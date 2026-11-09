@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand';
 import { isStance } from '../sim/feet';
-import { inFlight } from './playback';
-import { detectQuality, isQuality } from './quality';
-import type { CameraView, Quality, Stance, Theme, TrickState, UiSlice } from './types';
+import { animates, inFlight } from './playback';
+import { detectQuality, effectiveQuality, isQuality } from './quality';
+import type { CameraView, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
 
 export const THEME_KEY = 'trick-lab.theme';
 export const QUALITY_KEY = 'trick-lab.quality';
@@ -17,6 +17,32 @@ export const STANCE_KEY = 'trick-lab.stance';
 export const CUES_KEY = 'trick-lab.motion-cues';
 /** The camera preset (ADR-38). */
 export const CAMERA_VIEW_KEY = 'trick-lab.camera-view';
+/** The welcome screen's preview, paused or not (ADR-45). */
+export const PREVIEW_KEY = 'trick-lab.preview';
+
+export const SCREENS: readonly Screen[] = ['home', 'skate', 'lab'];
+const HASHES: Record<Screen, string> = { home: '', skate: '#/skate', lab: '#/lab' };
+
+/** The URL hash for a screen (ADR-45): none for home, #/skate and #/lab. */
+export const screenHash = (screen: Screen) => HASHES[screen];
+
+/** The screen a URL hash asks for; anything unknown is home. */
+export const screenFromHash = (hash: string): Screen => SCREENS.find((s) => s !== 'home' && HASHES[s] === hash) ?? 'home';
+
+const readScreen = (): Screen => (typeof window === 'undefined' ? 'home' : screenFromHash(window.location.hash));
+
+type PreviewState = Pick<TrickState, 'screen' | 'reducedMotion' | 'sceneUnavailable' | 'quality' | 'boardAssetFailed' | 'previewPaused'>;
+
+/**
+ * Whether the welcome screen's preview could play (ADR-45): on the home
+ * screen, with motion allowed and a 3D view, and not on the Low tier, where
+ * it holds one still pose so a low-end device never renders continuously.
+ * Where it could, the student can pause it (PreviewToggle).
+ */
+export const previewCanPlay = (s: Omit<PreviewState, 'previewPaused'>) => s.screen === 'home' && animates(s) && effectiveQuality(s) !== 'low';
+
+/** Whether the preview plays now: it could, and the student has not paused it. The frameloop is "always" only then. */
+export const previewAnimates = (s: PreviewState) => previewCanPlay(s) && !s.previewPaused;
 
 /** index.html applies the saved theme before first paint; the store starts from what it set. */
 function readTheme(): Theme {
@@ -107,6 +133,8 @@ export const SCENE_UNAVAILABLE_ANNOUNCEMENT =
 export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, get) => {
   let nonce = 0;
   return {
+    screen: readScreen(),
+    previewPaused: read(PREVIEW_KEY) === 'paused',
     perfVisible: false,
     shortcutsOpen: false,
     theme: readTheme(),
@@ -124,6 +152,26 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     stance: readStance(),
     motionCuesVisible: readMotionCuesVisible(),
 
+    setScreen: (screen) => {
+      const s = get();
+      if (s.screen === screen) return;
+      // Leaving the game ends it, logged as quit when it was in play (ADR-45), before
+      // any landing below, so a trick in the air can no longer score in it.
+      if (s.screen === 'skate' && s.skate.phase !== 'off') s.quitSkate();
+      // A scrub gesture still open (its timeline is about to unmount) is committed, so its event is not lost.
+      get().commitScrub();
+      // A trick in the air lands now, as under reduced motion (ADR-6), so no
+      // screen inherits a flight it has no controls to finish.
+      if (inFlight(get())) get().land();
+      set({ screen, shortcutsOpen: false });
+      get().requestFocus({ kind: 'screen-heading' });
+    },
+    togglePreview: () => {
+      const previewPaused = !get().previewPaused;
+      save(PREVIEW_KEY, previewPaused ? 'paused' : 'on');
+      set({ previewPaused });
+      get().announce(previewPaused ? 'Preview paused.' : 'Preview playing.');
+    },
     togglePerf: () => set((s) => ({ perfVisible: !s.perfVisible })),
     setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
     toggleTheme: () => {

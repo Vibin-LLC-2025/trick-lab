@@ -34,6 +34,8 @@ let error: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   localStorage.clear();
+  // The store reads its screen from the hash when it is created: these are the lab's tests (ADR-45).
+  window.history.replaceState(null, '', '#/lab');
   document.documentElement.dataset.theme = 'dark';
   // React reports a caught error on console.error, the boundary on console.warn; keep the run quiet.
   error = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -70,7 +72,7 @@ describe('scene failure boundary', () => {
     expect(announcer()).toHaveTextContent(FAILED);
     // The rest of the app is still mounted and named.
     expect(screen.getByRole('region', { name: '3D skateboard view' })).toHaveAttribute('aria-describedby', 'scene-description');
-    expect(screen.getByRole('complementary', { name: 'Setup' })).toBeInTheDocument();
+    expect(screen.getByRole('main', { name: 'Setup' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Results' })).toBeInTheDocument();
 
     await popResolvesAtOnce(app, '1', 'kickflip');

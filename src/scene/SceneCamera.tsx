@@ -10,14 +10,24 @@ import { newResetTracker, placeCamera, takeReset } from './cameraPlacement';
 const C = ART.camera;
 const FRAME_POINTS = framingPoints(C.fit);
 
+/** A camera preset: the student's two (ADR-38) and the welcome screen's preview (ADR-45). */
+type ViewKey = CameraView | 'showcase';
+
+const preset = (key: ViewKey) => ({
+  target: new Vector3(...C.views[key].target),
+  home: new Vector3(...C.views[key].position),
+  targetArray: [...C.views[key].target] as [number, number, number],
+});
+
 /** Each preset's target and home position as vectors, built once (ADR-38). */
-const PRESETS: Record<CameraView, { target: Vector3; home: Vector3; targetArray: [number, number, number] }> = {
-  rider: { target: new Vector3(...C.views.rider.target), home: new Vector3(...C.views.rider.position), targetArray: [...C.views.rider.target] },
-  detail: { target: new Vector3(...C.views.detail.target), home: new Vector3(...C.views.detail.position), targetArray: [...C.views.detail.target] },
+const PRESETS: Record<ViewKey, ReturnType<typeof preset>> = {
+  rider: preset('rider'),
+  detail: preset('detail'),
+  showcase: preset('showcase'),
 };
 
 /** Distance at which the board's whole flight fits a stage of this aspect from this preset (ADR-18). */
-function useFitDistance(view: CameraView) {
+function useFitDistance(view: ViewKey) {
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   const V = C.views[view];
   const d = fitDistance({
@@ -40,7 +50,7 @@ function useFitDistance(view: CameraView) {
  * student's orbit. No easing in any mode, so reduced motion needs no special
  * case.
  */
-function FitAndReset({ distance, view }: { distance: number; view: CameraView }) {
+function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as { target: Vector3; update: () => void } | null;
   const invalidate = useThree((s) => s.invalidate);
@@ -66,14 +76,19 @@ function FitAndReset({ distance, view }: { distance: number; view: CameraView })
  * change, so the demand loop still renders while orbiting. maxDistance grows
  * with the fit so a narrow stage can still zoom out a little past the fit.
  * The orbit target is the chosen preset's (pan is off, so it never moves).
+ * On the welcome screen (ADR-45) the camera holds the preview's own preset
+ * and the orbit is off; the student's preset comes back with the lab or game.
  */
 export function SceneCamera() {
-  const view = useTrickStore((s) => s.cameraView);
+  const home = useTrickStore((s) => s.screen === 'home');
+  const chosen = useTrickStore((s) => s.cameraView);
+  const view: ViewKey = home ? 'showcase' : chosen;
   const distance = useFitDistance(view);
   return (
     <>
       <OrbitControls
         makeDefault
+        enabled={!home}
         target={PRESETS[view].targetArray}
         enablePan={false}
         enableDamping={false}

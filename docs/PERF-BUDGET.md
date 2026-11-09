@@ -21,7 +21,7 @@ The board budget is enforced on the committed GLB by `npm run assets:check`, whi
 
 ## What the app does to stay under it
 
-- `frameloop="demand"` except while `status === 'playing'`, when it is `"always"`. Landing calls `land()`, which flips the loop back to demand. Idle, paused and done cost zero frames; scrubbing and orbiting render one frame per change. The environment map and the GLB arriving each request one frame.
+- `frameloop="demand"` except while `status === 'playing'`, or while the welcome screen's preview plays (`previewAnimates`: home, motion allowed, a 3D view, Medium or High; ADR-45), when it is `"always"`. Landing calls `land()`, which flips the loop back to demand. Idle, paused and done cost zero frames; scrubbing and orbiting render one frame per change. The environment map and the GLB arriving each request one frame.
 - `gl={{ powerPreference: 'low-power', antialias: false }}` and DPR capped at 1.5.
 - The board GLB is one mesh per material (7 draw calls for 51 parts: 18 per truck, 8 bolts, 4 wheels, 3 deck surfaces), compressed with meshopt and quantized (ADR-12, ADR-13). The primitive board and the pad stay merged per material in `scene/resources.ts`.
 - The GLTF loader and the meshopt decoder are their own lazy chunk, fetched only on High (ADR-15). Board detail Low is the escape hatch back to the original scene cost.

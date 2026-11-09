@@ -13,6 +13,7 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 ## Features
 
 - **Physics you can see.** Airtime, height, flip and shove come from a small, pure, unit-tested model. Change one slider and the result changes for a visible reason.
+- **Two ways in.** The app opens on a welcome screen with a live preview of the board doing tricks: play a game of SKATE, or practice in the lab. Each has its own screen, and the browser's back button moves between them.
 - **A game of SKATE.** Play the computer by the real rules: a coin flip for who starts, call your trick before you set it, copy or take a letter, two tries on your last letter, and no trick set twice. The computer goes through the same physics as you, missing its aim more on Easy and less on Hard. A trick guide says which way to flick and scoop, never the numbers.
 - **Real trick recognition.** 15 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Seven presets, seven objectives, scored as you go.
 - **A rider, not a floating board.** Shoes and legs follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails.

@@ -2,10 +2,11 @@ import { Suspense, lazy, useEffect } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { describeScene } from '../sim/format';
 import { PRESETS } from '../sim/tricks';
-import { useTrickStore } from '../store';
+import { previewCanPlay, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
 import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
 import { FootMotion } from './FootMotion';
+import { Home } from './Home';
 import { Inputs } from './Inputs';
 import { Objectives } from './Objectives';
 import { PerfBadge } from './PerfBadge';
@@ -15,6 +16,8 @@ import { SceneBoundary } from './SceneBoundary';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Skate } from './Skate';
 import { Telemetry } from './Telemetry';
+import { TopBar } from './TopBar';
+import { PreviewToggle } from './Utilities';
 import { ViewPanel } from './ViewPanel';
 
 // Code-split three.js so the accessible DOM UI paints before the 3D chunk loads.
@@ -38,6 +41,21 @@ function spaceIsNative(el: Element | null) {
 
 const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
 
+/**
+ * The keys each screen answers to (ADR-45), each backed by a DOM control on
+ * that screen. The theme and the shortcuts dialog work everywhere. The game
+ * adds Space and the speed keys but not the presets (off in a game) or
+ * Reset (it would end the game). The lab has them all, and the perf badge,
+ * whose switch is in its View panel. The welcome screen has nothing to pop.
+ */
+const EVERYWHERE = ['t', 'T', '?'];
+const PLAY = [' ', 's', 'S', '[', ']'];
+export const SCREEN_KEYS: Record<Screen, ReadonlySet<string>> = {
+  home: new Set(EVERYWHERE),
+  skate: new Set([...EVERYWHERE, ...PLAY]),
+  lab: new Set([...EVERYWHERE, ...PLAY, 'p', 'P', 'r', 'R', ...PRESET_BY_KEY.keys()]),
+};
+
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,6 +63,7 @@ function useGlobalShortcuts() {
       // The modal dialog owns the keyboard while it is open.
       if (s.shortcutsOpen) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (!SCREEN_KEYS[s.screen].has(e.key)) return;
       const target = document.activeElement;
       if (isTyping(target)) return;
 
@@ -75,7 +94,41 @@ function useFocusRequests() {
   useEffect(() => {
     if (request?.kind === 'setup-heading') document.getElementById('setup-heading')?.focus();
     else if (request?.kind === 'skate-heading') document.getElementById('skate-heading')?.focus();
+    else if (request?.kind === 'screen-heading') document.getElementById('screen-heading')?.focus();
   }, [request]);
+}
+
+/**
+ * The screen and the URL hash follow each other (ADR-45): a screen change
+ * pushes a history entry, and the back and forward buttons, or an edited
+ * hash, change the screen. The store read the hash it started on.
+ */
+function useScreenRoute() {
+  const screen = useTrickStore((s) => s.screen);
+  useEffect(() => {
+    const follow = () => {
+      const screen = screenFromHash(window.location.hash);
+      useTrickStore.getState().setScreen(screen);
+      // An unknown hash means home: tidy it in place, even when home was already showing.
+      if (window.location.hash !== screenHash(screen)) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${screenHash(screen)}`);
+      }
+    };
+    window.addEventListener('popstate', follow);
+    window.addEventListener('hashchange', follow);
+    return () => {
+      window.removeEventListener('popstate', follow);
+      window.removeEventListener('hashchange', follow);
+    };
+  }, []);
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash === screenHash(screen)) return;
+    const url = `${window.location.pathname}${window.location.search}${screenHash(screen)}`;
+    // A hash that already means this screen (an unknown one is home) is tidied in place: no extra Back step.
+    if (screenFromHash(hash) === screen) window.history.replaceState(null, '', url);
+    else window.history.pushState(null, '', url);
+  }, [screen]);
 }
 
 /**
@@ -88,8 +141,12 @@ function useReducedMotionSync() {
   useEffect(() => setReducedMotion(reduced), [reduced, setReducedMotion]);
 }
 
+/** The preview's text equivalent on the welcome screen (ADR-45); the stage describes the student's board everywhere else. */
+export const PREVIEW_DESCRIPTION =
+  'Preview: a rider on a skateboard doing a kickflip, a 360 flip and other tricks in slow motion, one after another.';
+
 function SceneDescription() {
-  const text = useTrickStore(describeScene);
+  const text = useTrickStore((s) => (s.screen === 'home' ? PREVIEW_DESCRIPTION : describeScene(s)));
   return (
     <p id="scene-description" className="visually-hidden">
       {text}
@@ -97,22 +154,47 @@ function SceneDescription() {
   );
 }
 
+/**
+ * Three screens (ADR-45): the welcome screen, the game of SKATE and the lab.
+ * Every child below keeps its slot whatever the screen (false holds the
+ * place), so the stage, and with it the 3D view, is never remounted when the
+ * screen changes: only the layout around it does (data-screen in app.css).
+ */
 export function App() {
   useGlobalShortcuts();
   useFocusRequests();
   useReducedMotionSync();
+  useScreenRoute();
+  const screen = useTrickStore((s) => s.screen);
+  const canPause = useTrickStore(previewCanPlay);
 
   return (
     <>
-      <div className="app">
-        <aside className="app__setup" aria-label="Setup">
-          <h1 className="visually-hidden">Trick Lab: land the trick</h1>
-          <Presets />
-          <Inputs />
-          <Playback />
-          <ViewPanel />
-        </aside>
-        <section className="app__stage" aria-label="3D skateboard view" aria-describedby="scene-description">
+      <div className="app" data-screen={screen}>
+        {screen !== 'home' && <TopBar screen={screen} />}
+        {screen === 'home' && <Home />}
+        {/* Each screen's controls are its one main landmark; the stage and the results are beside them. */}
+        {screen === 'lab' && (
+          <main className="app__setup" aria-label="Setup">
+            <Presets />
+            <Inputs />
+            <Playback />
+            <ViewPanel />
+          </main>
+        )}
+        {screen === 'skate' && (
+          <main className="app__play" aria-label="Game">
+            <Skate />
+            <Telemetry />
+            <Inputs />
+            <Playback />
+          </main>
+        )}
+        <section
+          className="app__stage"
+          aria-label={screen === 'home' ? 'Preview' : '3D skateboard view'}
+          aria-describedby="scene-description"
+        >
           <SceneDescription />
           {/* Suspense covers loading; SceneBoundary covers failure, so a broken 3D view never takes the controls with it. */}
           <SceneBoundary>
@@ -121,14 +203,16 @@ export function App() {
             </Suspense>
           </SceneBoundary>
           <PerfBadge />
+          {canPause && <PreviewToggle />}
         </section>
-        <aside className="app__results" aria-label="Results">
-          <Skate />
-          <Telemetry />
-          <FootMotion />
-          <Objectives />
-          <EventLog />
-        </aside>
+        {screen === 'lab' && (
+          <aside className="app__results" aria-label="Results">
+            <Telemetry />
+            <FootMotion />
+            <Objectives />
+            <EventLog />
+          </aside>
+        )}
       </div>
       <Announcer />
       <ShortcutsDialog />

@@ -104,6 +104,11 @@ Assessment objectives (checklist, scored on the fly):
 Bonus text (not an objective): land any preset at pop 0.20 m or lower by
 raising flick/scoop yourself.
 
+Screens (2026-11-08, ADR-45): the app opens on a welcome screen with a live
+preview of the board doing tricks, the title, a short description and two
+choices, play a game of SKATE or practice in the lab. Each mode is its own
+screen under a top bar with Home; the URL hash follows the screen.
+
 Game of SKATE (added 2026-11-06, ADR-43; real-game rules 2026-11-08,
 ADR-44): an optional mode against the computer. A coin flip picks who sets
 first. The setter calls a trick, then tries it: landed exactly as called, the
@@ -253,6 +258,8 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .objectives, .objective, .objective--done, .objective__check, .objective__text
 .skate__score, .skate__row, .skate__who, .skate__letters, .skate__letter, .skate__letter--got, .skate__call, .skate__actions (game of SKATE, ADR-43)
 .skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
+.app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)
+.home, .home__eyebrow, .home__title, .home__lede, .home__choices, .home__utilities, .home__hint, .choice, .choice--primary, .choice__title, .choice__text, .preview-toggle (welcome screen, ADR-45)
 .eventlog, .eventlog__row, .eventlog__t, .eventlog__type
 .perf-badge
 .visually-hidden

@@ -4,7 +4,7 @@ import { Matrix4, MathUtils, Vector3, type Bone, type Vector2, type Vector4, typ
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
-import { useTrickStore } from '../store';
+import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { setBoardRotation } from './boardPose';
@@ -15,6 +15,7 @@ import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES } from './resources';
+import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
 const CUES = ART.motionCues;
@@ -93,6 +94,11 @@ function applySegment(b: Bone, s: Segment) {
  * idle, so moving a slider moves the stance. A remount (a tier change
  * rebuilds the Canvas) continues from the playhead, so the board never jumps
  * back to the last 10 Hz commit.
+ *
+ * On the welcome screen (ADR-45) the preview's own clock (showcase.ts) poses
+ * the board, feet and legs from preset flights on a loop instead, and the
+ * store's flight is left alone: nothing is logged or scored. Under reduced
+ * motion, on the Low tier or with no 3D view it poses one still frame.
  */
 export function FlightDriver({ shadows }: { shadows: boolean }) {
   const board = useRef<Group>(null);
@@ -105,6 +111,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const legs = useRef<LegRig>(null);
   const legsPose = useRef<LegsPose>(newLegsPose());
   const clock = useRef(newFlightClock());
+  const show = useRef(newShowcaseClock());
+  const home = useTrickStore((s) => s.screen === 'home');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
@@ -117,10 +125,28 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   useFrame((_state, delta) => {
     const s = useTrickStore.getState();
     const c = clock.current;
-    // Advances the playhead while playing; lands or commits progress through the store's actions.
-    tickFlightClock(c, head, s, delta);
+    // The flight on screen and how far through it: the preview's on the welcome screen, the store's elsewhere.
+    let flight = s.flight;
+    let progress: number;
+    if (s.screen === 'home') {
+      const sc = show.current;
+      if (previewAnimates(s)) {
+        stepShowcase(sc, delta);
+        flight = showcaseFlight(sc);
+        progress = showcaseProgress(sc);
+      } else {
+        flight = SHOWCASE_STILL.flight;
+        progress = SHOWCASE_STILL.progress;
+      }
+    } else {
+      // Advances the playhead while playing; lands or commits progress through the store's actions.
+      tickFlightClock(c, head, s, delta);
+      progress = c.progress;
+    }
+    // The preview's flight carries its own inputs; elsewhere the store state is the inputs object. No allocation either way.
+    const inputs = s.screen === 'home' && flight ? flight.inputs : s;
 
-    const p = writePose(pose.current, s.flight, c.progress);
+    const p = writePose(pose.current, flight, progress);
     const g = board.current;
     if (g) {
       g.position.y = REST_Y + p.y;
@@ -133,14 +159,14 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     const feetShown = front.current !== null || back.current !== null;
     if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
-      const f = writeFeetPose(feet.current, s, s.flight, c.progress, s.stance);
+      const f = writeFeetPose(feet.current, inputs, flight, progress, s.stance);
       const regular = s.stance === 'regular';
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
       // The legs (ADR-37) reach the shoes just posed; mounted only with the feet.
       const rig = legs.current;
       if (rig) {
-        const l = writeLegsPose(legsPose.current, f, s.flight, c.progress, s, s.stance);
+        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance);
         applySegment(rig.frontThigh, l.front.thigh);
         applySegment(rig.frontShank, l.front.shank);
         applySegment(rig.backThigh, l.back.thigh);
@@ -148,12 +174,12 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
-    pathProgress.value = s.flight ? c.progress : 0;
+    pathProgress.value = flight ? progress : 0;
     // Motion cues (ADR-26) are the plan: full before the pop, gone early in
     // the flight. They stay gone at the landing (the deck has turned, so an
     // arrow riding it would point the wrong way) and come back on Reset or
     // when the timeline is scrubbed back to the start.
-    mat.motionCues.opacity = CUES.opacity * (s.flight ? 1 - MathUtils.smoothstep(c.progress, 0, CUES.fadeBy) : 1);
+    mat.motionCues.opacity = CUES.opacity * (flight ? 1 - MathUtils.smoothstep(progress, 0, CUES.fadeBy) : 1);
     // Fully faded, skip the draw call (three skips a mesh whose material is not visible).
     mat.motionCues.visible = mat.motionCues.opacity > 0;
     // Medium and Low (ADR-38): the board's soft and contact shadows and,
@@ -181,12 +207,13 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       {!shadows && (
         <instancedMesh ref={shadow} args={[geo.shadow, mat.shadow, SHADOW_INSTANCES]} renderOrder={1} frustumCulled={false} />
       )}
+      {/* The cues and trails are a plan for the student's inputs, so the welcome screen's preview has neither. */}
       <Board ref={board} shadows={shadows}>
-        {motionCuesVisible && <MotionCues />}
+        {motionCuesVisible && !home && <MotionCues />}
       </Board>
       {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
       {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
-      {footPathsVisible && <FootPaths />}
+      {footPathsVisible && !home && <FootPaths />}
     </>
   );
 }

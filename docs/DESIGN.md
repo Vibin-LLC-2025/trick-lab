@@ -673,3 +673,25 @@ The first panel of the results column, titled "Game of SKATE", with the session'
 - **Pop:** the label changes to "Computer's go" on the computer's turn; nothing else about the button changes.
 - **Call picker (2026-11-08, ADR-44):** on the student's set turn, a `.field.skate__pick` with the label "Call your trick" over a native `select.skate__select` (36 px tall, full width, 1 px `--color-line-strong`, `--radius-sm`). The 15 settable tricks sit in three `optgroup`s (Flips, Shove-its, Flip and shove); one already set this game is a disabled option reading "(already set)".
 - **Trick guide (2026-11-08, ADR-44):** when a trick is in play for the student (to copy, or called), `.skate__guide`: a 1 px `--color-line` box with "How to <trick>" in `.skate__guide-title` (13 px semibold), a `dl.skate__guide-list` of Flick and Scoop (muted `dt` in a max-content column), and the pop tip in `.panel__note`. Words only: never a slider value.
+
+## 12. Screens and the welcome screen (2026-11-08, ADR-45)
+
+The app opens on a welcome screen instead of every control at once. Three screens share one grid, chosen by `data-screen` on `.app`; the stage keeps its place in the DOM so the 3D view never reloads.
+
+### 12.1 Welcome screen (`.home`)
+
+- **Layout.** Two columns: the text column (`--col-intro`, 440 px, a `--color-surface` card with the column border and radius) and the preview stage filling the rest. At 960 px and below the stage sits on top (`clamp(220px, 62.5vw, 560px)` tall) and the text card under it.
+- **Text.** `.home__eyebrow` "A skateboard physics lab" (12 px bold, uppercase, 0.08em tracking, `--color-accent`); the h1 `.home__title` "Trick Lab" at `--text-display` (36 to 52 px, bold, 1.05 leading, -0.02em); `.home__lede` at 15 px in `--color-muted`, at most 36em wide.
+- **Choices.** `.home__choices` stacks two full-width `.choice` buttons, at least 88 px tall, 8 px radius, 16 px padding, each with `.choice__title` (`--text-xl`, 22 px bold) over `.choice__text` (13 px). The game is first and filled (`.choice--primary`: `--color-accent` with `--color-accent-fg` text, 6.56 light and 7.39 dark); the lab is outlined (`--color-surface-2`, 1 px `--color-line-strong`, muted text, the border turns accent on hover). Each button is named by its title and described by its text.
+- **Utilities.** `.home__utilities` under the choices: `.home__hint` "Works with a keyboard and a screen reader." (12 px muted, its own line), then Keyboard shortcuts (`.btn--ghost.btn--sm`) and the Light theme `.toggle`.
+- **Preview.** Presets on a loop at half speed from the `showcase` camera, orbit off, no motion cues or foot trails. A still kickflip at 45 percent under reduced motion, on Low, with no 3D view and while paused. Where it can play, `.btn.btn--sm.preview-toggle` ("Pause preview" or "Play preview") sits 12 px in from the stage's bottom-left corner on `--color-surface` with `--shadow-sm`, so it reads against the concrete.
+
+### 12.2 Top bar (`.topbar`)
+
+Over the game and the lab: a 44 px `--color-surface` strip with the column border and radius. Home (`.btn--ghost.btn--sm.topbar__home`, with a left arrow) on the left, the screen's h1 `.topbar__title` (15 px bold) taking the rest, and `.topbar__actions`: Shortcuts (ghost, small), the Light theme `.toggle` (moved here from the lab's View panel), and a `nav` named "Modes" with one ghost button across to the other mode. It wraps onto a second line on a phone.
+
+### 12.3 Screen layouts
+
+- **Lab:** the top bar over the three columns of section 9, unchanged inside.
+- **Game:** the top bar over the stage and one game column (`.app__play`, `--col-play` 360 px, the same surface as the side columns). Its content is redesigned in the next change.
+- **Below 960 px:** everything stacks: the top bar, the stage, then the columns.

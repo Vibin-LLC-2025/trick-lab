@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, type DirectionalLight } from 'three';
-import { useTrickStore } from '../store';
+import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -76,7 +76,8 @@ function onCreated(state: RootState) {
 /**
  * The 3D view. Decorative for assistive tech: aria-hidden, every action has a
  * DOM control, and #scene-description carries the board state as text.
- * frameloop is "always" only while a trick is playing, "demand" otherwise.
+ * frameloop is "always" only while a trick is playing or the welcome screen's
+ * preview plays (ADR-45), "demand" otherwise.
  *
  * The Canvas is keyed on the tier in use (ADR-16): antialias and
  * powerPreference are WebGL context options, so a tier change remounts it.
@@ -85,7 +86,7 @@ function onCreated(state: RootState) {
  */
 export default function TrickScene() {
   useEffect(() => () => disposeSharedResources(), []);
-  const playing = useTrickStore((s) => s.status === 'playing');
+  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s));
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);

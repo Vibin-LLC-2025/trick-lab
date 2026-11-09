@@ -30,7 +30,13 @@ export interface TrickEvent {
 export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
 /** One of SPEEDS in store/speed.ts. */
 export type PlaybackRate = number;
-export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' };
+export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' };
+/**
+ * Which screen is showing (ADR-45): the welcome screen with the two choices,
+ * the game of SKATE, or the practice lab. Mirrored in the URL hash, so the
+ * browser's back button and a bookmark work.
+ */
+export type Screen = 'home' | 'skate' | 'lab';
 export type Theme = 'dark' | 'light';
 /**
  * Quality tier (ADR-16). High: the detailed board, shoes and shadows for a
@@ -104,6 +110,10 @@ export interface AssessmentSlice {
 }
 
 export interface UiSlice {
+  /** The screen showing (ADR-45). Read from the URL hash at start, default home. Not logged, not reset. */
+  screen: Screen;
+  /** The welcome screen's preview is paused (WCAG 2.2.2): it shows the still pose. Persisted under trick-lab.preview. Not logged. */
+  previewPaused: boolean;
   perfVisible: boolean;
   shortcutsOpen: boolean;
   theme: Theme;
@@ -133,6 +143,14 @@ export interface UiSlice {
   stance: Stance;
   /** Motion cues: arrows on the deck showing how each shoe will move against the board for the set inputs (ADR-26). Persisted under trick-lab.motion-cues, default on. Not logged. */
   motionCuesVisible: boolean;
+  /**
+   * Goes to a screen (ADR-45). Leaving the game ends it (a game in play is
+   * logged as quit), a trick in the air lands at once, as under reduced
+   * motion, and focus moves to the new screen's heading. Not logged.
+   */
+  setScreen: (screen: Screen) => void;
+  /** Pauses or plays the welcome screen's preview, persisted and announced. */
+  togglePreview: () => void;
   togglePerf: () => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleTheme: () => void;

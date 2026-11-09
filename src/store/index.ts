@@ -10,10 +10,11 @@ import type { TrickState } from './types';
 export { SPEEDS, speedIndex, speedLabel, speedText } from './speed';
 export { animates } from './playback';
 export { effectiveQuality } from './quality';
+export { previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
 
 export type { Random } from './skate';
-export type { TrickState, TrickEvent, EventType, FocusTarget, Theme, Quality, Stance, CameraView, PlaybackStatus, PlaybackRate } from './types';
+export type { TrickState, TrickEvent, EventType, FocusTarget, Screen, Theme, Quality, Stance, CameraView, PlaybackStatus, PlaybackRate } from './types';
 
 /**
  * Factory so tests can inject a deterministic clock and the computer's random

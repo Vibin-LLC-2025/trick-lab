@@ -1,4 +1,5 @@
 import { effectiveQuality, useTrickStore, type CameraView, type Quality, type Stance } from '../store';
+import { Toggle } from './Toggle';
 
 const CAMERA_OPTIONS: { value: CameraView; label: string }[] = [
   { value: 'rider', label: 'Rider' },
@@ -128,45 +129,16 @@ function QualityControl() {
  * `name` is the accessible name when the visible label is shortened; it
  * always contains the visible label (WCAG 2.5.3, label in name).
  */
-function Toggle({
-  label,
-  name,
-  pressed,
-  keys,
-  onClick,
-}: {
-  label: string;
-  name?: string;
-  pressed: boolean;
-  keys?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`toggle${pressed ? ' toggle--on' : ''}`}
-      aria-pressed={pressed}
-      aria-label={name}
-      aria-keyshortcuts={keys}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
-
 /**
- * Camera and shortcuts in the header, then what the scene shows (feet, legs
- * while the feet are shown, trails, motion cues), the theme and the perf badge as switches, then
+ * Reset view in the header, then what the scene shows (feet, legs
+ * while the feet are shown, trails, motion cues) and the perf badge as switches (the theme and the
+ * shortcuts moved to the top bar, ADR-45), then
  * the camera preset (ADR-38), stance and quality (DESIGN.md 9). Each is also reachable without a pointer.
  */
 export function ViewPanel() {
-  const theme = useTrickStore((s) => s.theme);
   const perfVisible = useTrickStore((s) => s.perfVisible);
-  const toggleTheme = useTrickStore((s) => s.toggleTheme);
   const togglePerf = useTrickStore((s) => s.togglePerf);
   const resetView = useTrickStore((s) => s.resetView);
-  const setShortcutsOpen = useTrickStore((s) => s.setShortcutsOpen);
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const toggleFeet = useTrickStore((s) => s.toggleFeet);
   const legsVisible = useTrickStore((s) => s.legsVisible);
@@ -186,15 +158,6 @@ export function ViewPanel() {
           <button type="button" className="btn btn--ghost btn--sm" onClick={resetView}>
             Reset view
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            aria-haspopup="dialog"
-            aria-keyshortcuts="?"
-            onClick={() => setShortcutsOpen(true)}
-          >
-            Shortcuts
-          </button>
         </div>
       </div>
       <div className="view-panel__toggles">
@@ -203,7 +166,6 @@ export function ViewPanel() {
         {feetVisible && <Toggle label="Legs" name="Show legs" pressed={legsVisible} onClick={toggleLegs} />}
         <Toggle label="Foot trails" name="Show foot trails" pressed={footPathsVisible} onClick={toggleFootPaths} />
         <Toggle label="Motion cues" name="Show motion cues" pressed={motionCuesVisible} onClick={toggleMotionCues} />
-        <Toggle label="Light theme" pressed={theme === 'light'} keys="t" onClick={toggleTheme} />
         <Toggle label="Perf badge" pressed={perfVisible} keys="p" onClick={togglePerf} />
       </div>
       <CameraControl />

@@ -37,6 +37,8 @@ async function setup() {
 
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
+  // These are the lab's tests (the welcome screen and the game have their own, ADR-45).
+  useTrickStore.setState({ screen: 'lab' });
   document.documentElement.dataset.theme = 'dark';
   localStorage.clear();
 });

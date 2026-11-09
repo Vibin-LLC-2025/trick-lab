@@ -96,9 +96,7 @@ export const createSkateSlice =
       if (skateActive(s.skate)) {
         // A flight still in the air lands as usual but scores nothing (scoreSkate ignores it once the game is off).
         s.log('skate.ended', { winner: null, reason: 'quit', ...score(s.skate) });
-        s.announce('Game of SKATE ended. Back to practice: presets are on again.');
-      } else {
-        s.announce('Back to practice: presets are on again.');
+        s.announce('Game of SKATE ended.');
       }
       set({ skate: newSkateGame(s.skate.level), skateMessage: '' });
       s.requestFocus({ kind: 'skate-heading' });
