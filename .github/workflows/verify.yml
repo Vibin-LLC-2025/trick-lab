@@ -18,5 +18,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Typecheck, lint, tests, then the GLB budget check.
+      # Typecheck, lint, tests, the GLB budget check, then a build and its download budget.
       - run: npm run verify

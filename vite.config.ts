@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   // three.js alone is most of the lazy TrickScene chunk; see docs/PERF-BUDGET.md.
-  build: { chunkSizeWarningLimit: 1000 },
+  // The manifest lists every chunk and its imports for the download budget (npm run bundle:check).
+  build: { chunkSizeWarningLimit: 1000, manifest: true },
   test: {
     environment: 'jsdom',
     globals: true,

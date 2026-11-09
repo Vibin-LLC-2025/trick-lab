@@ -54,7 +54,7 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server |
-| `npm run verify` | Typecheck, lint, tests and the asset budget check (CI runs this) |
+| `npm run verify` | Typecheck, lint, tests, the asset budget check, then a production build and the download budget check (CI runs this) |
 | `npm run build` / `npm run preview` | Production build to `dist/`, then serve it |
 | `npm run assets` | Rebuild the four GLBs in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |

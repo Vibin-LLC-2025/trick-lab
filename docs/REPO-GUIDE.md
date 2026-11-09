@@ -82,4 +82,4 @@ Tests sit next to the code they test, named `*.test.ts` or `*.test.tsx`.
 | `npm install` | Installs the dependencies (once, after cloning) |
 | `npm run dev` | Runs the app at http://localhost:5173 while you edit (updates live) |
 | `npm run build` then `npm run preview` | Builds the real website and serves it at http://localhost:4173. Use this for performance checks |
-| `npm run verify` | Runs every check: types, code style, tests, board budget. Run it before committing |
+| `npm run verify` | Runs every check: types, code style, tests, board budget, then a production build and its download budget. Run it before committing |
