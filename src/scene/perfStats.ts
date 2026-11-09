@@ -1,4 +1,4 @@
-import type { TrickFrames } from './flightPace';
+import { newTrickFrames, type TrickFrames } from './flightPace';
 
 // Written by PerfProbe inside the render loop, read by the DOM PerfBadge on a
 // timer. A plain mutable object on purpose: putting per-frame numbers in the
@@ -23,10 +23,10 @@ export const perfStats = {
 export const TRICK_FRAMES_MAX = 900;
 
 /**
- * The frame intervals of the flight playing now, in milliseconds (ADR-59):
- * PerfProbe writes one per frame while a flight plays (recordFrame in
- * flightPace.ts), into this array made once (no per-frame allocation),
- * starting afresh when the store's flightId changes (a pause and resume keep
- * the record). Read once per landing by flightPace.
+ * The frame intervals of playing flights, in milliseconds (ADR-59): PerfProbe
+ * writes one per frame while a flight plays (recordFrame in flightPace.ts),
+ * into this array made once (no per-frame allocation). A pool: short flights
+ * add up until it covers enough time to judge, read at a landing by
+ * flightPace. Emptied when a Canvas (a tier) mounts.
  */
-export const trickFrames: TrickFrames = { intervals: new Float32Array(TRICK_FRAMES_MAX), count: 0, flightId: -1, wasPlaying: false };
+export const trickFrames: TrickFrames = newTrickFrames(TRICK_FRAMES_MAX);

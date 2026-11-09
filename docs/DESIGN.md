@@ -802,4 +802,4 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 
 ### 14.9 Automatic step-down (ADR-59)
 
-No new control and no new class: when the first three judged tricks on the device's own tier (each with at least 250 ms of frames) run choppy (two over 40 ms a frame), the tier drops one step and the landing's announcement says so ("Tricks were running slowly on this device, so quality is now medium. You can change it in View."). View's Quality control shows the new tier; picking a tier there turns the step-down off for good.
+No new control and no new class: when the first three samples on the device's own tier (each at least 250 ms of trick frames: one trick, or several short ones) run choppy (two over 40 ms a frame), the tier drops one step and the landing's announcement says so ("Tricks were running slowly on this device, so quality is now medium. You can change it in View."). View's Quality control shows the new tier; picking a tier there turns the step-down off for good.

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTrickStore } from '../store';
-import { flightPace, recordFrame } from './flightPace';
+import { flightPace, noteFramesStoreChange, recordFrame } from './flightPace';
 import { frame, perfStats, trickFrames } from './perfStats';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
 
@@ -14,14 +14,20 @@ import { drawCallsOf, isNodeRenderer } from './rendererKind';
  * frame; its draw calls are `info.render.drawCalls` (rendererKind.ts).
  *
  * While a flight plays it also records each frame's interval into
- * `trickFrames` (one array write, ADR-59), afresh for each new flight; the
- * store reads that flight's pace when it lands (flightPace, registered here)
- * and decides whether to step down.
+ * `trickFrames` (one array write, ADR-59), a pool that short flights add to;
+ * the store reads the pace at a landing (flightPace, registered here) and
+ * decides whether to step down. A playback change in the store or a hidden
+ * tab ends the run of frames, so the frame that spans it is not recorded.
  */
 export function PerfProbe() {
   useEffect(() => {
+    // A new Canvas is a new tier: its evidence starts empty.
+    trickFrames.count = 0;
+    trickFrames.flightId = -1;
+    trickFrames.wasPlaying = false;
     const { setPaceSource } = useTrickStore.getState();
     setPaceSource((flightId) => flightPace(trickFrames, flightId));
+    const stopWatching = useTrickStore.subscribe((s, prev) => noteFramesStoreChange(trickFrames, s, prev));
     // A hidden tab draws nothing; the frame after it spans the gap, so it is left out.
     const onVisibility = () => {
       trickFrames.wasPlaying = false;
@@ -29,6 +35,7 @@ export function PerfProbe() {
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       setPaceSource(null);
+      stopWatching();
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);

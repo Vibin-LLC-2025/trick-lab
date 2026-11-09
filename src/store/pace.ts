@@ -6,14 +6,18 @@
 import type { Quality } from './types';
 
 export const PACE = {
-  /** Tricks judged on a tier: its first few that drew enough frames. */
+  /** Samples judged on a tier: its first few. */
   tricks: 3,
   /**
-   * A trick is judged only if its recorded frames cover this much time, in at
-   * least `minIntervals` intervals: a pop resolved at once (reduced motion)
-   * or a scrub records none. By time, not a frame count, so a slow device
-   * is judged too: a 0.53 s kickflip at 20 frames a second draws about 10
-   * (review of Phase D, 2026-11-09: a 12-frame minimum let it go unjudged).
+   * A sample is the frames of playing flights covering at least this much
+   * time, in at least `minIntervals` intervals: one trick, or several short
+   * ones pooled (flightPace.ts), judged at the landing that completes it. A
+   * pop resolved at once (reduced motion) or a scrub records nothing. By
+   * time, not a frame count, and pooled, so a slow device is judged whatever
+   * the trick and speed: a 0.53 s kickflip at 20 frames a second draws about
+   * 10 intervals, a low pop at 2x at 10 frames a second one (reviews of
+   * Phase D, 2026-11-09: a 12-frame, then a per-flight 250 ms, minimum let
+   * them go unjudged).
    */
   minCoveredMs: 250,
   minIntervals: 2,
@@ -54,5 +58,5 @@ export function trickPace(intervals: ArrayLike<number>, count: number): number |
   return kept.length % 2 ? kept[mid]! : (kept[mid - 1]! + kept[mid]!) / 2;
 }
 
-/** Whether a tier's judged tricks ran choppy: at least `choppyOf` of them over `choppyMs`. */
+/** Whether a tier's judged samples ran choppy: at least `choppyOf` of them over `choppyMs`. */
 export const ranChoppy = (paces: readonly number[]) => paces.filter((ms) => ms > PACE.choppyMs).length >= PACE.choppyOf;
