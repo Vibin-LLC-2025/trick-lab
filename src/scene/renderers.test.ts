@@ -4,10 +4,10 @@
 // twin for the renderer in use. The renderers themselves need a GPU, so they
 // are checked in the browser (docs/PERF-BUDGET.md); here, the wiring.
 import { describe, expect, it } from 'vitest';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
 import { ShaderMaterial } from 'three';
 import { QUALITY } from './artDirection';
-import { footPathNodeMaterial, shadowNodeMaterial } from './nodeRenderer';
+import { footPathNodeMaterial, legsNodeMaterial, shadowNodeMaterial } from './nodeRenderer';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
 import { mat, setNodeMaterials, shaderMat, uniforms } from './resources';
 
@@ -54,15 +54,29 @@ describe('the shader materials and their TSL twins', () => {
     expect(shadow.toneMapped).toBe(true);
   });
 
+  it('builds the legs twin opaque, with the dither as its alpha test and a shadow mask (ADR-60)', () => {
+    const legs = legsNodeMaterial();
+    expect(legs).toBeInstanceOf(MeshStandardNodeMaterial);
+    expect(legs.transparent).toBe(false);
+    expect(legs.depthWrite).toBe(true);
+    expect(legs.vertexColors).toBe(true);
+    expect(legs.roughness).toBe(mat.legs.roughness);
+    expect(legs.alphaTestNode).toBeTruthy();
+    expect(legs.maskShadowNode).toBeTruthy();
+  });
+
   it('picks the GLSL material on WebGLRenderer and the twin on WebGPURenderer, once one is registered', () => {
     // Before a WebGPURenderer has registered its twins, the GLSL one is all there is.
     expect(shaderMat('footPath', false)).toBe(mat.footPath);
     expect(shaderMat('footPath', true)).toBe(mat.footPath);
     const path = footPathNodeMaterial();
     const shadow = shadowNodeMaterial();
-    setNodeMaterials({ footPath: path, shadow });
+    const legs = legsNodeMaterial();
+    setNodeMaterials({ footPath: path, shadow, legs });
     expect(shaderMat('footPath', true)).toBe(path);
     expect(shaderMat('shadow', true)).toBe(shadow);
     expect(shaderMat('shadow', false)).toBe(mat.shadow);
+    expect(shaderMat('legs', true)).toBe(legs);
+    expect(shaderMat('legs', false)).toBe(mat.legs);
   });
 });

@@ -538,11 +538,11 @@ The rider's lower legs come out of the shoe collars and the thighs dissolve towa
 
 | Part | Shape | Colour (sRGB) |
 | --- | --- | --- |
-| Thigh | Tapered capsule, hip radius 0.085 to knee 0.062 (slightly baggy trousers); opaque from the knee to 0.85 of its length, clear from 0.35 toward the hip (vertex alpha, no depth write) | trouser `#3b3e44` |
+| Thigh | Tapered capsule, hip radius 0.085 to knee 0.062 (slightly baggy trousers); opaque from the knee to 0.85 of its length, clear from 0.35 toward the hip (vertex alpha, drawn as a 4 x 4 screen-door dither since ADR-60) | trouser `#3b3e44` |
 | Shank | Tapered capsule, knee 0.054 (inside the thigh's knee cap), calf 0.056 at 0.3 of its length, hem 0.054 | trouser `#3b3e44` |
 | Sock | From the hem, 4.5 cm above the ankle joint, a step in to 0.036, 0.034 at the ankle, capped inside the shoe (about 3 cm shows above the collar) | sock `#d9d5cb` |
 
-One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are the rider's (`LEG` in src/sim/legs.ts: thigh 0.43, shank 0.42). Two draw calls for both legs on every tier; on High the shanks cast shadows like the shoes and the thighs do not. From the rider's view the thighs point toward the camera and stay behind the knees, so the board and the shoes stay readable at the catch; the low side view shows the crouch, the tuck, the reach for the catch and the bent knees at the landing. `#scene-description` adds one sentence after the feet: "Legs crouched, knees bent, ready to pop.", "Knees tucked up in the air.", "Legs reach down to catch the board." (a bail: "Legs reach down beside the board."), "Knees bent, absorbing the landing.".
+One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are the rider's (`LEG` in src/sim/legs.ts: thigh 0.43, shank 0.42). One draw call for both legs on every tier (two before ADR-60); on High the shanks cast shadows like the shoes and the thighs do not. From the rider's view the thighs point toward the camera and stay behind the knees, so the board and the shoes stay readable at the catch; the low side view shows the crouch, the tuck, the reach for the catch and the bent knees at the landing. `#scene-description` adds one sentence after the feet: "Legs crouched, knees bent, ready to pop.", "Knees tucked up in the air.", "Legs reach down to catch the board." (a bail: "Legs reach down beside the board."), "Knees bent, absorbing the landing.".
 
 ### 8.9 Camera control (2026-11-05, ADR-38)
 

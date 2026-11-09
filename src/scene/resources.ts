@@ -362,19 +362,20 @@ function cap(r: number, y0: number, dir: 1 | -1, color: string, alpha: number): 
 }
 
 /**
- * One rigid leg segment for the skinned leg meshes (ADR-37): a tapered
- * capsule turned about +Y from the profile (y 0 at the proximal joint,
- * increasing toward the distal one), every vertex weighted 1 to `bone`, the
- * colour (and alpha, with `alpha`) from its profile point. Built once.
+ * One rigid leg segment for the skinned leg mesh (ADR-37): a tapered capsule
+ * turned about +Y from the profile (y 0 at the proximal joint, increasing
+ * toward the distal one), every vertex weighted 1 to `bone`, its colour and
+ * alpha from its profile point, and `aCast` 1 where the segment casts a shadow
+ * (the shanks) and 0 where it does not (the thighs, whose shadow would be the
+ * whole thigh). Built once.
  */
-function legSegment(profile: ProfilePoint[], bone: number, alpha: boolean) {
+function legSegment(profile: ProfilePoint[], bone: number, cast: boolean) {
   const g = new THREE.LatheGeometry(
     profile.map((p) => new THREE.Vector2(p.r, p.y)),
     LG.radialSegments,
   );
   const count = g.attributes.position!.count;
-  const size = alpha ? 4 : 3;
-  const colors = new Float32Array(count * size);
+  const colors = new Float32Array(count * 4);
   const skinIndex = new Uint16Array(count * 4);
   const skinWeight = new Float32Array(count * 4);
   const c = new THREE.Color();
@@ -382,16 +383,17 @@ function legSegment(profile: ProfilePoint[], bone: number, alpha: boolean) {
     // LatheGeometry writes the profile once per radial step, in order.
     const p = profile[v % profile.length]!;
     c.set(p.color);
-    colors[v * size] = c.r;
-    colors[v * size + 1] = c.g;
-    colors[v * size + 2] = c.b;
-    if (alpha) colors[v * size + 3] = p.alpha;
+    colors[v * 4] = c.r;
+    colors[v * 4 + 1] = c.g;
+    colors[v * 4 + 2] = c.b;
+    colors[v * 4 + 3] = p.alpha;
     skinIndex[v * 4] = bone;
     skinWeight[v * 4] = 1;
   }
-  g.setAttribute('color', new THREE.BufferAttribute(colors, size));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 4));
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
   g.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+  g.setAttribute('aCast', new THREE.BufferAttribute(new Float32Array(count).fill(cast ? 1 : 0), 1));
   return g;
 }
 
@@ -437,15 +439,16 @@ function mergedLegs(parts: THREE.BufferGeometry[]) {
 export const geo = {
   shoeSole,
   shoeUpper,
-  /** Both shanks, opaque, one draw call (plus one shadow draw on High). */
-  legsSolid: mergedLegs([
-    legSegment(shankProfile(), LEG_BONES.frontShank, false),
-    legSegment(shankProfile(), LEG_BONES.backShank, false),
-  ]),
-  /** Both thighs, fading toward the hips, one draw call, no shadow. */
-  legsFade: mergedLegs([
-    legSegment(thighProfile(), LEG_BONES.frontThigh, true),
-    legSegment(thighProfile(), LEG_BONES.backThigh, true),
+  /**
+   * Both legs in one geometry (ADR-60): the opaque shanks and the thighs,
+   * which fade toward the hips by a screen-door dither (mat.legs), so the
+   * whole rig is one draw call (plus one shadow draw on High, the shanks only).
+   */
+  legs: mergedLegs([
+    legSegment(shankProfile(), LEG_BONES.frontShank, true),
+    legSegment(shankProfile(), LEG_BONES.backShank, true),
+    legSegment(thighProfile(), LEG_BONES.frontThigh, false),
+    legSegment(thighProfile(), LEG_BONES.backThigh, false),
   ]),
   /** The primitive board (fallback, Low; ADR-54): the deck, and the trucks with the wheels. Two draw calls. */
   boardDeck: primitiveDeck(),
@@ -500,6 +503,54 @@ function jointTexture() {
   return t;
 }
 
+/**
+ * The legs' screen-door threshold (ADR-60): a 4 x 4 ordered (Bayer) dither of
+ * the pixel, in (0, 1). A fragment whose alpha is at or below it is not drawn.
+ * Written here in GLSL; the TSL twin (nodeRenderer.ts) and the JavaScript one
+ * the tests read (`ditherThreshold`) follow the same formula: two levels of
+ * the 2 x 2 matrix (2|x - y| + y), the low bits weighted 4.
+ */
+export const DITHER_GLSL = /* glsl */ `
+float legsDither(vec2 frag) {
+  vec2 q = mod(floor(frag), 4.0);
+  vec2 lo = mod(q, 2.0);
+  vec2 hi = floor(q / 2.0);
+  float b = 4.0 * (2.0 * abs(lo.x - lo.y) + lo.y) + (2.0 * abs(hi.x - hi.y) + hi.y);
+  return (b + 0.5) / 16.0;
+}
+`;
+
+/** The same threshold in JavaScript, for the tests. */
+export function ditherThreshold(x: number, y: number) {
+  const qx = Math.floor(x) % 4;
+  const qy = Math.floor(y) % 4;
+  const b2 = (a: number, c: number) => 2 * Math.abs(a - c) + c;
+  return (4 * b2(qx % 2, qy % 2) + b2(Math.floor(qx / 2), Math.floor(qy / 2)) + 0.5) / 16;
+}
+
+/** The legs on WebGLRenderer: a standard material whose alpha test is the dither, so it stays opaque (depth written, no sorting). */
+function legsMaterial() {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness });
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', `${DITHER_GLSL}\nvoid main() {`)
+      .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n\tif ( diffuseColor.a <= legsDither( gl_FragCoord.xy ) ) discard;');
+  };
+  m.customProgramCacheKey = () => 'trick-lab-legs-dither';
+  return m;
+}
+
+/** The legs' shadow depth on WebGLRenderer: only where `aCast` is set (the shanks). */
+function legsDepthMaterial() {
+  const m = new THREE.MeshDepthMaterial();
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('void main() {', 'attribute float aCast;\nvarying float vCast;\nvoid main() {\n\tvCast = aCast;');
+    shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'varying float vCast;\nvoid main() {\n\tif ( vCast < 0.5 ) discard;');
+  };
+  m.customProgramCacheKey = () => 'trick-lab-legs-depth';
+  return m;
+}
+
 /** Textures the materials below hold, freed with them. */
 const tex = { toon: toonGradient(), joints: jointTexture() };
 
@@ -514,11 +565,13 @@ export const mat = {
   ground: std(G.color, G.roughness),
   shoeSole: std(FT.sole.color, FT.sole.roughness),
   shoeUpper: std(FT.upper.color, FT.upper.roughness),
-  // The legs (ADR-37): white times the vertex colours (trouser and sock).
-  legsSolid: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness }),
-  // The thighs: vertex alpha fades them toward the hips. No depth write, so a
-  // faded thigh never hides the board, the shoes or the other leg behind it.
-  legsFade: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness, transparent: true, depthWrite: false }),
+  // The legs (ADR-37, ADR-60): white times the vertex colours (trouser and
+  // sock), opaque, with the vertex alpha (the thighs' fade toward the hips)
+  // drawn as a screen-door dither, so solid and fading parts are one draw.
+  // Never swapped; its TSL twin is nodeRenderer.ts legsNodeMaterial.
+  legs: legsMaterial(),
+  // The legs' shadow on WebGLRenderer (High's fallback): the shanks only, as before.
+  legsDepth: legsDepthMaterial(),
   // uProgress is mutated by FlightDriver; never swapped.
   footPath: footPathMaterial(),
   // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.
@@ -550,13 +603,13 @@ export const mat = {
   }),
 };
 
-/** The materials written as shaders: a GLSL ShaderMaterial in `mat`, a TSL twin for the WebGPURenderer. */
-export type ShaderKey = 'footPath' | 'shadow';
+/** The materials written as shaders: a GLSL one in `mat` (a ShaderMaterial, or the legs' patched standard material), a TSL twin for the WebGPURenderer. */
+export type ShaderKey = 'footPath' | 'shadow' | 'legs';
 
 /** The TSL twins (ADR-50), registered by nodeRenderer.ts when a WebGPURenderer starts; null until then. */
-const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null };
+const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null };
 
-/** nodeRenderer.ts hands over a fresh pair for each WebGPURenderer it makes; the last pair is freed. */
+/** nodeRenderer.ts hands over a fresh set for each WebGPURenderer it makes; the last set is freed. */
 export function setNodeMaterials(m: Record<ShaderKey, THREE.Material>) {
   for (const key of Object.keys(nodeMat) as ShaderKey[]) {
     if (nodeMat[key] !== m[key]) nodeMat[key]?.dispose();

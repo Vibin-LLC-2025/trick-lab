@@ -538,3 +538,16 @@ Draw calls in the lab during a 360 flip, every switch combination (motion cues a
 | Low | 5 to 7 | 10 | 11 | 12 | **13** | under 20 |
 
 The welcome screen draws at most 33 / 18 / 11 (feet and legs on). Landings: 0 frames after the idle point on every tier. a0a2c86's build has no store under `?debug`, so its frames to the idle point are not counted; on this step's build they are 1, the frame the landing's write queues.
+
+### Step 2: the legs in one draw (ADR-60)
+
+The same switch run on this step's build: the legs cost one draw call instead of two on every tier.
+
+| Tier | Defaults | + foot trails | + legs | Everything on | Gate |
+| --- | --- | --- | --- | --- | --- |
+| High | 31 | 32 | 33 | **34** | under 40 |
+| Medium | 17 | 18 | 18 | **19** | under 20: kept again |
+| Low | 10 | 11 | 11 | **12** | under 20 |
+
+The welcome screen draws at most 32 / 17 / 10 with feet and legs on.
+

@@ -1,12 +1,12 @@
 // The WebGPURenderer path (ADR-50), its own lazy chunk: Medium and High load
-// it, Low never does. It makes the renderer, the TSL twins of the two GLSL
+// it, Low never does. It makes the renderer, the TSL twins of the three GLSL
 // materials in resources.ts, and the environment map, since three's WebGL
 // PMREMGenerator cannot run on it, and the range fog (ADR-55). Where the
 // browser has no WebGPU the renderer runs on its own WebGL2 backend, with the
 // same materials.
 import { Color, type Object3D, type Texture } from 'three';
-import { MeshBasicNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
-import { attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
+import { abs, attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
 import { ART, type QUALITY } from './artDirection';
 import { setNodeFog } from './rangeFog';
 import { setNodeMaterials, uniforms } from './resources';
@@ -16,6 +16,7 @@ export { createEffects, type Effects } from './effects';
 
 const S = ART.shadow;
 const FP = ART.footPaths;
+const LG = ART.legs;
 
 /**
  * The foot trails (resources.ts footPathMaterial, ADR-50): vertex colour per
@@ -69,6 +70,25 @@ export function shadowNodeMaterial() {
   return m;
 }
 
+/**
+ * The legs (resources.ts legsMaterial, ADR-60): a standard material with the
+ * vertex colours, opaque, its alpha test the 4 x 4 screen-door threshold of
+ * resources.ts DITHER_GLSL (the same formula), so the thighs fade toward the
+ * hips in the same draw as the shanks. In the shadow pass only `aCast` (the
+ * shanks) draws, as on WebGLRenderer.
+ */
+export function legsNodeMaterial() {
+  const q = screenCoordinate.xy.floor().mod(4);
+  const lo = q.mod(2);
+  const hi = q.div(2).floor();
+  const b2 = (v: typeof q) => abs(v.x.sub(v.y)).mul(2).add(v.y);
+  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: LG.roughness });
+  m.alphaTestNode = b2(lo).mul(4).add(b2(hi)).add(0.5).div(16);
+  m.maskShadowNode = attribute('aCast', 'float').greaterThan(0.5);
+  m.name = 'legs (TSL)';
+  return m;
+}
+
 type Tier = (typeof QUALITY)[keyof typeof QUALITY];
 
 /**
@@ -81,7 +101,7 @@ export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, tim
   const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: timestamps });
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
-  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial() });
+  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() });
   setNodeFog(rangeFogNode());
   return renderer;
 }
