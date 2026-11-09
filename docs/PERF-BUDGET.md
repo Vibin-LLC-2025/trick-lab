@@ -487,9 +487,13 @@ Before is 87ccd92 (the `skate-game` head the plan started from, measured 2026-11
 | JavaScript, Low | 352 KB | 362 KB |
 | Models, High (feet on / off) | 2,585 / 2,106 KB | **755 / 588 KB** (KTX2, ADR-49) |
 | Models, Medium | 661 KB | **273 KB** |
+| KTX2 transcoder (`basis_transcoder.wasm`), High and Medium | none | 240 KB (its 15 KB JavaScript loader is in the JavaScript row) |
 | Loading picture | none | 26 KB |
 | Display face | none | 14 KB |
+| **Everything on a first visit** (dark, feet on), High / Medium / Low | 2,967 / 1,042 / 360 KB | **1,639** / 1,158 / 410 KB |
 | GPU texture memory, estimate (`assets:check`), High / Medium | 33.5 / 14.7 MB | **8.4 / 3.7 MB** |
+
+A first visit to High downloads 45 percent less; Medium downloads 116 KB more (the transcoder and the WebGPU code outweigh its 388 KB of smaller models; every later visit has them cached), and Low 50 KB more (the picture, the face and 10 KB of JavaScript).
 
 **Drawing** (the most draw calls seen over half a second; the lab's GPU time is the median over four tricks, the welcome screen's over its looping preview; GPU time is WebGL timer queries before, WebGPU timestamps after, and after includes the post-processing):
 
@@ -504,6 +508,6 @@ Before is 87ccd92 (the `skate-game` head the plan started from, measured 2026-11
 
 Every tier is inside its gate (Low and Medium under 20, High under 40), the game screen draws the same as the welcome screen, gl.render's CPU time stays 0.2 to 0.8 ms, and every tier draws **0 frames** in the 1.5 s after a landing, before and after.
 
-**What it adds up to, against the plan's expectations.** High downloads 755 KB of models instead of 2.6 MB (expected about 1 MB) and keeps 8.4 MB of textures on the GPU instead of 33.5 (expected about 10). The stage is never blank and never shows the stand-in board on any connection: the loading picture is up from 0.05 to 1.0 s and lifts 20 to 50 ms after the tier's scene is complete. High draws in a third to a half of the GPU time with occlusion, motion blur, glow and the grade added. Idle frames and the draw-call gates hold.
+**What it adds up to, against the plan's expectations.** High downloads 755 KB of models instead of 2.6 MB (expected about 1 MB) and keeps 8.4 MB of textures on the GPU instead of 33.5 (expected about 10). The stage shows the stand-in board or a blank 3D view on no connection, with two limits. The loading picture arrives 0.05 to 1.0 s into the load, with the page's own first paint: about 0.3 s after it at 3 Mbps (0.1 to 0.15 s at 10 Mbps, none at full speed), so for that moment the stage is its plain background colour. And a trick popped before the models are in lifts the picture so the trick can be seen, on the stand-in board if need be (ADR-56). The picture lifts 11 to 153 ms after the tier's scene is complete (the 153 ms on High at 10 Mbps; 11 to 75 ms everywhere else). High draws in a third to a half of the GPU time with occlusion, motion blur, glow and the grade added. Idle frames and the draw-call gates hold.
 
-**The cost.** The WebGPURenderer and its effects are 220 KB more JavaScript, which Medium and High load and start before their first 3D frame. So on those tiers the 3D scene itself comes later: at full speed the complete scene is about 0.3 s later than before (1.0 to 1.2 s, was 0.73 to 0.75 s), and on Medium at 3 Mbps 0.6 s later (3.97 s, was 3.38). The loading picture covers that time; on High at 10 and 3 Mbps the complete scene still comes much sooner than before, since its models are a third of the size. Low, which never loads the WebGPU chunk, is unchanged within 0.1 s.
+**The cost.** The WebGPURenderer and its effects are 220 KB more JavaScript, which Medium and High load and start before their first 3D frame, and their textures need the 240 KB transcoder (step 3). So on those tiers the 3D scene itself comes later: at full speed the complete scene is about 0.3 s later than before (1.0 to 1.2 s, was 0.73 to 0.75 s), and on Medium at 3 Mbps 0.6 s later (3.97 s, was 3.38). The loading picture covers that time; on High at 10 and 3 Mbps the complete scene still comes much sooner than before, since its models are a third of the size. Low, which never loads the WebGPU chunk, is unchanged within 0.1 s.
