@@ -101,7 +101,7 @@ export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, tim
   const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: timestamps });
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
-  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() });
+  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() }, renderer);
   setNodeFog(rangeFogNode());
   return renderer;
 }

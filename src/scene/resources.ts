@@ -1,7 +1,11 @@
 // Geometries and materials shared by every mesh in the scene. Created once at
 // module load; static parts are merged so each material is one draw call.
-// TrickScene calls disposeSharedResources() on unmount; three.js re-uploads a
-// disposed resource on next use, so a remount is safe.
+// Each Canvas calls disposeSharedResources() when it unmounts (TrickScene's
+// SharedResources), so a tier change frees them too; three.js re-uploads a
+// disposed resource on next use, so a remount is safe. Disposing matters on
+// every remount, not only at the end: each renderer that draws a material
+// adds a dispose listener to it, which holds that renderer's programs until
+// the material is disposed (found by the soak test, 2026-11-09).
 //
 // Two renderers (ADR-50): Low draws with three's WebGLRenderer, Medium and
 // High with its WebGPURenderer. Every material here works on both except the
@@ -609,23 +613,36 @@ export type ShaderKey = 'footPath' | 'shadow' | 'legs';
 /** The TSL twins (ADR-50), registered by nodeRenderer.ts when a WebGPURenderer starts; null until then. */
 const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null };
 
-/** nodeRenderer.ts hands over a fresh set for each WebGPURenderer it makes; the last set is freed. */
-export function setNodeMaterials(m: Record<ShaderKey, THREE.Material>) {
+/** The renderer the registered TSL twins belong to. */
+let nodeOwner: object | null = null;
+
+/** nodeRenderer.ts hands over a fresh set for each WebGPURenderer it makes (`owner`); the last set is freed. */
+export function setNodeMaterials(m: Record<ShaderKey, THREE.Material>, owner: object) {
   for (const key of Object.keys(nodeMat) as ShaderKey[]) {
     if (nodeMat[key] !== m[key]) nodeMat[key]?.dispose();
     nodeMat[key] = m[key];
   }
+  nodeOwner = owner;
 }
 
 /** The shader material for the renderer in use: the TSL twin on a WebGPURenderer, the GLSL one otherwise. */
 export const shaderMat = (key: ShaderKey, nodeRenderer: boolean): THREE.Material => (nodeRenderer ? (nodeMat[key] ?? mat[key]) : mat[key]);
 
-export function disposeSharedResources() {
+/**
+ * Frees the shared geometries, materials and textures (each re-uploads on
+ * next use), when a Canvas unmounts. The TSL twins go too, but only if
+ * `renderer` registered them: a tier change can start the next Canvas's
+ * WebGPURenderer before the old Canvas has finished unmounting, and its twins
+ * must stay.
+ */
+export function disposeSharedResources(renderer: object | null = null) {
   Object.values(geo).forEach((g) => g.dispose());
   Object.values(mat).forEach((m) => m.dispose());
   Object.values(tex).forEach((t) => t.dispose());
+  if (renderer !== null && renderer !== nodeOwner) return;
   for (const key of Object.keys(nodeMat) as ShaderKey[]) {
     nodeMat[key]?.dispose();
     nodeMat[key] = null;
   }
+  nodeOwner = null;
 }

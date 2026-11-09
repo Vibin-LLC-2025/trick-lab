@@ -212,6 +212,24 @@ function StageReady({ revealed }: { revealed: boolean }) {
   return null;
 }
 
+/**
+ * Frees the shared geometries and materials (resources.ts) when this Canvas
+ * unmounts, a tier change included (rule 7). Each renderer that draws a shared
+ * material adds a dispose listener to it, and the listener holds the
+ * renderer's programs, so without this every remount kept the last
+ * renderer's programs alive (about 40 KB a WebGLRenderer, found by the soak
+ * test, 2026-11-09). The TSL twins are freed only if this Canvas's renderer
+ * registered them.
+ */
+function SharedResources() {
+  const get = useThree((s) => s.get);
+  useEffect(() => {
+    const gl = get().gl;
+    return () => disposeSharedResources(gl);
+  }, [get]);
+  return null;
+}
+
 /** The lit content and its readiness (ADR-56), both per Canvas: a remount starts unrevealed. */
 function Stage({ shadows }: { shadows: boolean }) {
   const [revealed, setRevealed] = useState(false);
@@ -267,11 +285,10 @@ function rendererFactory(Q: Tier) {
  *
  * The Canvas is keyed on the tier in use (ADR-16): antialias and
  * powerPreference are WebGL context options, so a tier change remounts it.
- * The GLB caches survive the remount; the shared resources are disposed and
- * re-uploaded on first use.
+ * The GLB caches survive the remount; the shared resources are disposed with
+ * each Canvas (SharedResources) and re-uploaded on first use.
  */
 export default function TrickScene() {
-  useEffect(() => () => disposeSharedResources(), []);
   const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s));
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
@@ -317,6 +334,7 @@ export default function TrickScene() {
       <Stage shadows={Q.shadows} />
       <SceneCamera />
       <InvalidateOnStoreChange />
+      <SharedResources />
       <PostEffects />
       <PerfProbe />
     </Canvas>

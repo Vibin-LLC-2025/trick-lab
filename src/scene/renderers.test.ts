@@ -9,7 +9,7 @@ import { ShaderMaterial } from 'three';
 import { QUALITY } from './artDirection';
 import { footPathNodeMaterial, legsNodeMaterial, shadowNodeMaterial } from './nodeRenderer';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
-import { mat, setNodeMaterials, shaderMat, uniforms } from './resources';
+import { disposeSharedResources, mat, setNodeMaterials, shaderMat, uniforms } from './resources';
 
 describe('the renderer per tier', () => {
   it('runs the WebGPURenderer on High and Medium, WebGLRenderer on Low', () => {
@@ -72,11 +72,37 @@ describe('the shader materials and their TSL twins', () => {
     const path = footPathNodeMaterial();
     const shadow = shadowNodeMaterial();
     const legs = legsNodeMaterial();
-    setNodeMaterials({ footPath: path, shadow, legs });
+    setNodeMaterials({ footPath: path, shadow, legs }, {});
     expect(shaderMat('footPath', true)).toBe(path);
     expect(shaderMat('shadow', true)).toBe(shadow);
     expect(shaderMat('shadow', false)).toBe(mat.shadow);
     expect(shaderMat('legs', true)).toBe(legs);
     expect(shaderMat('legs', false)).toBe(mat.legs);
+  });
+
+  it('frees the shared resources with each Canvas, and the twins only with the renderer that registered them', () => {
+    const older = {};
+    const newer = {};
+    const twins = () => ({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() });
+    const disposed = (m: { addEventListener: (t: 'dispose', f: () => void) => void }) => {
+      let n = 0;
+      m.addEventListener('dispose', () => n++);
+      return () => n;
+    };
+    // A tier change: the next Canvas's renderer registers its twins before the old Canvas has unmounted.
+    setNodeMaterials(twins(), older);
+    const set = twins();
+    setNodeMaterials(set, newer);
+    const sky = disposed(mat.sky);
+    const legs = disposed(set.legs);
+    disposeSharedResources(older);
+    // The shared materials go with every Canvas (a renderer's dispose listeners on them hold its programs).
+    expect(sky()).toBe(1);
+    // The newer renderer's twins stay.
+    expect(legs()).toBe(0);
+    expect(shaderMat('legs', true)).toBe(set.legs);
+    disposeSharedResources(newer);
+    expect(legs()).toBe(1);
+    expect(shaderMat('legs', true)).toBe(mat.legs);
   });
 });
