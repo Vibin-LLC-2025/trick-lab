@@ -443,3 +443,16 @@ Against step 9 (6395a38) in the same session, the welcome screen, 1440 x 900, li
 The picture is 26 KB (27 KB on the wire with headers) and shares the link with the 3D code: the scene comes 50 to 90 ms later at 3 Mbps, about the picture's own transfer time; at full speed the difference is within noise. It lifts 20 to 50 ms after the tier's scene is complete. The `measure.js` table now has a "Loading picture" and a "Picture lifts" column. Draw calls (High 30 and 31, Medium 16 and 17, Low 9 and 10), triangles and frame times are unchanged: the picture is DOM. Frames after a landing: 0 on every tier.
 
 Checked in the browser: the stage shows the picture at 0.7 and 1.6 s on High at 3 Mbps (where step 9 showed a blank stage); popping in the lab before the models arrive lifts it at once; under reduced motion it goes with no fade; blocking `ground.glb` lifts it on High with the plain ground (1.8 s), blocking `board-high.glb` or `shoes.glb` lifts it on Low (1.5 s).
+
+### Steps 11 and 12: skate style and sound (ADR-57, ADR-58)
+
+No change to the scene: draw calls, triangles and frame times as at step 10 (the celebration and the letters are DOM; sound is Web Audio). What they add to a load:
+
+| | Bytes | When |
+| --- | --- | --- |
+| Display face, Bungee Latin woff2 | 14.3 KB (already compressed) | with the first paint's CSS; text shows in Arial Black until it arrives (`font-display: swap`) |
+| Skate style CSS | about 1 KB gzipped (CSS 35.2 KB, 6.9 KB gzipped) | with the page |
+| Celebration and letters JS | under 1 KB gzipped (main bundle 311.1 KB, 98.8 KB gzipped, was 309.3 and 98.2 at step 10) | with the page |
+| Sound (recipes, player, hook) | 3.3 KB, 1.5 KB gzipped (main bundle 314.4 KB, 100.3 KB gzipped) | with the page; no audio context and no nodes until sound is on and something happens |
+
+Checked in the browser: the font loads from the app's own path; the celebration plays on a landed kickflip in both themes and on a 390 px phone stage (it scales with the stage, so the board stays in view); a new SKATE letter stamps in once; with sound off nothing is started; turning it on starts the audio context inside the click; at 0.25x the landing's sound came 2.17 s after the pop, as the board landed.

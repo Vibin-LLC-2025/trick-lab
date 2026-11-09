@@ -28,6 +28,13 @@ export interface TrickEvent {
 }
 
 export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
+
+/**
+ * A sound the store asks for (ADR-58): the board popping, landing or bailing,
+ * a SKATE letter earned (either player's), and a game won or lost. The
+ * player (src/audio) plays it only while sound is on.
+ */
+export type SoundKind = 'pop' | 'land' | 'bail' | 'letter' | 'win' | 'lose';
 /** One of SPEEDS in store/speed.ts. */
 export type PlaybackRate = number;
 export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' };
@@ -156,6 +163,17 @@ export interface UiSlice {
    * not announced (the result's announcement already says it landed).
    */
   celebration: { nonce: number; trick: string } | null;
+  /** Sound effects (ADR-58). Persisted under trick-lab.sound, default off. Announced, not logged, not exported. */
+  soundOn: boolean;
+  /**
+   * The last sound asked for, from a store action at the moment it happens:
+   * the pop as the flight starts, the landing or bail when it lands (so at
+   * the flight's own pace, slow motion included), then a letter and the
+   * game's end. `nonce` goes up by one each time; several in one action
+   * arrive one after another. Set whether or not sound is on. Not persisted,
+   * not logged, not exported.
+   */
+  soundCue: { nonce: number; kind: SoundKind } | null;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
   /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs, default off (ADR-48). Not logged, not exported. */
@@ -205,6 +223,10 @@ export interface UiSlice {
   setStageReady: () => void;
   /** Internal: marks a landing to celebrate. Called from store actions only (the landing's resolution and the game's scoring). */
   celebrate: (trick: string) => void;
+  /** Turns sound on or off, persisted and announced (ADR-58). */
+  toggleSound: () => void;
+  /** Internal: asks for a sound. Called from store actions only. */
+  cue: (kind: SoundKind) => void;
   announce: (message: string) => void;
   requestFocus: (target: FocusTarget) => void;
 }

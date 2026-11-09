@@ -45,6 +45,8 @@ export const createPlaybackSlice =
       const by = s.flightBy;
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
+      // The landing's sound, at the moment it lands (ADR-58); a letter and the game's end follow in scoreSkate.
+      s.cue(result.landed ? 'land' : 'bail');
       s.log('trick.resolved', {
         by,
         trick: result.id,
@@ -115,6 +117,7 @@ export const createPlaybackSlice =
         if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call });
         else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null });
         else s.log('trick.popped', { by, ...inputs, preset: s.activePreset });
+        s.cue('pop');
         const lead = go ? go.lead : `Popped with ${describeInputs(inputs)}.`;
         // Reduced motion, or no 3D view: no playback at all. Resolve now and
         // leave the board at its final pose; the timeline steps through the flight.

@@ -783,3 +783,19 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 - **Brand orange** (`--color-brand` `#ea5a30`, the deck graphic; `--color-brand-fg` `#1b0c06` on it 5.45:1). Fill and stripe only: `.home__title`'s 0.06 em offset print (`text-shadow`, behind 14:1 text), `.topbar`'s 3 px inset foot, `.turn--you`'s 4 px inset left edge, the celebration's shout. Against the page it is 2.94 (light bg), 3.27 (light surface), 5.28 (dark bg), 4.73 (dark surface): never text on the page, never the only cue.
 - **Stickers**: `--color-sticker-edge` (`#ffffff` light, `#f1ece3` dark) die-cut borders. Earned letters tilt -6, 4, -3, 5 and -4 degrees in order; `.skate__letter--new` runs `skate-stamp` once (480 ms, `--ease-out`: scale 2.4 and 20 degrees back, to 0.9, 1.06, 1), none under reduced motion.
 - **Celebration** (`.celebration`, `aria-hidden`, over the stage at 10 % of its height from the top, centred, no pointer events; `.app__stage` is a size container, so it scales with the stage, not the window): `.celebration__shout` "Landed!" (brand-fg on brand 5.45, 9 % of the stage's height, 17 to 44 px, 3 px edge, -4 degrees) over `.celebration__trick` (sticker-edge on brand-fg, 19.06 light and 16.20 dark, 3.5 % of the stage's height, 12 to 15 px, 2 px edge, 3 degrees). Each stamps in (`celebration-stamp`, 320 ms; the trick 90 ms later) and fades up 8 px from 1500 ms (`celebration-out`, 300 ms); the component removes it at 1800 ms. `[data-calm]` (reduced motion): no animation, shown and removed.
+
+### 14.8 Sound (ADR-58)
+
+- **Switch**: "Sound", a `.toggle` after the Light theme switch in `.topbar__actions` and `.home__utilities`; off by default, saved, announced. No new classes.
+- **Sounds** (`src/audio/sounds.ts`; tones glide between two pitches, noise goes through one filter; 5 ms attack, exponential decay):
+
+| Sound | When | Voices |
+| --- | --- | --- |
+| Pop | the board pops (`popTrick`) | bandpass noise 1.6 kHz 70 ms, highpass click 3.5 kHz 30 ms, sine 220 to 90 Hz 90 ms |
+| Landing | a landed trick lands | lowpass noise 1.2 kHz 120 ms, a second clack 35 ms later, sine 140 to 60 Hz 160 ms |
+| Bail | a missed trick lands | bandpass noise 0.9 and 1.4 kHz, triangle 180 to 70 Hz 400 ms, lowpass scrape 600 Hz |
+| Letter | either player earns a SKATE letter | lowpass noise 2.2 kHz 60 ms, square 300 to 150 Hz 80 ms |
+| Win | the student wins a game | triangle C5, E5, G5, C6, 110 ms apart |
+| Lose | the computer wins | triangle G4, E4, C4, then C4 sagging to B3 |
+
+- **Mix**: master gain 0.6; sounds asked for together play 0.22 s apart. Below 1x the pop, landing and bail drop in pitch and stretch by speed^0.35 (half pitch at most).

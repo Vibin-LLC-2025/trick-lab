@@ -18,6 +18,13 @@ export function ThemeToggle() {
   return <Toggle label="Light theme" pressed={theme === 'light'} keys="t" onClick={toggleTheme} />;
 }
 
+/** The sound switch (ADR-58), on every screen beside the theme: off until the student turns it on. */
+export function SoundToggle() {
+  const soundOn = useTrickStore((s) => s.soundOn);
+  const toggleSound = useTrickStore((s) => s.toggleSound);
+  return <Toggle label="Sound" pressed={soundOn} onClick={toggleSound} />;
+}
+
 /**
  * Pauses or plays the welcome screen's preview (ADR-45; WCAG 2.2.2, motion
  * that starts on its own must be pausable). Shown only where the preview

@@ -1,5 +1,5 @@
 import { useTrickStore } from '../store';
-import { ShortcutsButton, ThemeToggle } from './Utilities';
+import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
 /**
  * The welcome screen (ADR-45, DESIGN.md 12): the title, what the app is, and
@@ -54,6 +54,7 @@ export function Home() {
         <p className="home__hint">Works with a keyboard and a screen reader.</p>
         <ShortcutsButton label="Keyboard shortcuts" />
         <ThemeToggle />
+        <SoundToggle />
       </div>
     </main>
   );

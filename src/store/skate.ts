@@ -173,11 +173,13 @@ export const createSkateSlice =
       if (step.set) s.log('skate.set', { by, trick: step.set.id });
       if (step.letterTo) {
         s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });
+        s.cue('letter');
       }
       const out = [step.message];
       if (game.phase === 'over' && game.winner) {
         const winner = game.winner;
         s.log('skate.ended', { winner, reason: 'spelled', ...score(game) });
+        s.cue(winner === 'you' ? 'win' : 'lose');
         // A leave still asked for has nothing left to end: the dialog closes, and the result takes focus (ADR-46).
         set({ skateRecord: { ...s.skateRecord, [winner]: s.skateRecord[winner] + 1 }, skateLeave: null });
         // The turn controls give way to the result, so focus goes to its heading rather than to the page (ADR-46).

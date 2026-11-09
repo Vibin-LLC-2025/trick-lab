@@ -16,6 +16,7 @@ import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
 import { Celebration } from './Celebration';
 import { StageStill } from './StageStill';
+import { useSound } from '../hooks/useSound';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { LeaveDialog, Skate, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
@@ -172,6 +173,7 @@ export function App() {
   useFocusRequests();
   useReducedMotionSync();
   useScreenRoute();
+  useSound();
   const screen = useTrickStore((s) => s.screen);
   const canPause = useTrickStore(previewCanPlay);
 

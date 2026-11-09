@@ -18,6 +18,8 @@ export const STANCE_KEY = 'trick-lab.stance';
 export const CUES_KEY = 'trick-lab.motion-cues';
 /** Motion blur on High (ADR-51). */
 export const MOTION_BLUR_KEY = 'trick-lab.motion-blur';
+/** Sound effects (ADR-58): 'on', or off when absent. */
+export const SOUND_KEY = 'trick-lab.sound';
 /** The camera preset (ADR-38). */
 export const CAMERA_VIEW_KEY = 'trick-lab.camera-view';
 /** The welcome screen's preview, paused or not (ADR-45). */
@@ -102,6 +104,9 @@ export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 export const readMotionCuesVisible = (): boolean => read(CUES_KEY) !== 'off';
 /** Motion blur is on until the student switches it off (ADR-51). */
 export const readMotionBlur = (): boolean => read(MOTION_BLUR_KEY) !== 'off';
+
+/** Off unless the student turned it on (ADR-58). */
+export const readSoundOn = (): boolean => read(SOUND_KEY) === 'on';
 /** Goofy unless regular was saved (ADR-25). */
 export const readStance = (): Stance => {
   const saved = read(STANCE_KEY);
@@ -157,6 +162,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     sceneUnavailable: false,
     stageReady: false,
     celebration: null,
+    soundOn: readSoundOn(),
+    soundCue: null,
     feetVisible: readFeetVisible(),
     legsVisible: readLegsVisible(),
     footPathsVisible: readFootPathsVisible(),
@@ -273,6 +280,13 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       if (!get().stageReady) set({ stageReady: true });
     },
     celebrate: (trick) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick } }),
+    toggleSound: () => {
+      const soundOn = !get().soundOn;
+      save(SOUND_KEY, soundOn ? 'on' : 'off');
+      set({ soundOn });
+      get().announce(soundOn ? 'Sound on.' : 'Sound off.');
+    },
+    cue: (kind) => set({ soundCue: { nonce: (get().soundCue?.nonce ?? 0) + 1, kind } }),
     announce: (message) => set({ announcement: { message, nonce: ++nonce } }),
     requestFocus: (target) => set({ focusRequest: { ...target, nonce: ++nonce } }),
   };

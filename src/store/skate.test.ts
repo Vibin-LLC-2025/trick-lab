@@ -422,3 +422,50 @@ describe('the celebration in a game', () => {
     expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip' });
   });
 });
+
+// ADR-58: the game's sounds come after the landing's, in order.
+describe('the game sounds', () => {
+  const cues = (store: Store) => {
+    const kinds: string[] = [];
+    store.subscribe((s, prev) => {
+      if (s.soundCue && s.soundCue !== prev.soundCue) kinds.push(s.soundCue.kind);
+    });
+    return kinds;
+  };
+
+  it('asks for a letter after the landing that earns it, and the jingle when someone spells SKATE', () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().startSkate();
+    const kinds = cues(store);
+    pop(store);
+    expect(kinds).toEqual(['pop', 'land']);
+    // A wrong trick on the copy (an ollie lands, but it is not the call): the landing, then the letter.
+    tryInputs(store, 0, 0);
+    expect(kinds.slice(2)).toEqual(['pop', 'land', 'letter']);
+  });
+
+  it('plays the losing jingle after the fifth letter', () => {
+    const store = makeStore([COMPUTER_FIRST]);
+    store.getState().startSkate();
+    store.setState((s) => ({ skate: { ...s.skate, letters: { you: 4, computer: 0 }, secondTry: true } }));
+    pop(store);
+    const kinds = cues(store);
+    tryInputs(store, 0, 0);
+    expect(store.getState().skate.winner).toBe('computer');
+    expect(kinds).toEqual(['pop', 'land', 'letter', 'lose']);
+  });
+
+  it('plays the winning jingle when the computer spells SKATE', () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().startSkate();
+    store.setState((s) => ({ skate: { ...s.skate, letters: { you: 0, computer: 4 } } }));
+    callAndSet(store, 'kickflip');
+    const kinds = cues(store);
+    store.aim.value = 0.999;
+    // The computer misses the copy twice (its last letter gives it a second try).
+    pop(store);
+    pop(store);
+    expect(store.getState().skate.winner).toBe('you');
+    expect(kinds.slice(-2)).toEqual(['letter', 'win']);
+  });
+});

@@ -1,5 +1,5 @@
 import { useTrickStore, type Screen } from '../store';
-import { ShortcutsButton, ThemeToggle } from './Utilities';
+import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
 const TITLE: Record<Exclude<Screen, 'home'>, string> = { skate: 'Game of SKATE', lab: 'Practice lab' };
 const OTHER: Record<Exclude<Screen, 'home'>, { screen: Screen; label: string }> = {
@@ -28,6 +28,7 @@ export function TopBar({ screen }: { screen: Exclude<Screen, 'home'> }) {
       <div className="topbar__actions">
         <ShortcutsButton />
         <ThemeToggle />
+        <SoundToggle />
         <nav aria-label="Modes">
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => go(other.screen)}>
             {other.label}

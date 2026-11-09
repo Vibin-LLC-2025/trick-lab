@@ -34,7 +34,8 @@ src/scene/      R3F: TrickScene (Canvas, keyed on the tier, with fog to the clea
                 resources.ts holds shared, merged geometries and materials (pad, shadow, primitive board, primitive shoe, the foot-trail shader)
                 cameraFit.ts frames the board and its highest pop (ADR-18); boardPose.ts maps a sim pose to the board rotation and its stance signs (ADR-10)
 src/ui/         DOM UI: App (three screens: home, skate, lab, ADR-45; the hash follows the screen), Home (the welcome screen), TopBar, Utilities (Shortcuts, the theme switch, the preview's pause), Toggle, Fold (the lab's sections that open, ADR-47), Skate (the game screen's column: how to play, letters, the turn card, controls, the end, the leave dialog and the stage's turn chip; the computer's auto turn, ADR-46), Presets, Inputs, Playback (Speed, Timeline), Telemetry, FootMotion, Objectives, EventLog, Announcer, PerfBadge, ShortcutsDialog, ViewPanel, StageStill (the loading picture over the stage until the scene is ready, ADR-56), Celebration (the stickers over the stage on the student's landed trick, ADR-57)
-src/hooks/      useReducedMotion
+src/hooks/      useReducedMotion; useSound (plays the store's sound cues while sound is on, ADR-58)
+src/audio/      sounds.ts (the synthesized sounds as pure data, slow motion) and player.ts (Web Audio, made on first use), ADR-58; no React, no three
 src/styles/     tokens.css and app.css (owned by the design agent; do not restyle from components); fonts/ the display face (Bungee, woff2) and its license, OFL.txt (ADR-57)
 scripts/        build-board.ts, check-assets.ts; lib/ build.ts (GLB, KTX2 textures), inspect.ts and budget.ts (checker); measure/measure.js (the playwright-cli measurement, ADR-48) and serve.ts (a node:http server that gzips like GitHub Pages); still/capture.js and write.ts (the loading pictures, ADR-56); lib/webp.ts (their checks)
 assets/source/  design source art (deck-graphic.svg, wheel-print.svg), owned by the design agent
@@ -47,7 +48,7 @@ docs/           BRIEF, BRIEF-BOARD, BRIEF-FEET, RESEARCH-FEET, CAPTURE-PROTOCOL 
 
 ## Conventions (the rules a change must keep)
 
-1. **Store actions own the event log.** Only actions in `src/store/` call `log()`. Components never append events, never compute objectives or recognize tricks. UI preferences (theme, quality, feet, foot trails, speed, motion blur) are never logged.
+1. **Store actions own the event log.** Only actions in `src/store/` call `log()`. Components never append events, never compute objectives or recognize tricks. UI preferences (theme, quality, feet, foot trails, speed, motion blur, sound) are never logged. Sound cues (`soundCue`) come from store actions only, like announcements (ADR-58).
 2. **The DOM owns accessibility.** The canvas is `aria-hidden`. Every action has a DOM control. `#scene-description` is the text equivalent of the scene (derived by `describeScene`). One polite live region (`Announcer`); messages come from store actions only.
 3. **No drei `Html` or any DOM inside the Canvas.** UI goes in `src/ui/`.
 4. **Demand frameloop.** `frameloop` is `"always"` only while `status === 'playing'` or the welcome screen's preview plays (`previewAnimates`, ADR-45), `"demand"` otherwise. Any store change requests one frame (`InvalidateOnStoreChange`). Anything that changes the picture outside the store (the environment map, a GLB arriving) calls `invalidate()` once.

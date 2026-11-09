@@ -178,6 +178,48 @@ describe('the celebration (lab)', () => {
   });
 });
 
+// ADR-58: sound is off until turned on; the store asks for each sound when it happens.
+describe('sound', () => {
+  it('starts off, turns on and off, saved and announced, never logged', () => {
+    localStorage.clear();
+    const store = makeStore();
+    expect(store.getState().soundOn).toBe(false);
+    store.getState().toggleSound();
+    expect(store.getState().soundOn).toBe(true);
+    expect(localStorage.getItem('trick-lab.sound')).toBe('on');
+    expect(store.getState().announcement.message).toBe('Sound on.');
+    expect(makeStore().getState().soundOn).toBe(true);
+    store.getState().toggleSound();
+    expect(localStorage.getItem('trick-lab.sound')).toBe('off');
+    expect(store.getState().announcement.message).toBe('Sound off.');
+    expect(store.getState().events).toEqual([]);
+    localStorage.clear();
+  });
+
+  it('asks for the pop when the board pops and the landing or the bail when it lands, whether or not sound is on', () => {
+    const store = makeStore();
+    const kinds: string[] = [];
+    store.subscribe((s, prev) => {
+      if (s.soundCue && s.soundCue !== prev.soundCue) kinds.push(s.soundCue.kind);
+    });
+    store.getState().applyPreset('kickflip');
+    store.getState().popTrick();
+    expect(kinds).toEqual(['pop']);
+    store.getState().land();
+    expect(kinds).toEqual(['pop', 'land']);
+    store.getState().setInput('pop', 0.15);
+    store.getState().popTrick();
+    store.getState().land();
+    expect(kinds).toEqual(['pop', 'land', 'pop', 'bail']);
+    expect(store.getState().soundCue?.nonce).toBe(4);
+    // A refused pop (still in the air) asks for nothing.
+    store.getState().setInput('pop', 0.35);
+    store.getState().popTrick();
+    store.getState().popTrick();
+    expect(kinds).toEqual(['pop', 'land', 'pop', 'bail', 'pop']);
+  });
+});
+
 describe('playback controls', () => {
   it('syncProgress only applies while playing and is not logged', () => {
     const store = makeStore();
