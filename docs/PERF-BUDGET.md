@@ -392,3 +392,7 @@ Looked at in the browser: the occlusion drawn alone (contact where shoes meet th
 Same setup, gzip server, 1440 x 900. The dome is one draw call and about 2,000 triangles on every tier: High 30 on the welcome screen and 31 in the lab (were 29 and 30), Medium 16 and 17, Low 12 and 13. GPU time: High's welcome loop 1.84 ms (was 1.25: the lower preview camera now frames the far ground and the sky, which the occlusion and the glow cover too), the lab 1.90 ms (1.84); Medium 1.44 and 1.25 ms; Low's lab 0.69 ms. Frames after a landing 0 on every tier. Loading is unchanged within run-to-run spread (High every model at 3 Mbps 4.90 s, Medium 3.86 s, Low's first frame 1.44 s). A theme change builds the environment map again on every tier (checked in the browser), with no console errors.
 
 The lit concrete, measured in the detail view's empty ground (mean of 200 x 120 px): light theme #737474 before the sky pass under ACES, #6e6f70 now under Neutral at exposure 1.3; dark theme's golden hour #6c5f53.
+
+### Step 8: clearcoat and sheen on High (ADR-53)
+
+High, against step 7 (6e462ee) in the same session, draw calls 30 and 31 both times. GPU time, medians then p95: welcome loop 1.38 / 2.29 to 1.25 / 1.57 ms at 1440 x 900 and 2.56 / 2.69 to 2.49 / 2.69 ms at 2560 x 1440; lab 1.11 / 2.03 to 1.11 / 2.42 ms and 2.82 / 3.15 to 2.82 / 2.95 ms. No change beyond noise.

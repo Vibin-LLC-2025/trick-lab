@@ -527,6 +527,14 @@ export const BUDGETS = {
 
 export type AssetKey = keyof typeof BUDGETS;
 
+/**
+ * The High board's finish (ADR-53, 2026-11-09): a clear lacquer over the deck
+ * print (KHR_materials_clearcoat), the way a heat-transfer graphic is sealed,
+ * so the sun and the sky catch a second, sharper highlight on top of the
+ * worn print. Factors only, no texture. The Medium board stays as it is.
+ */
+export const GRAPHIC_CLEARCOAT = { factor: 0.6, roughness: 0.22 } as const;
+
 /** BRIEF-BOARD.md budget for the medium board, plus the whole-scene draw call cap. */
 export const BUDGET = { ...BUDGETS.board, sceneDrawCalls: 20 } as const;
 

@@ -159,3 +159,7 @@ Every texture in all four GLBs is now KTX2: Basis Universal ETC1S at quality 255
 | `ground.glb` | 432.7 KB | **143.4 KB** | concrete-color 107.5, concrete-normal 11.1, concrete-roughness 21.4 KB | 3.00 MB (was 12.00) |
 
 The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder from `public/basis/`, which `npm run assets` copies from `node_modules/three/examples/jsm/libs/basis/` and `npm run assets:check` compares byte for byte with it. `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
+
+## High finish (2026-11-09, ADR-53)
+
+`scripts/lib/build.ts` writes two glTF material extensions, factors only: `KHR_materials_clearcoat` on the High board's Graphic material (`GRAPHIC_CLEARCOAT` in `src/asset/spec.ts`, factor 0.6, roughness 0.22) and `KHR_materials_sheen` on the shoe's Upper material (`UPPER_SHEEN` in `src/asset/shoeSpec.ts`, colour `#62666d`, roughness 0.55). `board-high.glb` 596.2 KB and `shoes.glb` 209.0 KB; `board.glb` and `ground.glb` unchanged.

@@ -520,3 +520,14 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Cost.** One draw call on every tier (High 31, Medium 17, Low 13 in the lab); the dome is 1,000 to 1,100 vertices built at mount.
 
 **Consequence.** `sky.test.ts` covers the colours meeting the fog, the gradient, the city and the dome, and the welcome camera's sky and fogged plane edge.
+
+## ADR-53: A lacquered deck print and a suede sheen on High (2026-11-09)
+
+**Context.** Step 8 of `docs/PLAN-LOOK-FEEL-PERF.md`: glTF material extensions for the High finish, kept only if High's frame time holds and the look improves in the six poses.
+
+**Decision.**
+- **Clearcoat on the High deck print** (`KHR_materials_clearcoat`, `GRAPHIC_CLEARCOAT` in `src/asset/spec.ts`): factor 0.6, roughness 0.22, a sealed heat-transfer print that catches a second, sharper highlight over the worn graphic. Only `board-high.glb`; the Medium board is unchanged byte for byte.
+- **Sheen on the suede upper** (`KHR_materials_sheen`, `UPPER_SHEEN` in `src/asset/shoeSpec.ts`): colour `#62666d`, roughness 0.55, a soft lift on the edges that turn from the light. `shoes.glb` is High only. A first try at `#8d929a` turned the black shoes dusty grey; at `#62666d` they stay black with a suede edge.
+- Factors only, no texture: the files grow by under 0.1 KB and the asset budgets do not move. The loaders turn both into a physical material on either renderer.
+
+**Measured** (High, 1440 x 900 and 2560 x 1440, against step 7 in the same session): draw calls unchanged (30 and 31); GPU time unchanged within noise (the welcome loop 1.38 to 1.25 ms and 2.56 to 2.49 ms; the lab 1.11 and 2.82 ms both times). The six poses side by side: the print reads lacquered, the shoes read suede. Kept.

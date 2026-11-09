@@ -757,3 +757,8 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 - **Environment**: the theme's sky at 45 percent saturation, times 0.7, over the concrete below.
 - **Tone mapping**: Khronos Neutral, exposure 1.3 (was ACES at 1.0).
 - **Welcome preview camera**: 8 degrees above the horizon, 35 degrees round toward the nose, target 0.45 m up; its own polar limit, 1.45 rad.
+
+### 14.4 High finish (ADR-53)
+
+- **Deck print**: a clear lacquer, clearcoat 0.6 at roughness 0.22, High only.
+- **Shoe upper**: a suede sheen, `#62666d` at roughness 0.55, High only (the shoes are High only).

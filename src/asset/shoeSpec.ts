@@ -191,6 +191,13 @@ export const SHOE_MATERIALS = {
 
 export type ShoeMaterialKey = keyof typeof SHOE_MATERIALS;
 
+/**
+ * Suede's soft rim (ADR-53, 2026-11-09): KHR_materials_sheen on the upper, a
+ * pale grey sheen that lifts the edges facing away from the light, as a
+ * napped surface does. Factors only, no texture; the shoes are High only.
+ */
+export const UPPER_SHEEN = { color: '#62666d', roughness: 0.55 } as const;
+
 export const SHOE_TEXTURES = {
   sole: { file: 'shoe-sole.png', width: 1024, height: 512, wrap: 'clamp' },
   upper: { file: 'shoe-upper.png', width: 1024, height: 1024, wrap: 'clamp' },

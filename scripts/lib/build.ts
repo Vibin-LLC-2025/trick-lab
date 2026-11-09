@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, Logger, NodeIO, TextureInfo, type Material, type Texture } from '@gltf-transform/core';
-import { ALL_EXTENSIONS, KHRTextureBasisu, KHRTextureTransform } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, KHRMaterialsClearcoat, KHRMaterialsSheen, KHRTextureBasisu, KHRTextureTransform } from '@gltf-transform/extensions';
 import { dedup, meshopt, prune } from '@gltf-transform/functions';
 import { Resvg } from '@resvg/resvg-js';
 import { encodeToKTX2 } from 'ktx2-encoder';
@@ -21,9 +21,10 @@ import { buildGround } from '../../src/asset/ground';
 import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS, groundRepeat } from '../../src/asset/groundSpec';
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildShoe } from '../../src/asset/shoe';
-import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES } from '../../src/asset/shoeSpec';
+import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
 import { solePixels, upperPixels, upperTint } from '../../src/asset/shoeTextures';
 import {
+  GRAPHIC_CLEARCOAT,
   GRIP_NORMAL_SCALE,
   MATERIALS,
   OUTLINE,
@@ -165,6 +166,10 @@ interface AssetSpec {
     roughnessMap?: string;
     /** Render both faces (the shoe upper: its inside shows through the opening). */
     doubleSided?: boolean;
+    /** KHR_materials_clearcoat (ADR-53): the High deck print's lacquer. */
+    clearcoat?: { factor: number; roughness: number };
+    /** KHR_materials_sheen (ADR-53): the suede upper's rim, a linear colour. */
+    sheen?: { color: [number, number, number]; roughness: number };
   }[];
   parts: { node: string; material: string; geometry: BufferGeometry }[];
   droppedTriangles: number;
@@ -218,6 +223,7 @@ function boardSpec(level: DetailLevel): AssetSpec {
       map: 'map' in M ? M.map : undefined,
       normalMap: key === 'grip' && level === 'high' ? { key: 'gripNormal', scale: GRIP_NORMAL_SCALE } : undefined,
       roughnessMap: key === 'graphic' && level === 'high' ? 'deckRoughness' : undefined,
+      clearcoat: key === 'graphic' && level === 'high' ? { ...GRAPHIC_CLEARCOAT } : undefined,
     };
   });
   return {
@@ -259,6 +265,7 @@ function shoeSpec(): AssetSpec {
         metalness: M.metalness,
         map: 'map' in M ? M.map : undefined,
         doubleSided: 'doubleSided' in M ? M.doubleSided : undefined,
+        sheen: key === 'upper' ? { color: linearFactor(UPPER_SHEEN.color).slice(0, 3) as [number, number, number], roughness: UPPER_SHEEN.roughness } : undefined,
       };
     }),
     parts: SHOE_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: shoe.parts[p.node] })),
@@ -367,6 +374,14 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
     if (M.roughnessMap) {
       m.setMetallicRoughnessTexture(textures.get(M.roughnessMap)!);
       configure(m.getMetallicRoughnessTextureInfo()!, M.roughnessMap);
+    }
+    if (M.clearcoat) {
+      const ext = doc.createExtension(KHRMaterialsClearcoat);
+      m.setExtension('KHR_materials_clearcoat', ext.createClearcoat().setClearcoatFactor(M.clearcoat.factor).setClearcoatRoughnessFactor(M.clearcoat.roughness));
+    }
+    if (M.sheen) {
+      const ext = doc.createExtension(KHRMaterialsSheen);
+      m.setExtension('KHR_materials_sheen', ext.createSheen().setSheenColorFactor(M.sheen.color).setSheenRoughnessFactor(M.sheen.roughness));
     }
     materials.set(M.key, m);
   }
