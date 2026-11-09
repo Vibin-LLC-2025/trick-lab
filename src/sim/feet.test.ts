@@ -17,6 +17,7 @@ import {
   RAIL_Z,
   releaseAt,
   scoopDistance,
+  SKETCH,
   STANCE,
   TAIL_TOP,
   tuckHeight,
@@ -30,7 +31,7 @@ import {
 } from './feet';
 import { CLEARANCE, footLift, glbDeckTop, halfWidth } from './boardVolume';
 import { airtimeFor, computeFlight, PHASE, poseAt, POP_RISE_BY, type Pose, type TrickInputs } from './flight';
-import { PRESETS, presetById, recognize, snapInput } from './tricks';
+import { PRESETS, presetById, recognize, sketchAmount, snapInput } from './tricks';
 
 const REST: Pose = { y: 0, roll: 0, yaw: 0, pitch: 0 };
 /**
@@ -302,6 +303,76 @@ describe('flight', () => {
   // scoop, 3 rev/s, is a 25 cm backward kick in the first eighth of the
   // airtime, as fast as the coaching sources describe a 360 flip scoop. Still
   // far from a jump: the step is a tenth of a shoe length.
+  // ADR-63: a sketchy landing comes down off the bolts, toward the middle of
+  // the board, by an amount from the miss, and stays on the grip. Roll misses,
+  // yaw misses and both together, each direction, both stances; the shove-its
+  // end half round, so the front foot stands over the tail's bolts.
+  const SKETCHY: readonly { name: string; inputs: TrickInputs }[] = [
+    { name: 'a kickflip flipped 25 degrees past', inputs: { pop: 0.35, flick: 2, scoop: 0 } },
+    { name: 'a heelflip 14 degrees short', inputs: { pop: 0.35, flick: -1.8, scoop: 0 } },
+    { name: 'a pop shove-it 12 degrees past', inputs: { pop: 0.35, flick: 0, scoop: 1 } },
+    { name: 'a frontside shove-it 20 degrees short', inputs: { pop: 0.3, flick: 0, scoop: -0.9 } },
+    { name: 'a varial flip past on both', inputs: { pop: 0.35, flick: 2, scoop: 1 } },
+    { name: 'a varial heelflip past on both', inputs: { pop: 0.35, flick: -2, scoop: -1 } },
+    { name: 'a 360 flip past on both', inputs: { pop: 0.35, flick: 2, scoop: 2 } },
+  ];
+
+  it.each(SKETCHY)('lands $name off the bolts, toward the middle, on the grip (ADR-63)', ({ inputs }) => {
+    const flight = computeFlight(inputs);
+    expect(recognize(flight).grade).toBe('sketchy');
+    const sketch = sketchAmount(flight.rollTotal, flight.yawTotal);
+    expect(sketch).toBeGreaterThan(0.1);
+    const pose = poseAt(flight, 1);
+    const p = feetPoseAt(ollie, flight, 1);
+    // The front foot further than the back: a narrow, uneven stance.
+    expect(p.front.x).toBeCloseTo(BOLTS_X - SKETCH.front * sketch, 6);
+    expect(p.back.x).toBeCloseTo(-BOLTS_X + SKETCH.back * sketch, 6);
+    expect(BOLTS_X - p.front.x).toBeGreaterThan(p.back.x + BOLTS_X);
+    expect(p.front.z).toBeCloseTo(0, 6);
+    expect(p.back.z).toBeCloseTo(0, 6);
+    // Still on the grip, resting on the rails: clear of the board, and not floating above it.
+    expect(restsOnBoard(p.front, 1, pose)).toBe(true);
+    expect(restsOnBoard(p.back, -1, pose)).toBe(true);
+    // Regular is the mirror: the same distances the other way along the board.
+    const r = feetPoseAt(ollie, flight, 1, 'regular');
+    expect(r.front.x).toBeCloseTo(-p.front.x, 9);
+    expect(r.back.x).toBeCloseTo(-p.back.x, 9);
+    expect(r.front.y).toBeCloseTo(p.front.y, 9);
+  });
+
+  it('a sketchy landing never puts a sole in the board or under the pad, and never jumps (ADR-63)', () => {
+    for (const { inputs } of SKETCHY) {
+      const flight = computeFlight(inputs);
+      let prev = feetPoseAt(ollie, flight, 0);
+      for (let i = 1; i <= 100; i++) {
+        const u = i / 100;
+        const pose = poseAt(flight, u);
+        const p = feetPoseAt(ollie, flight, u);
+        // Nothing left to lift: the clearance already put each sole clear of the board in its pose.
+        expect(footLift(p.front, 1, pose)).toBeLessThan(3e-4);
+        expect(footLift(p.back, -1, pose)).toBeLessThan(3e-4);
+        for (const foot of ['front', 'back'] as const) {
+          expect(p[foot].y).toBeGreaterThan(PAD_Y - 1e-9);
+          // The world bound the landed tricks keep (below).
+          expect(Math.hypot(p[foot].x - prev[foot].x, p[foot].y - prev[foot].y, p[foot].z - prev[foot].z)).toBeLessThan(0.08);
+        }
+        prev = p;
+      }
+    }
+  });
+
+  it('a clean landing is on the bolts exactly: the sketchy offset starts from nothing at the clean limit', () => {
+    // Just inside and just outside 10 degrees of flip: the feet land within a hair of each other.
+    const at370 = { ...computeFlight(kickflip), rollTotal: 370 };
+    const at371 = { ...computeFlight(kickflip), rollTotal: 371 };
+    const a = feetPoseAt(ollie, at370, 1);
+    const b = feetPoseAt(ollie, at371, 1);
+    expect(a.front.x).toBe(BOLTS_X);
+    expect(a.back.x).toBe(-BOLTS_X);
+    expect(BOLTS_X - b.front.x).toBeGreaterThan(0);
+    expect(BOLTS_X - b.front.x).toBeLessThan(0.004);
+  });
+
   // Measured against the deck since ADR-27 (2026-11-04): in the pop the feet
   // ride the deck as it snaps 32 degrees nose up in 5 percent of the airtime,
   // so a front foot near the nose is carried up to 6 cm per percent by the

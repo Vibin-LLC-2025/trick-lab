@@ -52,6 +52,7 @@ export const createPlaybackSlice =
         trick: result.id,
         name: result.name,
         landed: result.landed,
+        grade: result.grade,
         outcome: result.outcome,
         rollTotal: round(result.rollTotal, 1),
         yawTotal: round(result.yawTotal, 1),
@@ -71,7 +72,7 @@ export const createPlaybackSlice =
         out.push(`${completed.length} of ${OBJECTIVES.length} objectives done.`);
       }
       // A landing in the lab is the student's to celebrate; in a game, only a set or copy that counts (scoreSkate).
-      if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name);
+      if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name, result.grade === 'clean');
       out.push(...s.scoreSkate(result, by));
       // The automatic step-down (ADR-59): this flight's pace, judged after its result and said with it.
       const pace = s.paceSource?.(s.flightId) ?? null;

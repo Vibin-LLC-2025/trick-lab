@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { computeFlight } from './flight';
 import {
   DEFAULT_INPUTS,
+  gradeOf,
+  isLanded,
   isUnderRotated,
   newlyCompleted,
   presetById,
@@ -10,6 +12,8 @@ import {
   PRESETS,
   recognize,
   resolveTrick,
+  sketchAmount,
+  sketchOf,
   snapInput,
 } from './tricks';
 
@@ -271,5 +275,49 @@ describe('snapInput', () => {
       const v = Number((i / 10).toFixed(1)) + 0;
       expect(snapInput('flick', v)).toBe(v);
     }
+  });
+});
+
+describe('graded landings (ADR-63)', () => {
+  it('every preset lands clean at pop 0.35 m and bails at 0.15 m', () => {
+    for (const p of PRESETS) {
+      expect(resolveTrick(p.inputs).grade, p.id).toBe('clean');
+      expect(resolveTrick({ ...p.inputs, pop: 0.15 }).grade, p.id).toBe('bail');
+    }
+  });
+
+  it('clean is inside 10 degrees of flip and 8 of shove; sketchy is the rest of a landing; isLanded is unchanged', () => {
+    const at = (rollTotal: number, yawTotal: number) => recognize({ ...computeFlight({ pop: 0.35, flick: 0, scoop: 0 }), rollTotal, yawTotal });
+    expect(at(370, 0)).toMatchObject({ landed: true, grade: 'clean' });
+    expect(at(370.1, 0)).toMatchObject({ landed: true, grade: 'sketchy' });
+    expect(at(390, 0)).toMatchObject({ landed: true, grade: 'sketchy' });
+    expect(at(390.1, 0)).toMatchObject({ landed: false, grade: 'bail' });
+    expect(at(0, 188)).toMatchObject({ landed: true, grade: 'clean' });
+    expect(at(0, 188.1)).toMatchObject({ landed: true, grade: 'sketchy' });
+    expect(at(0, 205)).toMatchObject({ landed: true, grade: 'sketchy' });
+    expect(at(0, 205.1)).toMatchObject({ landed: false, grade: 'bail' });
+    // Either axis outside its clean limit makes it sketchy; mirrors grade the same.
+    expect(at(-350, -172).grade).toBe('clean');
+    expect(at(-349, -172).grade).toBe('sketchy');
+    expect(at(-350, -171).grade).toBe('sketchy');
+    for (const [roll, yaw] of [[365, 0], [378, 0], [395, 0], [0, 200], [0, 206]] as const) {
+      expect(at(roll, yaw).landed).toBe(isLanded(roll, yaw));
+      expect(gradeOf(roll, yaw) !== 'bail').toBe(isLanded(roll, yaw));
+    }
+  });
+
+  it('how sketchy runs from 0 at the clean limit to 1 at the edge of landing, and names the worse axis', () => {
+    expect(sketchAmount(370, 0)).toBe(0);
+    expect(sketchAmount(380, 0)).toBeCloseTo(0.5, 10);
+    expect(sketchAmount(390, 0)).toBeCloseTo(1, 10);
+    expect(sketchAmount(0, 196.5)).toBeCloseTo(0.5, 10);
+    expect(sketchAmount(400, 0)).toBe(0);
+    const at = (rollTotal: number, yawTotal: number) => recognize({ ...computeFlight({ pop: 0.35, flick: 0, scoop: 0 }), rollTotal, yawTotal });
+    expect(sketchOf(at(365, 0))).toBeNull();
+    expect(sketchOf(at(395, 0))).toBeNull();
+    expect(sketchOf(at(378, 0))).toEqual({ axis: 'flip', by: 18, short: false });
+    expect(sketchOf(at(345, 0))).toEqual({ axis: 'flip', by: 15, short: true });
+    expect(sketchOf(at(-345, 0))).toEqual({ axis: 'flip', by: 15, short: true });
+    expect(sketchOf(at(372, 200))).toEqual({ axis: 'shove', by: 20, short: false });
   });
 });

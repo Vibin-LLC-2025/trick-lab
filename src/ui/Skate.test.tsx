@@ -57,7 +57,10 @@ describe('game screen (ADR-46)', () => {
 
     await start(user);
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your turn' }));
-    expect(announcer()).toHaveTextContent('Game of SKATE started, hard level. Coin flip: you set first.');
+    // Hard's rule is said as the game starts (ADR-63).
+    expect(announcer()).toHaveTextContent(
+      'Game of SKATE started, hard level. Only a clean landing counts on Hard: within 10 degrees on the flip and 8 on the shove. Coin flip: you set first.',
+    );
     // The coin flip is the first news; the trick is the student's to call.
     expect(within(game()).getByText('Coin flip: you set first.')).toBeInTheDocument();
     expect(within(game()).getByText('Your set')).toBeInTheDocument();
@@ -98,7 +101,7 @@ describe('game screen (ADR-46)', () => {
     expect(within(game()).getByText('The computer landed a heelflip.')).toBeInTheDocument();
     expect(within(game()).getByText('How to heelflip')).toBeInTheDocument();
     expect(within(game()).getByText('Toward heelflip (slider to the left), for one full flip.')).toBeInTheDocument();
-    expect(within(game()).getByText('Computer: Heelflip landed')).toBeInTheDocument();
+    expect(within(game()).getByText('Computer: Heelflip landed clean')).toBeInTheDocument();
     expect(announcer()).toHaveTextContent("The computer landed a heelflip. Your turn: copy the computer's heelflip");
     // Focus never moved during the turns.
     expect(document.activeElement).toBe(turnHeading());
@@ -110,7 +113,7 @@ describe('game screen (ADR-46)', () => {
     landNow();
     expect(within(game()).getByText('S', { selector: '.visually-hidden' })).toBeInTheDocument();
     expect(within(game()).getByText('You landed an ollie, but the trick to copy was a heelflip. You got S.')).toBeInTheDocument();
-    expect(within(game()).getByText('You: Ollie landed')).toBeInTheDocument();
+    expect(within(game()).getByText('You: Ollie landed clean')).toBeInTheDocument();
     // The setter keeps setting: the computer is up again, with its next call, on the same button.
     expect(turnHeading()).toHaveTextContent("Computer's turn");
     expect(within(game()).getByRole('button', { name: "Computer's go" })).toBe(pop);

@@ -6,6 +6,8 @@ import {
   awaitingCall,
   callProblem,
   callTrick,
+  CLEAN_ONLY_NOTE,
+  cleanSetup,
   coinFlip,
   markUsed,
   computerAttempt,
@@ -91,7 +93,8 @@ describe('the computer', () => {
         expect(Math.abs(inputs.flick)).toBeLessThanOrEqual(INPUT_LIMITS.flick.max);
         expect(Math.abs(inputs.scoop)).toBeLessThanOrEqual(INPUT_LIMITS.scoop.max);
         const r = resolveTrick(inputs);
-        if (r.landed && r.id === id) landed += 1;
+        // Made: landed as called, and clean where the level counts only clean landings (ADR-63).
+        if (r.landed && r.id === id && (!SKATE_LEVELS[level].cleanOnly || r.grade === 'clean')) landed += 1;
       }
       return landed / 2000;
     };
@@ -105,6 +108,33 @@ describe('the computer', () => {
     expect(tre).toBeGreaterThan(0.4);
     expect(tre).toBeLessThan(0.65);
     expect(rate('double-tre', 'hard')).toBeLessThan(kick.hard);
+    // Hard under the clean rule (ADR-63's table): about what it landed before the rule.
+    expect(kick.hard).toBeGreaterThan(0.93);
+    const doubleTre = rate('double-tre', 'hard');
+    expect(doubleTre).toBeGreaterThan(0.55);
+    expect(doubleTre).toBeLessThan(0.78);
+    const tre3 = rate('360-flip', 'hard');
+    expect(tre3).toBeGreaterThan(0.8);
+    expect(tre3).toBeLessThan(0.93);
+  });
+
+  it('every settable trick has a clean setup on the slider grid (ADR-63)', () => {
+    for (const c of SETTABLE_TRICKS) {
+      const inputs = cleanSetup(c);
+      for (const key of ['pop', 'flick', 'scoop'] as const) {
+        const { min, max, step } = INPUT_LIMITS[key];
+        expect(inputs[key], `${c.id} ${key}`).toBeGreaterThanOrEqual(min);
+        expect(inputs[key], `${c.id} ${key}`).toBeLessThanOrEqual(max);
+        // On the grid: a whole number of steps from the minimum.
+        expect(Math.abs((inputs[key] - min) / step - Math.round((inputs[key] - min) / step)), `${c.id} ${key}`).toBeLessThan(1e-6);
+      }
+      const r = resolveTrick(inputs);
+      expect(r.id, c.id).toBe(c.id);
+      expect(r.grade, c.id).toBe('clean');
+    }
+    // The double flips have one clean setup only: pop 0.55 m with the flick at its limit.
+    expect(cleanSetup(SETTABLE_TRICKS.find((t) => t.id === 'double-kickflip')!)).toEqual({ pop: 0.55, flick: 3, scoop: 0 });
+    expect(cleanSetup(SETTABLE_TRICKS.find((t) => t.id === 'double-tre')!)).toEqual({ pop: 0.55, flick: 3, scoop: 1.5 });
   });
 
   it('calls from its level, never a trick already set, and not its own last call twice running', () => {
@@ -295,6 +325,43 @@ describe('the rules', () => {
     expect(missed.game.phase).toBe('you-set');
     expect(missed.letterTo).toBe('computer');
     expect(missed.message).toBe('The computer missed your kickflip. The computer got S.');
+  });
+
+  it('on Hard a set or a copy counts only if it lands clean, for both players (ADR-63)', () => {
+    const sketchy = recognize({ ...computeFlight(presetById('kickflip').inputs), rollTotal: 378 });
+    expect(sketchy).toMatchObject({ id: 'kickflip', landed: true, grade: 'sketchy' });
+    expect(kickflip.grade).toBe('clean');
+    const hard = (phase: SkatePhase, extra: Partial<SkateGame> = {}) => game(phase, { call: kickCall, level: 'hard', ...extra });
+
+    // Easy and Normal count a sketchy landing.
+    expect(afterAttempt(game('you-set', { call: kickCall, level: 'normal' }), 'you', sketchy).made).toBe(true);
+    expect(afterAttempt(game('you-copy', { call: kickCall, level: 'easy' }), 'you', sketchy).made).toBe(true);
+
+    const set = afterAttempt(hard('you-set'), 'you', sketchy);
+    expect(set).toMatchObject({ made: false, set: null, letterTo: null });
+    expect(set.game.phase).toBe('computer-set');
+    expect(set.game.used).toEqual([]);
+    expect(set.message).toBe('You landed your kickflip, but sketchy: on Hard only a clean landing counts. The computer sets next.');
+
+    const copy = afterAttempt(hard('you-copy'), 'you', sketchy);
+    expect(copy).toMatchObject({ made: false, letterTo: 'you' });
+    expect(copy.message).toBe('You landed the kickflip, but sketchy: on Hard only a clean landing counts. You got S.');
+
+    const cpuSet = afterAttempt(hard('computer-set'), 'computer', sketchy);
+    expect(cpuSet.game.phase).toBe('you-set');
+    expect(cpuSet.message).toBe("The computer landed the kickflip sketchy, and on Hard only a clean landing counts, so it's your turn to set.");
+
+    const cpuCopy = afterAttempt(hard('computer-copy'), 'computer', sketchy);
+    expect(cpuCopy).toMatchObject({ made: false, letterTo: 'computer' });
+    expect(cpuCopy.message).toBe('The computer landed your kickflip, but sketchy: on Hard only a clean landing counts. The computer got S.');
+
+    // Clean still counts on Hard, and the last-letter second try still applies to a sketchy copy.
+    expect(afterAttempt(hard('you-set'), 'you', kickflip).made).toBe(true);
+    const retry = afterAttempt(hard('you-copy', { letters: { you: 4, computer: 0 } }), 'you', sketchy);
+    expect(retry.letterTo).toBeNull();
+    expect(retry.game.secondTry).toBe(true);
+    expect(SKATE_LEVELS.hard.hint).toContain('Only a clean landing counts');
+    expect(CLEAN_ONLY_NOTE).toBe('Only a clean landing counts on Hard: within 10 degrees on the flip and 8 on the shove.');
   });
 
   it('an attempt by the player who is not up changes nothing', () => {

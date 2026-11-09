@@ -137,7 +137,9 @@ per drag), `objective.completed`, `session.reset`, and for the game of SKATE
 (2026-11-06, ADR-43) `skate.started` (level, and since ADR-44 the coin
 flip's `first`), `skate.set`, `skate.letter` and `skate.ended`;
 `trick.popped` and `trick.resolved` carry `by` (you or computer), and in a
-game `trick.popped` carries the `call` in play. Exportable as JSON.
+game `trick.popped` carries the `call` in play. Since 2026-11-09 (ADR-63)
+`trick.resolved` also carries the landing's `grade` (clean, sketchy or
+bail), and the export's schema is `trick-lab.events/2`. Exportable as JSON.
 Reset clears inputs to defaults and board pose, keeps the log.
 
 ## Architecture contract (design and implementation both follow this)

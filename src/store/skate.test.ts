@@ -144,7 +144,7 @@ describe('game of SKATE', () => {
     expect(after.skate.phase).toBe('you-copy');
     expect(after.events.find((e) => e.type === 'trick.resolved')?.payload.by).toBe('computer');
     expect(after.events.at(-1)).toMatchObject({ type: 'skate.set', payload: { by: 'computer', trick: 'heelflip' } });
-    expect(said(store)).toMatch(/^The computer's trick: Heelflip landed\./);
+    expect(said(store)).toMatch(/^The computer's trick: Heelflip landed clean./);
     expect(said(store)).toMatch(/The computer landed a heelflip\. Your turn: copy the computer's heelflip\. Set the sliders, then press Pop\.$/);
   });
 
@@ -409,7 +409,7 @@ describe('the celebration in a game', () => {
     const copy = presetById(call.id as PresetId).inputs;
     tryInputs(store, copy.flick, copy.scoop);
     expect(store.getState().skate.letters.you).toBe(1);
-    expect(store.getState().celebration).toEqual({ nonce: 1, trick: call.name });
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: call.name, clean: true });
     // Nothing about it is logged.
     expect(types(store).filter((t) => t.includes('celebrat'))).toEqual([]);
   });
@@ -419,7 +419,7 @@ describe('the celebration in a game', () => {
     store.getState().startSkate();
     callAndSet(store, 'kickflip');
     expect(store.getState().skate.phase).toBe('computer-copy');
-    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip' });
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip', clean: true });
   });
 });
 
@@ -467,5 +467,38 @@ describe('the game sounds', () => {
     pop(store);
     expect(store.getState().skate.winner).toBe('you');
     expect(kinds.slice(-2)).toEqual(['letter', 'win']);
+  });
+});
+
+describe('graded landings in a game (ADR-63)', () => {
+  it('on Hard a sketchy set does not count: no set, no celebration, and the computer sets next', () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().setSkateLevel('hard');
+    store.getState().startSkate();
+    expect(said(store)).toBe(
+      'Game of SKATE started, hard level. Only a clean landing counts on Hard: within 10 degrees on the flip and 8 on the shove. Coin flip: you set first. Your turn to set: call a trick, then land it. The computer has to copy it.',
+    );
+    store.getState().callSkateTrick('kickflip');
+    // Flick 2.0 at pop 0.35 m: a kickflip 25 degrees past, landed but sketchy.
+    tryInputs(store, 2);
+    const s = store.getState();
+    expect(s.result).toMatchObject({ id: 'kickflip', landed: true, grade: 'sketchy' });
+    expect(s.skate.phase).toBe('computer-set');
+    expect(s.skate.used).toEqual([]);
+    expect(s.celebration).toBeNull();
+    expect(types(store)).not.toContain('skate.set');
+    expect(s.skateMessage).toBe('You landed your kickflip, but sketchy: on Hard only a clean landing counts. The computer sets next.');
+    expect(said(store)).toMatch(/^Kickflip landed, sketchy: 25 degrees past on the flip\. .*You landed your kickflip, but sketchy: on Hard only a clean landing counts\./);
+    expect(s.events.find((e) => e.type === 'trick.resolved')!.payload).toMatchObject({ landed: true, grade: 'sketchy' });
+  });
+
+  it('on Normal the same sketchy set counts, and its celebration is not a clean one', () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().startSkate();
+    store.getState().callSkateTrick('kickflip');
+    tryInputs(store, 2);
+    expect(store.getState().skate.phase).toBe('computer-copy');
+    expect(store.getState().skate.used).toEqual(['kickflip']);
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip', clean: false });
   });
 });

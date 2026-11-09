@@ -1,10 +1,21 @@
 // Pure trick recognition, presets and objectives. No React, no three.
 import { computeFlight, type Flight, type TrickInputs } from './flight';
-import { isLanded, rollError as rollErrorOf, ROLL_TOLERANCE, turns, yawError as yawErrorOf, YAW_TOLERANCE } from './landing';
+import {
+  CLEAN_ROLL,
+  CLEAN_YAW,
+  gradeOf,
+  isLanded,
+  rollError as rollErrorOf,
+  ROLL_TOLERANCE,
+  turns,
+  yawError as yawErrorOf,
+  YAW_TOLERANCE,
+  type Grade,
+} from './landing';
 
 // The landing rule lives in landing.ts (ADR-36), so flight.ts can use it
 // without importing this file; re-exported so no other import changes.
-export { isLanded, rollError, ROLL_TOLERANCE, turns, yawError, YAW_TOLERANCE } from './landing';
+export { CLEAN_ROLL, CLEAN_YAW, gradeOf, isLanded, rollError, ROLL_TOLERANCE, sketchAmount, turns, yawError, YAW_TOLERANCE, type Grade } from './landing';
 
 export type TrickId =
   | 'ollie'
@@ -55,6 +66,8 @@ export interface TrickResult {
   airtime: number;
   peak: number;
   landed: boolean;
+  /** Clean, sketchy or bail (ADR-63). `landed` is true for the first two. */
+  grade: Grade;
   /** Under or over against the direction of rotation (isUnderRotated), not the raw sign of the error. */
   outcome: Outcome;
   /** Axis that failed (the one furthest past its tolerance), or null when landed. */
@@ -170,6 +183,7 @@ export function recognize(flight: Flight): TrickResult {
     airtime,
     peak,
     landed,
+    grade: gradeOf(rollTotal, yawTotal),
     outcome,
     failedAxis,
     failedBy,
@@ -177,6 +191,20 @@ export function recognize(flight: Flight): TrickResult {
 }
 
 export const resolveTrick = (inputs: TrickInputs) => recognize(computeFlight(inputs));
+
+/**
+ * What makes a landing sketchy (ADR-63): the axis furthest past its clean
+ * limit, how many degrees it is off, and whether it fell short of its turn or
+ * went past it. Null for a clean landing or a bail.
+ */
+export function sketchOf(r: Pick<TrickResult, 'grade' | 'rollError' | 'yawError' | 'rollTotal' | 'yawTotal'>): { axis: Axis; by: number; short: boolean } | null {
+  if (r.grade !== 'sketchy') return null;
+  const roll = (Math.abs(r.rollError) - CLEAN_ROLL) / (ROLL_TOLERANCE - CLEAN_ROLL);
+  const yaw = (Math.abs(r.yawError) - CLEAN_YAW) / (YAW_TOLERANCE - CLEAN_YAW);
+  return roll >= yaw
+    ? { axis: 'flip', by: Math.abs(r.rollError), short: isUnderRotated(r.rollTotal, 360) }
+    : { axis: 'shove', by: Math.abs(r.yawError), short: isUnderRotated(r.yawTotal, 180) };
+}
 
 export const DEFAULT_INPUTS: TrickInputs = { pop: 0.35, flick: 0, scoop: 0 };
 

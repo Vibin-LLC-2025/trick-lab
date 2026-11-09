@@ -124,7 +124,7 @@ describe('trick lab UI', () => {
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     landNow();
     const outcome = screen.getByRole('region', { name: 'Outcome' });
-    expect(within(outcome).getByText('Varial heelflip landed')).toHaveClass('outcome__name');
+    expect(within(outcome).getByText('Varial heelflip landed clean')).toHaveClass('outcome__name');
     expect(within(outcome).getByText('365 deg heelflip, 173 deg frontside shove, 0.53 s in the air.')).toBeInTheDocument();
     const values = [...outcome.querySelectorAll('.telemetry__v')].map((v) => v.textContent);
     // The fifth row (ADR-36, 2026-11-05): the board's spin rate in the air, between the ramp-up and the catch.
@@ -152,15 +152,15 @@ describe('trick lab UI', () => {
 
     landNow();
     expect(announcer()).toHaveTextContent(
-      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 7 objectives done.',
+      'Kickflip landed clean. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
-    expect(screen.getByText('Kickflip landed')).toBeInTheDocument();
+    expect(screen.getByText('Kickflip landed clean')).toBeInTheDocument();
     expect(screen.getByText('365 deg kickflip, 0 deg shove, 0.53 s in the air.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Objectives 1 of 7' })).toBeInTheDocument();
     expect(document.querySelectorAll('.objective--done')).toHaveLength(1);
     // The outcome headline names the trick; the strip below gives the numbers and marks no axis.
     const outcome = screen.getByRole('region', { name: 'Outcome' });
-    expect(within(outcome).getByText('Kickflip landed')).toHaveClass('outcome__name');
+    expect(within(outcome).getByText('Kickflip landed clean')).toHaveClass('outcome__name');
     expect(within(outcome).getByText('365°', { exact: false }).closest('.telemetry__v')).toHaveTextContent('365° kickflip');
     expect(within(outcome).getByText('0.53 s')).toBeInTheDocument();
     expect(outcome.querySelector('.telemetry__v--bad')).toBeNull();
@@ -173,7 +173,7 @@ describe('trick lab UI', () => {
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     landNow();
     expect(screen.getByRole('button', { name: 'Pop' })).toHaveFocus();
-    expect(announcer()).toHaveTextContent('Varial flip landed.');
+    expect(announcer()).toHaveTextContent('Varial flip landed clean.');
   });
 
   it('a low pop is not landed and says which axis and by how much', async () => {
@@ -305,7 +305,7 @@ describe('reduced motion', () => {
     await user.keyboard(' ');
 
     expect(useTrickStore.getState().status).toBe('done');
-    expect(announcer()).toHaveTextContent(/Popped with .* Pop shove-it landed\. 0 degrees of flip, 173 degrees of backside shove/);
+    expect(announcer()).toHaveTextContent(/Popped with .* Pop shove-it landed clean. 0 degrees of flip, 173 degrees of backside shove/);
     expect(announcer()).toHaveTextContent('Objective complete: Land a pop shove-it.');
     expect(description()).toHaveTextContent('Skateboard back on the pad at its landing pose.');
 
@@ -723,7 +723,7 @@ describe('reduced motion turned on mid-flight (ADR-6)', () => {
     expect(useTrickStore.getState().status).toBe('playing');
     setReduced(true);
     expect(useTrickStore.getState().status).toBe('done');
-    expect(announcer()).toHaveTextContent(/^Reduced motion on: the board goes straight to its landing\. Kickflip landed\..*Objective complete: Land a kickflip\./);
+    expect(announcer()).toHaveTextContent(/^Reduced motion on: the board goes straight to its landing\. Kickflip landed clean..*Objective complete: Land a kickflip\./);
     expect(description()).toHaveTextContent('Skateboard back on the pad at its landing pose.');
     expect(timeline()).toBeEnabled();
     // FlightDriver's land() arriving late changes nothing.
@@ -747,7 +747,7 @@ describe('reduced motion turned on mid-flight (ADR-6)', () => {
     // The next pop resolves at once with one combined announcement. (Focus is on a button, where Space presses it.)
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     expect(useTrickStore.getState().status).toBe('done');
-    expect(announcer()).toHaveTextContent(/^Popped with .*Ollie landed\./);
+    expect(announcer()).toHaveTextContent(/^Popped with .*Ollie landed clean./);
     expect(resolved()).toHaveLength(2);
   });
 });
@@ -764,7 +764,7 @@ describe('scene description while the board is in the air (audit fix, 2026-11-04
     expect(description()).toHaveTextContent('Waiting for this trick to land.');
     await user.click(screen.getByRole('button', { name: 'Resume' }));
     landNow();
-    expect(description()).toHaveTextContent('Last trick: Kickflip landed.');
+    expect(description()).toHaveTextContent('Last trick: Kickflip landed clean.');
     await user.click(screen.getByRole('button', { name: 'Pop' }));
     expect(description()).toHaveTextContent('Waiting for this trick to land.');
     expect(description()).not.toHaveTextContent('Last trick');

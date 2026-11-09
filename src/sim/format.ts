@@ -23,6 +23,8 @@ import {
   isUnderRotated,
   ROLL_TOLERANCE,
   SHOVE_WORDS,
+  sketchAmount,
+  sketchOf,
   YAW_TOLERANCE,
   type InputKey,
   type TrickResult,
@@ -120,10 +122,21 @@ export function spinReadout(flight: Pick<Flight, 'flipRate' | 'shoveRate'>): str
   return parts.length ? `${parts.join(', ')} in the air` : null;
 }
 
-/** "Heelflip landed. 365 degrees of heelflip, 0 degrees of shove, 0.53 seconds in the air." */
+/** A sketchy landing's miss, as heard: "18 degrees past on the flip", "12 degrees short on the shove". */
+export function sketchText(r: TrickResult): string {
+  const sk = sketchOf(r);
+  return sk ? `${degWord(sk.by)} ${sk.short ? 'short' : 'past'} on the ${sk.axis}` : '';
+}
+
+/**
+ * "Heelflip landed clean. 365 degrees of heelflip, 0 degrees of shove, 0.53
+ * seconds in the air.", or "Kickflip landed, sketchy: 18 degrees past on the
+ * flip. ..." (ADR-63).
+ */
 export function describeResult(r: TrickResult): string {
   const totals = `${degWord(r.rollTotal)} of ${flipNoun(r.rollTotal)}, ${degWord(r.yawTotal)} of ${shoveNoun(r.yawTotal)}, ${seconds(r.airtime)} seconds in the air.`;
-  if (r.landed) return `${r.name} landed. ${totals}`;
+  if (r.grade === 'sketchy') return `${r.name} landed, sketchy: ${sketchText(r)}. ${totals}`;
+  if (r.landed) return `${r.name} landed clean. ${totals}`;
   return `${r.name} not landed: ${r.failedAxis} ${r.outcome} by ${degWord(r.failedBy)}. ${totals}`;
 }
 
@@ -137,6 +150,14 @@ const HINT: Record<'flip' | 'shove', Record<'under' | 'over', string>> = {
  * "deg" and "s"; the announcer is heard, so it uses full words.
  */
 export function outcomeCard(r: TrickResult): { name: string; detail: string } {
+  const sk = sketchOf(r);
+  if (sk) {
+    // Sketchy (ADR-63): which axis was off, which way, and what to change.
+    return {
+      name: `${r.name} landed, sketchy`,
+      detail: `${Math.abs(deg(sk.by))} deg ${sk.short ? 'short' : 'past'} on the ${sk.axis}. ${HINT[sk.axis][sk.short ? 'under' : 'over']}`,
+    };
+  }
   if (r.landed) {
     // "No rotation" only when both totals show as 0: an ollie inside the
     // tolerances can still have turned up to 30 degrees of flip and 25 of
@@ -145,7 +166,7 @@ export function outcomeCard(r: TrickResult): { name: string; detail: string } {
       r.id === 'ollie' && deg(r.rollTotal) === 0 && deg(r.yawTotal) === 0
         ? `No rotation, ${seconds(r.airtime)} s in the air. Add flick or scoop to try a trick.`
         : `${Math.abs(deg(r.rollTotal))} deg ${flipNoun(r.rollTotal)}, ${Math.abs(deg(r.yawTotal))} deg ${shoveNoun(r.yawTotal)}, ${seconds(r.airtime)} s in the air.`;
-    return { name: `${r.name} landed`, detail };
+    return { name: `${r.name} landed clean`, detail };
   }
   // Under or over against the direction of rotation (ADR-30), not the raw sign of the error.
   const off = [
@@ -287,9 +308,17 @@ export function footSteps(s: { flight: Flight | null; pop: number; flick: number
       end: C.end,
     });
   }
+  const sketchy = sketchAmount(flight.rollTotal, flight.yawTotal) > 0;
   steps.push(
     landed
-      ? { foot: 'both', text: 'Both feet ride the board down over the bolts and land on the grip.', start: CATCH.back, end: 1 }
+      ? {
+          foot: 'both',
+          text: sketchy
+            ? 'Both feet ride the board down, but come down off the bolts, toward the middle: a sketchy landing.'
+            : 'Both feet ride the board down over the bolts and land on the grip.',
+          start: CATCH.back,
+          end: 1,
+        }
       : { foot: 'both', text: 'The board does not come round in time: both feet step off to the heel side, a bail.', start: M.bail.start, end: 1 },
   );
   return steps;
@@ -300,7 +329,8 @@ function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done
   if (!s.flight || s.status === 'idle') return '';
   const landed = isLanded(s.flight.rollTotal, s.flight.yawTotal);
   if (s.status === 'done' && s.progress >= 1) {
-    return landed ? 'Feet landed on the bolts.' : 'Feet stepped off to the heel side and landed on the pad: a bail.';
+    if (!landed) return 'Feet stepped off to the heel side and landed on the pad: a bail.';
+    return sketchAmount(s.flight.rollTotal, s.flight.yawTotal) > 0 ? 'Feet landed off the bolts, toward the middle: a sketchy landing.' : 'Feet landed on the bolts.';
   }
   return landed && s.progress >= CATCH.back ? 'Feet on the board, riding it down.' : 'Feet in the air above the board.';
 }

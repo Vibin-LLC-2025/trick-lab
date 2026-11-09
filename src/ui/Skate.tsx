@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { outcomeCard } from '../sim/format';
 import {
+  CLEAN_ONLY_NOTE,
   computerTurn,
   GUIDE_TIP,
   lettersText,
@@ -131,6 +132,7 @@ function Scoreboard() {
 /** The trick guide (ADR-44): which way and how far to flick and scoop, in words, never the slider values. */
 function Guide({ call }: { call: SkateCall }) {
   const guide = trickGuide(call);
+  const cleanOnly = useTrickStore((s) => SKATE_LEVELS[s.skate.level].cleanOnly);
   return (
     <div className="skate__guide">
       <p className="skate__guide-title">How to {call.name.toLowerCase()}</p>
@@ -141,6 +143,7 @@ function Guide({ call }: { call: SkateCall }) {
         <dd>{guide.scoop}</dd>
       </dl>
       <p className="panel__note">{GUIDE_TIP}</p>
+      {cleanOnly && <p className="panel__note">{CLEAN_ONLY_NOTE}</p>}
     </div>
   );
 }

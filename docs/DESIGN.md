@@ -138,14 +138,17 @@ Tone: short, plain, encouraging but honest. Name the trick, say what happened, g
 
 | Case | `.outcome__name` | `.outcome__detail` |
 | --- | --- | --- |
-| Landed | `Kickflip landed` | `365 deg kickflip, 0 deg shove, 0.53 s in the air.` (since ADR-30 each non-zero total names its direction: `365 deg heelflip, 173 deg frontside shove, ...`) |
+| Landed clean (ADR-63: within 10 deg of flip and 8 of shove) | `Kickflip landed clean` | `365 deg kickflip, 0 deg shove, 0.53 s in the air.` (since ADR-30 each non-zero total names its direction: `365 deg heelflip, 173 deg frontside shove, ...`) |
+| Landed, sketchy (ADR-63: landed, outside a clean limit) | `Kickflip landed, sketchy` | `18 deg past on the flip. Ease the flick a little.` The axis is the one furthest past its clean limit; `short` when it fell short of its turn, `past` when it went over; then the same hint a miss on that axis gets. |
 | Under-rotated flip | `Kickflip not landed` | `Under-rotated by 48 deg of flip. More flick or more pop gives it time.` |
 | Over-rotated shove | `Pop shove-it not landed` | `Over-rotated by 31 deg of shove. Ease the scoop a little.` |
 | Both axes off | `Varial flip not landed` | `Under-rotated 40 deg of flip, over-rotated 28 deg of shove.` |
 | Nothing set yet (idle) | `Set the board up and pop` | `Pick a preset or move the sliders, then press Pop or Space.` |
-| Ollie (no rotation, landed) | `Ollie landed` | `No rotation, 0.53 s in the air. Add flick or scoop to try a trick.` |
+| Ollie (no rotation, landed) | `Ollie landed clean` | `No rotation, 0.53 s in the air. Add flick or scoop to try a trick.` |
 
-The live announcer uses full words ("365 degrees of kickflip") while the card uses `deg` and `s`, because the card is scanned and the announcer is heard.
+The live announcer uses full words ("365 degrees of kickflip") while the card uses `deg` and `s`, because the card is scanned and the announcer is heard. It says the grade the same way: "Kickflip landed clean. 365 degrees of kickflip, ..." or "Kickflip landed, sketchy: 18 degrees past on the flip. 378 degrees of kickflip, ...".
+
+Graded landings (2026-11-09, ADR-63) add no class and no colour: a sketchy landing is still a landing, so it keeps the landed card's green bar and check glyph, and the words carry the grade. The celebration's shout is "Clean!" for a clean landing and "Landed!" for a sketchy one (14.7). In the scene a sketchy landing's shoes come down off the bolts, toward the middle of the board (the front shoe up to 6 cm, the back up to 3.5 cm, growing with the miss), and the scene description says so.
 
 Since the UI redesign (section 9) the "card" is no longer a box: it is the headline of the Outcome section at the top of the results column, and the copy above is unchanged.
 

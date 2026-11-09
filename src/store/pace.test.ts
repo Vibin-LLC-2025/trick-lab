@@ -116,7 +116,7 @@ describe('the step-down at a landing (ADR-59)', () => {
     expect(asked).toEqual([1, 2, 3]);
     const s = store.getState();
     expect(s.quality).toBe('medium');
-    expect(s.announcement.message).toMatch(/^Kickflip landed\. .*Tricks were running slowly on this device, so quality is now medium\. You can change it in View\.$/);
+    expect(s.announcement.message).toMatch(/^Kickflip landed clean. .*Tricks were running slowly on this device, so quality is now medium\. You can change it in View\.$/);
     expect(s.events.map((e) => e.type).filter((t) => !['preset.applied', 'trick.popped', 'trick.resolved', 'objective.completed'].includes(t))).toEqual([]);
   });
 

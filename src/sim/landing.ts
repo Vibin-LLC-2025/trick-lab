@@ -8,6 +8,16 @@
 export const ROLL_TOLERANCE = 30;
 /** A landing needs the shove within this many degrees of a half turn. */
 export const YAW_TOLERANCE = 25;
+/** A clean landing (ADR-63) has the flip within this many degrees of a whole revolution. */
+export const CLEAN_ROLL = 10;
+/** A clean landing has the shove within this many degrees of a half turn. */
+export const CLEAN_YAW = 8;
+
+/**
+ * How a flight ended (ADR-63). Clean: inside both clean limits. Sketchy:
+ * landed (isLanded), but outside a clean limit. Bail: not landed.
+ */
+export type Grade = 'clean' | 'sketchy' | 'bail';
 
 /**
  * Symmetric round to the nearest whole number of turns: Math.round sends -0.5
@@ -26,3 +36,21 @@ export const yawError = (yawTotal: number) => yawTotal - turns(yawTotal / 180) *
  */
 export const isLanded = (rollTotal: number, yawTotal: number) =>
   Math.abs(rollError(rollTotal)) <= ROLL_TOLERANCE && Math.abs(yawError(yawTotal)) <= YAW_TOLERANCE;
+
+/**
+ * How far a landed flight is from clean, 0 to 1 (ADR-63): 0 inside both clean
+ * limits, rising to 1 where the worse axis reaches its landing tolerance.
+ * Continuous, so the feet's sketchy offset (feet.ts) grows from nothing. 0
+ * for a flight that does not land (it bails instead). Allocation-free.
+ */
+export function sketchAmount(rollTotal: number, yawTotal: number): number {
+  if (!isLanded(rollTotal, yawTotal)) return 0;
+  const roll = (Math.abs(rollError(rollTotal)) - CLEAN_ROLL) / (ROLL_TOLERANCE - CLEAN_ROLL);
+  const yaw = (Math.abs(yawError(yawTotal)) - CLEAN_YAW) / (YAW_TOLERANCE - CLEAN_YAW);
+  const worst = Math.max(roll, yaw);
+  return worst <= 0 ? 0 : worst >= 1 ? 1 : worst;
+}
+
+/** The grade of a flight with these totals. `isLanded` still decides land or bail; this only splits the landings. */
+export const gradeOf = (rollTotal: number, yawTotal: number): Grade =>
+  !isLanded(rollTotal, yawTotal) ? 'bail' : sketchAmount(rollTotal, yawTotal) > 0 ? 'sketchy' : 'clean';

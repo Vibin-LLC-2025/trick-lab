@@ -78,7 +78,7 @@ describe('scene failure boundary', () => {
     expect(screen.getByRole('complementary', { name: 'Results' })).toBeInTheDocument();
 
     await popResolvesAtOnce(app, '1', 'kickflip');
-    expect(announcer()).toHaveTextContent(/^Popped with .*Kickflip landed\..*Objective complete: Land a kickflip\./);
+    expect(announcer()).toHaveTextContent(/^Popped with .*Kickflip landed clean..*Objective complete: Land a kickflip\./);
     expect(count(app, 'trick.resolved')).toBe(1);
     expect(count(app, 'objective.completed')).toBe(1);
     expect(warn).toHaveBeenCalled();
@@ -125,11 +125,11 @@ describe('scene failure boundary', () => {
     const s = app.useTrickStore.getState();
     expect(s.status).toBe('done');
     expect(s.result?.id).toBe('kickflip');
-    expect(announcer()).toHaveTextContent(new RegExp(`^${FAILED.replace(/[.;]/g, '\\$&')} Kickflip landed\\..*Objective complete: Land a kickflip\\.`));
+    expect(announcer()).toHaveTextContent(new RegExp(`^${FAILED.replace(/[.;]/g, '\\$&')} Kickflip landed clean...*Objective complete: Land a kickflip\\.`));
     expect(count(app, 'trick.resolved')).toBe(1);
     expect(count(app, 'objective.completed')).toBe(1);
     // The Results panel shows the outcome, and the next pop resolves at once.
-    expect(screen.getByText('Kickflip landed')).toBeInTheDocument();
+    expect(screen.getByText('Kickflip landed clean')).toBeInTheDocument();
     await popResolvesAtOnce(app, '1', 'kickflip');
     expect(count(app, 'trick.resolved')).toBe(2);
     expect(count(app, 'objective.completed')).toBe(1);

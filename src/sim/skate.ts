@@ -5,7 +5,7 @@
 // level, and the real flight and recognition decide what happened, exactly as
 // they do for the student. Randomness always comes in as a parameter.
 import { airtimeFor, type TrickInputs } from './flight';
-import { INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
+import { CLEAN_ROLL, CLEAN_YAW, INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
 
 export const SKATE_WORD = 'SKATE';
 /** Letters that end a game: one per letter of SKATE. */
@@ -52,32 +52,43 @@ export interface SkateGame {
 }
 
 /**
- * Per level: how far the computer misses its aim, and what it may call.
+ * Per level: how far the computer misses its aim, what it may call, and
+ * whether only a clean landing counts (ADR-63).
  * `spread` scales the miss: the standard deviation on a rate is spread times
  * (0.25 + the rate), so a bigger flick or scoop is harder to get right and
  * an axis the trick does not use stays nearly still. Normal lands a kickflip
  * about 3 times in 4 and a 360 flip about half the time (skate.test.ts).
+ * Hard counts only clean landings, for both players, so its spread is the one
+ * that keeps the computer making its tricks about as often as it landed them
+ * before the rule (0.035 then: a kickflip 97 times in 100, a double tre 64;
+ * 0.012 now: 97 and 66, ADR-63's table).
  */
-export const SKATE_LEVELS: Record<SkateLevel, { label: string; spread: number; calls: readonly TrickId[]; hint: string }> = {
+export const SKATE_LEVELS: Record<SkateLevel, { label: string; spread: number; calls: readonly TrickId[]; cleanOnly: boolean; hint: string }> = {
   easy: {
     label: 'Easy',
     spread: 0.1,
     calls: ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it'],
+    cleanOnly: false,
     hint: 'The computer misses often and sticks to simple flips and shove-its.',
   },
   normal: {
     label: 'Normal',
     spread: 0.06,
     calls: PRESETS.map((p) => p.id),
+    cleanOnly: false,
     hint: 'The computer goes for the seven classic tricks, up to the 360 flip.',
   },
   hard: {
     label: 'Hard',
-    spread: 0.035,
+    spread: 0.012,
     calls: NAMED_TRICKS.filter((t) => t.id !== 'ollie').map((t) => t.id),
-    hint: 'The computer rarely misses and goes for every trick, doubles included.',
+    cleanOnly: true,
+    hint: 'The computer rarely misses and goes for every trick, doubles included. Only a clean landing counts, for both of you.',
   },
 };
+
+/** Said wherever Hard's rule needs saying: the guide, and the start of a game. */
+export const CLEAN_ONLY_NOTE = `Only a clean landing counts on Hard: within ${CLEAN_ROLL} degrees on the flip and ${CLEAN_YAW} on the shove.`;
 
 export const SKATE_LEVEL_ORDER: readonly SkateLevel[] = ['easy', 'normal', 'hard'];
 
@@ -170,6 +181,35 @@ export function aimFor(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInpu
   while (pop < INPUT_LIMITS.pop.max && turnsNeeded / airtimeFor(pop) > AIM_MAX_RATE) pop = snapInput('pop', pop + INPUT_LIMITS.pop.step);
   const T = airtimeFor(pop);
   return { pop, flick: call.flips / T, scoop: call.halfShoves / 2 / T };
+}
+
+/**
+ * The slider setup that lands a call cleanest (ADR-63): for each pop on the
+ * slider grid, the flick and scoop steps nearest the rates that turn exactly
+ * the call's flips and half shoves, scored by its worse axis against the
+ * clean limits; the best score wins, and of equal scores the lowest pop.
+ * Every settable trick has a clean one (skate.test.ts): the double flips
+ * only at pop 0.55 m with flick 3.0. Tests and the first game's walk-through
+ * use it, since `aimFor`'s exact rates are off the slider grid.
+ */
+export function cleanSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInputs {
+  const P = INPUT_LIMITS.pop;
+  let best: TrickInputs = { pop: P.min, flick: 0, scoop: 0 };
+  let bestScore = Infinity;
+  for (let pop = P.min; pop <= P.max + 1e-9; pop = snapInput('pop', pop + P.step)) {
+    const T = airtimeFor(pop);
+    const flick = snapInput('flick', call.flips / T);
+    const scoop = snapInput('scoop', call.halfShoves / 2 / T);
+    const rollOff = Math.abs(flick * T * 360 - call.flips * 360);
+    const yawOff = Math.abs(scoop * T * 360 - call.halfShoves * 180);
+    const score = Math.max(rollOff / CLEAN_ROLL, yawOff / CLEAN_YAW);
+    if (score < bestScore - 1e-9) {
+      bestScore = score;
+      best = { pop, flick, scoop };
+    }
+    if (pop >= P.max) break;
+  }
+  return best;
 }
 
 /** A standard normal draw (Box-Muller), clamped to 3 deviations so one wild draw cannot turn a call into another trick. */
@@ -287,8 +327,12 @@ const lastLetterRetry = (g: SkateGame, who: SkatePlayer) => g.letters[who] === S
  * attempt by the player who is not up changes nothing.
  */
 export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): SkateStep {
-  const same = (c: SkateCall | null) => c !== null && r.landed && r.id === c.id;
+  const cleanOnly = SKATE_LEVELS[g.level].cleanOnly;
+  // The right trick, landed, but sketchy where only clean counts (ADR-63): it does not count, and the message says why.
+  const sketchy = (c: SkateCall | null) => c !== null && cleanOnly && r.landed && r.id === c.id && r.grade !== 'clean';
+  const same = (c: SkateCall | null) => c !== null && r.landed && r.id === c.id && !sketchy(c);
   const none = (message: string): SkateStep => ({ game: g, letterTo: null, set: null, made: false, message });
+  const HARD = 'on Hard only a clean landing counts';
 
   switch (g.phase) {
     case 'computer-set': {
@@ -308,7 +352,9 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
         letterTo: null,
         set: null,
         made: false,
-        message: `The computer missed ${the(call.name)}, so it's your turn to set.`,
+        message: sketchy(call)
+          ? `The computer landed ${the(call.name)} sketchy, and ${HARD}, so it's your turn to set.`
+          : `The computer missed ${the(call.name)}, so it's your turn to set.`,
       };
     }
     case 'you-copy': {
@@ -317,7 +363,11 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
       if (same(call)) {
         return { game: { ...g, phase: 'computer-set', call: null, secondTry: false }, letterTo: null, set: null, made: true, message: `You copied ${the(call.name)}!` };
       }
-      const missed = r.landed ? `You landed ${landedAs(r)}, but the trick to copy was ${a(call.name)}.` : `You missed ${the(call.name)}.`;
+      const missed = sketchy(call)
+        ? `You landed ${the(call.name)}, but sketchy: ${HARD}.`
+        : r.landed
+          ? `You landed ${landedAs(r)}, but the trick to copy was ${a(call.name)}.`
+          : `You missed ${the(call.name)}.`;
       if (lastLetterRetry(g, 'you')) {
         return { game: { ...g, secondTry: true }, letterTo: null, set: null, made: false, message: `${missed} You're on your last letter, so you get a second try.` };
       }
@@ -335,9 +385,11 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
           message: `You landed your ${call.name.toLowerCase()}!`,
         };
       }
-      const message = r.landed
-        ? `You landed ${landedAs(r)}, but you called ${a(call.name)}, so it doesn't count. The computer sets next.`
-        : `You missed your ${call.name.toLowerCase()}. The computer sets next.`;
+      const message = sketchy(call)
+        ? `You landed your ${call.name.toLowerCase()}, but sketchy: ${HARD}. The computer sets next.`
+        : r.landed
+          ? `You landed ${landedAs(r)}, but you called ${a(call.name)}, so it doesn't count. The computer sets next.`
+          : `You missed your ${call.name.toLowerCase()}. The computer sets next.`;
       return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, made: false, message };
     }
     case 'computer-copy': {
@@ -352,7 +404,9 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
           message: `The computer copied your ${call.name.toLowerCase()}.`,
         };
       }
-      const missed = `The computer missed your ${call.name.toLowerCase()}.`;
+      const missed = sketchy(call)
+        ? `The computer landed your ${call.name.toLowerCase()}, but sketchy: ${HARD}.`
+        : `The computer missed your ${call.name.toLowerCase()}.`;
       if (lastLetterRetry(g, 'computer')) {
         return { game: { ...g, secondTry: true }, letterTo: null, set: null, made: false, message: `${missed} It's on its last letter, so it gets a second try.` };
       }

@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe('the celebration (ADR-57)', () => {
-  it('stamps "Landed!" and the trick over the stage when the student lands, then goes', async () => {
+  it('stamps "Clean!" and the trick over the stage when the student lands clean, then goes', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = await setup('lab');
     expect(celebration()).toBeNull();
@@ -52,10 +52,20 @@ describe('the celebration (ADR-57)', () => {
     expect(c.closest('.app__stage')).not.toBeNull();
     expect(c).toHaveAttribute('aria-hidden', 'true');
     expect(c).not.toHaveAttribute('data-calm');
-    expect(c.querySelector('.celebration__shout')).toHaveTextContent('Landed!');
+    expect(c.querySelector('.celebration__shout')).toHaveTextContent('Clean!');
     expect(c.querySelector('.celebration__trick')).toHaveTextContent('Kickflip');
     act(() => vi.advanceTimersByTime(CELEBRATION_MS));
     expect(celebration()).toBeNull();
+  });
+
+  it('says "Landed!" for a sketchy landing (ADR-63)', async () => {
+    const user = await setup('lab');
+    // Flick 2.0 at pop 0.35 m turns 385 degrees: landed, 25 past, so sketchy.
+    act(() => useTrickStore.getState().setInput('flick', 2));
+    await user.click(screen.getByRole('button', { name: 'Pop' }));
+    act(() => useTrickStore.getState().land());
+    expect(useTrickStore.getState().result).toMatchObject({ id: 'kickflip', grade: 'sketchy' });
+    expect(celebration()!.querySelector('.celebration__shout')).toHaveTextContent('Landed!');
   });
 
   it('plays again for the next landing, and not for a bail', async () => {
@@ -87,19 +97,19 @@ describe('the celebration (ADR-57)', () => {
 
   it('never shows on the welcome screen, and a screen change does not replay one', async () => {
     await setup('home');
-    act(() => useTrickStore.getState().celebrate('Kickflip'));
+    act(() => useTrickStore.getState().celebrate('Kickflip', true));
     expect(celebration()).toBeNull();
     // Into the lab after that landing: the old one is not replayed.
     act(() => useTrickStore.setState({ screen: 'lab' }));
     expect(celebration()).toBeNull();
-    act(() => useTrickStore.getState().celebrate('Heelflip'));
+    act(() => useTrickStore.getState().celebrate('Heelflip', true));
     expect(celebration()).toHaveTextContent('Heelflip');
   });
 
   it('stays off when the 3D view has failed', async () => {
     await setup('lab');
     act(() => useTrickStore.getState().setSceneUnavailable());
-    act(() => useTrickStore.getState().celebrate('Kickflip'));
+    act(() => useTrickStore.getState().celebrate('Kickflip', true));
     expect(celebration()).toBeNull();
   });
 });

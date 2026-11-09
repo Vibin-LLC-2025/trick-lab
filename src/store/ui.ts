@@ -312,7 +312,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setStageReady: () => {
       if (!get().stageReady) set({ stageReady: true });
     },
-    celebrate: (trick) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick } }),
+    celebrate: (trick, clean) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick, clean } }),
     toggleSound: () => {
       const soundOn = !get().soundOn;
       save(SOUND_KEY, soundOn ? 'on' : 'off');

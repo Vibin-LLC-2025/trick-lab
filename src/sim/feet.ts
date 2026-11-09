@@ -26,7 +26,7 @@
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
 import { computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
-import { isLanded } from './landing';
+import { isLanded, sketchAmount } from './landing';
 
 /**
  * Which foot leads (ADR-24, ADR-25). Goofy: right foot forward, nose at +X.
@@ -219,6 +219,37 @@ export const LAND_Y = {
   front: { square: landHeight(BOLTS_X, 1, 0), half: landHeight(BOLTS_X, 1, 180) },
   back: { square: landHeight(-BOLTS_X, -1, 0), half: landHeight(-BOLTS_X, -1, 180) },
 } as const;
+
+/**
+ * A sketchy landing (ADR-63): the shoes come down off the bolts, toward the
+ * middle of the board, by these distances at the edge of landing
+ * (sketchAmount 1), the front foot further than the back, so the stance is
+ * narrow and uneven. Nothing for a clean landing, which keeps the motion
+ * pinned in feet.pinned.test.ts. Between the kicks the deck is the same along
+ * its length, so the shoes stay on the grip.
+ */
+export const SKETCH = { front: 0.06, back: 0.035 } as const;
+/**
+ * The resting height along each foot's sketchy slide, as LAND_Y is at the
+ * bolts: a table from the bolts (index 0, LAND_Y exactly) to the furthest
+ * spot. A table and not two ends, because the height is not a straight line:
+ * a sole over the bolts rests partly on the start of the kick, 1.2 mm higher
+ * than on the flat a few centimetres in. Computed once, at import; read by
+ * sketchHeight without allocating.
+ */
+const SKETCH_STEPS = 12;
+const sketchTable = (x: number, toward: 1 | -1, reach: number, edge: 1 | -1, yaw: number) =>
+  Float64Array.from({ length: SKETCH_STEPS + 1 }, (_, i) => landHeight(x + (toward * reach * i) / SKETCH_STEPS, edge, yaw));
+const SKETCH_Y = {
+  front: { square: sketchTable(BOLTS_X, -1, SKETCH.front, 1, 0), half: sketchTable(BOLTS_X, -1, SKETCH.front, 1, 180) },
+  back: { square: sketchTable(-BOLTS_X, 1, SKETCH.back, -1, 0), half: sketchTable(-BOLTS_X, 1, SKETCH.back, -1, 180) },
+} as const;
+/** The resting height at sketch amount `s` (0 to 1) from one of the tables above. `s` 0 is the bolts' own height, exactly. */
+function sketchHeight(table: Float64Array, s: number): number {
+  const f = s * SKETCH_STEPS;
+  const i = Math.min(SKETCH_STEPS - 1, Math.floor(f));
+  return table[i]! + (table[i + 1]! - table[i]!) * (f - i);
+}
 
 /**
  * When each foot is back on the board (ADR-36, 2026-11-05), fractions of the
@@ -656,8 +687,10 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const bail = landed ? 0 : smooth(M.bail.start, 1, p);
   // On the grip over the bolts, resting on the rails (LAND_Y), of a board that ends square or half round.
   const half = landed && Math.round(Math.abs(flight.yawTarget) / 180) % 2 === 1;
-  const landFront = half ? LAND_Y.front.half : LAND_Y.front.square;
-  const landBack = half ? LAND_Y.back.half : LAND_Y.back.square;
+  // A sketchy landing comes down off the bolts (ADR-63); 0 for a clean one, which leaves every number below as it was.
+  const sketch = sketchAmount(flight.rollTotal, flight.yawTotal);
+  const landFront = sketchHeight(half ? SKETCH_Y.front.half : SKETCH_Y.front.square, sketch);
+  const landBack = sketchHeight(half ? SKETCH_Y.back.half : SKETCH_Y.back.square, sketch);
 
   // Front foot: slide up the grip on the outside edge, then flick out of the
   // heel-side corner of the nose (forward, out and up), then gather. A
@@ -681,7 +714,7 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const fx = front.x + slide + dir.x * flick + pivot * (Math.cos(turned * D2R) - Math.cos(front.yaw * D2R));
   const fy = DECK_TOP + slide * S.lift + dir.y * flick;
   const fz = front.z + dir.z * flick - pivot * (Math.sin(turned * D2R) - Math.sin(front.yaw * D2R));
-  front.x = lerp(fx, BOLTS_X, gatherFront);
+  front.x = lerp(fx, BOLTS_X - SKETCH.front * sketch, gatherFront);
   front.z = lerp(lerp(fz, 0, gatherFront), M.bail.frontZ, bail);
   front.y = lerp(lerp(fy, landFront, gatherFront), PAD_Y, bail);
   front.yaw = lerp(turned, STANCE.front.yawAcross, gatherFront);
@@ -698,7 +731,7 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const bx = back.x + M.scoop.dir.x * scoop;
   const by = TAIL_TOP - press + M.scoop.dir.y * scoop * (1 - smooth(scoopEnd, scoopEnd + 0.1, p));
   const bz = back.z + M.scoop.dir.z * sideOf(i.scoop) * scoop;
-  back.x = lerp(bx, -BOLTS_X, gatherBack);
+  back.x = lerp(bx, -BOLTS_X + SKETCH.back * sketch, gatherBack);
   back.z = lerp(lerp(bz, 0, gatherBack), M.bail.backZ, bail);
   back.y = lerp(lerp(by, landBack, gatherBack), PAD_Y, bail);
   // From the stance's own tilt on the tail (writeStance), so progress 0 is the stance exactly.

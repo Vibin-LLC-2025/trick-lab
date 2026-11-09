@@ -62,9 +62,9 @@ describe('pop and resolve', () => {
     expect(s.result).toMatchObject({ id: 'kickflip', landed: true });
     expect(s.completed).toEqual(['kickflip']);
     expect(types(store)).toEqual(['preset.applied', 'trick.popped', 'trick.resolved', 'objective.completed']);
-    expect(s.events[2]!.payload).toMatchObject({ trick: 'kickflip', landed: true, rollTotal: 365.4, airtime: 0.534 });
+    expect(s.events[2]!.payload).toMatchObject({ trick: 'kickflip', landed: true, grade: 'clean', rollTotal: 365.4, airtime: 0.534 });
     expect(said(store)).toBe(
-      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
+      'Kickflip landed clean. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
         'Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
   });
@@ -109,7 +109,7 @@ describe('pop and resolve', () => {
     expect(s.status).toBe('done');
     expect(s.progress).toBe(1);
     expect(s.result?.id).toBe('pop-shove-it');
-    expect(said(store)).toMatch(/^Popped with pop 0\.35 meters.*Pop shove-it landed\. 0 degrees of flip, 173 degrees of backside shove/);
+    expect(said(store)).toMatch(/^Popped with pop 0\.35 meters.*Pop shove-it landed clean. 0 degrees of flip, 173 degrees of backside shove/);
   });
 
   it('all seven presets complete all seven objectives', () => {
@@ -138,7 +138,7 @@ describe('pop and resolve', () => {
     expect(store.getState().result).toMatchObject({ id: 'varial-heelflip', landed: true, flips: -1, halfShoves: -1 });
     expect(store.getState().events.find((e) => e.type === 'trick.resolved')!.payload).toMatchObject({ rollTotal: -365.4, yawTotal: -173.1 });
     expect(said(store)).toBe(
-      'Varial heelflip landed. 365 degrees of heelflip, 173 degrees of frontside shove, 0.53 seconds in the air. ' +
+      'Varial heelflip landed clean. 365 degrees of heelflip, 173 degrees of frontside shove, 0.53 seconds in the air. ' +
         'Objective complete: Land a varial heelflip. 1 of 7 objectives done.',
     );
   });
@@ -164,11 +164,11 @@ describe('the celebration (lab)', () => {
     store.getState().popTrick();
     expect(store.getState().celebration).toBeNull();
     store.getState().land();
-    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip' });
+    expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip', clean: true });
     expect(types(store)).toEqual(['preset.applied', 'trick.popped', 'trick.resolved', 'objective.completed']);
     store.getState().popTrick();
     store.getState().land();
-    expect(store.getState().celebration).toEqual({ nonce: 2, trick: 'Kickflip' });
+    expect(store.getState().celebration).toEqual({ nonce: 2, trick: 'Kickflip', clean: true });
     // Too low a pop bails: no celebration.
     store.getState().setInput('pop', 0.15);
     store.getState().popTrick();
@@ -343,7 +343,7 @@ describe('event log and reset', () => {
     const out = buildExport(store.getState(), new Date('2026-11-04T12:00:00Z'));
     expect(out.events.length).toBe(store.getState().events.length);
     expect(out.events.length).toBeGreaterThan(200);
-    expect(out.schema).toBe('trick-lab.events/1');
+    expect(out.schema).toBe('trick-lab.events/2');
     expect(exportFilename(new Date('2026-11-04T12:00:00Z'))).toBe('trick-lab-events-2026-11-04.json');
   });
 });
@@ -716,7 +716,7 @@ describe('motion turned off mid-flight (ADR-6)', () => {
     expect(s.progress).toBe(1);
     expect(s.result?.id).toBe('kickflip');
     expect(said(store)).toBe(
-      'Reduced motion on: the board goes straight to its landing. Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
+      'Reduced motion on: the board goes straight to its landing. Kickflip landed clean. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air. ' +
         'Objective complete: Land a kickflip. 1 of 7 objectives done.',
     );
     const nonce = s.announcement.nonce;
@@ -748,7 +748,7 @@ describe('motion turned off mid-flight (ADR-6)', () => {
     const store = makeStore();
     store.getState().setReducedMotion(true);
     store.getState().popTrick();
-    expect(said(store)).toMatch(/^Popped with pop 0\.35 meters.*Ollie landed\./);
+    expect(said(store)).toMatch(/^Popped with pop 0\.35 meters.*Ollie landed clean./);
     expect(store.getState().announcement.nonce).toBe(1);
   });
 
@@ -783,7 +783,7 @@ describe('scene unavailable (SceneBoundary)', () => {
     store.getState().popTrick();
     store.getState().setSceneUnavailable();
     expect(store.getState().status).toBe('done');
-    expect(said(store)).toMatch(/^The 3D view stopped working\. .* Pop shove-it landed\. .*Objective complete: Land a pop shove-it\./);
+    expect(said(store)).toMatch(/^The 3D view stopped working\. .* Pop shove-it landed clean. .*Objective complete: Land a pop shove-it\./);
     store.getState().setSceneUnavailable();
     store.getState().land();
     expect(types(store).filter((t) => t === 'trick.resolved')).toHaveLength(1);
@@ -796,7 +796,7 @@ describe('scene unavailable (SceneBoundary)', () => {
     store.getState().popTrick();
     expect(store.getState().status).toBe('done');
     expect(store.getState().completed).toEqual(['kickflip']);
-    expect(said(store)).toMatch(/^Popped with .*Kickflip landed\..*1 of 7 objectives done\.$/);
+    expect(said(store)).toMatch(/^Popped with .*Kickflip landed clean..*1 of 7 objectives done\.$/);
     store.getState().scrub(0.4);
     expect(store.getState().progress).toBe(0.4);
     store.getState().resetSession();

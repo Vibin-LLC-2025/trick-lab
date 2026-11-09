@@ -3,6 +3,7 @@ import {
   afterAttempt,
   callProblem,
   callTrick,
+  CLEAN_ONLY_NOTE,
   coinFlip,
   computerAttempt,
   computerTurn,
@@ -76,7 +77,8 @@ export const createSkateSlice =
       set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you' });
       s.log('skate.started', { level: skate.level, first });
       s.requestFocus({ kind: 'skate-heading' });
-      s.announce(`Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level. ${flip} ${skateInstruction(skate)}`);
+      const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
+      s.announce(`Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}`);
     },
 
     toggleSkateAuto: () => {
@@ -169,7 +171,7 @@ export const createSkateSlice =
       if (!step.message) return [];
       const game = withComputerCall(step.game, random);
       set({ skate: game, skateMessage: step.message });
-      if (by === 'you' && step.made) s.celebrate(result.name);
+      if (by === 'you' && step.made) s.celebrate(result.name, result.grade === 'clean');
       if (step.set) s.log('skate.set', { by, trick: step.set.id });
       if (step.letterTo) {
         s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });

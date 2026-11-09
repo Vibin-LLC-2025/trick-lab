@@ -69,13 +69,13 @@ describe('signed degree readouts (ADR-30)', () => {
 describe('announcer text', () => {
   it('matches the brief example for a kickflip, with the direction of each axis', () => {
     expect(describeResult(resolveTrick({ pop: 0.35, flick: 1.9, scoop: 0 }))).toBe(
-      'Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air.',
+      'Kickflip landed clean. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air.',
     );
   });
 
   it('reads the mirror tricks naturally', () => {
     expect(describeResult(resolveTrick({ pop: 0.35, flick: -1.9, scoop: -0.9 }))).toBe(
-      'Varial heelflip landed. 365 degrees of heelflip, 173 degrees of frontside shove, 0.53 seconds in the air.',
+      'Varial heelflip landed clean. 365 degrees of heelflip, 173 degrees of frontside shove, 0.53 seconds in the air.',
     );
     expect(describeResult(resolveTrick({ pop: 0.15, flick: -1.9, scoop: 0 }))).toBe(
       'Heelflip not landed: flip under-rotated by 121 degrees. 239 degrees of heelflip, 0 degrees of shove, 0.35 seconds in the air.',
@@ -83,17 +83,51 @@ describe('announcer text', () => {
   });
 });
 
+describe('graded landings in words (ADR-63)', () => {
+  it('says clean, or sketchy with the axis, the degrees and which way', () => {
+    expect(describeResult(withTotals(365, 0))).toMatch(/^Kickflip landed clean\. /);
+    // 18 past a whole flip: landed (inside 30), not clean (outside 10).
+    expect(describeResult(withTotals(378, 0))).toBe('Kickflip landed, sketchy: 18 degrees past on the flip. 378 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air.');
+    expect(describeResult(withTotals(-345, 0))).toMatch(/^Heelflip landed, sketchy: 15 degrees short on the flip\. /);
+    expect(describeResult(withTotals(0, 168))).toMatch(/^Pop shove-it landed, sketchy: 12 degrees short on the shove\. /);
+    // Both axes off: the one further past its clean limit is named.
+    expect(describeResult(withTotals(372, 200))).toMatch(/^Varial flip landed, sketchy: 20 degrees past on the shove\. /);
+    expect(describeResult(withTotals(395, 0))).toMatch(/^Kickflip not landed: /);
+  });
+
+  it('the card names the miss and what to change', () => {
+    expect(outcomeCard(withTotals(378, 0))).toEqual({ name: 'Kickflip landed, sketchy', detail: '18 deg past on the flip. Ease the flick a little.' });
+    expect(outcomeCard(withTotals(0, -168))).toEqual({
+      name: 'Frontside pop shove-it landed, sketchy',
+      detail: '12 deg short on the shove. More scoop or more pop gives it time.',
+    });
+    // An ollie that turned too far to be clean.
+    expect(outcomeCard(withTotals(19, 19))).toEqual({ name: 'Ollie landed, sketchy', detail: '19 deg past on the shove. Ease the scoop a little.' });
+  });
+
+  it('the feet and the foot steps say a sketchy landing is off the bolts', () => {
+    const sketchy = { ...computeFlight(DEFAULT_INPUTS), rollTotal: 378, rollTarget: 360, yawTotal: 0, yawTarget: 0, landed: true };
+    const base = { pop: 0.35, flick: 2, scoop: 0 };
+    expect(describeScene({ ...base, status: 'done', progress: 1, flight: sketchy, result: recognize(sketchy) })).toContain(
+      'Feet landed off the bolts, toward the middle: a sketchy landing.',
+    );
+    expect(footSteps({ ...base, flight: sketchy }).at(-1)!.text).toBe('Both feet ride the board down, but come down off the bolts, toward the middle: a sketchy landing.');
+    const clean = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });
+    expect(footSteps({ ...base, flight: clean }).at(-1)!.text).toBe('Both feet ride the board down over the bolts and land on the grip.');
+  });
+});
+
 describe('outcome card copy (DESIGN.md section 4)', () => {
   it('landed', () => {
     expect(outcomeCard(withTotals(365, 0))).toEqual({
-      name: 'Kickflip landed',
+      name: 'Kickflip landed clean',
       detail: '365 deg kickflip, 0 deg shove, 0.53 s in the air.',
     });
   });
 
   it('landed mirror tricks name each direction', () => {
     expect(outcomeCard(withTotals(-365, -173))).toEqual({
-      name: 'Varial heelflip landed',
+      name: 'Varial heelflip landed clean',
       detail: '365 deg heelflip, 173 deg frontside shove, 0.53 s in the air.',
     });
     expect(outcomeCard(withTotals(365, -173)).detail).toBe('365 deg kickflip, 173 deg frontside shove, 0.53 s in the air.');
@@ -119,13 +153,13 @@ describe('outcome card copy (DESIGN.md section 4)', () => {
   });
 
   it('an ollie inside the tolerances that turned shows its degrees, never "No rotation" (audit fix, 2026-11-04)', () => {
-    expect(outcomeCard(withTotals(19, 19))).toEqual({
-      name: 'Ollie landed',
-      detail: '19 deg kickflip, 19 deg backside shove, 0.53 s in the air.',
+    expect(outcomeCard(withTotals(9, 7))).toEqual({
+      name: 'Ollie landed clean',
+      detail: '9 deg kickflip, 7 deg backside shove, 0.53 s in the air.',
     });
-    expect(outcomeCard(withTotals(-19, -19)).detail).toBe('19 deg heelflip, 19 deg frontside shove, 0.53 s in the air.');
+    expect(outcomeCard(withTotals(-9, -7)).detail).toBe('9 deg heelflip, 7 deg frontside shove, 0.53 s in the air.');
     // One axis alone is enough to drop the phrase.
-    expect(outcomeCard(withTotals(0, -12)).detail).toBe('0 deg flip, 12 deg frontside shove, 0.53 s in the air.');
+    expect(outcomeCard(withTotals(0, -7)).detail).toBe('0 deg flip, 7 deg frontside shove, 0.53 s in the air.');
     expect(outcomeCard(withTotals(7, 0)).detail).toBe('7 deg kickflip, 0 deg shove, 0.53 s in the air.');
   });
 
@@ -212,11 +246,11 @@ describe('the last trick in the scene description (audit fix, 2026-11-04)', () =
   });
 
   it('a second pop after a landed trick is waiting too, then reads the new result', () => {
-    expect(describeScene({ ...base, status: 'done', progress: 1, flight, result: first })).toContain('Last trick: Kickflip landed.');
+    expect(describeScene({ ...base, status: 'done', progress: 1, flight, result: first })).toContain('Last trick: Kickflip landed clean.');
     const second = computeFlight({ pop: 0.35, flick: 0, scoop: 0.9 });
     expect(describeScene({ ...base, status: 'playing', progress: 0.1, flight: second, result: null })).toMatch(/Waiting for this trick to land\.$/);
     expect(describeScene({ ...base, status: 'done', progress: 1, flight: second, result: recognize(second) })).toContain(
-      'Last trick: Pop shove-it landed.',
+      'Last trick: Pop shove-it landed clean.',
     );
   });
 });

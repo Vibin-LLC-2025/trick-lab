@@ -60,7 +60,7 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | `npm run assets` | Rebuild the four GLBs in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
-New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-62), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-63), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## How it works
 
@@ -108,7 +108,7 @@ The ground is built the same way (2026-11-04, ADR-31): `src/asset/groundTextures
 - Flip (roll about the board's long axis) and shove (yaw about vertical) turn at constant rates: `rollTotal = flick * T * 360`, `yawTotal = scoop * T * 360`.
 - Euler order YZX: yaw, then the pop pitch, then the flip about the pitched long axis, so the flip axis follows the shove and the nose stays on it during the pop (ADR-32, which replaced ADR-2's YXZ).
 - Stance and direction (ADR-10, ADR-24, ADR-25): goofy by default (right foot forward, nose on the right), with a Stance control in the View panel to switch to regular (left foot forward, the board turned so the nose is on the left). The camera stays on the heel side in both. A kickflip rolls the grip toward the heel side, toward the camera; scoop swings the tail toward the heels (backside), counterclockwise seen from above for goofy and clockwise for regular. The scene description says this in words.
-- Recognition rounds to whole flips and half shoves; landed if within 30 degrees of flip and 25 of shove; otherwise under- or over-rotated on the axis furthest off.
+- Recognition rounds to whole flips and half shoves; landed if within 30 degrees of flip and 25 of shove; otherwise under- or over-rotated on the axis furthest off. A landing is graded (ADR-63): clean within 10 degrees of flip and 8 of shove, sketchy otherwise, and on the game's Hard level only a clean one counts.
 - Rotation is phased (ADR-36): the flip and the shove ramp up just after the pop, spin free at a constant rate, and are caught by the feet at about 70 percent of the flight, so the feet have a moment to catch the board.
 - Simplified away: drag, the board's real inertia (no tumbling or wobble), and horizontal travel. Pitch is not part of recognition: the pop pivots the board on its rear wheels until the tail strikes the pad at 32.5 degrees, and nothing passes through the pad (ADR-27). Motion cues on the grip show how each shoe will move against the deck before the pop (ADR-26). The shoes never pass through the board: each one is lifted just clear of the board's actual shape in its pose at that moment, the rails, kicks, wheels and trucks of either board model (ADR-29).
 

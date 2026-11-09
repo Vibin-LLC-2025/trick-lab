@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 6 are committed. Step 7 is next.
+- Steps 1 to 7 are committed. Step 8 is next: two rough controls, then the owner picks.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 42 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 43 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -60,7 +60,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 42 commits a
 | 470bdc1 | This revision of the plan |
 | 9b7c140 | A memory leak fix the long-run test found: shared materials are freed with each Canvas |
 | e6ab283 | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
-| this commit | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
+| 2dcf12f | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
+| this commit | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -187,8 +188,13 @@ The measurement, Medium back under its cap, the download budget, and one texture
 
 ## Phase B: the game
 
-### 7. Graded landings: clean, sketchy, bail
+### 7. Graded landings: clean, sketchy, bail. Done (ADR-63)
 Small, and it comes first because the controls need it to tell you how close you were.
+
+As built:
+- **The computer on Hard was recalibrated.** With only clean landings counting, its old miss would have made a kickflip 54 times in 100 instead of 97. Its spread went from 0.035 to 0.012, which keeps every trick within 4 points of before (the table is in ADR-63).
+- **The sketchy look is a narrow, uneven stance:** the shoes come down toward the middle of the board, the front up to 6 cm and the back up to 3.5 cm. The rock and swerve come in step 13.
+- **Not done here:** the session's start time in the export (it belonged to the parked session work), and the scuffed landing sound (step 18).
 
 - **Three grades** in `src/sim/landing.ts`:
   - **clean:** within 10 degrees on the flip and 8 on the shove;

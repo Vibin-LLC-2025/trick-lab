@@ -175,10 +175,12 @@ export interface UiSlice {
    * The student's last landing worth a cheer (ADR-57): any landed trick in
    * the lab, and in a game a set landed as called or a copy made. `nonce`
    * goes up by one each time, so the stage's celebration plays once per
-   * landing. Null until the first. Not persisted, not logged, not exported,
-   * not announced (the result's announcement already says it landed).
+   * landing. `clean` says whether it was a clean landing (ADR-63: the
+   * celebration shouts "Clean!"). Null until the first. Not persisted, not
+   * logged, not exported, not announced (the result's announcement already
+   * says it landed).
    */
-  celebration: { nonce: number; trick: string } | null;
+  celebration: { nonce: number; trick: string; clean: boolean } | null;
   /** Sound effects (ADR-58). Persisted under trick-lab.sound, default off. Announced, not logged, not exported. */
   soundOn: boolean;
   /**
@@ -249,7 +251,7 @@ export interface UiSlice {
   /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */
   setStageReady: () => void;
   /** Internal: marks a landing to celebrate. Called from store actions only (the landing's resolution and the game's scoring). */
-  celebrate: (trick: string) => void;
+  celebrate: (trick: string, clean: boolean) => void;
   /** Turns sound on or off, persisted and announced (ADR-58). */
   toggleSound: () => void;
   /** Internal: asks for a sound. Called from store actions only. */

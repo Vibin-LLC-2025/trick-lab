@@ -9,7 +9,8 @@ export const CELEBRATION_MS = 1800;
  * counts (ADR-57): the store's `celebration` (a landing in the lab, a set or
  * copy made in a game; never the computer's, never the welcome preview).
  * DOM over the stage, never inside the Canvas (rule 3): an orange sticker
- * "Landed!" stamps in with the trick's name under it, holds and fades. Under
+ * stamps in with the trick's name under it, holds and fades. It shouts
+ * "Clean!" for a clean landing and "Landed!" for a sketchy one (ADR-63). Under
  * reduced motion the calm version: the same stickers, still, shown and then
  * gone with no movement. One per landing (keyed on the nonce); one already
  * there when this mounts (a screen change) is not replayed. Decorative and
@@ -35,7 +36,7 @@ export function Celebration() {
   if (!active) return null;
   return (
     <div key={nonce} className="celebration" data-calm={calm || undefined} aria-hidden="true">
-      <span className="celebration__shout">Landed!</span>
+      <span className="celebration__shout">{celebration.clean ? 'Clean!' : 'Landed!'}</span>
       <span className="celebration__trick">{celebration.trick}</span>
     </div>
   );

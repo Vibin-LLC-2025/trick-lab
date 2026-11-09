@@ -687,3 +687,34 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 - **Medium's target is a stand-in.** It is measured on the reference machine with Medium chosen, not on built-in graphics. One game on a real laptop (step 20) is worth more than the number.
 - The automatic step-down (ADR-59) still protects a device that cannot keep up: it judges real tricks at 40 ms a frame, far above these targets.
 - CLAUDE.md's rule 14 and verify loop, BRIEF.md's opening, ROADMAP.md's ground rule and PERF-BUDGET.md's targets say the same from this commit.
+
+## ADR-63: Graded landings: clean, sketchy, bail (2026-11-09)
+
+**Context.** Step 7 of `docs/PLAN-PLAY-POLISH-REACH.md`. A trick lands within 30 degrees of a whole flip and 25 of a half shove (`src/sim/landing.ts`), so a near-miss and a perfect landing looked and counted the same. The game's new controls (steps 8 and 9) need a way to say how close an attempt was.
+
+**Decision.**
+- **Three grades**, from the same two errors the landing rule already uses (`gradeOf`, `landing.ts`): **clean** within 10 degrees on the flip and 8 on the shove; **sketchy** landed but outside a clean limit; **bail** not landed. `isLanded` is unchanged, so recognition, the catch (ADR-36) and the feet still decide land or bail by one rule. `TrickResult` gains `grade`; `landed` is true for clean and sketchy.
+- **The presets land clean** at pop 0.35 m (their largest miss is the shove's 6.9 degrees) and bail at 0.15 m, tested.
+- **The words.** "Kickflip landed clean." or "Kickflip landed, sketchy: 18 degrees past on the flip." in the announcement; the card reads "Kickflip landed, sketchy" with "18 deg past on the flip. Ease the flick a little." (DESIGN.md 4). The axis named is the one furthest past its clean limit, "short" or "past" against its own direction of rotation. The celebration shouts "Clean!" for clean and "Landed!" for sketchy.
+- **The look.** A sketchy landing's shoes come down off the bolts, toward the middle of the board: the front shoe by up to 6 cm and the back by up to 3.5 cm at the edge of landing, growing from nothing at the clean limit (`sketchAmount`, `SKETCH` in `feet.ts`). They stay on the grip: the landing height along the slide is a table computed at import (a sole over the bolts rests partly on the kick's start, 1.2 mm higher than on the flat). A clean landing is today's motion exactly, so the pinned poses (`feet.pinned.test.ts`) do not change. The rock and the swerve of a sketchy landing come with the landings in step 13.
+- **The game.** On Hard a set or a copy counts only if it lands clean, for both players (`cleanOnly` in `SKATE_LEVELS`, applied in `afterAttempt`). The message says why ("You landed your kickflip, but sketchy: on Hard only a clean landing counts."), the level's hint and the trick guide say the rule, and the game's start announces it. Easy and Normal count a sketchy landing as before.
+- **Reachable on the sliders.** `cleanSetup(call)` finds the slider setup that lands a trick cleanest. Every settable trick has a clean one; the double kickflip, double heelflip and double tre only at pop 0.55 m with the flick at 3.0 (tested).
+- **The export is `trick-lab.events/2`**: `trick.resolved` carries `grade` beside `landed`. Nothing was removed. Step 9 adds how the pop was made to the same schema before the branch merges.
+
+**The computer on Hard, before and after.** The clean rule alone would have made Hard's computer far weaker (a kickflip made 54 times in 100 instead of 97), so its spread went from 0.035 to 0.012, the value that keeps it making its tricks about as often as it landed them before. A seeded simulation, 4,000 attempts a trick:
+
+| Trick | Landed before (spread 0.035) | Clean with the old spread | Made now (clean, spread 0.012) |
+| --- | --- | --- | --- |
+| Kickflip, heelflip | 97 | 54 | 97 |
+| Double kickflip, double heelflip | 71 | 30 | 72 |
+| Pop shove-it, frontside pop shove-it | 100 | 67 | 99 |
+| 360 shove-it, frontside 360 shove-it | 92 | 40 | 88 |
+| Varial flip, varial heelflip, inward heelflip | 97 | 36 | 97 |
+| 360 flip, laser flip, 360 inward heelflip | 89 | 21 | 86 |
+| Double tre | 64 | 13 | 66 |
+
+Every difference is 4 points or less. Easy and Normal are untouched (a kickflip 53 and 78 times in 100, a 360 flip 54 on Normal).
+
+**Left out.** The first version of the plan also put the session's start time in the export; that belonged to keeping a session across a reload, which is parked. The scuffed landing sound for a sketchy landing comes with the recordings in step 18.
+
+**Consequence.** For the student on Hard the game is now about precision, not only about knowing the numbers: a set at flick 2.0 where 1.9 is clean no longer counts. In Exact a clean setup always exists, so nothing is out of reach.
