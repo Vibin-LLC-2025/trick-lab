@@ -13,6 +13,10 @@ export interface TextureStat {
   height: number;
   bytes: number;
   mipmapped: boolean;
+  /** image/ktx2 since ADR-49. */
+  mimeType: string;
+  /** Mip levels stored in the file (1 for a PNG, whose mips the GPU makes). */
+  levels: number;
 }
 
 export interface AssetStats {
@@ -37,8 +41,14 @@ export interface BudgetRow {
 const isPow2 = (n: number) => n > 0 && (n & (n - 1)) === 0;
 /** The ground plane's smallest side, metres (the ground brief, 2026-11-04). */
 export const GROUND_MIN_SIZE = 24;
-/** RGBA8 on the GPU, plus a third for the mip chain. */
-export const gpuBytes = (t: { width: number; height: number }) => (t.width * t.height * 4 * 4) / 3;
+/**
+ * GPU memory, plus a third for the mip chain: a KTX2 texture stays compressed
+ * (BC7 on a desktop GPU, 1 byte a pixel, ADR-49), anything else is RGBA8.
+ */
+export const gpuBytes = (t: { width: number; height: number; mimeType?: string }) =>
+  (t.width * t.height * (t.mimeType === 'image/ktx2' ? 1 : 4) * 4) / 3;
+/** A full mip chain, down to 1 x 1. */
+export const fullMipLevels = (t: { width: number; height: number }) => Math.floor(Math.log2(Math.max(t.width, t.height, 1))) + 1;
 const mm = (m: number) => `${(m * 1000).toFixed(1)} mm`;
 
 /** Physical size rows per asset: the boards must match the deck outline and rest height, the shoe its footprint. */
@@ -94,7 +104,7 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
   const missing = expectedNodes.filter((n) => !s.nodeNames.includes(n));
   const rows: BudgetRow[] = [
     { check: 'GLB file size', value: kb(s.fileBytes), limit: `<= ${kb(BUDGET.fileBytes)}`, ok: s.fileBytes <= BUDGET.fileBytes },
-    { check: '  of which textures (PNG)', value: kb(texBytes), limit: 'info', ok: true },
+    { check: '  of which textures', value: kb(texBytes), limit: 'info', ok: true },
     { check: 'Draw calls (primitives)', value: String(s.drawCalls), limit: `<= ${BUDGET.drawCalls}`, ok: s.drawCalls <= BUDGET.drawCalls },
     { check: 'Triangles', value: s.triangles.toLocaleString('en-US'), limit: `<= ${BUDGET.triangles.toLocaleString('en-US')}`, ok: s.triangles <= BUDGET.triangles },
     { check: 'Materials', value: String(s.materials), limit: 'info', ok: true },
@@ -112,7 +122,21 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
       limit: 'all',
       ok: s.textures.every((t) => t.mipmapped),
     },
-    { check: 'Texture GPU memory (est.)', value: `${(gpu / 1024 / 1024).toFixed(2)} MB`, limit: 'info, RGBA8 + mips', ok: true },
+    {
+      check: 'Textures KTX2 (Basis)',
+      value: `${s.textures.filter((t) => t.mimeType === 'image/ktx2').length} of ${s.textures.length}`,
+      limit: 'all, KHR_texture_basisu required',
+      ok:
+        s.textures.every((t) => t.mimeType === 'image/ktx2') &&
+        (s.textures.length === 0 || s.extensionsRequired.includes('KHR_texture_basisu')),
+    },
+    {
+      check: 'Mip chains in the file',
+      value: `${s.textures.filter((t) => t.levels === fullMipLevels(t)).length} of ${s.textures.length}`,
+      limit: 'all, down to 1 x 1',
+      ok: s.textures.every((t) => t.levels === fullMipLevels(t)),
+    },
+    { check: 'Texture GPU memory (est.)', value: `${(gpu / 1024 / 1024).toFixed(2)} MB`, limit: 'info, BC7 (KTX2) + mips', ok: true },
     {
       check: 'EXT_meshopt_compression',
       value: s.extensionsRequired.includes('EXT_meshopt_compression') ? 'required' : 'missing',

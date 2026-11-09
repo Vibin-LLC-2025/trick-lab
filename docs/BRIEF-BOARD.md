@@ -62,6 +62,8 @@ follow. ADR-10 rotation signs do not change.
   power-of-two. Estimate GPU memory in the budget report. KTX2/Basis needs
   the native toktx binary: do not install system tools. Ship WebP or PNG
   inside the GLB and document KTX2 as the next step with the exact command.
+  (Superseded 2026-11-09 by ADR-49: a WASM Basis encoder, `ktx2-encoder`,
+  needs no system tool, and every texture is now KTX2.)
 - Whole-scene draw calls after the change stay under 20.
 
 ## Pipeline contract (implementation)

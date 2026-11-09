@@ -1,17 +1,19 @@
 // Builds the GLBs in memory: geometry from src/asset/, procedural textures
 // (src/asset/textures.ts, shoeTextures.ts, groundTextures.ts), the deck
-// graphic rasterized from assets/source/deck-graphic.svg, then meshopt
-// compression and quantization. Deterministic: the same sources give the
-// same bytes (tested). Four assets share one builder: the medium board (the
+// graphic rasterized from assets/source/deck-graphic.svg, each texture
+// encoded as KTX2 (Basis Universal ETC1S with its mip chain, ADR-49), then
+// meshopt compression and quantization. Deterministic: the same sources give
+// the same bytes (tested). Four assets share one builder: the medium board (the
 // original board.glb, unchanged), the high board and the shoe (quality tiers
 // and feet, 2026-11-04), and the concrete ground (ground pass, 2026-11-04).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, Logger, NodeIO, TextureInfo, type Material, type Texture } from '@gltf-transform/core';
-import { ALL_EXTENSIONS, KHRTextureTransform } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, KHRTextureBasisu, KHRTextureTransform } from '@gltf-transform/extensions';
 import { dedup, meshopt, prune } from '@gltf-transform/functions';
 import { Resvg } from '@resvg/resvg-js';
+import { encodeToKTX2 } from 'ktx2-encoder';
 import { MeshoptEncoder } from 'meshoptimizer';
 import type { BufferGeometry } from 'three';
 import { buildBoard, triangleCount } from '../../src/asset/board';
@@ -47,7 +49,6 @@ import {
   wheelPixelsHigh,
   type Pixels,
 } from '../../src/asset/textures';
-import { encodePng } from './png';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const GRAPHIC_SVG = resolve(ROOT, 'assets/source/deck-graphic.svg');
@@ -59,7 +60,65 @@ const linearFactor = (hex: string): [number, number, number, number] => {
   return [r!, g!, b!, 1];
 };
 
-const png = (p: Pixels) => encodePng(p.width, p.height, 3, p.rgb);
+/** A texture's pixels before encoding: RGB, or one grey channel. */
+export interface Raster {
+  width: number;
+  height: number;
+  channels: 1 | 3;
+  data: Uint8Array;
+}
+const rgb = (p: Pixels): Raster => ({ width: p.width, height: p.height, channels: 3, data: p.rgb });
+const grey = (width: number, height: number, data: Uint8Array): Raster => ({ width, height, channels: 1, data });
+
+/** What a texture feeds decides how it is encoded: colour is sRGB and perceptual, a normal map gets Basis's normal-map preset, data stays linear. */
+export type TextureRole = 'color' | 'normal' | 'data';
+
+/**
+ * The texture settings (ADR-49): ETC1S, the smaller of Basis's two modes, at
+ * its top quality level, which held the grip, the deck graphic, the shoes and
+ * the concrete against the PNGs in side-by-side crops (UASTC normal maps,
+ * tried with it, added 200 KB to the high board for no visible difference).
+ * The mip chain is in the file, as compressed textures cannot be mipmapped
+ * on the GPU. three transcodes it to BC7 on a desktop GPU (1 byte a pixel, a
+ * quarter of RGBA8) and to ETC on most phones.
+ */
+export const KTX2_OPTIONS = { isUASTC: false, qualityLevel: 255, compressionLevel: 2, generateMipmap: true, isKTX2File: true } as const;
+
+/**
+ * The Basis WASM binds console.log once, when its module is created, and
+ * prints a line per mip level through it. The first encode creates it, so
+ * that one runs with a silent console.log; errors still go to console.error.
+ */
+let quiet: Promise<unknown> | null = null;
+function quietEncoder() {
+  if (quiet) return quiet;
+  const log = console.log;
+  console.log = () => {};
+  const px = new Uint8Array(4 * 4 * 4).fill(255);
+  quiet = encodeToKTX2(px, { ...KTX2_OPTIONS, imageDecoder: async () => ({ width: 4, height: 4, data: px }) }).finally(() => {
+    console.log = log;
+  });
+  return quiet;
+}
+
+/** One texture as KTX2: the raster goes in as RGBA, top row first and not flipped (glTF's UV origin is the top left). */
+export async function encodeKtx2(r: Raster, role: TextureRole): Promise<Uint8Array> {
+  await quietEncoder();
+  const n = r.width * r.height;
+  const rgba = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < 3; c++) rgba[i * 4 + c] = r.data[i * r.channels + (r.channels === 3 ? c : 0)]!;
+    rgba[i * 4 + 3] = 255;
+  }
+  return encodeToKTX2(rgba, {
+    ...KTX2_OPTIONS,
+    isPerceptual: role === 'color',
+    isSetKTX2SRGBTransferFunc: role === 'color',
+    isNormalMap: role === 'normal',
+    // The raster is already decoded: hand it straight to the encoder.
+    imageDecoder: async () => ({ width: r.width, height: r.height, data: rgba }),
+  });
+}
 
 /** Rasterize the design's SVG at the texture size and drop the alpha (the field is opaque). */
 function deckGraphic(T: { width: number; height: number }): Pixels {
@@ -84,7 +143,7 @@ function wornDeckBottom(T: { width: number; height: number }) {
 export interface BuildReport {
   triangles: Record<string, number>;
   droppedTriangles: number;
-  /** PNG bytes per texture file name. */
+  /** KTX2 bytes per texture file name. */
   textureBytes: Record<string, number>;
 }
 
@@ -93,7 +152,7 @@ interface AssetSpec {
   rootName: string;
   extras: Record<string, unknown>;
   /** `repeat`: a KHR_texture_transform scale for a tiling map (UVs stay in [0, 1] so they quantize). */
-  textures: { key: string; file: string; png: Uint8Array; wrap: 'repeat' | 'clamp'; repeat?: [number, number] }[];
+  textures: { key: string; file: string; pixels: Raster; wrap: 'repeat' | 'clamp'; repeat?: [number, number] }[];
   materials: {
     key: string;
     name: string;
@@ -121,10 +180,10 @@ function boardSpec(level: DetailLevel): AssetSpec {
     const T = TEXTURES;
     const grip = gripGrey();
     textures.push(
-      { key: 'grip', file: T.grip.file, png: encodePng(grip.width, grip.height, 1, grip.grey), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
-      { key: 'deckBottom', file: T.deckBottom.file, png: png(wornDeckBottom(T.deckBottom).color), wrap: T.deckBottom.wrap },
-      { key: 'ply', file: T.ply.file, png: png(plyPixels()), wrap: T.ply.wrap },
-      { key: 'wheel', file: T.wheel.file, png: png(wheelPixels()), wrap: T.wheel.wrap },
+      { key: 'grip', file: T.grip.file, pixels: grey(grip.width, grip.height, grip.grey), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
+      { key: 'deckBottom', file: T.deckBottom.file, pixels: rgb(wornDeckBottom(T.deckBottom).color), wrap: T.deckBottom.wrap },
+      { key: 'ply', file: T.ply.file, pixels: rgb(plyPixels()), wrap: T.ply.wrap },
+      { key: 'wheel', file: T.wheel.file, pixels: rgb(wheelPixels()), wrap: T.wheel.wrap },
     );
   } else {
     const T = TEXTURES_HIGH;
@@ -132,18 +191,18 @@ function boardSpec(level: DetailLevel): AssetSpec {
     const deck = wornDeckBottom(T.deckBottom);
     const rough = greyFromField(deck.roughness, T.deckBottom.width, T.deckBottom.height, T.deckRoughness.width, T.deckRoughness.height);
     textures.push(
-      { key: 'grip', file: T.grip.file, png: png(grip.color), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
+      { key: 'grip', file: T.grip.file, pixels: rgb(grip.color), wrap: T.grip.wrap, repeat: deckRepeat(T.grip.tile) },
       {
         key: 'gripNormal',
         file: T.gripNormal.file,
-        png: png(normalMapFromHeight(downsample2(grip.lift, T.grip.width, T.grip.height), T.gripNormal.width, T.gripNormal.height)),
+        pixels: rgb(normalMapFromHeight(downsample2(grip.lift, T.grip.width, T.grip.height), T.gripNormal.width, T.gripNormal.height)),
         wrap: T.gripNormal.wrap,
         repeat: deckRepeat(T.gripNormal.tile),
       },
-      { key: 'deckBottom', file: T.deckBottom.file, png: png(deck.color), wrap: T.deckBottom.wrap },
-      { key: 'deckRoughness', file: T.deckRoughness.file, png: encodePng(rough.width, rough.height, 1, rough.grey), wrap: T.deckRoughness.wrap },
-      { key: 'ply', file: T.ply.file, png: png(plyPixelsHigh()), wrap: T.ply.wrap },
-      { key: 'wheel', file: T.wheel.file, png: png(wheelPixelsHigh()), wrap: T.wheel.wrap },
+      { key: 'deckBottom', file: T.deckBottom.file, pixels: rgb(deck.color), wrap: T.deckBottom.wrap },
+      { key: 'deckRoughness', file: T.deckRoughness.file, pixels: grey(rough.width, rough.height, rough.grey), wrap: T.deckRoughness.wrap },
+      { key: 'ply', file: T.ply.file, pixels: rgb(plyPixelsHigh()), wrap: T.ply.wrap },
+      { key: 'wheel', file: T.wheel.file, pixels: rgb(wheelPixelsHigh()), wrap: T.wheel.wrap },
     );
   }
   const materials: AssetSpec['materials'] = (Object.keys(MATERIALS) as (keyof typeof MATERIALS)[]).map((key) => {
@@ -186,8 +245,8 @@ function shoeSpec(): AssetSpec {
     rootName: 'Shoe',
     extras: { units: 'metres', foot: 'right', source: 'procedural, scripts/build-board.ts', design: 'src/asset/shoeSpec.ts' },
     textures: [
-      { key: 'sole', file: T.sole.file, png: png(solePixels()), wrap: T.sole.wrap },
-      { key: 'upper', file: T.upper.file, png: encodePng(upper.width, upper.height, 1, upper.grey), wrap: T.upper.wrap },
+      { key: 'sole', file: T.sole.file, pixels: rgb(solePixels()), wrap: T.sole.wrap },
+      { key: 'upper', file: T.upper.file, pixels: grey(upper.width, upper.height, upper.grey), wrap: T.upper.wrap },
     ],
     materials: (Object.keys(SHOE_MATERIALS) as (keyof typeof SHOE_MATERIALS)[]).map((key) => {
       const M = SHOE_MATERIALS[key];
@@ -226,12 +285,12 @@ function groundSpec(): AssetSpec {
       design: 'src/asset/groundSpec.ts',
     },
     textures: [
-      { key: 'color', file: T.color.file, png: encodePng(color.width, color.height, 1, color.grey), wrap: 'repeat', repeat: groundRepeat('color') },
-      { key: 'normal', file: T.normal.file, png: png(concreteNormal()), wrap: 'repeat', repeat: groundRepeat('normal') },
+      { key: 'color', file: T.color.file, pixels: grey(color.width, color.height, color.grey), wrap: 'repeat', repeat: groundRepeat('color') },
+      { key: 'normal', file: T.normal.file, pixels: rgb(concreteNormal()), wrap: 'repeat', repeat: groundRepeat('normal') },
       {
         key: 'roughness',
         file: T.roughness.file,
-        png: encodePng(rough.width, rough.height, 1, rough.grey),
+        pixels: grey(rough.width, rough.height, rough.grey),
         wrap: 'repeat',
         repeat: groundRepeat('roughness'),
       },
@@ -260,12 +319,26 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
   const buffer = doc.createBuffer();
   const textureTransform = doc.createExtension(KHRTextureTransform);
 
+  // What each texture feeds decides its encoding (here a texture feeds one slot).
+  const roles = new Map<string, TextureRole>();
+  for (const M of spec.materials) {
+    if (M.map) roles.set(M.map, 'color');
+    if (M.normalMap) roles.set(M.normalMap.key, 'normal');
+    if (M.roughnessMap) roles.set(M.roughnessMap, 'data');
+  }
   const textures = new Map<string, Texture>();
   const textureSpec = new Map<string, AssetSpec['textures'][number]>();
+  const encoded = new Map<string, Uint8Array>();
+  // One at a time: the encoder is one WASM instance, and a fixed order keeps the build deterministic.
   for (const t of spec.textures) {
-    textures.set(t.key, doc.createTexture(t.key).setImage(t.png).setMimeType('image/png').setURI(t.file));
+    const ktx2 = await encodeKtx2(t.pixels, roles.get(t.key) ?? 'data');
+    // The spec names the files .png; inside the GLB they are KTX2 (ADR-49).
+    const uri = t.file.replace(/\.png$/, '.ktx2');
+    encoded.set(uri, ktx2);
+    textures.set(t.key, doc.createTexture(t.key).setImage(ktx2).setMimeType('image/ktx2').setURI(uri));
     textureSpec.set(t.key, t);
   }
+  doc.createExtension(KHRTextureBasisu).setRequired(true);
 
   /** Sampler and (for a tiling map) the repeat transform; UVs are stored in [0, 1] so they quantize. */
   const configure = (info: TextureInfo, key: string) => {
@@ -333,7 +406,7 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
   const report: BuildReport = {
     triangles: Object.fromEntries(spec.parts.map((p) => [p.node, triangleCount(p.geometry)])),
     droppedTriangles: spec.droppedTriangles,
-    textureBytes: Object.fromEntries(spec.textures.map((t) => [t.file, t.png.length])),
+    textureBytes: Object.fromEntries([...encoded].map(([file, b]) => [file, b.length])),
   };
   return { glb, report };
 }

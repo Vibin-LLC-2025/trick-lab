@@ -1,8 +1,10 @@
 // How every GLB is loaded and freed (BoardModel, ShoesModel, GroundModel).
 // Part of the lazy model chunk: a student on Low never downloads it.
 import { useGLTF } from '@react-three/drei';
-import { LoaderUtils, Mesh, Texture, type Material } from 'three';
-import { onReleaseModels, takePrefetched } from './modelCache';
+import { LoaderUtils, Mesh, Texture, type Material, type WebGLRenderer } from 'three';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { BASIS_DIR } from '../asset/spec';
+import { onReleaseModels, takePrefetched, whenRenderer } from './modelCache';
 
 // useGLTF(path, useDraco, useMeshopt, extendLoader). Draco is off: drei would
 // fetch its decoder from a CDN, which school networks often block. The meshopt
@@ -13,6 +15,31 @@ export const MESHOPT = true;
 type GLTFLoader = Parameters<NonNullable<Parameters<typeof useGLTF>[3]>>[0];
 /** What the loader hands back (three-stdlib's GLTF), before R3F adds the node and material maps. */
 type GLTF = Parameters<Parameters<GLTFLoader['load']>[1]>[0];
+
+/**
+ * The textures are KTX2 (Basis Universal, ADR-49): the worker transcodes each
+ * to a format the GPU keeps compressed. Its transcoder is served from our own
+ * public/basis/ (copied from three by npm run assets), never a CDN.
+ */
+const ktx2 = new KTX2Loader().setTranscoderPath(`${import.meta.env.BASE_URL}${BASIS_DIR}`);
+let ktx2Ready: Promise<void> | null = null;
+/**
+ * Ready to read KTX2 textures. The transcoder starts downloading at the first
+ * ask (the model chunk's preload, beside the models), since it is needed
+ * before any texture can be read. KTX2Loader picks its GPU format from a
+ * renderer, and three-stdlib's GLTFLoader silently drops a texture its KTX2
+ * loader cannot read yet, so no model is parsed before the first Canvas has
+ * made one either. A transcoder that cannot load fails every model load, so
+ * AssetBoundary shows the simple board and says so, instead of a board
+ * without its textures.
+ */
+const textureSupport = () =>
+  (ktx2Ready ??= Promise.all([
+    ktx2.init(),
+    whenRenderer().then((r) => {
+      ktx2.detectSupport(r as WebGLRenderer);
+    }),
+  ]).then(() => undefined));
 
 /** What each URL loaded, so a release can free it. */
 const loaded = new Map<string, GLTF>();
@@ -28,6 +55,7 @@ const patched = new WeakSet<GLTFLoader>();
 export function shareEarlyDownloads(loader: GLTFLoader) {
   if (patched.has(loader)) return;
   patched.add(loader);
+  loader.setKTX2Loader(ktx2 as unknown as Parameters<GLTFLoader['setKTX2Loader']>[0]);
   const load = loader.load.bind(loader);
   loader.load = (url, onLoad, onProgress, onError) => {
     const done = (gltf: GLTF) => {
@@ -35,16 +63,22 @@ export function shareEarlyDownloads(loader: GLTFLoader) {
       onLoad(gltf);
     };
     const early = takePrefetched(url);
-    if (!early) return load(url, done, onProgress, onError);
-    early.then(
-      (data) => {
-        try {
-          loader.parse(data, LoaderUtils.extractUrlBase(url), done, onError);
-        } catch (e) {
-          onError?.(e as ErrorEvent);
-        }
+    // The download runs meanwhile; only the parse waits for the renderer.
+    textureSupport().then(
+      () => {
+        if (!early) return load(url, done, onProgress, onError);
+        early.then(
+          (data) => {
+            try {
+              loader.parse(data, LoaderUtils.extractUrlBase(url), done, onError);
+            } catch (e) {
+              onError?.(e as ErrorEvent);
+            }
+          },
+          () => load(url, done, onProgress, onError),
+        );
       },
-      () => load(url, done, onProgress, onError),
+      (e) => onError?.(e as ErrorEvent),
     );
   };
 }

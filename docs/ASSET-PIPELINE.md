@@ -6,7 +6,7 @@ Written 2026-11-04, realistic board pass. The board is a **procedural, scripted 
 
 | Command | What it does |
 | --- | --- |
-| `npm run assets` | Builds `public/models/board.glb` (about 0.3 s) and prints triangles per part, dropped triangles and PNG sizes |
+| `npm run assets` | Builds the four GLBs in `public/models/` (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes, and copies three's Basis transcoder into `public/basis/` |
 | `npm run assets:check` | Reads the committed GLB and prints the budget table; exits 1 on any miss. Last step of `npm run verify` |
 
 The GLB is committed, so a fresh clone runs without building it. A test (`scripts/lib/budget.test.ts`) fails if the committed file's triangle count no longer matches the geometry source, which means "run `npm run assets`". Another test builds the GLB twice in memory and requires identical bytes.
@@ -15,7 +15,7 @@ The GLB is committed, so a fresh clone runs without building it. A test (`script
 
 ```
 assets/source/deck-graphic.svg --resvg 1024 x 256--+
-src/asset/textures.ts (grip, ply, wheel) --PNG-----+
+src/asset/textures.ts (grip, ply, wheel) --KTX2----+
 src/asset/spec.ts     (DESIGN.md 7 numbers)        +--> scripts/lib/build.ts --> glTF-Transform Document
 src/asset/deck.ts     (outline, kicks, concave)    |      dedup, prune, meshopt (reorder + quantize + EXT_meshopt_compression)
 src/asset/hardware.ts (trucks, bolts, wheel lathe) +            |
@@ -33,7 +33,6 @@ src/asset/hardware.ts (trucks, bolts, wheel lathe) +            |
 | `src/asset/hardware.ts` | Trucks from three's cylinders and rounded boxes, bolt heads, wheels from three's `LatheGeometry` | `board.test.ts` |
 | `src/asset/board.ts` | One merged geometry per material, in the GLB's part order | `board.test.ts` |
 | `src/asset/textures.ts` | mulberry32 seeded grip grit, ply stripes, wheel bands (raw pixels) | `textures.test.ts` |
-| `scripts/lib/png.ts` | Minimal deterministic PNG encoder on `node:zlib` (grey or RGB, adaptive filters) | `png.test.ts` (round trip) |
 | `scripts/lib/build.ts` | Materials, samplers, `KHR_texture_transform` on the grip, accessors, nodes, compression | `budget.test.ts` (determinism) |
 | `scripts/lib/inspect.ts`, `budget.ts` | Read the GLB back, count draw calls, triangles, textures and bounds; evaluate the budget | `budget.test.ts` |
 
@@ -147,3 +146,16 @@ The look and the numbers are DESIGN.md 7.3, 7.4 and 10.1. Three files changed, `
 | `scripts/lib/build.ts` | `COLOR_0` from a geometry's `color` attribute; the deck graphic goes through `wearDeckBottom`; the High graphic gets a metallic-roughness texture with factor 1; each ground map takes `groundRepeat(key)` | `budget.test.ts` (determinism, committed bytes, the High texture list) |
 
 **Bytes.** The wear and the varied bays cost little because the expensive parts were made predictable for PNG's row filters. The print grain's wave is snapped to 0.2 m blocks along the deck (each texel row then repeats along a block: 2 KB, against 12 to 14 KB for the continuous wave at 2 levels, which shows no difference); texels outside the outline at the tips are plain wood without grain; the scuff haze is limited to patches near the tips. On the ground, the colour tile's grain moved from 3.5 mm to 12 mm cells: at the new 3.1 mm texel the old grain was per-texel noise and cost 154 KB.
+
+## KTX2 textures (2026-11-09, ADR-49)
+
+Every texture in all four GLBs is now KTX2: Basis Universal ETC1S at quality 255 with its mip chain down to 1 x 1 (`KTX2_OPTIONS` and `encodeKtx2` in `scripts/lib/build.ts`, through the pinned `ktx2-encoder`, WASM, no system tool). The raw pixels go straight to the encoder; colour maps are perceptual with the sRGB transfer function, normal maps use the normal-map preset, roughness is linear. `scripts/lib/png.ts` is gone. The texture file names in the specs still end in `.png`; the builder names them `.ktx2` inside the GLB. Everything above that gives a PNG size is history.
+
+| File | Before (PNG) | After (KTX2) | Textures inside | GPU memory, est. (BC7 + mips) |
+| --- | --- | --- | --- | --- |
+| `board.glb` | 281.4 KB | **187.6 KB** | grip 78.1, deck-bottom 18.6, ply 0.8, wheel 0.9 KB | 0.67 MB (was 2.70) |
+| `board-high.glb` | 1,823.3 KB | **596.1 KB** | grip-high 228.6, grip-normal 81.6, deck-bottom-high 40.7, deck-bottom-roughness 8.4, ply-high 1.7, wheel-high 1.3 KB | 3.39 MB (was 13.54) |
+| `shoes.glb` | 520.4 KB | **208.9 KB** | shoe-sole 62.3, shoe-upper 56.1 KB | 2.00 MB (was 8.00) |
+| `ground.glb` | 432.7 KB | **143.4 KB** | concrete-color 107.5, concrete-normal 11.1, concrete-roughness 21.4 KB | 3.00 MB (was 12.00) |
+
+The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder from `public/basis/`, which `npm run assets` copies from `node_modules/three/examples/jsm/libs/basis/` and `npm run assets:check` compares byte for byte with it. `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.

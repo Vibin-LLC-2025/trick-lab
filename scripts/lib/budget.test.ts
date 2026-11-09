@@ -9,7 +9,7 @@ import { PLANE } from '../../src/asset/groundSpec';
 import { buildShoe, shoeTriangles } from '../../src/asset/shoe';
 import { SHOE } from '../../src/asset/shoeSpec';
 import { ASSET_FILES, BUDGET, BUDGETS, OUTLINE, REST_Y, type AssetKey } from '../../src/asset/spec';
-import { evaluateBudget, formatTable, gpuBytes, type AssetStats } from './budget';
+import { evaluateBudget, formatTable, fullMipLevels, gpuBytes, type AssetStats } from './budget';
 import { buildAsset } from './build';
 import { inspectGlb } from './inspect';
 
@@ -19,11 +19,11 @@ const good: AssetStats = {
   triangles: 13000,
   materials: 7,
   textures: [
-    { name: 'grip', width: 512, height: 512, bytes: 100, mipmapped: true },
-    { name: 'deckBottom', width: 1024, height: 256, bytes: 100, mipmapped: true },
+    { name: 'grip', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10 },
+    { name: 'deckBottom', width: 1024, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
-  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
+  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
   nodeNames: ['Board', 'Deck_Grip', 'Deck_Wood', 'Deck_Graphic', 'Truck_Aluminium', 'Truck_Steel', 'Truck_Bushings', 'Wheels'],
   bounds: { min: [OUTLINE.tailTip, -REST_Y, -OUTLINE.width / 2], max: [OUTLINE.noseTip, 0.05, OUTLINE.width / 2] },
 };
@@ -34,11 +34,11 @@ const goodShoe: AssetStats = {
   triangles: 9000,
   materials: 3,
   textures: [
-    { name: 'sole', width: 16, height: 64, bytes: 100, mipmapped: true },
-    { name: 'upper', width: 512, height: 512, bytes: 100, mipmapped: true },
+    { name: 'sole', width: 16, height: 64, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 7 },
+    { name: 'upper', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10 },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
-  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
+  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
   nodeNames: ['Shoe', 'Shoe_Sole', 'Shoe_Upper', 'Shoe_Laces'],
   bounds: { min: [-SHOE.length / 2, 0, -0.055], max: [SHOE.length / 2, 0.085, 0.05] },
 };
@@ -49,12 +49,12 @@ const goodGround: AssetStats = {
   triangles: 2,
   materials: 1,
   textures: [
-    { name: 'color', width: 1024, height: 1024, bytes: 100, mipmapped: true },
-    { name: 'normal', width: 1024, height: 1024, bytes: 100, mipmapped: true },
-    { name: 'roughness', width: 256, height: 256, bytes: 100, mipmapped: true },
+    { name: 'color', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
+    { name: 'normal', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
+    { name: 'roughness', width: 256, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 9 },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_transform'],
-  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
+  extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
   nodeNames: ['Ground', 'Ground_Concrete'],
   bounds: { min: [-PLANE.x / 2, 0, -PLANE.z / 2], max: [PLANE.x / 2, 0, PLANE.z / 2] },
 };
@@ -70,7 +70,8 @@ describe('asset budget rules', () => {
     ['a file over 300 KB', { fileBytes: BUDGET.fileBytes + 1 }, 'GLB file size'],
     ['a ninth draw call', { drawCalls: 9 }, 'Draw calls (primitives)'],
     ['too many triangles', { triangles: 25001 }, 'Triangles'],
-    ['a missing meshopt extension', { extensionsRequired: ['KHR_mesh_quantization'] }, 'EXT_meshopt_compression'],
+    ['a missing meshopt extension', { extensionsRequired: ['KHR_mesh_quantization', 'KHR_texture_basisu'] }, 'EXT_meshopt_compression'],
+    ['KTX2 textures without KHR_texture_basisu', { extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization'] }, 'Textures KTX2 (Basis)'],
     ['Draco', { extensionsUsed: ['KHR_draco_mesh_compression'] }, 'No Draco (CDN decoder)'],
     ['a missing part', { nodeNames: ['Board', 'Deck_Grip'] }, 'Part nodes'],
     ['wheels below the pad', { bounds: { min: [OUTLINE.tailTip, -REST_Y - 0.001, -0.1016], max: [OUTLINE.noseTip, 0.05, 0.1016] } }, 'Wheel bottoms (min y)'],
@@ -81,14 +82,22 @@ describe('asset budget rules', () => {
   it('fails textures that are too many, too big, not power of two or not mipmapped', () => {
     const t = good.textures[0]!;
     expect(failing({ ...good, textures: [t, t, t, t, t] })).toEqual(['Textures']);
-    expect(failing({ ...good, textures: [{ ...t, width: 2048 }] })).toEqual(['Texture long side']);
+    expect(failing({ ...good, textures: [{ ...t, width: 2048, levels: 12 }] })).toEqual(['Texture long side']);
     expect(failing({ ...good, textures: [{ ...t, width: 500 }] })).toEqual(['Textures power of two']);
     expect(failing({ ...good, textures: [{ ...t, mipmapped: false }] })).toEqual(['Textures mipmapped (sampler)']);
   });
 
+  it('fails a texture that is not KTX2, or a KTX2 without its whole mip chain (ADR-49)', () => {
+    const t = good.textures[0]!;
+    expect(failing({ ...good, textures: [{ ...t, mimeType: 'image/png', levels: 1 }] })).toEqual(['Textures KTX2 (Basis)', 'Mip chains in the file']);
+    expect(failing({ ...good, textures: [{ ...t, levels: 9 }] })).toEqual(['Mip chains in the file']);
+    expect(fullMipLevels({ width: 2048, height: 512 })).toBe(12);
+    expect(fullMipLevels({ width: 16, height: 128 })).toBe(8);
+  });
+
   it('gives the high board its own limits: 2048 px textures, six of them, 120,000 triangles, 2.5 MB', () => {
     const t = good.textures[0]!;
-    const high: AssetStats = { ...good, fileBytes: 2 * 1024 * 1024, triangles: 100000, textures: [t, t, t, t, t, { ...t, width: 2048 }] };
+    const high: AssetStats = { ...good, fileBytes: 2 * 1024 * 1024, triangles: 100000, textures: [t, t, t, t, t, { ...t, width: 2048, levels: 12 }] };
     expect(failing(high, 'boardHigh')).toEqual([]);
     expect(failing(high, 'board')).toEqual(['GLB file size', 'Triangles', 'Textures', 'Texture long side']);
     expect(failing({ ...high, fileBytes: BUDGETS.boardHigh.fileBytes + 1 }, 'boardHigh')).toEqual(['GLB file size']);
@@ -124,8 +133,9 @@ describe('asset budget rules', () => {
     expect(failing({ ...goodGround, nodeNames: ['Ground'] }, 'ground')).toEqual(['Part nodes']);
   });
 
-  it('estimates GPU memory as RGBA8 plus a third for mips', () => {
+  it('estimates GPU memory plus a third for mips: RGBA8, or 1 byte a pixel for KTX2 (BC7)', () => {
     expect(gpuBytes({ width: 512, height: 512 })).toBeCloseTo((512 * 512 * 4 * 4) / 3, 6);
+    expect(gpuBytes({ width: 512, height: 512, mimeType: 'image/ktx2' })).toBeCloseTo((512 * 512 * 4) / 3, 6);
   });
 
   it('prints one table row per check', () => {
@@ -154,7 +164,7 @@ describe('the committed GLBs', () => {
     expect(stats.triangles).toBe(sum(boardTriangles(buildBoard('high'))));
     expect(stats.drawCalls).toBe(7);
     expect(stats.textures.map((t) => t.name)).toEqual(['grip', 'gripNormal', 'deckBottom', 'deckRoughness', 'ply', 'wheel']);
-    expect(stats.textures.every((t) => t.mipmapped)).toBe(true);
+    expect(stats.textures.every((t) => t.mipmapped && t.mimeType === 'image/ktx2' && t.levels === fullMipLevels(t))).toBe(true);
   });
 
   it('shoes.glb meets the shoe budget and matches the source', async () => {

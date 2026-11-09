@@ -1,13 +1,15 @@
 // npm run assets: builds public/models/board.glb (medium), board-high.glb
 // (high), shoes.glb and ground.glb (see scripts/lib/build.ts) and prints what
-// went into each. The GLBs are committed; npm run assets:check (part of npm
-// run verify) enforces each file's budget on the committed bytes.
+// went into each, then copies three's Basis transcoder into public/basis/ for
+// the KTX2 textures (ADR-49). Both are committed; npm run assets:check (part
+// of npm run verify) enforces each file's budget on the committed bytes and
+// that the transcoder is still three's.
 // `npm run assets -- ground` (asset keys from src/asset/spec.ts) builds only
 // those files; the build is deterministic, so the others would not change.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ASSET_FILES, type AssetKey } from '../src/asset/spec';
+import { ASSET_FILES, BASIS_DIR, BASIS_FILES, BASIS_SOURCE, type AssetKey } from '../src/asset/spec';
 import { buildAsset } from './lib/build';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,9 +31,12 @@ async function main() {
     console.log(`${file}: ${kb(glb.length)}, ${total.toLocaleString('en-US')} triangles, built in ${Math.round(performance.now() - t0)} ms`);
     console.log(`  triangles: ${Object.entries(report.triangles).map(([k, v]) => `${k} ${v}`).join(', ')}`);
     console.log(`  zero-area triangles dropped at the spine tips: ${report.droppedTriangles}`);
-    console.log(`  textures (PNG): ${Object.entries(report.textureBytes).map(([k, v]) => `${k} ${kb(v)}`).join(', ')}`);
+    console.log(`  textures (KTX2): ${Object.entries(report.textureBytes).map(([k, v]) => `${k} ${kb(v)}`).join(', ')}`);
     console.log(`  wrote ${out}`);
   }
+  mkdirSync(resolve(ROOT, 'public', BASIS_DIR), { recursive: true });
+  for (const f of BASIS_FILES) copyFileSync(resolve(ROOT, BASIS_SOURCE, f), resolve(ROOT, 'public', BASIS_DIR, f));
+  console.log(`public/${BASIS_DIR}: ${BASIS_FILES.join(', ')} copied from ${BASIS_SOURCE}`);
 }
 
 main().catch((err: unknown) => {

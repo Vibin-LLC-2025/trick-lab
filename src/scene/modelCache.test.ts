@@ -1,16 +1,25 @@
-// ADR-48 (2026-11-09): the tier's GLBs download from the moment the page
-// opens, the loader parses those downloads instead of fetching again, and a
-// move down a tier frees the models it no longer shows. jsdom has no network,
-// so fetch is stubbed; the loader is a stand-in with GLTFLoader's load and
-// parse, since the real one would need a real GLB and a WebGL context.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// ADR-48 (2026-11-09): the tier's GLBs download as soon as the 3D code
+// arrives, the loader parses those downloads instead of fetching again, and a
+// move down a tier frees the models it no longer shows. ADR-49: the loader
+// reads KTX2 textures, so it parses nothing before a renderer exists. jsdom
+// has no network, so fetch is stubbed; the loader is a stand-in with
+// GLTFLoader's load, parse and setKTX2Loader, and the renderer a stand-in
+// with the extension list KTX2Loader asks, since the real ones would need a
+// real GLB and a WebGL context.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, Mesh, MeshStandardMaterial, Scene, Texture } from 'three';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { useGLTF } from '@react-three/drei';
-import { prefetchModels, releaseModels, takePrefetched } from './modelCache';
+import { noteRenderer, prefetchModels, releaseModels, takePrefetched } from './modelCache';
 import { disposeModel, shareEarlyDownloads } from './gltf';
 import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL } from './modelUrls';
 
 type Loader = Parameters<typeof shareEarlyDownloads>[0];
+
+// The transcoder lives in public/basis/, which jsdom cannot fetch: it loads at once here.
+beforeEach(() => {
+  vi.spyOn(KTX2Loader.prototype, 'init').mockResolvedValue(undefined);
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,16 +34,20 @@ function stubFetch(ok = true) {
   return fetch;
 }
 
-/** A loader with GLTFLoader's load and parse: parse hands back a scene named after the bytes. */
+/** A loader with GLTFLoader's load, parse and setKTX2Loader: parse hands back a scene named after the bytes. */
 function fakeLoader() {
   const load = vi.fn((_url: string, onLoad: (g: unknown) => void) => onLoad({ scene: new Scene(), from: 'network' }));
   const parse = vi.fn((data: ArrayBuffer, path: string, onLoad: (g: unknown) => void) =>
     onLoad({ scene: new Scene(), from: new TextDecoder().decode(data), path }),
   );
-  const loader = { load, parse } as unknown as Loader;
+  const setKTX2Loader = vi.fn();
+  const loader = { load, parse, setKTX2Loader } as unknown as Loader;
   shareEarlyDownloads(loader);
-  return { loader, load, parse };
+  return { loader, load, parse, setKTX2Loader };
 }
+
+/** A renderer as KTX2Loader.detectSupport reads it: a WebGL one with no compressed formats. */
+const fakeRenderer = { extensions: { has: () => false } };
 
 const loadWith = (loader: Loader, url: string) =>
   new Promise<Record<string, unknown>>((resolve, reject) => loader.load(url, (g) => resolve(g as never), undefined, reject));
@@ -82,6 +95,30 @@ describe('early downloads', () => {
 });
 
 describe('the loader shares the early downloads', () => {
+  it('gives the loader a KTX2 loader and parses nothing before the first renderer exists (ADR-49)', async () => {
+    const { loader, load, setKTX2Loader } = fakeLoader();
+    expect(setKTX2Loader).toHaveBeenCalledTimes(1);
+    expect(setKTX2Loader.mock.calls[0]![0]).toHaveProperty('detectSupport');
+    const pending = loadWith(loader, '/models/waits.glb');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(load).not.toHaveBeenCalled();
+    noteRenderer(fakeRenderer);
+    expect((await pending).from).toBe('network');
+  });
+
+  it('reports a transcoder that cannot load as a failed model, so AssetBoundary shows the simple board (ADR-49)', async () => {
+    vi.resetModules();
+    vi.spyOn(KTX2Loader.prototype, 'init').mockRejectedValue(new Error('blocked'));
+    const fresh = await import('./gltf');
+    const cache = await import('./modelCache');
+    cache.noteRenderer(fakeRenderer);
+    const load = vi.fn();
+    const loader = { load, parse: vi.fn(), setKTX2Loader: vi.fn() } as unknown as Loader;
+    fresh.shareEarlyDownloads(loader);
+    await expect(loadWith(loader, '/models/no-transcoder.glb')).rejects.toThrow('blocked');
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('parses a file that was started early instead of fetching it again, with its folder as the resource path', async () => {
     stubFetch();
     prefetchModels(['/models/early.glb']);

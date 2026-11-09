@@ -50,6 +50,23 @@ export function takePrefetched(url: string): Promise<ArrayBuffer> | undefined {
  */
 export const RELEASE_AFTER_MS = 1000;
 
+let renderer: object | null = null;
+const waiting: ((r: object) => void)[] = [];
+
+/**
+ * TrickScene notes each renderer it creates. The KTX2 textures (ADR-49) are
+ * transcoded to a GPU format the renderer supports, so the loader waits for
+ * the first one before it parses a model.
+ */
+export function noteRenderer(r: object) {
+  renderer = r;
+  for (const w of waiting.splice(0)) w(r);
+}
+
+/** The first renderer, as soon as there is one. */
+export const whenRenderer = (): Promise<object> =>
+  renderer ? Promise.resolve(renderer) : new Promise((resolve) => waiting.push(resolve));
+
 type Release = (urls: readonly string[]) => void;
 let release: Release | null = null;
 

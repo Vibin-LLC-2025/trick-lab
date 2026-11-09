@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { ImageUtils, NodeIO, Primitive, TextureInfo, getBounds, type Node } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { read as readKtx2 } from 'ktx-parse';
 import { MeshoptDecoder } from 'meshoptimizer';
 import type { AssetStats, TextureStat } from './budget';
 
@@ -56,15 +57,21 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
       mipmapped.set(tex.getName(), (mipmapped.get(tex.getName()) ?? true) && ok);
     }
   }
+  // A KTX2 texture (ADR-49) carries its own mip chain: its header gives the
+  // size and the levels stored. Any other image has one level in the file.
   const textures: TextureStat[] = root.listTextures().map((t) => {
     const image = t.getImage();
-    const size = image ? ImageUtils.getSize(image, t.getMimeType()) : null;
+    const mimeType = t.getMimeType();
+    const ktx2 = image && mimeType === 'image/ktx2' ? readKtx2(image) : null;
+    const size = ktx2 ? [ktx2.pixelWidth, ktx2.pixelHeight] : image ? ImageUtils.getSize(image, mimeType) : null;
     return {
       name: t.getName(),
       width: size?.[0] ?? 0,
       height: size?.[1] ?? 0,
       bytes: image?.byteLength ?? 0,
       mipmapped: mipmapped.get(t.getName()) ?? false,
+      mimeType,
+      levels: ktx2 ? ktx2.levels.length : 1,
     };
   });
 

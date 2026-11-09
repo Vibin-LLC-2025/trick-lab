@@ -1,7 +1,7 @@
 // The repeatable measurement (ADR-48, docs/PERF-BUDGET.md "How to measure").
 // A single function for the global playwright-cli, not a Node script:
 //
-//   npm run build && npx vite preview --port 4173 --strictPort
+//   npm run build && node scripts/measure/serve.mjs dist 4173   (gzip like GitHub Pages)
 //   playwright-cli -s=measure open "http://localhost:4173/?tiers=high,medium,low&nets=full,10,3"
 //   playwright-cli -s=measure --raw run-code --filename=scripts/measure/measure.js > measure.json
 //   playwright-cli -s=measure close

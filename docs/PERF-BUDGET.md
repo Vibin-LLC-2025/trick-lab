@@ -45,11 +45,13 @@ The board budget is enforced on the committed GLB by `npm run assets:check`, whi
 Every change from `docs/PLAN-LOOK-FEEL-PERF.md` on reports before and after from one script, `scripts/measure/measure.js`, run by the global `playwright-cli` against a production build (Playwright is not a project dependency):
 
 ```
-npm run build && npx vite preview --port 4173 --strictPort
+npm run build && node scripts/measure/serve.mjs dist 4173
 playwright-cli -s=measure open "http://localhost:4173/?tiers=high,medium,low&nets=full,10,3"
 playwright-cli -s=measure --raw run-code --filename=scripts/measure/measure.js > measure.json
 playwright-cli -s=measure close
 ```
+
+`scripts/measure/serve.mjs` serves the build the way GitHub Pages, the live host, does: gzip for HTML, CSS, JS, JSON, SVG, `.wasm` and `.glb` (checked against Pages on 2026-11-09) and `Cache-Control: max-age=600`. `vite preview` gzips the JS, CSS and HTML but sends `.glb` and `.wasm` uncompressed, which overstates the model download; the baseline and step 1 tables were taken through it, before the server existed, and the step 3 section compares gzipped runs.
 
 The options are the query of the page the session is on (tiers, networks, screens, feet, legs, theme, viewport, the preset, the number of timed tricks, the base path; the script's header lists them). The result is JSON with a `markdown` field holding the two tables used below. For each tier it loads the welcome screen with the HTTP cache off at full speed and at 10 and 3 Mbps (Chromium's own throttling, 60 ms latency) and records first contentful paint, the first frame of the lit 3D scene, the frame where every model of the tier is on screen, and the bytes by kind. Then, at full speed on each screen, the draw calls and triangles (the most over half a second of frames after a forced frame), and in the lab, after one untimed trick, `gl.render` CPU time and GPU time (`EXT_disjoint_timer_query_webgl2`, where the browser exposes it) over four tricks, and the frames drawn in the 1.5 s after the last landing's own frame (must be 0). Where the welcome preview loops (Medium and High) it times three seconds of it too. It reads the renderer through `?debug` and sets each load's storage from the URL (the `m-*` parameters, applied by an init script before the app runs), so nothing in the app changes for it.
 
@@ -313,3 +315,23 @@ Against the plan's own baseline (2026-11-08, measured by hand): the same draw ca
 | Medium | 3 Mbps | 1.39 s | 1.39 s | 3.50 s | 3.42 s |
 
 The legs were two draw calls on every tier plus the shanks' shadow pass on High. GPU time over the looping welcome preview did not move beyond noise (High 3.29 to 3.54 ms, Medium 2.64 to 2.70 ms, medians). The models now start downloading when the 3D code arrives (High's request at 1.27 s instead of 1.43 s at 3 Mbps), which brings every model in 0.07 to 0.1 s sooner; starting them when the page opens, as first tried, delayed the first 3D frame to 3.51 s at 3 Mbps for 0.2 s on the models (ADR-48). JS: the first chunk is unchanged, the 3D chunk 0.7 KB larger. With `board-high.glb` loaded, a move to Medium frees it after a second and a move back loads it again (checked in the browser by its second resource entry); no console errors, only R3F's known `THREE.Clock` deprecation warning.
+
+### Step 3: KTX2 textures (ADR-49)
+
+Measured through `scripts/measure/serve.mjs` (gzip like GitHub Pages), so the bytes are what a student downloads. "Before" is step 2 (b063522) from the scratch worktree, served the same way in the same session. Models and JS are gzipped transfer sizes; the transcoder (`basis_transcoder.wasm`, 242 KB gzipped, plus its 15 KB JS, in the JS column) is fetched once and then cached.
+
+| Tier | Network | Every model on screen before | After | Models before | After | JS before | After |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| High | full speed | 0.80 s | 0.78 s | 2,584 KB | **754 KB** + 242 KB transcoder | 376 KB | 414 KB |
+| High | 10 Mbps | 2.89 s | **1.92 s** | | | | |
+| High | 3 Mbps | 8.60 s | **4.60 s** | | | | |
+| Medium | full speed | 0.76 s | 0.74 s | 660 KB | **274 KB** + 242 KB transcoder | 375 KB | 414 KB |
+| Medium | 10 Mbps | 1.38 s | 1.60 s | | | | |
+| Medium | 3 Mbps | 3.23 s | 3.36 s | | | | |
+
+| | High | Medium |
+| --- | --- | --- |
+| GPU texture memory, estimate (`assets:check`) | 33.5 to **8.4 MB** | 14.7 to **3.7 MB** |
+| Texture format on the GPU (read in the browser) | BC7 (`RGBA_BPTC_Format`), every texture, full mip chains | same |
+
+High's first visit is about twice as fast to every model on a slow link. Medium's first visit is about even (its 386 KB of savings are spent on the transcoder, and the transcoder has to arrive and compile before any texture is read: 0.1 to 0.2 s slower here, within this setup's run-to-run spread at 10 Mbps); every later visit saves the 386 KB, and the GPU keeps a quarter of the texture memory. The transcoder starts downloading with the first model request, beside the GLBs (starting it only when the first texture needed it cost Medium another 0.1 s). The first 3D frame, draw calls (High 27 and 28, Medium 13 and 14, Low 11 and 12), triangles and Low's downloads are unchanged; Low fetches neither the transcoder nor the model chunk. GPU time per frame did not move beyond noise (looping welcome preview, High 3.50 to 3.46 ms, Medium 2.55 to 1.81 ms). The model chunk is 45.9 KB gzipped (was 21.7: KTX2Loader and its zstd decoder).

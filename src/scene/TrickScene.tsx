@@ -5,7 +5,7 @@ import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
-import { prefetchModels, RELEASE_AFTER_MS, releaseModels } from './modelCache';
+import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels } from './modelCache';
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
@@ -76,6 +76,7 @@ function Lights({ shadows }: { shadows: boolean }) {
  * it nothing is attached.
  */
 function onCreated(state: RootState) {
+  noteRenderer(state.gl);
   if (new URLSearchParams(window.location.search).has('debug')) {
     (window as unknown as { __trickLab?: RootState }).__trickLab = state;
   }
