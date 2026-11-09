@@ -155,9 +155,10 @@ export const ART = {
    * three's view depth (ADR-55, 2026-11-09, rangeFog.ts): a desktop stage
    * has no widest shape, and by depth a 5.5:1 stage saw the edge 10 m deep.
    * `near` 5.5 m: the farthest point of the flight box (a deck corner at the
-   * top of a 0.6 m pop) from the farthest allowed camera (maxDistance 4.5 m;
-   * 1.25 times the fit is less, even on the narrowest stage) is 5.3 m, so the
-   * board, the feet and the trails are never fogged. `far` 15 m: from the
+   * top of a 0.6 m pop) from the farthest allowed camera is 5.3 m on most
+   * stages, and the orbit's zoom-out stops where it would pass 5.5 m (the
+   * detail view on the narrowest stage, `orbitMaxDistance`), so the board,
+   * the feet and the trails are never fogged. `far` 15 m: from the
    * lowest orbit (maxPolarAngle 1.25 rad, whose frame reaches the horizon)
    * and from the welcome camera, the nearest visible point of the plane's
    * edge is at least 19 m away on any stage from 0.5:1 to 50:1, so the edge
@@ -334,6 +335,12 @@ export const ART = {
     showcaseMaxPolarAngle: 1.45,
     minDistance: 1.0,
     maxDistance: 4.5,
+    /**
+     * On a narrow stage, where the fit is already far, the orbit may zoom out
+     * to this many times the fit past maxDistance (ADR-18), up to where the
+     * flight would reach the fog (orbitMaxDistance in cameraFit.ts, ADR-55).
+     */
+    zoomOut: 1.25,
     /**
      * Framing (integration pass, 2026-11-04): the camera backs off along its
      * view direction until the whole pad and the highest flight fit the stage

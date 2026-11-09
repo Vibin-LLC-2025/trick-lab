@@ -5,7 +5,7 @@ import { computeFlight, writePose } from '../sim/flight';
 import { newLegsPose, writeLegsPose } from '../sim/legs';
 import { PRESETS } from '../sim/tricks';
 import { ART } from './artDirection';
-import { boxCorners, fitDistance, framingPoints, projectToGround, shadowFrustum } from './cameraFit';
+import { boxCorners, fitDistance, framingPoints, orbitMaxDistance, projectToGround, shadowFrustum } from './cameraFit';
 
 const C = ART.camera;
 const POINTS = framingPoints(C.fit);
@@ -83,6 +83,22 @@ describe('camera fit (ADR-18)', () => {
     cam.updateMatrixWorld();
     const right = new Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
     expect(right.x).toBeCloseTo(1, 6);
+  });
+});
+
+describe('the orbit zoom-out limit (ADR-18, ADR-55)', () => {
+  // A unit box round the origin: its farthest corner is sqrt(3) from the target.
+  const points = framingPoints({ reach: 1, bottom: -1, top: 1 });
+  const base = { target: [0, 0, 0] as const, points, maxDistance: 4.5, zoomOut: 1.25, fogNear: 10 };
+
+  it('is the orbit limit while the fit is near, and the fit times zoomOut on a narrow stage', () => {
+    expect(orbitMaxDistance({ ...base, fit: 2 })).toBe(4.5);
+    expect(orbitMaxDistance({ ...base, fit: 5 })).toBe(6.25);
+  });
+
+  it('stops where the farthest point would reach the fog, but never nearer than the fit', () => {
+    expect(orbitMaxDistance({ ...base, fit: 5, fogNear: 7 })).toBeCloseTo(7 - Math.sqrt(3), 9);
+    expect(orbitMaxDistance({ ...base, fit: 6, fogNear: 7 })).toBe(6);
   });
 });
 

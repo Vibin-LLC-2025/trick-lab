@@ -49,6 +49,35 @@ export function fitDistance({ from, target, fov, aspect, points, margin }: FitIn
   return d;
 }
 
+export interface ZoomInput {
+  /** The fitted distance for the stage (fitDistance, at least the orbit's minimum). */
+  fit: number;
+  /** The orbit target. */
+  target: Vec3;
+  /** The flight box's corners (framingPoints). */
+  points: readonly Vec3[];
+  /** The orbit's own zoom-out limit. */
+  maxDistance: number;
+  /** How far past the fit a narrow stage may zoom out, as a multiple of it. */
+  zoomOut: number;
+  /** Where the fog starts: no point of the flight may be farther from the camera. */
+  fogNear: number;
+}
+
+/**
+ * How far the orbit may zoom out: `maxDistance`, or `zoomOut` times the fit
+ * on a narrow stage where the fit is already far (ADR-18), but never so far
+ * that a point of the flight could be farther than `fogNear` from the camera
+ * (the camera to the target plus the target to the point bounds it), so the
+ * board, the feet and the trails are never fogged (ADR-55's update); and
+ * never nearer than the fit itself.
+ */
+export function orbitMaxDistance({ fit, target, points, maxDistance, zoomOut, fogNear }: ZoomInput): number {
+  let spread = 0;
+  for (const p of points) spread = Math.max(spread, Math.hypot(p[0] - target[0], p[1] - target[1], p[2] - target[2]));
+  return Math.max(fit, Math.min(Math.max(maxDistance, fit * zoomOut), fogNear - spread));
+}
+
 /**
  * What must stay in frame (ADR-18): a box around the board's flight, from
  * the pad surface under it (`bottom`, so the shadow stays in) to the highest

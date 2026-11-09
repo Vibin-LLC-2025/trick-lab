@@ -4,7 +4,7 @@ import { useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useTrickStore, type CameraView } from '../store';
 import { ART } from './artDirection';
-import { fitDistance, framingPoints } from './cameraFit';
+import { fitDistance, framingPoints, orbitMaxDistance } from './cameraFit';
 import { newResetTracker, placeCamera, takeReset } from './cameraPlacement';
 
 const C = ART.camera;
@@ -74,7 +74,8 @@ function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
  * Orbit around the board. Damping stays off: it needs a continuous loop, and
  * with it off nobody gets camera easing. drei's OrbitControls invalidates on
  * change, so the demand loop still renders while orbiting. maxDistance grows
- * with the fit so a narrow stage can still zoom out a little past the fit.
+ * with the fit so a narrow stage can still zoom out a little past the fit,
+ * but stops before the flight would reach the fog (orbitMaxDistance, ADR-55).
  * The orbit target is the chosen preset's (pan is off, so it never moves).
  * On the welcome screen (ADR-45) the camera holds the preview's own preset
  * and the orbit is off; the student's preset comes back with the lab or game.
@@ -94,7 +95,14 @@ export function SceneCamera() {
         enableDamping={false}
         enableZoom
         minDistance={C.minDistance}
-        maxDistance={Math.max(C.maxDistance, distance * 1.25)}
+        maxDistance={orbitMaxDistance({
+          fit: distance,
+          target: C.views[view].target,
+          points: FRAME_POINTS,
+          maxDistance: C.maxDistance,
+          zoomOut: C.zoomOut,
+          fogNear: ART.fog.near,
+        })}
         minPolarAngle={C.minPolarAngle}
         // The welcome preview sits lower than a student may orbit, to show the sky (ADR-52); it never orbits.
         maxPolarAngle={home ? C.showcaseMaxPolarAngle : C.maxPolarAngle}

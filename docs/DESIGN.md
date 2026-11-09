@@ -62,7 +62,7 @@ Moved on 2026-11-04 (art pass after the rider's-view camera, ADR-23): at `[2.5, 
 | `enablePan` | `false` |
 | `enableDamping` | `false` (damping needs a continuous loop; the app runs `frameloop="demand"`) |
 | `enableZoom` | `true` |
-| Stage fit | the camera backs off along its view direction until the board's flight volume at a 0.6 m pop fits the stage with a 6 percent margin (`scene/cameraFit.ts`, ADR-18, which replaced the whole-pad fit of ADR-11); zoom-out may pass `maxDistance` up to 1.25 times the fit. See 8.2 |
+| Stage fit | the camera backs off along its view direction until the board's flight volume at a 0.6 m pop fits the stage with a 6 percent margin (`scene/cameraFit.ts`, ADR-18, which replaced the whole-pad fit of ADR-11); zoom-out may pass `maxDistance` up to `zoomOut` (1.25) times the fit, and stops where the flight would reach the fog's near (`orbitMaxDistance`, ADR-55). See 8.2 |
 | Presets (2026-11-05, ADR-38) | `rider` (the rows above, the default) and `detail`: 35 degrees above the horizon, 25 degrees round from the heel side toward +X, target `[0, 0.25, 0]` (position `[0.692, 1.397, 1.485]` before the fit, `[0.84, 1.64, 1.80]` after it at 1600 x 1000). Chosen in the View panel (8.9); "Reset view" returns to the chosen one |
 | Reduced motion | no easing in either mode; "Reset view" snaps |
 
@@ -642,7 +642,7 @@ Fine per-pixel grain is what PNG cannot compress, so the grain is smooth noise a
 | Ground on Medium and High | `ground.glb` (lazy chunk sharing the GLTF loader, preloaded at once, `dispose={null}`), receives the shadow on High |
 | Ground on Low, and the fallback | an untextured `PlaneGeometry` of the same size in `resources.ts`, `#616466`, roughness `0.93`, one draw call. A ground that fails to load falls back to it without marking the board as failed |
 | Ground anisotropy (`ART.quality[tier].groundAnisotropy`) | High `16`, Medium `8` (the board's Medium is 4; the ground is seen at grazing angles), Low `4` (its joint texture, ADR-54; was `1` and unused while Low's ground had no texture) |
-| Fog | `Fog(clearColor[theme], 5.5, 15)`; the colour equals `--scene-bg` and switches with the theme. By the distance from the camera, not view depth (ADR-55, 2026-11-09). Near: the farthest flight-box corner from the farthest camera is 5.3 m. Far: the nearest visible point of the plane edge, from the lowest orbit and the welcome camera, is at least 19 m on any stage from 0.5:1 to 50:1 (both tested) |
+| Fog | `Fog(clearColor[theme], 5.5, 15)`; the colour equals `--scene-bg` and switches with the theme. By the distance from the camera, not view depth (ADR-55, 2026-11-09). Near: the farthest flight-box corner from the farthest camera is 5.3 m, and the zoom-out stops before 5.5 m (the detail view on the narrowest stage). Far: the nearest visible point of the plane edge, from the lowest orbit and the welcome camera, is at least 19 m on any stage from 0.5:1 to 50:1 (both tested) |
 | Environment scene | sky dome radius `10`, 48 x 32 segments, zenith `#8d9cae`, horizon `#d0d2d1`, gradient exponent `0.55`; concrete below `#6b6a66` at `0.55`, blended over `0.06` of the radius under the horizon; sun disc `#fff1e0` at `40`, angular radius `0.05` rad, in the key light's direction. PMREM blur `0.04`, `environmentIntensity` `0.90` |
 | Hemisphere light | sky `#dde2e6`, ground `#6b6a66`, `0.35` |
 | Key light | `#fff1e0`, `2.7`, position and target unchanged |

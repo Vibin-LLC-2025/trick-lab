@@ -4,7 +4,7 @@ import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { CONCRETE, PLANE } from '../asset/groundSpec';
 import { OUTLINE, REST_Y, WHEEL } from '../asset/spec';
 import { ART, SCENE_BG } from './artDirection';
-import { fitDistance, framingPoints } from './cameraFit';
+import { fitDistance, framingPoints, orbitMaxDistance } from './cameraFit';
 import { geo } from './resources';
 
 /** Body of the first rule whose selector matches exactly, e.g. `:root` or `:root[data-theme="dark"]`. */
@@ -77,51 +77,76 @@ describe('fog and ground (ground pass, ADR-31)', () => {
     expect(F.color.light).toBe(ART.clearColor.light);
   });
 
-  it('never fogs the board: its farthest point from the farthest allowed camera is nearer than fog near', () => {
-    const points = framingPoints(C.fit);
-    // The narrowest stage the layout produces (cameraFit.test.ts), where the fit backs off most.
-    const fit = fitDistance({ from: C.position, target: C.target, fov: C.fov, aspect: 368 / 744, points, margin: C.fit.margin });
-    const farthest = Math.max(C.maxDistance, fit * 1.25);
-    // Board reach plus the highest pop, from the orbit target.
-    const spread = Math.hypot(C.fit.reach, C.fit.reach, C.fit.top - C.target[1]);
-    expect(farthest + spread).toBeLessThanOrEqual(F.near);
-    expect(fogAt(farthest + spread)).toBe(0);
+  /** The fitted distance for a view on a stage, as SceneCamera computes it. */
+  const fitFor = (view: 'rider' | 'detail' | 'showcase', aspect: number) => {
+    const V = C.views[view];
+    const d = fitDistance({ from: V.position, target: V.target, fov: C.fov, aspect, points: framingPoints(C.fit), margin: C.fit.margin });
+    return Math.max(C.minDistance, d);
+  };
+  /** The farthest the student's orbit may zoom out on a view and stage (SceneCamera). */
+  const orbitMax = (view: 'rider' | 'detail', aspect: number) =>
+    orbitMaxDistance({ fit: fitFor(view, aspect), target: C.views[view].target, points: framingPoints(C.fit), maxDistance: C.maxDistance, zoomOut: C.zoomOut, fogNear: F.near });
+
+  // Both of the student's views and the welcome one (no orbit there: it sits
+  // at the fit). The detail view on the 1024 x 768 stage zoomed out to 5.23 m
+  // before the cap, and a deck corner reached 6.0 m (review of Phase C,
+  // 2026-11-09).
+  it.each(['rider', 'detail', 'showcase'] as const)(
+    'never fogs the board from the %s view: its farthest point from the farthest allowed camera is nearer than fog near, on every stage',
+    (view) => {
+      const target = C.views[view].target;
+      const spread = Math.max(...framingPoints(C.fit).map((p) => Math.hypot(p[0] - target[0], p[1] - target[1], p[2] - target[2])));
+      for (const aspect of STAGES) {
+        const farthest = view === 'showcase' ? fitFor(view, aspect) : orbitMax(view, aspect);
+        expect(farthest).toBeGreaterThanOrEqual(fitFor(view, aspect));
+        expect(farthest + spread).toBeLessThanOrEqual(F.near + 1e-9);
+        expect(fogAt(farthest + spread)).toBe(0);
+      }
+    },
+  );
+
+  it('lets a narrow stage zoom out past the fit, and stops only where the fog would start', () => {
+    const narrow = 368 / 744;
+    expect(orbitMax('rider', narrow)).toBeCloseTo(C.maxDistance, 9);
+    expect(orbitMax('detail', narrow)).toBeGreaterThan(fitFor('detail', narrow));
+    expect(orbitMax('detail', narrow)).toBeLessThan(fitFor('detail', narrow) * C.zoomOut);
+    for (const aspect of [1, 1.6]) for (const view of ['rider', 'detail'] as const) expect(orbitMax(view, aspect)).toBeCloseTo(C.maxDistance, 9);
   });
 
   it('hides the plane edge: from every low orbit, on every stage shape, the ground near its edge is fully fogged', () => {
     const cam = new PerspectiveCamera(C.fov, 1, C.near, C.far);
-    const target = new Vector3(...C.target);
-    const points = framingPoints(C.fit);
+    const target = new Vector3();
     const ray = new Vector3();
     const hit = new Vector3();
     let nearestEdge = Infinity;
-    for (const aspect of STAGES) {
-      const fit = fitDistance({ from: C.position, target: C.target, fov: C.fov, aspect, points, margin: C.fit.margin });
-      for (const distance of [C.minDistance, 2.4, C.maxDistance, Math.max(C.maxDistance, fit * 1.25)])
-        for (let a = 0; a < 16; a++) {
-          const az = (a / 16) * Math.PI * 2;
-          const polar = C.maxPolarAngle;
-          cam.aspect = aspect;
-          cam.position.set(
-            target.x + distance * Math.sin(polar) * Math.sin(az),
-            target.y + distance * Math.cos(polar),
-            target.z + distance * Math.sin(polar) * Math.cos(az),
-          );
-          cam.lookAt(target);
-          cam.updateMatrixWorld();
-          cam.updateProjectionMatrix();
-          for (let i = 0; i <= 40; i++)
-            for (let j = 0; j <= 40; j++) {
-              ray.set((i / 20 - 1), (j / 20 - 1), 0.5).unproject(cam).sub(cam.position).normalize();
-              if (ray.y >= 0) continue;
-              const t = -cam.position.y / ray.y;
-              hit.copy(cam.position).addScaledVector(ray, t);
-              const edge = Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2));
-              if (edge < 0.97 || edge > 1) continue;
-              nearestEdge = Math.min(nearestEdge, hit.distanceTo(cam.position));
-            }
-        }
-    }
+    for (const view of ['rider', 'detail'] as const)
+      for (const aspect of STAGES) {
+        target.set(...C.views[view].target);
+        for (const distance of [C.minDistance, 2.4, C.maxDistance, orbitMax(view, aspect)])
+          for (let a = 0; a < 16; a++) {
+            const az = (a / 16) * Math.PI * 2;
+            const polar = C.maxPolarAngle;
+            cam.aspect = aspect;
+            cam.position.set(
+              target.x + distance * Math.sin(polar) * Math.sin(az),
+              target.y + distance * Math.cos(polar),
+              target.z + distance * Math.sin(polar) * Math.cos(az),
+            );
+            cam.lookAt(target);
+            cam.updateMatrixWorld();
+            cam.updateProjectionMatrix();
+            for (let i = 0; i <= 40; i++)
+              for (let j = 0; j <= 40; j++) {
+                ray.set((i / 20 - 1), (j / 20 - 1), 0.5).unproject(cam).sub(cam.position).normalize();
+                if (ray.y >= 0) continue;
+                const t = -cam.position.y / ray.y;
+                hit.copy(cam.position).addScaledVector(ray, t);
+                const edge = Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2));
+                if (edge < 0.97 || edge > 1) continue;
+                nearestEdge = Math.min(nearestEdge, hit.distanceTo(cam.position));
+              }
+          }
+      }
     expect(nearestEdge).toBeGreaterThan(F.far);
     expect(fogAt(nearestEdge)).toBe(1);
   });
