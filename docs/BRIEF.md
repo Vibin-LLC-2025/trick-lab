@@ -104,20 +104,26 @@ Assessment objectives (checklist, scored on the fly):
 Bonus text (not an objective): land any preset at pop 0.20 m or lower by
 raising flick/scoop yourself.
 
-Game of SKATE (added 2026-11-06, ADR-43): an optional mode against the
-computer. When one player lands a trick the other must copy it; a missed
-copy is a letter and S K A T E loses. The computer plays through the same
-flight and recognition with a level-dependent miss on its aim. Presets are
-off during a game. Rules in `src/sim/skate.ts`.
+Game of SKATE (added 2026-11-06, ADR-43; real-game rules 2026-11-08,
+ADR-44): an optional mode against the computer. A coin flip picks who sets
+first. The setter calls a trick, then tries it: landed exactly as called, the
+other player must copy it; missed, or a different trick, and the set passes
+with no letter. A missed copy is a letter and S K A T E loses; a copier on
+their last letter gets a second try. The setter keeps setting until a set
+misses. A trick set once cannot be set again in that game. The computer plays
+through the same flight and recognition with a level-dependent miss on its
+aim. A trick guide says in words, never numbers, which way and how far to
+flick and scoop. Presets are off during a game. Rules in `src/sim/skate.ts`.
 
 Event log: `{ id, t (ms since session start),
 type, payload }`. Types: `input.changed` (which slider, value),
 `preset.applied`, `trick.popped` (inputs), `trick.resolved` (name, landed,
 rollTotal, yawTotal, airtime), `playback.scrubbed` (debounced to one event
 per drag), `objective.completed`, `session.reset`, and for the game of SKATE
-(2026-11-06, ADR-43) `skate.started`, `skate.set`, `skate.letter` and
-`skate.ended`; `trick.popped` and `trick.resolved` carry `by` (you or
-computer). Exportable as JSON.
+(2026-11-06, ADR-43) `skate.started` (level, and since ADR-44 the coin
+flip's `first`), `skate.set`, `skate.letter` and `skate.ended`;
+`trick.popped` and `trick.resolved` carry `by` (you or computer), and in a
+game `trick.popped` carries the `call` in play. Exportable as JSON.
 Reset clears inputs to defaults and board pose, keeps the log.
 
 ## Architecture contract (design and implementation both follow this)
@@ -246,6 +252,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .foot-step, .foot-step--front, .foot-step--back, .foot-step--both, .foot-step--now, .foot-step__who, .foot-step__text
 .objectives, .objective, .objective--done, .objective__check, .objective__text
 .skate__score, .skate__row, .skate__who, .skate__letters, .skate__letter, .skate__letter--got, .skate__call, .skate__actions (game of SKATE, ADR-43)
+.skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
 .eventlog, .eventlog__row, .eventlog__t, .eventlog__type
 .perf-badge
 .visually-hidden

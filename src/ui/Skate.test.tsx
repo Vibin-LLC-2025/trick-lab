@@ -22,7 +22,7 @@ async function setup() {
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
   localStorage.clear();
-  // 0.25 makes the computer hit its aim (skate.test.ts) and pick the heelflip first on Normal.
+  // 0.25 wins the coin flip for the student, makes the computer hit its aim (skate.test.ts) and pick the heelflip first on Normal.
   vi.spyOn(Math, 'random').mockReturnValue(0.25);
 });
 
@@ -39,12 +39,12 @@ describe('game of SKATE panel', () => {
     normal.focus();
     await user.keyboard('{ArrowRight}');
     expect(within(panel()).getByRole('radio', { name: 'Hard' })).toBeChecked();
-    expect(within(panel()).getByText(/calls every named trick/)).toBeInTheDocument();
+    expect(within(panel()).getByText(/goes for every trick, doubles included/)).toBeInTheDocument();
 
     within(panel()).getByRole('button', { name: 'Start game' }).focus();
     await user.keyboard('{Enter}');
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Game of SKATE' }));
-    expect(announcer()).toHaveTextContent('Game of SKATE started, hard level.');
+    expect(announcer()).toHaveTextContent('Game of SKATE started, hard level. Coin flip: you set first.');
     expect(within(panel()).getByRole('button', { name: 'Quit game' })).toBeInTheDocument();
     expect(within(panel()).queryByRole('radio')).toBeNull();
     // Both players start clean; the letters read as text.
@@ -56,19 +56,24 @@ describe('game of SKATE panel', () => {
   });
 
   it("runs the computer's go on Space, then the student's copy on the Pop button", async () => {
+    // The computer wins the coin flip; every later draw is 0.25.
+    vi.mocked(Math.random).mockReturnValueOnce(0.75);
     const user = await setup();
     within(panel()).getByRole('button', { name: 'Start game' }).focus();
     await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: "Computer's go" })).toBeInTheDocument();
+    // Its call is up before it pops.
+    expect(within(panel()).getByText("Computer's turn: it's going for a heelflip.")).toBeInTheDocument();
 
     // Focus is on the heading, so Space is the global pop: the computer goes.
     await user.keyboard(' ');
     expect(useTrickStore.getState().flightBy).toBe('computer');
-    expect(within(panel()).getByText('The computer is going for a heelflip.')).toBeInTheDocument();
     landNow();
     expect(screen.getByText('Computer: Heelflip landed')).toBeInTheDocument();
-    expect(within(panel()).getByText("Copy the computer's heelflip: set the sliders, then press Pop.")).toBeInTheDocument();
-    expect(announcer()).toHaveTextContent("The computer landed a heelflip. Copy the computer's heelflip");
+    expect(within(panel()).getByText("Your turn: copy the computer's heelflip. Set the sliders, then press Pop.")).toBeInTheDocument();
+    expect(within(panel()).getByText('How to heelflip')).toBeInTheDocument();
+    expect(within(panel()).getByText('Toward heelflip (slider to the left), for one full flip.')).toBeInTheDocument();
+    expect(announcer()).toHaveTextContent("The computer landed a heelflip. Your turn: copy the computer's heelflip");
 
     // The student pops a plain ollie: the wrong trick, so the first letter.
     const popButton = screen.getByRole('button', { name: 'Pop' });
@@ -80,6 +85,38 @@ describe('game of SKATE panel', () => {
     expect(within(panel()).getByText('You landed an ollie, but the trick to copy was a heelflip. You got S.')).toBeInTheDocument();
     expect(within(panel()).getAllByText('no letters')).toHaveLength(1);
     expect(screen.getByRole('button', { name: "Computer's go" })).toBeInTheDocument();
+  });
+
+  it('the student calls their trick from the picker before setting it; a trick already set is not offered', async () => {
+    const user = await setup();
+    within(panel()).getByRole('button', { name: 'Start game' }).focus();
+    await user.keyboard('{Enter}');
+    expect(within(panel()).getByText('Your turn to set: call a trick, then land it. The computer has to copy it.')).toBeInTheDocument();
+    const picker = within(panel()).getByRole('combobox', { name: 'Call your trick' });
+
+    // Pop without a call: refused, and said why.
+    const popButton = screen.getByRole('button', { name: 'Pop' });
+    popButton.focus();
+    await user.keyboard('{Enter}');
+    expect(useTrickStore.getState().flight).toBeNull();
+    expect(announcer()).toHaveTextContent('Call your trick first: pick the trick you are going for, then pop.');
+
+    await user.selectOptions(picker, 'kickflip');
+    expect(announcer()).toHaveTextContent('You called a kickflip. Land it and the computer has to copy it.');
+    expect(within(panel()).getByText('How to kickflip')).toBeInTheDocument();
+    act(() => useTrickStore.getState().setInput('flick', 1.9));
+    popButton.focus();
+    await user.keyboard('{Enter}');
+    landNow();
+    expect(within(panel()).getByText('You landed your kickflip!')).toBeInTheDocument();
+
+    // The computer copies it (it hits its aim), so the student sets again: the kickflip is spent.
+    await user.click(screen.getByRole('button', { name: "Computer's go" }));
+    landNow();
+    const again = within(panel()).getByRole('combobox', { name: 'Call your trick' });
+    expect(within(again).getByRole('option', { name: 'Kickflip (already set)' })).toBeDisabled();
+    expect(within(again).getByRole('option', { name: 'Heelflip' })).toBeEnabled();
+    expect(within(again).queryByRole('option', { name: /^Ollie/ })).toBeNull();
   });
 
   it('quits back to practice and keeps focus in the panel', async () => {

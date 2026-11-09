@@ -1,4 +1,18 @@
-import { lettersText, SKATE_LEVEL_ORDER, SKATE_LEVELS, SKATE_WORD, skateActive, skateInstruction, type SkatePlayer } from '../sim/skate';
+import {
+  GUIDE_TIP,
+  lettersText,
+  openTricks,
+  SETTABLE_GROUPS,
+  SKATE_LEVEL_ORDER,
+  SKATE_LEVELS,
+  SKATE_WORD,
+  skateActive,
+  skateInstruction,
+  trickGuide,
+  type SkateCall,
+  type SkatePlayer,
+} from '../sim/skate';
+import type { TrickId } from '../sim/tricks';
 import { useTrickStore } from '../store';
 
 /** Five letter tiles; the ones a player has are filled. Read as text by the hidden label. */
@@ -14,6 +28,58 @@ function Letters({ who, count }: { who: SkatePlayer; count: number }) {
         ))}
         <span className="visually-hidden">{lettersText(count)}</span>
       </dd>
+    </div>
+  );
+}
+
+/** The trick guide (ADR-44): which way and how far to flick and scoop, in words, never the slider values. */
+function Guide({ call }: { call: SkateCall }) {
+  const guide = trickGuide(call);
+  return (
+    <div className="skate__guide">
+      <p className="skate__guide-title">How to {call.name.toLowerCase()}</p>
+      <dl className="skate__guide-list">
+        <dt>Flick</dt>
+        <dd>{guide.flick}</dd>
+        <dt>Scoop</dt>
+        <dd>{guide.scoop}</dd>
+      </dl>
+      <p className="panel__note">{GUIDE_TIP}</p>
+    </div>
+  );
+}
+
+/** The student's call before a set (ADR-44). Tricks already set this game cannot be called again. */
+function CallPicker() {
+  const game = useTrickStore((s) => s.skate);
+  const callTrick = useTrickStore((s) => s.callSkateTrick);
+  const open = new Set(openTricks(game).map((t) => t.id));
+  return (
+    <div className="field skate__pick">
+      <label className="field__label" htmlFor="skate-call">
+        Call your trick
+      </label>
+      <select
+        id="skate-call"
+        className="skate__select"
+        value={game.call?.id ?? ''}
+        onChange={(e) => {
+          if (e.currentTarget.value) callTrick(e.currentTarget.value as TrickId);
+        }}
+      >
+        <option value="" disabled>
+          Pick a trick
+        </option>
+        {SETTABLE_GROUPS.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.tricks.map((t) => (
+              <option key={t.id} value={t.id} disabled={!open.has(t.id)}>
+                {open.has(t.id) ? t.name : `${t.name} (already set)`}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
     </div>
   );
 }
@@ -96,6 +162,8 @@ export function Skate() {
           </dl>
           {message && <p className="panel__note">{message}</p>}
           <p className="skate__call">{skateInstruction(game)}</p>
+          {game.phase === 'you-set' && <CallPicker />}
+          {(game.phase === 'you-copy' || game.phase === 'you-set') && game.call && <Guide call={game.call} />}
           {game.phase === 'over' && (
             <div className="skate__actions">
               <button type="button" className="btn btn--primary" onClick={start}>

@@ -1,7 +1,7 @@
 import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
-import type { InputKey, PresetId, TrickResult } from '../sim/tricks';
+import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
 export type { Stance };
@@ -158,7 +158,7 @@ export interface UiSlice {
   requestFocus: (target: FocusTarget) => void;
 }
 
-/** The game of SKATE against the computer (ADR-43). Rules in sim/skate.ts. */
+/** The game of SKATE against the computer (ADR-43, real-game rules ADR-44). Rules in sim/skate.ts. */
 export interface SkateSlice {
   skate: SkateGame;
   /** What the last attempt did in the game, in plain words; '' before the first. */
@@ -167,8 +167,10 @@ export interface SkateSlice {
   skateRecord: Record<SkatePlayer, number>;
   /** Picks the computer's level; only between games. Not logged (skate.started carries it). */
   setSkateLevel: (level: SkateLevel) => void;
-  /** Starts a game: letters cleared, the computer sets first. Logged and announced; focus goes to the game's heading. */
+  /** Starts a game: letters cleared, a coin flip picks who sets first. Logged and announced; focus goes to the game's heading. */
   startSkate: () => void;
+  /** The student calls the trick they will set (ADR-44): only on their set turn, never a trick already set this game. Announced, not logged (their trick.popped carries the call). */
+  callSkateTrick: (id: TrickId) => void;
   /** Ends a game in play (logged as quit), or closes a finished one, back to practice. */
   quitSkate: () => void;
   /** Internal, popTrick: on the computer's turn, its inputs and the announcement lead; null on the student's turn. */

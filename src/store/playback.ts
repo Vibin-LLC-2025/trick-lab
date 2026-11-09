@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { computeFlight } from '../sim/flight';
 import { describeInputs, describeResult } from '../sim/format';
-import { skateActive } from '../sim/skate';
+import { awaitingCall, skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
 import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
@@ -87,6 +87,11 @@ export const createPlaybackSlice =
           s.announce('This trick has not landed yet. Press Resume to finish it.');
           return;
         }
+        // A set counts only for the trick the student called (ADR-44), so they call it first.
+        if (skateActive(s.skate) && awaitingCall(s.skate)) {
+          s.announce('Call your trick first: pick the trick you are going for, then pop.');
+          return;
+        }
         // On the computer's turn in a game of SKATE it pops its own inputs; the sliders stay the student's.
         const go = s.computerGo();
         const by = go ? ('computer' as const) : ('you' as const);
@@ -104,7 +109,10 @@ export const createPlaybackSlice =
           result: null,
           scrubFrom: null,
         });
-        s.log('trick.popped', go ? { by, ...inputs, preset: null, call: go.call } : { by, ...inputs, preset: s.activePreset });
+        // In a game the student's pop carries the trick in play too: the one they called, or the one to copy.
+        if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call });
+        else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null });
+        else s.log('trick.popped', { by, ...inputs, preset: s.activePreset });
         const lead = go ? go.lead : `Popped with ${describeInputs(inputs)}.`;
         // Reduced motion, or no 3D view: no playback at all. Resolve now and
         // leave the board at its final pose; the timeline steps through the flight.

@@ -1,8 +1,9 @@
-// The game of SKATE (ADR-43), pure: the rules, the computer's calls and its
-// attempts. No React, no three, no store. The computer does not roll a die
-// for land or bail: it aims at the inputs that land its trick, misses the
-// aim by a random amount that depends on the level, and the real flight and
-// recognition decide what happened, exactly as they do for the student.
+// The game of SKATE (ADR-43, real-game rules ADR-44), pure: the rules, the
+// computer's calls and its attempts. No React, no three, no store. The
+// computer does not roll a die for land or bail: it aims at the inputs that
+// land its trick, misses the aim by a random amount that depends on the
+// level, and the real flight and recognition decide what happened, exactly as
+// they do for the student. Randomness always comes in as a parameter.
 import { airtimeFor, type TrickInputs } from './flight';
 import { INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
 
@@ -15,8 +16,8 @@ export type SkateLevel = 'easy' | 'normal' | 'hard';
 /**
  * off: practice, no game. computer-set: the computer is up to set a trick.
  * you-copy: the student copies the computer's trick. you-set: the student
- * sets. computer-copy: the computer copies the student's trick. over: someone
- * spelled SKATE.
+ * calls and sets a trick. computer-copy: the computer copies the student's
+ * trick. over: someone spelled SKATE.
  */
 export type SkatePhase = 'off' | 'computer-set' | 'you-copy' | 'you-set' | 'computer-copy' | 'over';
 
@@ -33,10 +34,20 @@ export interface SkateGame {
   level: SkateLevel;
   /** Letters each player has, 0 to 5. */
   letters: Record<SkatePlayer, number>;
-  /** The trick in play: the computer's call while it sets, the trick to copy while copying; null otherwise. */
+  /** Who won the coin flip and set first; null before a game starts. */
+  first: SkatePlayer | null;
+  /**
+   * The trick in play. computer-set: the computer's call, picked as its set
+   * turn begins (withComputerCall). you-set: the student's call, null until
+   * they call one. you-copy and computer-copy: the trick to copy. Null otherwise.
+   */
   call: SkateCall | null;
-  /** The computer's last set, so it does not call the same trick twice in a row. */
-  lastSet: TrickId | null;
+  /** Tricks set (called and landed by the setter) this game, in order. None of them can be set again. */
+  used: TrickId[];
+  /** The computer's last call, landed or not, so it does not go for the same trick twice running. */
+  lastCall: TrickId | null;
+  /** The copier is on their last letter and has missed once: the next attempt is their second and last try. */
+  secondTry: boolean;
   winner: SkatePlayer | null;
 }
 
@@ -52,19 +63,19 @@ export const SKATE_LEVELS: Record<SkateLevel, { label: string; spread: number; c
     label: 'Easy',
     spread: 0.1,
     calls: ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it'],
-    hint: 'The computer misses often and only calls flips and shove-its.',
+    hint: 'The computer misses often and sticks to simple flips and shove-its.',
   },
   normal: {
     label: 'Normal',
     spread: 0.06,
     calls: PRESETS.map((p) => p.id),
-    hint: 'The computer calls the seven preset tricks.',
+    hint: 'The computer goes for the seven classic tricks, up to the 360 flip.',
   },
   hard: {
     label: 'Hard',
     spread: 0.035,
     calls: NAMED_TRICKS.filter((t) => t.id !== 'ollie').map((t) => t.id),
-    hint: 'The computer rarely misses and calls every named trick, doubles included.',
+    hint: 'The computer rarely misses and goes for every trick, doubles included.',
   },
 };
 
@@ -78,30 +89,67 @@ const callOf = (id: TrickId): SkateCall => {
   return { id: t.id, name: t.name, flips: t.flips, halfShoves: t.halfShoves };
 };
 
-export const callFor = (result: Pick<TrickResult, 'id' | 'name' | 'flips' | 'halfShoves'>): SkateCall => ({
-  id: result.id,
-  name: result.name,
-  flips: result.flips,
-  halfShoves: result.halfShoves,
-});
-
 /** The pool for a level, as calls. */
 export const skateCalls = (level: SkateLevel): SkateCall[] => SKATE_LEVELS[level].calls.map(callOf);
+
+/**
+ * Every trick a player may call, in the table order of NAMED_TRICKS: every
+ * named trick but the ollie, which anyone copies, so it would only waste a turn.
+ */
+export const SETTABLE_TRICKS: readonly SkateCall[] = NAMED_TRICKS.filter((t) => t.id !== 'ollie').map((t) => callOf(t.id));
+
+/** The settable tricks in three families, for the call picker: flips, shove-its, and the two together. */
+export const SETTABLE_GROUPS: readonly { label: string; tricks: readonly SkateCall[] }[] = [
+  { label: 'Flips', tricks: SETTABLE_TRICKS.filter((t) => t.halfShoves === 0) },
+  { label: 'Shove-its', tricks: SETTABLE_TRICKS.filter((t) => t.flips === 0) },
+  { label: 'Flip and shove', tricks: SETTABLE_TRICKS.filter((t) => t.flips !== 0 && t.halfShoves !== 0) },
+];
+
+/** The tricks that can be set now: every settable trick nobody has set yet this game (no repeats). */
+export function openTricks(g: Pick<SkateGame, 'used'>): SkateCall[] {
+  const open = SETTABLE_TRICKS.filter((t) => !g.used.includes(t.id));
+  // markUsed never lets `used` hold every trick; this only guards a hand-made game.
+  return open.length > 0 ? open : [...SETTABLE_TRICKS];
+}
+
+/**
+ * `used` after `id` is set. In the very long game where that uses up the last
+ * open trick, the slate is wiped and a fresh one starts with `id`, so every
+ * other trick can be set again and no-repeats holds from there on.
+ */
+export function markUsed(used: readonly TrickId[], id: TrickId): TrickId[] {
+  const next = used.includes(id) ? [...used] : [...used, id];
+  return SETTABLE_TRICKS.every((t) => next.includes(t.id)) ? [id] : next;
+}
 
 export const newSkateGame = (level: SkateLevel = 'normal'): SkateGame => ({
   phase: 'off',
   level,
   letters: { you: 0, computer: 0 },
+  first: null,
   call: null,
-  lastSet: null,
+  used: [],
+  lastCall: null,
+  secondTry: false,
   winner: null,
 });
 
-/** A new game: the computer sets first, so the student sees how a turn works. */
-export const startSkateGame = (level: SkateLevel): SkateGame => ({ ...newSkateGame(level), phase: 'computer-set' });
+/** The coin flip for who sets first: heads (below one half) is the student. */
+export const coinFlip = (rand: () => number): SkatePlayer => (rand() < 0.5 ? 'you' : 'computer');
+
+/** A new game: no letters, and the coin flip winner sets first. The computer's call comes from withComputerCall. */
+export const startSkateGame = (level: SkateLevel, first: SkatePlayer): SkateGame => ({
+  ...newSkateGame(level),
+  phase: first === 'you' ? 'you-set' : 'computer-set',
+  first,
+});
 
 export const skateActive = (g: SkateGame) => g.phase !== 'off' && g.phase !== 'over';
 export const computerTurn = (g: SkateGame) => g.phase === 'computer-set' || g.phase === 'computer-copy';
+/** Whose go it is: the player about to pop, or null when no game is in play. */
+export const turnOf = (g: SkateGame): SkatePlayer | null => (!skateActive(g) ? null : computerTurn(g) ? 'computer' : 'you');
+/** The student is up to set but has not called a trick yet, so a pop would not count. */
+export const awaitingCall = (g: SkateGame) => g.phase === 'you-set' && g.call === null;
 
 /** "S K A", or "no letters". */
 export const lettersText = (n: number) => (n === 0 ? 'no letters' : SKATE_WORD.slice(0, n).split('').join(' '));
@@ -149,12 +197,44 @@ export function computerAttempt(call: SkateCall, level: SkateLevel, rand: () => 
   return { pop: aim.pop, flick: clampRate('flick', miss(aim.flick)), scoop: clampRate('scoop', miss(aim.scoop)) };
 }
 
-/** The computer's next set: any trick of its level but the one it set last. */
-export function pickCall(level: SkateLevel, previous: TrickId | null, rand: () => number): SkateCall {
-  const all = skateCalls(level);
-  const pool = all.length > 1 ? all.filter((c) => c.id !== previous) : all;
+/**
+ * The computer's next set. It goes for a trick of its level that nobody has
+ * set yet; once its level's tricks are used up it moves on to the next
+ * level's, as a skater who runs out of easy tricks has to. It avoids its own
+ * last call while it has another choice. One draw from `rand`.
+ */
+export function pickCall(g: Pick<SkateGame, 'level' | 'used' | 'lastCall'>, rand: () => number): SkateCall {
+  const open = openTricks(g);
+  const from = SKATE_LEVEL_ORDER.slice(SKATE_LEVEL_ORDER.indexOf(g.level));
+  let pool = open;
+  for (const level of from) {
+    const mine = open.filter((t) => SKATE_LEVELS[level].calls.includes(t.id));
+    if (mine.length > 0) {
+      pool = mine;
+      break;
+    }
+  }
+  if (pool.length > 1) pool = pool.filter((t) => t.id !== g.lastCall);
   return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))]!;
 }
+
+/** On the computer's set turn without a call, it picks one now (so the student sees it before it pops). Otherwise unchanged. */
+export function withComputerCall(g: SkateGame, rand: () => number): SkateGame {
+  if (g.phase !== 'computer-set' || g.call) return g;
+  return { ...g, call: pickCall(g, rand) };
+}
+
+/** Why the student cannot call `id` now, or null when they can. */
+export function callProblem(g: SkateGame, id: TrickId): string | null {
+  if (g.phase !== 'you-set') return 'You can call a trick only when it is your turn to set.';
+  const trick = SETTABLE_TRICKS.find((t) => t.id === id);
+  if (!trick) return id === 'ollie' ? 'An ollie is too easy to set. Pick a trick with a flip or a shove.' : 'That trick has no name, so it cannot be called.';
+  if (!openTricks(g).some((t) => t.id === id)) return `The ${trick.name.toLowerCase()} has already been set this game. Pick another trick.`;
+  return null;
+}
+
+/** The student's call for their set. Assumes callProblem returned null. */
+export const callTrick = (g: SkateGame, id: TrickId): SkateGame => ({ ...g, call: callOf(id) });
 
 /** What one attempt did to the game. */
 export interface SkateStep {
@@ -171,31 +251,38 @@ export interface SkateStep {
 export const withArticle = (name: string) => `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name.toLowerCase()}`;
 const a = withArticle;
 const the = (name: string) => `the ${name.toLowerCase()}`;
+/** What a landed result was, as a phrase: "a heelflip", or "a trick with no name". */
+const landedAs = (r: TrickResult) => (r.id === 'unnamed' ? 'a trick with no name' : a(r.name));
 
-/** Gives `who` a letter and says so; ends the game on the fifth. */
+/** Gives `who` a letter and says so; ends the game on the fifth. The setter sets again. */
 function letter(g: SkateGame, who: SkatePlayer, missed: string, next: SkatePhase): SkateStep {
   const count = g.letters[who] + 1;
   const letters = { ...g.letters, [who]: count };
   const got = SKATE_WORD[count - 1];
   if (count >= SKATE_LETTERS) {
-    const game: SkateGame = { ...g, phase: 'over', letters, call: null, winner: who === 'you' ? 'computer' : 'you' };
+    const game: SkateGame = { ...g, phase: 'over', letters, call: null, secondTry: false, winner: who === 'you' ? 'computer' : 'you' };
     const message =
       who === 'you'
         ? `${missed} You got ${got}. That spells SKATE: the computer wins.`
         : `${missed} The computer got ${got}. That spells SKATE: you win!`;
     return { game, letterTo: who, set: null, message };
   }
-  const game: SkateGame = { ...g, phase: next, letters, call: null };
+  const game: SkateGame = { ...g, phase: next, letters, call: null, secondTry: false };
   const message = who === 'you' ? `${missed} You got ${got}.` : `${missed} The computer got ${got}.`;
   return { game, letterTo: who, set: null, message };
 }
 
+/** A copier on their last letter (S K A T) gets a second try at the copy after a first miss. */
+const lastLetterRetry = (g: SkateGame, who: SkatePlayer) => g.letters[who] === SKATE_LETTERS - 1 && !g.secondTry;
+
 /**
- * Applies one resolved flight to the game. A set counts only if the setter
- * lands the trick it went for (the computer its call; the student any named
- * trick with a flip or a shove). A copy counts only if it lands the same
- * trick, the same way round. The setter keeps setting until a set misses.
- * An attempt by the player who is not up changes nothing.
+ * Applies one resolved flight to the game (ADR-43, ADR-44). A set counts only
+ * if the setter lands exactly the trick they called; a miss, or a different
+ * trick, passes the set to the other player with no letter. A copy counts
+ * only if it lands the same trick, the same way round; a missed copy is a
+ * letter, except that a copier on their last letter gets a second try. The
+ * setter keeps setting until a set misses, whatever the copier does. An
+ * attempt by the player who is not up changes nothing.
  */
 export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): SkateStep {
   const same = (c: SkateCall | null) => c !== null && r.landed && r.id === c.id;
@@ -207,67 +294,122 @@ export function afterAttempt(g: SkateGame, by: SkatePlayer, r: TrickResult): Ska
       const call = g.call;
       if (same(call)) {
         return {
-          game: { ...g, phase: 'you-copy', lastSet: call.id },
+          game: { ...g, phase: 'you-copy', used: markUsed(g.used, call.id), lastCall: call.id },
           letterTo: null,
           set: call,
           message: `The computer landed ${a(call.name)}.`,
         };
       }
       return {
-        game: { ...g, phase: 'you-set', call: null, lastSet: call.id },
+        game: { ...g, phase: 'you-set', call: null, lastCall: call.id },
         letterTo: null,
         set: null,
-        message: `The computer missed ${the(call.name)}.`,
+        message: `The computer missed ${the(call.name)}, so it's your turn to set.`,
       };
     }
     case 'you-copy': {
       if (by !== 'you' || !g.call) return none('');
       const call = g.call;
-      if (same(call)) return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, message: `You copied ${the(call.name)}.` };
-      const missed = r.landed
-        ? `You landed ${a(r.name)}, but the trick to copy was ${a(call.name)}.`
-        : `You missed ${the(call.name)}.`;
+      if (same(call)) {
+        return { game: { ...g, phase: 'computer-set', call: null, secondTry: false }, letterTo: null, set: null, message: `You copied ${the(call.name)}!` };
+      }
+      const missed = r.landed ? `You landed ${landedAs(r)}, but the trick to copy was ${a(call.name)}.` : `You missed ${the(call.name)}.`;
+      if (lastLetterRetry(g, 'you')) {
+        return { game: { ...g, secondTry: true }, letterTo: null, set: null, message: `${missed} You're on your last letter, so you get a second try.` };
+      }
       return letter(g, 'you', missed, 'computer-set');
     }
     case 'you-set': {
-      if (by !== 'you') return none('');
-      if (!r.landed) {
-        return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, message: 'You missed your set.' };
+      if (by !== 'you' || !g.call) return none('');
+      const call = g.call;
+      if (same(call)) {
+        return {
+          game: { ...g, phase: 'computer-copy', used: markUsed(g.used, call.id) },
+          letterTo: null,
+          set: call,
+          message: `You landed your ${call.name.toLowerCase()}!`,
+        };
       }
-      if (r.id === 'ollie') return none('An ollie is too easy to set. Add some flick or scoop and try again.');
-      if (r.id === 'unnamed') return none(`${r.name} has no name, so it cannot be set. Try a named trick.`);
-      const call = callFor(r);
-      return {
-        game: { ...g, phase: 'computer-copy', call },
-        letterTo: null,
-        set: call,
-        message: `You set ${a(call.name)}.`,
-      };
+      const message = r.landed
+        ? `You landed ${landedAs(r)}, but you called ${a(call.name)}, so it doesn't count. The computer sets next.`
+        : `You missed your ${call.name.toLowerCase()}. The computer sets next.`;
+      return { game: { ...g, phase: 'computer-set', call: null }, letterTo: null, set: null, message };
     }
     case 'computer-copy': {
       if (by !== 'computer' || !g.call) return none('');
       const call = g.call;
-      if (same(call)) return { game: { ...g, phase: 'you-set', call: null }, letterTo: null, set: null, message: `The computer copied your ${call.name.toLowerCase()}.` };
-      return letter(g, 'computer', `The computer missed your ${call.name.toLowerCase()}.`, 'you-set');
+      if (same(call)) {
+        return {
+          game: { ...g, phase: 'you-set', call: null, secondTry: false },
+          letterTo: null,
+          set: null,
+          message: `The computer copied your ${call.name.toLowerCase()}.`,
+        };
+      }
+      const missed = `The computer missed your ${call.name.toLowerCase()}.`;
+      if (lastLetterRetry(g, 'computer')) {
+        return { game: { ...g, secondTry: true }, letterTo: null, set: null, message: `${missed} It's on its last letter, so it gets a second try.` };
+      }
+      return letter(g, 'computer', missed, 'you-set');
     }
     default:
       return none('');
   }
 }
 
+/**
+ * What a trick needs, in words and without numbers, for the trick guide: the
+ * side and amount of flick and of scoop. The student still picks the values.
+ */
+export interface TrickGuide {
+  flick: string;
+  scoop: string;
+}
+
+const COUNT_WORDS = ['no', 'one', 'two', 'three'];
+
+export function trickGuide(t: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickGuide {
+  const flips = Math.abs(t.flips);
+  const halves = Math.abs(t.halfShoves);
+  const flick =
+    flips === 0
+      ? 'None. Keep the flick slider in the middle.'
+      : `Toward ${t.flips > 0 ? 'kickflip (slider to the right)' : 'heelflip (slider to the left)'}, for ${COUNT_WORDS[flips] ?? flips} full ${flips === 1 ? 'flip' : 'flips'}.`;
+  const turn = halves === 1 ? 'a half turn (180 degrees)' : halves === 2 ? 'a full turn (360 degrees)' : `${halves} half turns`;
+  const scoop =
+    halves === 0
+      ? 'None. Keep the scoop slider in the middle.'
+      : `Toward ${t.halfShoves > 0 ? 'backside (slider to the right)' : 'frontside (slider to the left)'}, for ${turn}.`;
+  return { flick, scoop };
+}
+
+/** The tip under every guide: how pop trades against spin. */
+export const GUIDE_TIP = 'Pop higher and the board stays up longer, so it needs less flick and scoop to turn the same amount.';
+
+/** The guide as one sentence, for announcements: "Kickflip: flick toward kickflip, for one full flip. No scoop." */
+export function guideText(t: SkateCall): string {
+  const g = trickGuide(t);
+  const flick = t.flips === 0 ? 'No flick.' : `Flick ${g.flick.charAt(0).toLowerCase()}${g.flick.slice(1)}`;
+  const scoop = t.halfShoves === 0 ? 'No scoop.' : `Scoop ${g.scoop.charAt(0).toLowerCase()}${g.scoop.slice(1)}`;
+  return `${t.name}: ${flick} ${scoop}`;
+}
+
 /** What to do now, in plain words: the panel's call line and the end of each announcement. */
 export function skateInstruction(g: SkateGame): string {
+  const retry = g.secondTry ? ' Last letter: this is the second try.' : '';
   switch (g.phase) {
     case 'computer-set':
-      return g.call ? `The computer is going for ${a(g.call.name)}.` : `The computer is up. Press "Computer's go" or Space to watch it set a trick.`;
+      return g.call ? `Computer's turn: it's going for ${a(g.call.name)}.` : "Computer's turn to set a trick.";
     case 'you-copy':
-      return g.call ? `Copy the computer's ${g.call.name.toLowerCase()}: set the sliders, then press Pop.` : '';
+      return g.call ? `Your turn: copy the computer's ${g.call.name.toLowerCase()}. Set the sliders, then press Pop.${retry}` : '';
     case 'you-set':
-      return 'Your set: land any trick with a flip or a shove. The computer has to copy it.';
+      return g.call
+        ? `Your turn to set: land the ${g.call.name.toLowerCase()} you called and the computer has to copy it.`
+        : 'Your turn to set: call a trick, then land it. The computer has to copy it.';
     case 'computer-copy':
-      return g.call ? `The computer has to copy your ${g.call.name.toLowerCase()}. Press "Computer's go" or Space to watch.` : '';
+      return g.call ? `Computer's turn: it has to copy your ${g.call.name.toLowerCase()}.${retry}` : '';
     case 'over':
-      return 'Press Play again for a rematch, or Back to practice.';
+      return g.winner === 'you' ? 'You won! Play again for a rematch.' : 'The computer won this one. Play again for a rematch.';
     default:
       return '';
   }

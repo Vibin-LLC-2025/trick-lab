@@ -3,14 +3,26 @@ import { computeFlight } from './flight';
 import {
   afterAttempt,
   aimFor,
+  awaitingCall,
+  callProblem,
+  callTrick,
+  coinFlip,
+  markUsed,
   computerAttempt,
+  guideText,
   lettersText,
+  openTricks,
   pickCall,
+  SETTABLE_GROUPS,
+  SETTABLE_TRICKS,
   SKATE_LEVEL_ORDER,
   SKATE_LEVELS,
   skateCalls,
   skateInstruction,
   startSkateGame,
+  trickGuide,
+  turnOf,
+  withComputerCall,
   type SkateGame,
   type SkatePhase,
 } from './skate';
@@ -36,8 +48,9 @@ const kickflipBail = resolveTrick({ pop: 0.15, flick: 1.9, scoop: 0 });
 const ollie = resolveTrick({ pop: 0.35, flick: 0, scoop: 0 });
 const unnamed = resolveTrick({ pop: 0.35, flick: 1.9, scoop: -0.9 });
 const kickCall = { id: 'kickflip' as const, name: 'Kickflip', flips: 1, halfShoves: 0 };
+const heelCall = { id: 'heelflip' as const, name: 'Heelflip', flips: -1, halfShoves: 0 };
 
-const game = (phase: SkatePhase, over: Partial<SkateGame> = {}): SkateGame => ({ ...startSkateGame('normal'), phase, ...over });
+const game = (phase: SkatePhase, over: Partial<SkateGame> = {}): SkateGame => ({ ...startSkateGame('normal', 'computer'), phase, ...over });
 
 describe('the computer', () => {
   it('aims at inputs that land every named trick, inside the sliders', () => {
@@ -93,87 +106,188 @@ describe('the computer', () => {
     expect(rate('double-tre', 'hard')).toBeLessThan(kick.hard);
   });
 
-  it('calls from its level and never the same trick twice in a row', () => {
+  it('calls from its level, never a trick already set, and not its own last call twice running', () => {
     expect(skateCalls('easy')).toHaveLength(4);
     expect(skateCalls('normal')).toHaveLength(7);
     expect(skateCalls('hard')).toHaveLength(NAMED_TRICKS.length - 1);
     expect(skateCalls('hard').some((c) => c.id === 'ollie')).toBe(false);
     const rand = mulberry32(3);
-    let last = null as ReturnType<typeof pickCall>['id'] | null;
+    let lastCall = null as ReturnType<typeof pickCall>['id'] | null;
     for (let i = 0; i < 200; i++) {
-      const call = pickCall('easy', last, rand);
+      const call = pickCall({ level: 'easy', used: ['kickflip'], lastCall }, rand);
       expect(SKATE_LEVELS.easy.calls).toContain(call.id);
-      expect(call.id).not.toBe(last);
-      last = call.id;
+      expect(call.id).not.toBe('kickflip');
+      expect(call.id).not.toBe(lastCall);
+      lastCall = call.id;
     }
+  });
+
+  it("moves on to the next level's tricks once its own are used up, and wipes the slate when every trick is", () => {
+    const easyUsed = [...SKATE_LEVELS.easy.calls];
+    const rand = mulberry32(5);
+    for (let i = 0; i < 50; i++) {
+      const call = pickCall({ level: 'easy', used: easyUsed, lastCall: null }, rand);
+      expect(SKATE_LEVELS.normal.calls).toContain(call.id);
+      expect(easyUsed).not.toContain(call.id);
+    }
+    const allUsed = SETTABLE_TRICKS.map((t) => t.id);
+    expect(openTricks({ used: allUsed })).toHaveLength(SETTABLE_TRICKS.length);
+    expect(allUsed).toContain(pickCall({ level: 'normal', used: allUsed, lastCall: null }, rand).id);
+  });
+
+  it('picks its call as its set turn begins, and only then', () => {
+    const picked = withComputerCall(game('computer-set'), () => 0);
+    expect(picked.call?.id).toBe('kickflip');
+    const copying = game('you-copy', { call: kickCall });
+    expect(withComputerCall(copying, () => 0)).toBe(copying);
+    const called = game('computer-set', { call: heelCall });
+    expect(withComputerCall(called, () => 0)).toBe(called);
   });
 });
 
 describe('the rules', () => {
-  it('the computer lands its set: the student copies it', () => {
+  it('a coin flip picks who sets first', () => {
+    expect(coinFlip(() => 0.25)).toBe('you');
+    expect(coinFlip(() => 0.75)).toBe('computer');
+    const you = startSkateGame('easy', 'you');
+    expect(you).toMatchObject({ phase: 'you-set', first: 'you', level: 'easy', call: null, used: [], letters: { you: 0, computer: 0 } });
+    expect(awaitingCall(you)).toBe(true);
+    expect(turnOf(you)).toBe('you');
+    const cpu = startSkateGame('hard', 'computer');
+    expect(cpu).toMatchObject({ phase: 'computer-set', first: 'computer' });
+    expect(turnOf(cpu)).toBe('computer');
+    expect(turnOf(game('over'))).toBeNull();
+  });
+
+  it('the computer lands its set: the student copies it, and the trick is used up', () => {
     const step = afterAttempt(game('computer-set', { call: kickCall }), 'computer', kickflip);
     expect(step.game.phase).toBe('you-copy');
     expect(step.game.call?.id).toBe('kickflip');
+    expect(step.game.used).toEqual(['kickflip']);
     expect(step.set?.id).toBe('kickflip');
     expect(step.message).toBe('The computer landed a kickflip.');
   });
 
-  it('the computer misses its set: the student sets', () => {
+  it('the computer misses its set: no letter, and the student sets', () => {
     const step = afterAttempt(game('computer-set', { call: kickCall }), 'computer', kickflipBail);
     expect(step.game.phase).toBe('you-set');
     expect(step.game.call).toBeNull();
-    expect(step.game.lastSet).toBe('kickflip');
+    expect(step.game.used).toEqual([]);
+    expect(step.game.lastCall).toBe('kickflip');
     expect(step.letterTo).toBeNull();
+    expect(step.message).toBe("The computer missed the kickflip, so it's your turn to set.");
   });
 
-  it('a copy counts only for the same trick, landed', () => {
+  it('a copy counts only for the same trick, landed; the setter sets again either way', () => {
     const copied = afterAttempt(game('you-copy', { call: kickCall }), 'you', kickflip);
     expect(copied.game.phase).toBe('computer-set');
     expect(copied.letterTo).toBeNull();
+    expect(copied.message).toBe('You copied the kickflip!');
 
     const wrong = afterAttempt(game('you-copy', { call: kickCall }), 'you', heelflip);
     expect(wrong.letterTo).toBe('you');
+    expect(wrong.game.phase).toBe('computer-set');
     expect(wrong.game.letters.you).toBe(1);
     expect(wrong.message).toBe('You landed a heelflip, but the trick to copy was a kickflip. You got S.');
+
+    const noName = afterAttempt(game('you-copy', { call: kickCall }), 'you', unnamed);
+    expect(noName.message).toBe('You landed a trick with no name, but the trick to copy was a kickflip. You got S.');
 
     const bailed = afterAttempt(game('you-copy', { call: kickCall, letters: { you: 2, computer: 0 } }), 'you', kickflipBail);
     expect(bailed.game.letters.you).toBe(3);
     expect(bailed.message).toBe('You missed the kickflip. You got A.');
   });
 
-  it('the fifth letter ends the game', () => {
-    const lost = afterAttempt(game('you-copy', { call: kickCall, letters: { you: 4, computer: 1 } }), 'you', kickflipBail);
+  it('on the last letter the copier gets a second try, then the fifth letter ends the game', () => {
+    const first = afterAttempt(game('you-copy', { call: kickCall, letters: { you: 4, computer: 1 } }), 'you', kickflipBail);
+    expect(first.letterTo).toBeNull();
+    expect(first.game).toMatchObject({ phase: 'you-copy', secondTry: true, call: kickCall, letters: { you: 4 } });
+    expect(first.message).toBe("You missed the kickflip. You're on your last letter, so you get a second try.");
+    expect(skateInstruction(first.game)).toMatch(/Last letter: this is the second try\.$/);
+
+    const lost = afterAttempt(first.game, 'you', kickflipBail);
     expect(lost.game.phase).toBe('over');
     expect(lost.game.winner).toBe('computer');
+    expect(lost.game.secondTry).toBe(false);
     expect(lost.message).toMatch(/You got E\. That spells SKATE: the computer wins\.$/);
 
-    const won = afterAttempt(game('computer-copy', { call: kickCall, letters: { you: 0, computer: 4 } }), 'computer', kickflipBail);
+    // Landing the second try is a clean copy: no letter, and the computer sets again.
+    const saved = afterAttempt(first.game, 'you', kickflip);
+    expect(saved.game).toMatchObject({ phase: 'computer-set', secondTry: false, letters: { you: 4 } });
+
+    const cpuFirst = afterAttempt(game('computer-copy', { call: kickCall, letters: { you: 0, computer: 4 } }), 'computer', kickflipBail);
+    expect(cpuFirst.game).toMatchObject({ phase: 'computer-copy', secondTry: true });
+    expect(cpuFirst.message).toBe("The computer missed your kickflip. It's on its last letter, so it gets a second try.");
+    const won = afterAttempt(cpuFirst.game, 'computer', kickflipBail);
     expect(won.game.phase).toBe('over');
     expect(won.game.winner).toBe('you');
     expect(won.message).toBe('The computer missed your kickflip. The computer got E. That spells SKATE: you win!');
   });
 
-  it("the student's set: a landed named trick with a flip or a shove", () => {
-    const set = afterAttempt(game('you-set'), 'you', kickflip);
-    expect(set.game.phase).toBe('computer-copy');
-    expect(set.game.call?.id).toBe('kickflip');
-    expect(set.set?.id).toBe('kickflip');
+  it('wipes the slate once every trick has been set, and keeps no-repeats from there on', () => {
+    const allButKick = SETTABLE_TRICKS.map((t) => t.id).filter((id) => id !== 'kickflip');
+    expect(markUsed(['heelflip'], 'kickflip')).toEqual(['heelflip', 'kickflip']);
+    expect(markUsed(allButKick, 'kickflip')).toEqual(['kickflip']);
 
-    const missed = afterAttempt(game('you-set'), 'you', kickflipBail);
+    const set = afterAttempt(game('you-set', { call: kickCall, used: allButKick }), 'you', kickflip);
+    expect(set.game.used).toEqual(['kickflip']);
+    // The computer copies it and the student sets again: the kickflip is spent on the fresh slate, all else is open.
+    const next = afterAttempt(set.game, 'computer', kickflip);
+    expect(next.game.phase).toBe('you-set');
+    expect(callProblem(next.game, 'kickflip')).toMatch(/already been set this game/);
+    expect(callProblem(next.game, 'heelflip')).toBeNull();
+    expect(openTricks(next.game)).toHaveLength(SETTABLE_TRICKS.length - 1);
+    // And the computer's next set skips it too.
+    const cpu = afterAttempt(game('computer-set', { call: heelCall, used: next.game.used }), 'computer', heelflip);
+    expect(cpu.game.used).toEqual(['kickflip', 'heelflip']);
+  });
+
+  it('only a copier on their last letter gets a second try', () => {
+    const step = afterAttempt(game('you-copy', { call: kickCall, letters: { you: 3, computer: 4 } }), 'you', kickflipBail);
+    expect(step.letterTo).toBe('you');
+    expect(step.game.secondTry).toBe(false);
+  });
+
+  it("the student's call: any named trick with a flip or a shove, not one already set, only on their set turn", () => {
+    const g = game('you-set', { used: ['kickflip'] });
+    expect(callProblem(g, 'heelflip')).toBeNull();
+    expect(callProblem(g, 'double-tre')).toBeNull();
+    expect(callProblem(g, 'kickflip')).toBe('The kickflip has already been set this game. Pick another trick.');
+    expect(callProblem(g, 'ollie')).toMatch(/^An ollie is too easy to set\./);
+    expect(callProblem(g, 'unnamed')).toMatch(/cannot be called/);
+    expect(callProblem(game('you-copy', { call: kickCall }), 'heelflip')).toMatch(/only when it is your turn to set/);
+    expect(callTrick(g, 'heelflip').call).toEqual(heelCall);
+    // The picker lists every settable trick once, in three families.
+    expect(SETTABLE_GROUPS.flatMap((grp) => grp.tricks.map((t) => t.id)).sort()).toEqual(SETTABLE_TRICKS.map((t) => t.id).sort());
+  });
+
+  it("the student's set counts only for the trick they called", () => {
+    const called = game('you-set', { call: kickCall });
+    const set = afterAttempt(called, 'you', kickflip);
+    expect(set.game).toMatchObject({ phase: 'computer-copy', call: kickCall, used: ['kickflip'] });
+    expect(set.set?.id).toBe('kickflip');
+    expect(set.message).toBe('You landed your kickflip!');
+
+    const other = afterAttempt(called, 'you', heelflip);
+    expect(other.game).toMatchObject({ phase: 'computer-set', call: null, used: [] });
+    expect(other.letterTo).toBeNull();
+    expect(other.message).toBe("You landed a heelflip, but you called a kickflip, so it doesn't count. The computer sets next.");
+
+    const missed = afterAttempt(called, 'you', kickflipBail);
     expect(missed.game.phase).toBe('computer-set');
     expect(missed.letterTo).toBeNull();
+    expect(missed.message).toBe('You missed your kickflip. The computer sets next.');
 
-    // An ollie or an unnamed trick keeps the turn and says why.
-    for (const r of [ollie, unnamed]) {
-      const step = afterAttempt(game('you-set'), 'you', r);
-      expect(step.game.phase).toBe('you-set');
-      expect(step.message).not.toBe('');
-    }
+    // An ollie or a trick with no name is just not the call.
+    for (const r of [ollie, unnamed]) expect(afterAttempt(called, 'you', r).game.phase).toBe('computer-set');
+    // Without a call nothing is scored (popTrick refuses the pop before it gets here).
+    expect(afterAttempt(game('you-set'), 'you', kickflip).message).toBe('');
   });
 
   it('the computer copies or takes a letter, and the student sets again', () => {
     const copied = afterAttempt(game('computer-copy', { call: kickCall }), 'computer', kickflip);
     expect(copied.game.phase).toBe('you-set');
+    expect(copied.game.call).toBeNull();
     expect(copied.letterTo).toBeNull();
 
     const missed = afterAttempt(game('computer-copy', { call: kickCall }), 'computer', kickflipBail);
@@ -194,6 +308,7 @@ describe('the rules', () => {
       ['computer-set', { call: kickCall }],
       ['you-copy', { call: kickCall }],
       ['you-set', {}],
+      ['you-set', { call: kickCall }],
       ['computer-copy', { call: kickCall }],
       ['over', { winner: 'you' }],
       ['over', { winner: 'computer' }],
@@ -203,8 +318,37 @@ describe('the rules', () => {
       expect(text, phase).not.toBe('');
       expect(text).not.toMatch(/—/);
     }
+    expect(skateInstruction(game('computer-set', { call: kickCall }))).toBe("Computer's turn: it's going for a kickflip.");
+    expect(skateInstruction(game('you-set'))).toBe('Your turn to set: call a trick, then land it. The computer has to copy it.');
     expect(skateInstruction(game('off'))).toBe('');
     expect(lettersText(0)).toBe('no letters');
     expect(lettersText(3)).toBe('S K A');
+  });
+});
+
+describe('the trick guide', () => {
+  it('says which way and how far, in words', () => {
+    expect(trickGuide(kickCall)).toEqual({
+      flick: 'Toward kickflip (slider to the right), for one full flip.',
+      scoop: 'None. Keep the scoop slider in the middle.',
+    });
+    expect(trickGuide(heelCall).flick).toBe('Toward heelflip (slider to the left), for one full flip.');
+    expect(trickGuide({ flips: 0, halfShoves: -2 })).toEqual({
+      flick: 'None. Keep the flick slider in the middle.',
+      scoop: 'Toward frontside (slider to the left), for a full turn (360 degrees).',
+    });
+    expect(trickGuide({ flips: 2, halfShoves: 2 }).flick).toBe('Toward kickflip (slider to the right), for two full flips.');
+    expect(trickGuide({ flips: 1, halfShoves: 1 }).scoop).toBe('Toward backside (slider to the right), for a half turn (180 degrees).');
+    expect(guideText(kickCall)).toBe('Kickflip: Flick toward kickflip (slider to the right), for one full flip. No scoop.');
+  });
+
+  it('never gives away a slider value', () => {
+    for (const t of SETTABLE_TRICKS) {
+      const { flick, scoop } = trickGuide(t);
+      for (const line of [flick, scoop, guideText(t)]) {
+        expect(line, t.id).not.toMatch(/rev\/s|\d\.\d|\bm\b/);
+        expect(line).not.toMatch(/—/);
+      }
+    }
   });
 });
