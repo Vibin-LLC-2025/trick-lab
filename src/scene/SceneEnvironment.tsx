@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useTrickStore } from '../store';
 import { useThree } from '@react-three/fiber';
 import { PMREMGenerator, type Group, type Texture } from 'three';
 import { ART } from './artDirection';
@@ -37,13 +38,33 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
   // are long-lived three objects we mutate, not React state.
   const get = useThree((s) => s.get);
   const content = useRef<Group>(null);
+  // The environment is the theme's sky (ADR-52): a theme change prefilters it again.
+  const theme = useTrickStore((s) => s.theme);
+  // The warm-up (hidden content, compile, reveal) runs once per Canvas; a theme change only swaps the map.
+  const revealed = useRef(false);
+  // The map in use. A theme change keeps showing it until the next one is ready, then frees it.
+  const current = useRef<{ texture: Texture; dispose: () => void } | null>(null);
+
+  // Freed with the Canvas.
+  useEffect(
+    () => () => {
+      const t = current.current;
+      if (!t) return;
+      const { scene } = get();
+      if (scene.environment === t.texture) scene.environment = null;
+      t.dispose();
+      current.current = null;
+    },
+    [get],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    let target: { texture: Texture; dispose: () => void } | null = null;
+    let target: { texture: Texture; dispose: () => void };
 
     const reveal = () => {
       if (cancelled) return;
+      revealed.current = true;
       if (content.current) content.current.visible = true;
       // frameloop is "demand": ask for the frame that shows the lit scene.
       get().invalidate();
@@ -60,7 +81,7 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
       if (cancelled) return;
       const { gl, scene } = get();
       const E = ART.lights.environment;
-      const outdoor = outdoorEnvironment();
+      const outdoor = outdoorEnvironment(theme);
       if (isNodeRenderer(gl)) {
         // The WebGPURenderer has its own PMREMGenerator (ADR-50); its chunk is already loaded.
         const { prefilterEnvironment } = await import('./nodeRenderer');
@@ -75,9 +96,13 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
         pmrem.dispose();
       }
       outdoor.dispose();
+      const previous = current.current;
+      current.current = target;
       scene.environment = target.texture;
       scene.environmentIntensity = E.intensity;
-      timer = setTimeout(precompile, 0);
+      previous?.dispose();
+      if (revealed.current) get().invalidate();
+      else timer = setTimeout(precompile, 0);
     };
 
     // Macrotasks, so neither step is part of the Canvas mount's task or of each other's.
@@ -85,13 +110,8 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      const { scene } = get();
-      if (target) {
-        if (scene.environment === target.texture) scene.environment = null;
-        target.dispose();
-      }
     };
-  }, [get]);
+  }, [get, theme]);
 
   // Hidden until warmUp has compiled it; set imperatively, so no React state.
   // Named so scripts/measure can tell when the lit scene first draws (ADR-48).

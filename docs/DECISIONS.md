@@ -503,3 +503,20 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Not adopted.** Three's BloomNode (twelve passes). TRAA and depth of field (left out by the plan: they smear a spinning board and blur the information). A second scene pass for the occlusion. Denoising the occlusion (another pass; at 0.75 its grain does not show in the final picture).
 
 **Consequence.** Every effect number is in `ART.post`. `effects.test.ts` covers the tiers, when motion blur runs and that the effects build and free without a GPU; the store and UI tests cover the switch. The picture was checked in the browser (PERF-BUDGET.md, step 6).
+
+## ADR-52: A sky with a city, a lower and warmer sun, Neutral tone mapping (2026-11-09)
+
+**Context.** Step 7 of `docs/PLAN-LOOK-FEEL-PERF.md`: "nicer street, same idea": keep the concrete, add a real sky, a warmer sun and stronger shadows. The scene faded into a flat clear colour, and no view showed the horizon: the welcome preview sat 28 degrees up (its frame's top edge 10 degrees below the horizon), and OrbitControls held every view at least 18.4 degrees up.
+
+**Decision.**
+- **A sky dome** (`skyDome.ts`, numbers in `ART.sky`, pure colours and city in `sky.ts`): vertex colours, no texture, so one draw call and no texture memory on every tier; drawn first, not fogged, no depth writes, tone mapped like the fogged ground so the two meet at the horizon. Light theme is midday (a pale haze rising to a clear blue), dark theme late afternoon (a golden haze under a deeper blue). The horizon colour is also the fog's and the clear colour (`SCENE_BG`, so `--scene-bg` in tokens.css too, still tested equal).
+- **A faint city** on the horizon, in the same draw call: flat-roofed blocks 1.2 to 5.5 degrees wide and 0.5 to 2.6 degrees tall, some with a setback, from a fixed seed, leaning a third of the way from the sky toward a muted tint. A texture would have cost 2 MB of GPU memory per theme and tens of milliseconds to draw on a Chromebook.
+- **The same sky lights the scene**: the environment map is built from the theme's sky colours (at 45 percent of their saturation: at full colour the midday blue tinted the concrete), and is built again on a theme change, keeping the old map until the new one is in.
+- **The welcome preview shows the sky**: its camera is 8 degrees up with the target 0.45 m above the pad (was 28 degrees and 0.28 m), so the horizon sits about 28 percent down the frame. It has its own polar limit (`showcaseMaxPolarAngle`); the student's orbit keeps 18.4 degrees. From it, as from every low orbit, the ground plane's edge is past the fog (tested). The lab's rider and detail presets are unchanged: they are teaching views, and the sky shows there when a student orbits low.
+- **The sun** is lower and warmer: 52 degrees up (was 76), so a shadow reaches 0.78 of the height instead of 0.25; and round to the board's +X side, so the longer shadows fall to the left in the rider view and the preview instead of out of the frame's bottom. Its colour and strength per theme (dark's golden hour warmer). The PCF radius goes from 3 to 4 texels. The shadow camera refits itself (`shadowFrustum`); its tests and the footprint projection's pass unchanged.
+- **Tone mapping: Khronos Neutral, exposure 1.3** (was ACES at 1.0). Compared side by side with the grade on the welcome screen and the detail view, both themes: AgX washed the picture out; ACES desaturated the sky and moved the deck's orange; Neutral kept the colours as designed. Neutral is darker in the mid-tones, so the exposure rose until the lit concrete measured as before (#6e6f70 at 1.3, #737474 under ACES; dark's golden hour #6c5f53).
+- **The ground** keeps its colour and roughness: the light and the fill were tuned to it instead (above), so no GLB changed.
+
+**Cost.** One draw call on every tier (High 31, Medium 17, Low 13 in the lab); the dome is 1,000 to 1,100 vertices built at mount.
+
+**Consequence.** `sky.test.ts` covers the colours meeting the fog, the gradient, the city and the dome, and the welcome camera's sky and fogged plane edge.

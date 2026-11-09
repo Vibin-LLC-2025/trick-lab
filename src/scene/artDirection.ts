@@ -6,6 +6,7 @@
 import { BAY, CONCRETE, PLANE, ROUGHNESS } from '../asset/groundSpec';
 import { OUTLINE, REST_Y, TRUCK, WHEEL } from '../asset/spec';
 import { FOOT } from '../sim/feet';
+import { NeutralToneMapping, type ToneMapping } from 'three';
 import type { Quality, Theme } from '../store';
 
 export type Vec3 = readonly [number, number, number];
@@ -16,8 +17,11 @@ const v = (x: number, y: number, z: number): Vec3 => [x, y, z];
  * Scene clear color per theme. Each must equal `--scene-bg` for that theme in
  * src/styles/tokens.css, which paints `.app__stage` behind the canvas so resize
  * gaps do not flash. src/scene/artDirection.test.ts keeps them in step.
+ * Since the sky (ADR-52, 2026-11-09) it is each theme's horizon colour
+ * (`ART.sky.colors`), which the fog fades the far ground into and the dome
+ * starts from: a midday haze on light, a golden-hour haze on dark.
  */
-export const SCENE_BG: Record<Theme, string> = { dark: '#1e2124', light: '#d7d3cb' };
+export const SCENE_BG: Record<Theme, string> = { dark: '#e8c6a2', light: '#dde4ea' };
 
 /**
  * Renderer settings per quality tier (ADR-16, 2026-11-04). The Canvas is
@@ -53,7 +57,43 @@ export const QUALITY: Record<
 
 export const ART = {
   clearColor: SCENE_BG,
-  renderer: { exposure: 1.0 },
+  /**
+   * `toneMapping` (ADR-52): compared side by side with the grade (ACES,
+   * AgX, Khronos Neutral) in the six poses and on the welcome screen, both
+   * themes; set on every renderer when the Canvas is created.
+   */
+  renderer: { exposure: 1.3, toneMapping: NeutralToneMapping as ToneMapping },
+  /**
+   * The sky (ADR-52, 2026-11-09): a dome of vertex colours (skyDome.ts), one
+   * draw call on every tier, drawn first and behind everything, not fogged.
+   * Each theme has its own: light is midday (pale haze, a soft blue zenith),
+   * dark is late afternoon (a golden haze under a deeper blue). `horizon` is
+   * also the fog and the clear colour (SCENE_BG); `band` is reached at
+   * `bandAt` of the way up, the `zenith` beyond it, shaped by `exponent`.
+   * The same colours light the environment map (outdoorEnvironment.ts), so
+   * reflections match the sky. `skyline`: a faint city round the horizon,
+   * blocks `width` degrees wide and `height` degrees tall (ranges), some
+   * with a lower `setback`, leaning from the sky toward `city` by
+   * `strength`. `dome`: its radius (inside the camera's far plane, past the
+   * fog), how far it reaches below the horizon, and its rings.
+   */
+  sky: {
+    colors: {
+      light: { horizon: SCENE_BG.light, band: '#a3c1e2', zenith: '#5f93d2', city: '#8e9cad' },
+      dark: { horizon: SCENE_BG.dark, band: '#c4b8c2', zenith: '#6a84b4', city: '#9a8890' },
+    } as Record<Theme, { horizon: string; band: string; zenith: string; city: string }>,
+    bandAt: 0.13,
+    exponent: 1.0,
+    skyline: {
+      seed: 17,
+      width: [1.2, 5.5] as readonly [number, number],
+      height: [0.5, 2.6] as readonly [number, number],
+      setbackChance: 0.4,
+      setback: [0.45, 0.8] as readonly [number, number],
+      strength: 0.32,
+    },
+    dome: { radius: 25, below: 8, rings: [-8, 0, 1.5, 4, 8, 14, 22, 32, 45, 60, 75, 90] as readonly number[], azimuthSegments: 72 },
+  },
   /**
    * Post-processing (ADR-51, 2026-11-09), on the WebGPURenderer only: one
    * scene pass writing colour, normals and (High) velocity at once (MRT, so
@@ -162,7 +202,7 @@ export const ART = {
    */
   shadowMap: {
     size: 2048,
-    radius: 3,
+    radius: 4,
     bias: -0.0002,
     normalBias: 0.002,
     /**
@@ -211,17 +251,22 @@ export const ART = {
       blur: 0.04,
       radius: 10,
       segments: { width: 48, height: 32 },
-      sky: { zenith: '#8d9cae', horizon: '#d0d2d1', exponent: 0.55, scale: 1.0 },
+      // The sky's own colours (ART.sky, per theme) since ADR-52, times `skyScale`,
+      // at `skySaturation` of their colour (the rest grey of the same
+      // luminance): at full colour the midday blue tinted the concrete blue
+      // (#6d747e lit, against the neutral #787978 it had), at 0.45 it stays grey.
+      skyScale: 0.7,
+      skySaturation: 0.45,
       ground: { color: '#6b6a66', scale: 0.55 },
       horizonBlend: 0.06,
-      sun: { color: '#fff1e0', scale: 40, angularRadius: 0.05 },
+      sun: { color: { light: '#fff1e0', dark: '#ffd2a0' } as Record<Theme, string>, scale: 40, angularRadius: 0.05 },
     },
     /**
      * Sky colour from above, concrete from below (replaces the old ambient
      * #dde2e8 at 0.3). Near neutral, so the shadowed side of the deck and the
      * High shadow are not tinted blue on top of the sky's own fill.
      */
-    hemisphere: { sky: '#dde2e6', ground: '#6b6a66', intensity: 0.35 },
+    hemisphere: { sky: { light: '#e4e5e7', dark: '#e6dad2' } as Record<Theme, string>, ground: '#6b6a66', intensity: 0.35 },
     /**
      * Art pass (2026-11-04): moved from (2.5, 5.0, 3.0), which after the
      * rider's-view camera (ADR-23) sat behind and right of the camera and threw
@@ -234,7 +279,21 @@ export const ART = {
      * The outdoor environment gives less fill on the ground than the room
      * did, and the key now stands in for a sun or a floodlight.
      */
-    directional: { color: '#fff1e0', intensity: 2.7, position: v(0.9, 6.0, -1.2), target: v(0, 0.3, 0) },
+    /**
+     * Sky pass (2026-11-09, ADR-52): lower and warmer. From 76 degrees up to
+     * 52, so shadows reach 0.78 of the height instead of 0.25 and a pop reads
+     * further from its shadow; and round from behind the board to its +X
+     * side, so the longer shadows fall to the left of the board in the
+     * rider's view and the welcome preview instead of running out of the
+     * bottom of the frame. The colour per theme (dark's golden hour warmer,
+     * a touch dimmer).
+     */
+    directional: {
+      color: { light: '#fff0dc', dark: '#ffd9ad' } as Record<Theme, string>,
+      intensity: { light: 3.0, dark: 2.8 } as Record<Theme, number>,
+      position: v(3.45, 4.95, -1.09),
+      target: v(0, 0.3, 0),
+    },
   },
   camera: {
     /**
@@ -254,6 +313,13 @@ export const ART = {
     far: 30,
     minPolarAngle: 0.25,
     maxPolarAngle: 1.25,
+    /**
+     * The welcome preview's own limit (ADR-52): its preset is 8 degrees above
+     * the horizon (polar 82 degrees), lower than a student may orbit, so the
+     * sky shows. The orbit is off there, so no student reaches it; the fog
+     * test checks the plane's edge stays hidden from it too.
+     */
+    showcaseMaxPolarAngle: 1.45,
     minDistance: 1.0,
     maxDistance: 4.5,
     /**
@@ -302,18 +368,20 @@ export const ART = {
       },
       /**
        * The welcome screen's preview (ADR-45, 2026-11-08), not a student
-       * choice: a three-quarter view from the heel side, 28 degrees above the
-       * horizon (polar 62 degrees, inside the orbit limits) and 35 degrees
-       * round toward the goofy nose, so the flip, the shove and both shoes
-       * read at once. The orbit is off on the welcome screen.
+       * choice: a three-quarter view from the heel side, 35 degrees round
+       * toward the goofy nose, so the flip, the shove and both shoes read at
+       * once. The orbit is off on the welcome screen. Sky pass (2026-11-09,
+       * ADR-52): 8 degrees above the horizon (was 28) with the target 0.45 m
+       * up (was 0.28), so the horizon, the sky and its city sit in the top
+       * quarter of the frame and the street reads as a place.
        */
       showcase: {
         position: v(
-          2 * Math.cos((28 * Math.PI) / 180) * Math.sin((35 * Math.PI) / 180),
-          0.28 + 2 * Math.sin((28 * Math.PI) / 180),
-          2 * Math.cos((28 * Math.PI) / 180) * Math.cos((35 * Math.PI) / 180),
+          2 * Math.cos((8 * Math.PI) / 180) * Math.sin((35 * Math.PI) / 180),
+          0.45 + 2 * Math.sin((8 * Math.PI) / 180),
+          2 * Math.cos((8 * Math.PI) / 180) * Math.cos((35 * Math.PI) / 180),
         ),
-        target: v(0, 0.28, 0),
+        target: v(0, 0.45, 0),
       },
     },
   },

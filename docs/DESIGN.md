@@ -736,3 +736,24 @@ High and Medium draw through a short chain on the WebGPURenderer; Low draws as b
 - **Glow**: radiance above 1.1 (the sun's highlights on the trucks and bolts) spreads over two rings of eight taps at 0.4 and 1.1 percent of the stage's height, times 0.18.
 - **Grade** (after tone mapping): contrast 1.05 and saturation 1.06 round the middle; shadows multiplied by (0.98, 1.00, 1.03), highlights by (1.03, 1.00, 0.97), blended by luminance from 0.2 to 0.8. **Vignette**: up to 16 percent darker from 55 to 115 percent of the distance to a corner.
 - **View panel**: a "Motion blur" switch (`.toggle`, after Motion cues), shown on High only. Announcements: "Motion blur on.", "Motion blur off."
+
+### 14.3 Sky, sun and tone mapping (ADR-52)
+
+Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
+
+| | Light theme (midday) | Dark theme (late afternoon) |
+| --- | --- | --- |
+| Horizon (also fog, clear colour, `--scene-bg`) | `#dde4ea` | `#e8c6a2` |
+| Band (13 percent of the way up) | `#a3c1e2` | `#c4b8c2` |
+| Zenith | `#5f93d2` | `#6a84b4` |
+| City tint (mixed in at 0.32) | `#8e9cad` | `#9a8890` |
+| Sun colour, strength | `#fff0dc`, 3.0 | `#ffd9ad`, 2.8 |
+| Hemisphere sky | `#e4e5e7` | `#e6dad2` |
+| Environment sun disc | `#fff1e0` | `#ffd2a0` |
+
+- **Sky dome**: vertex colours on rings at -8, 0, 1.5, 4, 8, 14, 22, 32, 45, 60, 75 and 90 degrees, 72 steps round, radius 25 m; the city's blocks on a strip just inside it.
+- **City**: blocks 1.2 to 5.5 degrees wide, 0.5 to 2.6 degrees tall; 40 percent have a setback on their second half at 45 to 80 percent of the height; seed 17.
+- **Sun**: 52 degrees up, from the board's +X side and a little behind (position (3.45, 4.95, -1.09) toward (0, 0.3, 0)); PCF radius 4.
+- **Environment**: the theme's sky at 45 percent saturation, times 0.7, over the concrete below.
+- **Tone mapping**: Khronos Neutral, exposure 1.3 (was ACES at 1.0).
+- **Welcome preview camera**: 8 degrees above the horizon, 35 degrees round toward the nose, target 0.45 m up; its own polar limit, 1.45 rad.

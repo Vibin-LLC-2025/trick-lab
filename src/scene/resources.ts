@@ -481,6 +481,12 @@ export const mat = {
   footPath: footPathMaterial(),
   // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.
   shadow: shadowMaterial(),
+  // The sky dome (skyDome.ts, ADR-52): vertex colours, both faces (the
+  // winding is not worth tracking for a backdrop), no fog (it is the
+  // backdrop the fog fades into), no depth writes and drawn first, so
+  // everything else draws over it. Tone mapped like the fogged ground, so
+  // the two meet at the horizon.
+  sky: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false, depthWrite: false }),
   // Motion cues (motionCueGeometry.ts, DESIGN.md 8.7): vertex colour per
   // foot, unlit and not tone mapped so they match the trails and the legend.
   // Pulled toward the camera in depth so they never z-fight the grip; no depth

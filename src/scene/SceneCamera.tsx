@@ -96,7 +96,8 @@ export function SceneCamera() {
         minDistance={C.minDistance}
         maxDistance={Math.max(C.maxDistance, distance * 1.25)}
         minPolarAngle={C.minPolarAngle}
-        maxPolarAngle={C.maxPolarAngle}
+        // The welcome preview sits lower than a student may orbit, to show the sky (ADR-52); it never orbits.
+        maxPolarAngle={home ? C.showcaseMaxPolarAngle : C.maxPolarAngle}
       />
       <FitAndReset distance={distance} view={view} />
     </>

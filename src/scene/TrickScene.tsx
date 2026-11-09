@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { previewAnimates, useTrickStore } from '../store';
+import { previewAnimates, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -14,7 +14,8 @@ import { isNodeRenderer } from './rendererKind';
 import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
-import { disposeSharedResources } from './resources';
+import { disposeSharedResources, mat } from './resources';
+import { skyDomeGeometry } from './skyDome';
 
 // The tier's models start downloading as soon as the 3D code has arrived,
 // before the model chunk does (ADR-48). Not earlier: a download beside the 3D
@@ -40,7 +41,18 @@ function InvalidateOnStoreChange() {
  */
 const SHADOW_CAMERA = shadowFrustum(ART.lights.directional.position, ART.lights.directional.target, ART.shadowMap.casters, ART.shadowMap.pad);
 
-function Lights({ shadows }: { shadows: boolean }) {
+/**
+ * The sky dome (ADR-52): one draw call, drawn first (renderOrder), never
+ * culled (it surrounds the camera). Its geometry is the theme's, rebuilt on a
+ * theme change and freed when replaced.
+ */
+function Sky({ theme }: { theme: Theme }) {
+  const geometry = useMemo(() => skyDomeGeometry(theme), [theme]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <mesh geometry={geometry} material={mat.sky} renderOrder={-1} frustumCulled={false} />;
+}
+
+function Lights({ shadows, theme }: { shadows: boolean; theme: Theme }) {
   const L = ART.lights;
   const S = ART.shadowMap;
   const F = SHADOW_CAMERA;
@@ -48,11 +60,11 @@ function Lights({ shadows }: { shadows: boolean }) {
   return (
     <>
       {/* Sky from above, concrete from below (ADR-31; was an ambient light). */}
-      <hemisphereLight color={L.hemisphere.sky} groundColor={L.hemisphere.ground} intensity={L.hemisphere.intensity} />
+      <hemisphereLight color={L.hemisphere.sky[theme]} groundColor={L.hemisphere.ground} intensity={L.hemisphere.intensity} />
       <directionalLight
         ref={setSun}
-        color={L.directional.color}
-        intensity={L.directional.intensity}
+        color={L.directional.color[theme]}
+        intensity={L.directional.intensity[theme]}
         position={[...L.directional.position]}
         castShadow={shadows}
         shadow-mapSize={[S.size, S.size]}
@@ -82,6 +94,8 @@ const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.locati
  */
 function onCreated(state: RootState) {
   noteRenderer(state.gl);
+  // R3F gives ACES; the tone mapping is ART's (ADR-52), on every renderer.
+  state.gl.toneMapping = ART.renderer.toneMapping;
   if (DEBUG) {
     const w = window as unknown as { __trickLab?: RootState; __trickLabPerf?: typeof perfStats };
     w.__trickLab = state;
@@ -219,11 +233,12 @@ export default function TrickScene() {
       onCreated={onCreated}
       camera={{ position: [...C.position], fov: C.fov, near: C.near, far: C.far }}
     >
-      {/* R3F defaults already give ACES filmic tone mapping and sRGB output (DESIGN.md). */}
+      {/* sRGB output from R3F; the tone mapping is ART.renderer.toneMapping, set in onCreated (ADR-52). */}
       <color attach="background" args={[ART.clearColor[theme]]} />
       {/* Fog to the same colour, so the ground fades into the background (ADR-31). */}
       <fog attach="fog" args={[ART.fog.color[theme], ART.fog.near, ART.fog.far]} />
-      <Lights shadows={Q.shadows} />
+      <Sky theme={theme} />
+      <Lights shadows={Q.shadows} theme={theme} />
       {/* The pad and board stay hidden until their shaders are compiled with the environment. */}
       <SceneEnvironment>
         <Pad shadows={Q.shadows} />

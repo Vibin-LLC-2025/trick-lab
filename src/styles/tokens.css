@@ -30,8 +30,9 @@
 
   /* 3D stage clear color, per theme. Must equal ART.clearColor for the active
      theme in src/scene/artDirection.ts (a test asserts it), and paints
-     .app__stage so resize gaps never flash. Light: pale concrete. */
-  --scene-bg: #d7d3cb;
+     .app__stage so resize gaps never flash. Since the sky (ADR-52) it is the
+     horizon colour. Light: the midday haze. */
+  --scene-bg: #dde4ea;
   /* Foot path colours, the same in both themes; must equal ART.footPaths.color (tested). */
   --path-front: #56b4e9;
   --path-back: #f0e442;
@@ -124,8 +125,8 @@
   --color-bad-bg: #3a1715;      /* bailed card tint: text on it 13.07, bad on it 7.09, muted on it 6.85 */
   --color-focus: #7cc4ff;       /* ring, sky: on bg 9.84, on surface 8.83, on surface-2 7.60, on accent-bg 8.08 */
 
-  /* Dark stage clear color: charcoal concrete under sodium light. */
-  --scene-bg: #1e2124;
+  /* Dark stage clear color (ADR-52): the golden-hour haze on the horizon. */
+  --scene-bg: #e8c6a2;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
