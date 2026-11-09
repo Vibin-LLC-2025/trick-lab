@@ -11,8 +11,8 @@ const SHORTCUTS: [string[], string, readonly Screen[]][] = [
   // One key cap for the range (an en-dash, as for any numeric range) so the seven keys do not widen the key column.
   [['1–7'], 'Apply presets 1 to 7, in order: kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip', LAB],
   [['Space'], "Pop, or the computer's go in a game of SKATE (when focus is not on a slider or button, where Space keeps its usual job)", PLAY],
-  [['←', '→'], 'Move the focused slider; on the timeline, 1 percent', PLAY],
-  [['Page Up', 'Page Down'], 'On the timeline, 10 percent', LAB],
+  [['←', '→'], 'Move the focused slider', PLAY],
+  [['Page Up', 'Page Down'], 'On the timeline, 10 percent (the arrows move it 1 percent)', LAB],
   [['s'], 'Slow motion on or off (back to the last slow speed)', PLAY],
   [['[', ']'], 'One speed step slower or faster, also while the board is in the air', LAB],
   [['r'], 'Reset inputs, board and objectives (the event log is kept)', LAB],

@@ -112,6 +112,20 @@ describe('welcome screen (ADR-45)', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
+  it('the perf badge shows in the lab only, where its switch and key are', async () => {
+    const user = await setup();
+    await user.click(screen.getByRole('button', { name: 'Practice in the lab' }));
+    await user.click(screen.getByRole('button', { name: 'View', expanded: false }));
+    await user.click(screen.getByRole('button', { name: 'Perf badge' }));
+    expect(screen.getByLabelText('Performance stats')).toBeVisible();
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Home' }));
+    expect(screen.getByLabelText('Performance stats')).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Play a game of SKATE' }));
+    expect(screen.getByLabelText('Performance stats')).not.toBeVisible();
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Practice lab' }));
+    expect(screen.getByLabelText('Performance stats')).toBeVisible();
+  });
+
   it('tidies an unknown hash in place, without an extra Back step', async () => {
     window.history.replaceState(null, '', '/#/nowhere');
     const before = window.history.length;

@@ -1431,10 +1431,10 @@ a {
   border-color: var(--color-ok);
 }
 
-/* ---------- Game of SKATE (ADR-43, DESIGN.md 11) ----------
+/* ---------- Game of SKATE (ADR-43, ADR-46, DESIGN.md 11) ----------
    Markup: <dl class="skate__score"><div class="skate__row"><dt class="skate__who">You</dt>
      <dd class="skate__letters"><span class="skate__letter skate__letter--got">S</span>...</dd></div></dl>
-     <p class="skate__call">What to do now</p> <div class="skate__actions"><button class="btn">...</button></div>
+     <div class="skate__actions"><button class="btn">...</button></div>
    A letter you have is a filled bad-red tile in bold; one you do not is a
    dashed outline with a muted letter, so the count never rests on colour. */
 

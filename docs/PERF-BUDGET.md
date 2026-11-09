@@ -231,3 +231,18 @@ ADR-38. Measured by the implementation agent (opus) on the same desktop as above
 | Console errors | none | none | none |
 
 The two shoe footprints and the contact shadow are instances of the board's shadow mesh, so Medium and Low gain triangles (four 120-triangle discs instead of one) but no call. Per frame FlightDriver writes four instance matrices, four opacities and three uniform vectors (no allocation). On High the shadow pass is unchanged in calls; the map now covers 1.54 x 1.68 m instead of 2 x 2 m and 1.76 m of depth instead of 11 m, and `PCFShadowMap` with radius 3 is the same five comparison taps r187 already ran when it substituted PCF for the deprecated PCFSoft request (that warning is gone). The detail preset costs nothing at steady state.
+
+## Screens pass (2026-11-08): the welcome preview, the game and the tidied lab
+
+Measured on the production build (`vite preview`, 1440 x 900, `?debug`, `gl.info.render.calls` after load), ADR-45 to ADR-47. The welcome screen's preview renders continuously only on Medium and High; Low holds a still frame. In the lab a pop plays and the loop returns to demand at the landing (the frame counter stops).
+
+| Tier | Feet | Welcome (loop) | Game | Lab |
+| --- | --- | --- | --- | --- |
+| High | on | 30 (always) | 31 | 31 |
+| High | off | 15 (always) | 16 | 16 |
+| Medium | on | 15 (always) | 16 | 16 |
+| Medium | off | 9 (always) | 10 | 10 |
+| Low | on | 13 (demand) | 14 | 14 |
+| Low | off | 7 (demand) | 8 | 8 |
+
+All under the gates: 40 on High (the shadow pass counts), 20 on Medium and Low. The game and lab add one call over the welcome screen for the motion cues, which the preview hides.

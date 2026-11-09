@@ -214,7 +214,7 @@ export interface SkateSlice {
   cancelLeave: () => void;
   /** The student calls the trick they will set (ADR-44): only on their set turn, never a trick already set this game. Announced, not logged (their trick.popped carries the call). */
   callSkateTrick: (id: TrickId) => void;
-  /** Ends a game in play (logged as quit), or closes a finished one, back to practice. */
+  /** Ends a game in play (logged as quit), or closes a finished one, back to the game screen's How to play. */
   quitSkate: () => void;
   /** Internal, popTrick: on the computer's turn, its inputs and the announcement lead; null on the student's turn. */
   computerGo: () => { inputs: TrickInputs; lead: string; call: string } | null;

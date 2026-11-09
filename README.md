@@ -8,7 +8,7 @@
 
 A browser 3D physics lab about rotation in projectile flight, taught through skateboard flip tricks. Set the pop height, flick rate and scoop rate, pop, and watch the board flip and spin under the rider's feet. The lab names the trick you made and tells you whether you landed it, or which way you over- or under-rotated.
 
-![A kickflip at 45 percent of its flight, seen from the detail camera on High quality](docs/screenshots/hero-kickflip-detail.png)
+![The welcome screen: the title, the two choices, and the live preview of a rider caught mid-kickflip, on High quality](docs/screenshots/welcome.png)
 
 ## Features
 
@@ -25,8 +25,8 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 
 | | |
 | --- | --- |
-| ![A 360 flip landed, rider's view](docs/screenshots/tre-flip-landed-rider.png) | ![A varial flip at 30 percent, light theme](docs/screenshots/varial-flip-light.png) |
-| 360 flip landed, rider's view | Varial flip in the air, light theme |
+| ![The game of SKATE: the computer's turn, going for a 360 flip, in slow motion](docs/screenshots/skate-computer-turn.png) | ![The lab in the light theme: a varial flip in the air, with Foot motion open](docs/screenshots/lab-varial-light.png) |
+| The game: whose turn and the trick, large | The lab: the essentials up front, Foot motion open, light theme |
 
 ## Quick start
 
@@ -39,9 +39,12 @@ npm install
 npm run dev
 ```
 
-Then open the local URL Vite prints. Press `1` for the kickflip preset and `Space` to pop.
+Then open the local URL Vite prints. The welcome screen offers the two ways in: choose Practice in the lab, press `1` for the kickflip preset and `Space` to pop; or choose Play a game of SKATE and press Start game.
 
-**Keys:** `1` to `7` presets (kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip), `Space` pop, `s` slow motion, `[` and `]` slower and faster (also mid-trick), `r` reset, `t` theme, `p` perf badge, `?` all shortcuts.
+**Keys** (`?` lists the ones for the screen you are on):
+- Everywhere: `t` theme, `?` all shortcuts.
+- In the lab: `1` to `7` presets (kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip), `Space` pop, `s` slow motion, `[` and `]` slower and faster (also mid-trick), `r` reset, `p` perf badge.
+- In a game: `Space` pop or the computer's go, `s` slow motion.
 
 | Command | What it does |
 | --- | --- |
@@ -51,7 +54,7 @@ Then open the local URL Vite prints. Press `1` for the kickflip preset and `Spac
 | `npm run assets` | Rebuild the four GLBs in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
-New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-40), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-47), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## How it works
 
@@ -88,7 +91,7 @@ The ground is built the same way (2026-11-04, ADR-31): `src/asset/groundTextures
 - **The sim is pure.** No React, no three. Every number on screen comes from `computeFlight` and `recognize`, which are unit tested.
 - **Store actions own the event log.** `applyPreset`, `setInput`, `popTrick`, `land`, `commitScrub` and `resetSession` are the only writers; components select and call.
 - **One per-frame writer.** `FlightDriver` advances progress with the frame delta, writes the board pose into a ref, applies it to the board, the feet and the ground shadow, commits progress to the store at most 10 times a second, and calls `land()` at the end. No React state changes per frame.
-- **Demand rendering.** `frameloop` is `"always"` only while a trick is playing. Idle costs zero frames.
+- **Demand rendering.** `frameloop` is `"always"` only while a trick is playing, or while the welcome screen's preview plays on Medium and High (it holds a still frame on Low, under reduced motion and while paused). Idle costs zero frames.
 - **Code-split 3D.** The DOM lab paints and is fully usable before the three.js chunk arrives.
 
 ## The physics model and its simplifications
@@ -106,7 +109,7 @@ The ground is built the same way (2026-11-04, ADR-31): `src/asset/groundTextures
 - The canvas is `aria-hidden`; a visually hidden `#scene-description` carries the board state, inputs and last outcome.
 - One polite live region announces presets, pops and outcomes in plain language ("Kickflip landed. 365 degrees of kickflip, 0 degrees of shove, 0.53 seconds in the air."; a varial heelflip reads "365 degrees of heelflip, 173 degrees of frontside shove").
 - Native range sliders with visible labels and spoken units (`aria-valuetext`).
-- Focus stays put after a preset or a result; after reset it moves to the setup heading. Space pops only when focus is not on a slider, button or other control where Space already means something. Shortcuts are inert while the dialog is open.
+- Focus stays put after a preset or a result; after reset it moves to the setup heading, after a screen change to the new screen's title, and when a game starts or ends to the game's heading (at the end the turn controls are gone, so focus goes to the result rather than the page). Space pops only when focus is not on a slider, button or other control where Space already means something. Shortcuts are inert while the dialog is open.
 - `prefers-reduced-motion`: no playback at all. A pop resolves at once, the board shows its final pose, and the timeline steps through the flight.
 - Contrast ratios for both themes are documented beside each token (see `docs/DESIGN.md`).
 - "Quality" (High / Medium / Low) is a native radio group in a `fieldset` with a legend and a described-by hint, so Tab reaches it, arrow keys switch it, and the change is announced. The hint says when the tier was picked for the device. High and Medium are disabled, showing Low, if a model fails to load. "Show feet" is a pressed-state toggle button.

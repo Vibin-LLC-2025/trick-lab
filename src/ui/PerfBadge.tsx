@@ -4,9 +4,12 @@ import { perfStats } from '../scene/perfStats';
 
 type Snapshot = typeof perfStats;
 
-/** Developer overlay, toggled with p. Polls perfStats twice a second only while visible. */
+/**
+ * Developer overlay, toggled with p. Polls perfStats twice a second only while visible. Shown in
+ * the lab only, where its switch and its key are (ADR-45); it comes back on return there.
+ */
 export function PerfBadge() {
-  const visible = useTrickStore((s) => s.perfVisible);
+  const visible = useTrickStore((s) => s.perfVisible && s.screen === 'lab');
   const [snap, setSnap] = useState<Snapshot | null>(null);
 
   useEffect(() => {
