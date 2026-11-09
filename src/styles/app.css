@@ -77,6 +77,25 @@ a {
   outline: none;
 }
 
+/* Headings a store action moves focus to (tabindex="-1": a screen change,
+   reset, a game starting or ending; ADR-48, DESIGN.md 14.1). They are not
+   controls, so they do not take the control ring, which boxed the heading's
+   whole row and read as a text field. A focus-coloured bar under the words
+   says where focus went instead. Forced colours keep a system outline. */
+:is(.topbar__title, .home__title, .panel__title, .turn__who)[tabindex]:focus-visible {
+  outline: none;
+  text-decoration: underline var(--focus-ring) var(--color-focus);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.22em;
+}
+
+@media (forced-colors: active) {
+  :is(.topbar__title, .home__title, .panel__title, .turn__who)[tabindex]:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 /* ---------- App shell ----------
    Three screens (ADR-45, DESIGN.md 12), one grid, picked by data-screen:
    - home: the welcome text (left) beside the preview stage (right).
@@ -339,11 +358,6 @@ a {
   color: var(--color-text);
 }
 
-/* The title receives focus after a screen change (tabindex="-1"). */
-.topbar__title[tabindex] {
-  border-radius: var(--radius-sm);
-}
-
 .topbar__actions {
   display: flex;
   flex-wrap: wrap;
@@ -400,11 +414,6 @@ a {
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--color-text);
-}
-
-/* The title receives focus when the student comes back (tabindex="-1"). */
-.home__title[tabindex] {
-  border-radius: var(--radius-sm);
 }
 
 .home__lede {
@@ -540,11 +549,6 @@ a {
   line-height: var(--leading-tight);
   letter-spacing: 0.02em;
   color: var(--color-muted);
-}
-
-/* The setup heading receives focus after reset (tabindex="-1"). */
-.panel__title[tabindex] {
-  border-radius: var(--radius-sm);
 }
 
 .panel__count {
@@ -1584,11 +1588,6 @@ a {
   line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   color: var(--color-text);
-}
-
-/* The heading receives focus when a game starts, ends or is quit (tabindex="-1"). */
-.turn__who[tabindex] {
-  border-radius: var(--radius-sm);
 }
 
 .turn--you .turn__who {

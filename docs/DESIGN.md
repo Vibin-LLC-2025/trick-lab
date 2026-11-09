@@ -532,7 +532,7 @@ Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no ne
 
 Written by the implementation agent (opus) for the legs, pending the design agent's own pass; `ART.legs` in artDirection.ts is sourced from here. (8.6 is the Stance control, so the legs take the next free number.)
 
-The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Shown by default with the feet; the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
+The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Hidden by default since 2026-11-09 (ADR-48: the owner chose shoes only); the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
 
 | Part | Shape | Colour (sRGB) |
 | --- | --- | --- |
@@ -711,3 +711,9 @@ Up front: Setup, Inputs, Playback (Pop, Pause, Reset) on the left and the Outcom
 - **The body** (`.fold__body`) is a column with 8 px gaps, `hidden` while closed.
 - **Phones:** the lab's stage sticks to the top like the game's (section 11).
 - **Telemetry:** Air spin, the last row, spans the grid's full width and wraps there.
+
+## 14. Look, feel and performance (2026-11-09, `docs/PLAN-LOOK-FEEL-PERF.md`)
+
+### 14.1 Focus on headings (ADR-48)
+
+The headings that a store action focuses (after a screen change `#screen-heading` in the top bar or on the welcome screen, after reset `#setup-heading`, when a game starts, ends or is quit `#skate-heading`) are not controls, so they no longer take the control ring: on a heading that fills its row the ring was a full-width box that read as a text field. Instead, under `:focus-visible`, the words get a 3 px underline in `--color-focus` (cobalt on light, sky on dark; the same 3:1-plus ratios as the ring, section 9.8), 0.22 em below the baseline, with no skip-ink so it reads as one bar. Under forced colours the system outline (`Highlight`, 2 px, 2 px off) stays. Selectors: `:is(.topbar__title, .home__title, .panel__title, .turn__who)[tabindex]:focus-visible`.

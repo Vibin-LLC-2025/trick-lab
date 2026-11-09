@@ -346,23 +346,23 @@ describe('quality and feet (ui slice)', () => {
     localStorage.clear();
   });
 
-  it('shows the legs by default; hiding them persists and announces it, without logging (ADR-37)', () => {
+  it('hides the legs by default; showing them persists and announces it, without logging (ADR-37, ADR-48)', () => {
     localStorage.clear();
     const store = makeStore();
-    expect(store.getState().legsVisible).toBe(true);
-    store.getState().toggleLegs();
     expect(store.getState().legsVisible).toBe(false);
-    expect(localStorage.getItem('trick-lab.legs')).toBe('off');
-    expect(said(store)).toBe('Legs hidden.');
     store.getState().toggleLegs();
     expect(store.getState().legsVisible).toBe(true);
     expect(localStorage.getItem('trick-lab.legs')).toBe('on');
     expect(said(store)).toBe('Legs shown.');
+    store.getState().toggleLegs();
+    expect(store.getState().legsVisible).toBe(false);
+    expect(localStorage.getItem('trick-lab.legs')).toBe('off');
+    expect(said(store)).toBe('Legs hidden.');
     expect(store.getState().events).toEqual([]);
-    localStorage.setItem('trick-lab.legs', 'off');
-    expect(makeStore().getState().legsVisible).toBe(false);
-    localStorage.setItem('trick-lab.legs', 'nonsense');
+    localStorage.setItem('trick-lab.legs', 'on');
     expect(makeStore().getState().legsVisible).toBe(true);
+    localStorage.setItem('trick-lab.legs', 'nonsense');
+    expect(makeStore().getState().legsVisible).toBe(false);
     localStorage.clear();
   });
 
@@ -421,7 +421,7 @@ describe('quality and feet (ui slice)', () => {
     store.getState().resetSession();
     expect(store.getState().quality).toBe('low');
     expect(store.getState().feetVisible).toBe(false);
-    expect(store.getState().legsVisible).toBe(false);
+    expect(store.getState().legsVisible).toBe(true);
     localStorage.clear();
   });
 

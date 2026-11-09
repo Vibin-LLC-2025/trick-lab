@@ -92,8 +92,8 @@ export function readQuality(): { quality: Quality; qualityAuto: boolean } {
 }
 
 export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
-/** Legs are on until the student switches them off (ADR-37). */
-export const readLegsVisible = (): boolean => read(LEGS_KEY) !== 'off';
+/** Legs are off until the student switches them on (ADR-37; off by default since ADR-48). */
+export const readLegsVisible = (): boolean => read(LEGS_KEY) === 'on';
 /** Foot trails are off until the student switches them on. */
 export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 /** Motion cues are on until the student switches them off (ADR-26). */

@@ -5,12 +5,20 @@ import { previewAnimates, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
+import { prefetchModels, RELEASE_AFTER_MS, releaseModels } from './modelCache';
+import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
 import { rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
 import { disposeSharedResources } from './resources';
+
+// The tier's models start downloading as soon as the 3D code has arrived,
+// before the model chunk does (ADR-48). Not earlier: a download beside the 3D
+// code delays the first frame by sharing the bandwidth (measured 2026-11-09).
+const start = useTrickStore.getState();
+prefetchModels(modelsFor(start.quality, start.feetVisible));
 
 /**
  * Store changes that can change the picture (inputs move the feet, and a
@@ -90,6 +98,12 @@ export default function TrickScene() {
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);
+  // A move down a tier frees the models the new tier never shows (ADR-48),
+  // once the old tier's Canvas is gone. A quick move back up cancels it.
+  useEffect(() => {
+    const id = setTimeout(() => releaseModels(modelsUnusedBy(quality)), RELEASE_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [quality]);
   const Q = useTrickStore(rendererFor);
   const C = ART.camera;
 

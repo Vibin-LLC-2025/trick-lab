@@ -1,17 +1,11 @@
 import { useEffect } from 'react';
-import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import type { Mesh, MeshStandardMaterial } from 'three';
 import { PARTS } from '../asset/spec';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
+import { preloadModel, useModel } from './gltf';
 import { boardUrlFor, SHOES_URL } from './modelUrls';
-
-// useGLTF(path, useDraco, useMeshopt). Draco is off: drei would fetch its
-// decoder from a CDN, which school networks often block. The meshopt decoder
-// ships inside the JS bundle (three-stdlib), so it works offline (ADR-13).
-export const DRACO = false;
-export const MESHOPT = true;
 
 /**
  * Sets anisotropic filtering on every texture of a cached GLB's materials,
@@ -42,7 +36,7 @@ export function applyAnisotropy(materials: Record<string, unknown>, anisotropy: 
  * lose it). The cache lives as long as the page.
  */
 export function BoardModel({ url, castShadow }: { url: string; castShadow: boolean }) {
-  const { nodes, materials } = useGLTF(url, DRACO, MESHOPT);
+  const { nodes, materials } = useModel(url);
   const invalidate = useThree((s) => s.invalidate);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].anisotropy);
   // The demand frameloop needs one frame once the model replaces the fallback.
@@ -72,9 +66,10 @@ export function BoardModel({ url, castShadow }: { url: string; castShadow: boole
   );
 }
 
-// Start the downloads as soon as the scene chunk loads, in parallel with the
-// first render. Skipped when the student is on Low, so a Chromebook never
-// fetches a model; switching tiers later loads on demand.
+// Start parsing as soon as the scene chunk loads, in parallel with the first
+// render, from the downloads TrickScene started when the 3D code arrived (ADR-48).
+// Skipped when the student is on Low, so a Chromebook never fetches a model;
+// switching tiers later loads on demand.
 const q = useTrickStore.getState().quality;
-if (q !== 'low') useGLTF.preload(boardUrlFor(q), DRACO, MESHOPT);
-if (q === 'high' && useTrickStore.getState().feetVisible) useGLTF.preload(SHOES_URL, DRACO, MESHOPT);
+if (q !== 'low') preloadModel(boardUrlFor(q));
+if (q === 'high' && useTrickStore.getState().feetVisible) preloadModel(SHOES_URL);

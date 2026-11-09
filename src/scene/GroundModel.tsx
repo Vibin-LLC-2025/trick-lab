@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import type { Mesh } from 'three';
 import { GROUND_PARTS } from '../asset/groundSpec';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
-import { applyAnisotropy, DRACO, MESHOPT } from './BoardModel';
+import { applyAnisotropy } from './BoardModel';
+import { preloadModel, useModel } from './gltf';
 import { GROUND_URL } from './modelUrls';
 
 /**
@@ -16,7 +16,7 @@ import { GROUND_URL } from './modelUrls';
  * the cached textures.
  */
 export function GroundModel({ receiveShadow }: { receiveShadow: boolean }) {
-  const { nodes, materials } = useGLTF(GROUND_URL, DRACO, MESHOPT);
+  const { nodes, materials } = useModel(GROUND_URL);
   const invalidate = useThree((s) => s.invalidate);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].groundAnisotropy);
   // The demand frameloop needs one frame once the model replaces the fallback.
@@ -42,6 +42,7 @@ export function GroundModel({ receiveShadow }: { receiveShadow: boolean }) {
   );
 }
 
-// Start the download as soon as this chunk loads (Pad.tsx imports it at once
-// on Medium and High). Skipped on Low, which never fetches the ground.
-if (useTrickStore.getState().quality !== 'low') useGLTF.preload(GROUND_URL, DRACO, MESHOPT);
+// Start parsing as soon as this chunk loads (Pad.tsx imports it at once on
+// Medium and High), from the download TrickScene started (ADR-48). Skipped on
+// Low, which never fetches the ground.
+if (useTrickStore.getState().quality !== 'low') preloadModel(GROUND_URL);

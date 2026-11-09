@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import type { Mesh } from 'three';
 import { SHOE_PARTS } from '../asset/shoeSpec';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
-import { applyAnisotropy, DRACO, MESHOPT } from './BoardModel';
+import { applyAnisotropy } from './BoardModel';
+import { useModel } from './gltf';
 import { SHOES_URL } from './modelUrls';
 
 /**
@@ -14,7 +14,7 @@ import { SHOES_URL } from './modelUrls';
  * rules as BoardModel: `dispose={null}`, nothing disposed here.
  */
 export function ShoesModel({ castShadow }: { castShadow: boolean }) {
-  const { nodes, materials } = useGLTF(SHOES_URL, DRACO, MESHOPT);
+  const { nodes, materials } = useModel(SHOES_URL);
   const invalidate = useThree((s) => s.invalidate);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].anisotropy);
   useEffect(() => {
