@@ -799,3 +799,7 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 | Lose | the computer wins | triangle G4, E4, C4, then C4 sagging to B3 |
 
 - **Mix**: master gain 0.6; sounds asked for together play 0.22 s apart. Below 1x the pop, landing and bail drop in pitch and stretch by speed^0.35 (half pitch at most).
+
+### 14.9 Automatic step-down (ADR-59)
+
+No new control and no new class: when the first three judged tricks on the device's own tier run choppy (two over 40 ms a frame), the tier drops one step and the landing's announcement says so ("Tricks were running slowly on this device, so quality is now medium. You can change it in View."). View's Quality control shows the new tier; picking a tier there turns the step-down off for good.

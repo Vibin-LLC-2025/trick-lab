@@ -8,6 +8,9 @@ export const QUALITIES: readonly Quality[] = ['high', 'medium', 'low'];
 
 export const isQuality = (v: unknown): v is Quality => QUALITIES.includes(v as Quality);
 
+/** The lower of a tier and a cap (ADR-59: the device's pick, after an automatic step-down on an earlier visit). */
+export const capQuality = (q: Quality, cap: unknown): Quality => (isQuality(cap) && QUALITIES.indexOf(cap) > QUALITIES.indexOf(q) ? cap : q);
+
 /**
  * The tier the scene actually runs (ADR-15): Low once a model failed to
  * load, whatever was saved; otherwise the saved or auto-picked tier. Every

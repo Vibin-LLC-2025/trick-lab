@@ -73,6 +73,10 @@ export const createPlaybackSlice =
       // A landing in the lab is the student's to celebrate; in a game, only a set or copy that counts (scoreSkate).
       if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name);
       out.push(...s.scoreSkate(result, by));
+      // The automatic step-down (ADR-59): this flight's pace, judged after its result and said with it.
+      const pace = s.paceSource?.(s.flightId) ?? null;
+      const stepped = pace === null ? null : get().noteTrickPace(pace);
+      if (stepped) out.push(stepped);
       s.announce(out.join(' '));
     };
 

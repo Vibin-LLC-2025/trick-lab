@@ -2,11 +2,14 @@ import type { StateCreator } from 'zustand';
 import { isStance } from '../sim/feet';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
-import { detectQuality, effectiveQuality, isQuality } from './quality';
+import { capQuality, detectQuality, effectiveQuality, isQuality } from './quality';
+import { lowerTier, PACE, ranChoppy } from './pace';
 import type { CameraView, LabFold, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
 
 export const THEME_KEY = 'trick-lab.theme';
 export const QUALITY_KEY = 'trick-lab.quality';
+/** The tier an automatic step-down moved to (ADR-59): the device's pick is capped at it on later visits. */
+export const QUALITY_STEP_KEY = 'trick-lab.quality-step';
 /** The pre-tier setting (ADR-15); read once so an earlier "Low" choice survives the upgrade. */
 export const LEGACY_DETAIL_KEY = 'trick-lab.board-detail';
 export const FEET_KEY = 'trick-lab.feet';
@@ -92,7 +95,8 @@ export function readQuality(): { quality: Quality; qualityAuto: boolean } {
   const saved = read(QUALITY_KEY);
   if (isQuality(saved)) return { quality: saved, qualityAuto: false };
   if (read(LEGACY_DETAIL_KEY) === 'low') return { quality: 'low', qualityAuto: false };
-  return { quality: detectQuality(), qualityAuto: true };
+  // The device's pick, no higher than a step-down on an earlier visit (ADR-59).
+  return { quality: capQuality(detectQuality(), read(QUALITY_STEP_KEY)), qualityAuto: true };
 }
 
 export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
@@ -137,6 +141,12 @@ export const QUALITY_ANNOUNCEMENT: Record<Quality, string> = {
   low: 'Quality low: simple board. Fastest.',
 };
 
+/** Said when tricks ran choppy and the tier stepped down by itself (ADR-59). */
+export const STEP_DOWN_ANNOUNCEMENT: Record<Exclude<Quality, 'high'>, string> = {
+  medium: 'Tricks were running slowly on this device, so quality is now medium. You can change it in View.',
+  low: 'Tricks were running slowly on this device, so quality is now low. You can change it in View.',
+};
+
 /** Opens the one announcement when the motion preference turns on mid-flight (ADR-6). */
 export const REDUCED_MOTION_LEAD = 'Reduced motion on: the board goes straight to its landing.';
 /** The one announcement when the 3D view fails (SceneBoundary); the result follows it if a trick was in the air. */
@@ -158,6 +168,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     viewResetNonce: 0,
     cameraView: readCameraView(),
     ...readQuality(),
+    paces: [],
+    paceJudged: false,
+    paceSource: null,
     boardAssetFailed: false,
     sceneUnavailable: false,
     stageReady: false,
@@ -276,6 +289,26 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
     },
+    noteTrickPace: (ms) => {
+      const s = get();
+      // Only the device's own pick is corrected; a tier the student chose is theirs.
+      if (!s.qualityAuto || s.boardAssetFailed || s.paceJudged) return null;
+      const lower = lowerTier(s.quality);
+      if (!lower) return null;
+      const paces = [...s.paces, ms];
+      if (paces.length < PACE.tricks) {
+        set({ paces });
+        return null;
+      }
+      if (!ranChoppy(paces)) {
+        set({ paces, paceJudged: true });
+        return null;
+      }
+      save(QUALITY_STEP_KEY, lower);
+      set({ quality: lower, paces: [], paceJudged: false });
+      return STEP_DOWN_ANNOUNCEMENT[lower as Exclude<Quality, 'high'>];
+    },
+    setPaceSource: (paceSource) => set({ paceSource }),
     setStageReady: () => {
       if (!get().stageReady) set({ stageReady: true });
     },

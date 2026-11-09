@@ -144,6 +144,22 @@ export interface UiSlice {
   quality: Quality;
   /** True while the tier is the device's auto-pick, false once the student chose one. */
   qualityAuto: boolean;
+  /**
+   * The automatic step-down (ADR-59): the paces (median frame interval, ms)
+   * of the tricks judged so far on this tier, and whether the tier has been
+   * judged and kept. Only while the tier is the device's pick. Not
+   * persisted (the step-down itself is, as trick-lab.quality-step), not
+   * logged, not exported.
+   */
+  paces: number[];
+  paceJudged: boolean;
+  /**
+   * How the scene reads the pace of a flight that has just ended (PerfProbe,
+   * ADR-59): the median frame interval in ms of flight `flightId`, or null
+   * if it drew too few frames or is not the flight the scene recorded. Null
+   * with no scene. Asked once per landing, by the landing's resolution.
+   */
+  paceSource: ((flightId: number) => number | null) | null;
   /** Set when a GLB fails to load; the scene then shows the primitive board and the High and Medium options are disabled. The saved `quality` is kept; read the tier in use with effectiveQuality (quality.ts). */
   boardAssetFailed: boolean;
   /** Set when the whole 3D view fails (SceneBoundary). Not persisted, not logged. Pops then resolve at once, like reduced motion (ADR-6). */
@@ -217,6 +233,17 @@ export interface UiSlice {
   toggleMotionBlur: () => void;
   /** Called by the scene's error boundary when the board model cannot load. */
   setBoardAssetFailed: () => void;
+  /**
+   * Internal: judges a landed trick's pace (ADR-59), called by the landing's
+   * resolution. While the tier is the device's pick: after the first few, if
+   * they ran choppy, drops one tier, remembers it for the next visit and
+   * returns what to say, which the resolution adds to the landing's own
+   * announcement (one message, so neither is lost); otherwise keeps the tier
+   * and stops judging it, and returns null. Never logged.
+   */
+  noteTrickPace: (ms: number) => string | null;
+  /** Called by the scene (PerfProbe) to register, or with null to remove, its pace source. */
+  setPaceSource: (source: ((flightId: number) => number | null) | null) => void;
   /** Called by SceneBoundary when the 3D view cannot render: announces once and resolves a flight in the air. */
   setSceneUnavailable: () => void;
   /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */

@@ -456,3 +456,9 @@ No change to the scene: draw calls, triangles and frame times as at step 10 (the
 | Sound (recipes, player, hook) | 3.3 KB, 1.5 KB gzipped (main bundle 314.4 KB, 100.3 KB gzipped) | with the page; no audio context and no nodes until sound is on and something happens |
 
 Checked in the browser: the font loads from the app's own path; the celebration plays on a landed kickflip in both themes and on a 390 px phone stage (it scales with the stage, so the board stays in view); a new SKATE letter stamps in once; with sound off nothing is started; turning it on starts the audio context inside the click; at 0.25x the landing's sound came 2.17 s after the pop, as the board landed.
+
+### Step 13: the automatic step-down (ADR-59)
+
+The rule: on the device's own tier, the first 3 tricks that draw at least 12 frames are judged by their median frame interval (gaps over 250 ms left out); 2 of them over 40 ms (under 25 frames a second) drop the tier one step, said in the landing's announcement and saved as `trick-lab.quality-step` for later visits. The cost while a flight plays is one store read and one array write per frame in PerfProbe (no allocation), and one median per landing, outside the frame loop.
+
+Checked in the browser (RTX 3060, High by the device's pick): smooth tricks kept High. With 45 ms of main-thread work forced into every animation frame, the third trick stepped the scene to Medium with the announcement, and the next visit started on Medium (`board.glb`, View showing Medium). CPU throttling at 20x alone did not trigger it, rightly: about 0.6 ms of CPU per frame becomes about 12 ms, still smooth. The measurement script always sets a tier, so it never steps down.
