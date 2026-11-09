@@ -335,3 +335,37 @@ Measured through `scripts/measure/serve.ts` (gzip like GitHub Pages), so the byt
 | Texture format on the GPU (read in the browser) | BC7 (`RGBA_BPTC_Format`), every texture, full mip chains | same |
 
 High's first visit is about twice as fast to every model on a slow link. Medium's first visit is about even (its 386 KB of savings are spent on the transcoder, and the transcoder has to arrive and compile before any texture is read: 0.1 to 0.2 s slower here, within this setup's run-to-run spread at 10 Mbps); every later visit saves the 386 KB, and the GPU keeps a quarter of the texture memory. The transcoder starts downloading with the first model request, beside the GLBs (starting it only when the first texture needed it cost Medium another 0.1 s). The first 3D frame, draw calls (High 27 and 28, Medium 13 and 14, Low 11 and 12), triangles and Low's downloads are unchanged; Low fetches neither the transcoder nor the model chunk. GPU time per frame did not move beyond noise (looping welcome preview, High 3.50 to 3.46 ms, Medium 2.55 to 1.81 ms). The model chunk is 45.9 KB gzipped (was 21.7: KTX2Loader and its zstd decoder).
+
+### Steps 4 and 5: the WebGPURenderer and the go/no-go check (ADR-50)
+
+"Before" is HEAD at f5d408d (WebGLRenderer on every tier) from the scratch worktree; "after" is the WebGPURenderer on Medium and High. Same session, both served by `scripts/measure/serve.ts`.
+
+GPU time per frame (timestamp queries on WebGPU, timer queries on WebGL; medians, then p95):
+
+| Tier | View | 1440 x 900, WebGL | WebGPU | 2560 x 1440, WebGL | WebGPU |
+| --- | --- | --- | --- | --- | --- |
+| High | welcome preview, looping | 3.35 / 5.58 ms | **1.05 / 2.10 ms** | 4.01 / 6.46 ms | **1.44 / 1.70 ms** |
+| High | lab, four kickflips | 1.19 / 2.76 ms | 0.79 / 1.90 ms | 2.26 / 4.60 ms | 1.18 / 2.23 ms |
+| Medium | welcome preview, looping | 2.55 / 5.32 ms | **0.72 / 1.77 ms** | 2.64 / 3.75 ms | **0.46 / 1.25 ms** |
+| Medium | lab, four kickflips | 1.35 / 2.93 ms | 0.52 / 2.23 ms | 2.29 / 2.41 ms | 1.31 / 1.97 ms |
+
+The two kinds of query are not identical (WebGPU times its passes, WebGL the whole frame), but the gap is two to three times, at both sizes and on both tiers. `gl.render` CPU time stayed 0.3 to 0.6 ms.
+
+Loading (the first 3D frame, then every model on screen):
+
+| Tier | Network | WebGL | WebGPU |
+| --- | --- | --- | --- |
+| High | full speed | 0.49 s, 1.08 s | 0.91 s, 1.08 s |
+| High | 10 Mbps | 0.68 s, 1.93 s | 1.70 s, 2.17 s |
+| High | 3 Mbps | 1.36 s, 4.71 s | 3.91 s, 5.07 s |
+| Medium | full speed | 0.49 s, 0.85 s | 0.89 s, 1.06 s |
+| Medium | 10 Mbps | 0.69 s, 1.63 s | 1.31 s, 1.60 s |
+| Medium | 3 Mbps | 1.41 s, 3.42 s | 3.27 s, 3.84 s |
+| Low | full speed | 0.45 to 0.51 s (three runs) | 0.45 and 0.65 s (two runs; WebGLRenderer as before) |
+| Low | 3 Mbps | 1.36 to 1.44 s (three runs) | 1.40 and 1.42 s (two runs) |
+
+The first 3D frame comes later on Medium and High: the node renderer chunk (170 KB gzipped) loads only once the 3D code has run, beside the models, and the device and pipelines take a moment to start. The time to every model on screen, which is when step 10's loading picture is to hand over to the live scene, moves by 0 to 0.42 s, about the chunk's bytes at the link's speed. Draw calls: High 28 and 29 (welcome, lab; were 27 and 28), Medium 14 and 15 (were 13 and 14), Low unchanged; the extra one is the node renderer's output pass. Frames after a landing: 0 on every tier. Textures on the GPU: High 18, Medium 12 (three more on the node renderer, its own lookup and output textures). No console errors on any tier; with the node renderer's chunk blocked, High drew on WebGLRenderer with every model.
+
+The look: six poses of a kickflip on High from the detail camera (rest, rising, edge-on, inverted, the catch, landed), a regular-stance kickflip at 40 percent with legs and foot trails on, and Medium's projected footprints, each side by side on the two renderers: the same board, shoes, graphic, legs, trails and shadows, with no visible difference.
+
+**Go.** The new renderer is two to three times cheaper on the GPU, looks the same, ran without an error on every tier, and starts later only by what the loading picture of step 10 covers (0.4 s more on the time to every model at 3 Mbps). Phase B goes on with it.
