@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { addAfterEffect, useFrame, useThree } from '@react-three/fiber';
+import { addAfterEffect, addEffect, useFrame, useThree } from '@react-three/fiber';
 import { useTrickStore } from '../store';
 import { flightPace, noteFramesStoreChange, recordFrame } from './flightPace';
 import { allShown } from './modelCache';
@@ -12,7 +12,10 @@ import { effectsFor, sceneTier } from './sceneTier';
 /**
  * Takes over rendering (a positive useFrame priority disables R3F's own
  * render call) so it can time gl.render and read renderer.info for the frame.
- * Costs two performance.now() calls per frame; no allocations.
+ * Costs three performance.now() calls per frame; no allocations. One is
+ * R3F's before-effect, which marks where the frame's work starts, so
+ * `workMs` is everything the app does in a frame (FlightDriver's pose and
+ * the draw), the number ADR-62's target is about.
  * The WebGPURenderer (ADR-50) resets its frame counts only in its own
  * animation loop, which R3F does not use, so they are reset here before each
  * frame; its draw calls are `info.render.drawCalls` (rendererKind.ts).
@@ -55,6 +58,13 @@ export function PerfProbe() {
     });
     return stop;
   }, [get]);
+  useEffect(
+    () =>
+      addEffect(() => {
+        perfStats.frameStart = performance.now();
+      }),
+    [],
+  );
   useEffect(() => {
     // A new Canvas is a new tier: its evidence starts empty.
     trickFrames.count = 0;
@@ -82,7 +92,9 @@ export function PerfProbe() {
     // Through the effects where the tier has them (ADR-51), straight otherwise.
     if (frame.render) frame.render();
     else gl.render(scene, camera);
-    perfStats.renderMs = performance.now() - t0;
+    const t1 = performance.now();
+    perfStats.renderMs = t1 - t0;
+    perfStats.workMs = t1 - perfStats.frameStart;
     perfStats.frames += 1;
     perfStats.drawCalls = drawCallsOf(gl);
     perfStats.triangles = gl.info.render.triangles;

@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { drawCalls, expectTier, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
-// The draw-call ledger (PLAN-PLAY-POLISH-REACH): every switch combination, on
-// the welcome screen at rest and in the lab over a 360 flip, fits the tier's
-// ledger and gate. The switches are the store's own actions, as the View
+// The draw-call caps (ADR-62): every switch combination, on the welcome
+// screen at rest and in the lab over a 360 flip, fits the tier's cap and its
+// expected worst case (LEDGER). The switches are the store's own actions, as the View
 // panel's switches call them; none of them remounts the Canvas.
 
 type Switches = { feet: boolean; legs: boolean; trails: boolean; cues: boolean };

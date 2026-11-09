@@ -53,10 +53,21 @@
 //   or cues), in the lab over a `spin` trick (feet, legs, foot trails, motion
 //   cues; the legs need the feet). The most seen is the ledger's number
 //   (PLAN-PLAY-POLISH-REACH, "Draw-call ledger");
-// - in the lab, one trick at the current speed: the render CPU time and,
-//   where the browser exposes it, GPU time per frame (median and p95), and the
-//   landing's frames, by the store (below). Where the welcome preview loops,
-//   the same times over a few seconds of it.
+// - in the lab, over `pops` tricks at the current speed, per frame: the render
+//   CPU time, the frame's whole work on the main thread (`workMs`, from R3F's
+//   before-effect to the end of the draw; builds before ADR-62 do not report
+//   it), the interval from the frame before, and, where the browser exposes
+//   it, GPU time; each as median, p95 and the longest. Then the landing's
+//   frames, by the store (below). Where the welcome preview loops, the same
+//   times over a few seconds of it.
+//
+// Targets (ADR-62, docs/PERF-BUDGET.md "Targets"): the last table checks each
+// tier's tricks against its frame-time targets and its draw-call cap, and
+// `pass` says whether every one held. The longest interval is a dropped-frame
+// check: the target is no frame longer than 16.7 ms (one refresh at 60 Hz),
+// and the gate is under 20 ms to leave room for the timer's jitter. At 60 Hz
+// any missed refresh (33.3 ms) fails; at 120 Hz one missed refresh (16.7 ms)
+// passes and two (25 ms) fail.
 //
 // Landings are read from the store (`window.__trickLabStore` under ?debug),
 // not from the frameloop. The endpoint frame is the one that draws the
@@ -383,10 +394,31 @@ async (page) => {
     p.evaluate(() => {
       const s = window.__trickLab.get();
       const gl = s.gl;
+      // Per drawn frame, on either renderer: the frame's whole work, and the interval from the frame
+      // before when the two came on consecutive animation frames (a run of frames, not a wake-up).
+      const frames = { work: [], interval: [] };
+      if (!gl.__measured) {
+        const perf = window.__trickLabPerf;
+        let seenFrame = perf.frames;
+        let lastDrew = false;
+        let lastAt = 0;
+        const tick = (now) => {
+          const drew = perf.frames !== seenFrame;
+          seenFrame = perf.frames;
+          if (drew) {
+            if (typeof perf.workMs === 'number') window.__times.work.push(perf.workMs);
+            if (lastDrew) window.__times.interval.push(now - lastAt);
+          }
+          lastDrew = drew;
+          lastAt = now;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
       if (gl.isWebGPURenderer) {
         // Timestamp queries, resolved once per frame PerfProbe drew (the resolve sums every pass of it).
         const timed = gl.backend && gl.backend.trackTimestamp && gl.hasFeature('timestamp-query');
-        window.__times = { cpu: [], gpu: [], pending: [], ext: timed };
+        window.__times = { cpu: [], gpu: [], pending: [], ext: timed, ...frames };
         if (gl.__measured) return;
         gl.__measured = true;
         // A frame can be several render calls (the effects' passes, ADR-51): PerfProbe times the whole frame.
@@ -408,7 +440,7 @@ async (page) => {
       }
       const ctx = gl.getContext();
       const ext = ctx.getExtension && ctx.getExtension('EXT_disjoint_timer_query_webgl2');
-      window.__times = { cpu: [], gpu: [], pending: [], ext: !!ext };
+      window.__times = { cpu: [], gpu: [], pending: [], ext: !!ext, ...frames };
       if (gl.__measured) return;
       gl.__measured = true;
       const render = gl.render.bind(gl);
@@ -441,6 +473,8 @@ async (page) => {
     p.evaluate(() => {
       window.__times.cpu.length = 0;
       window.__times.gpu.length = 0;
+      window.__times.work.length = 0;
+      window.__times.interval.length = 0;
     });
 
   const readTimes = (p) =>
@@ -450,9 +484,10 @@ async (page) => {
         if (!xs.length) return null;
         const s = [...xs].sort((a, b) => a - b);
         const at = (q) => s[Math.min(s.length - 1, Math.floor(q * s.length))];
-        return { n: s.length, median: Math.round(at(0.5) * 100) / 100, p95: Math.round(at(0.95) * 100) / 100 };
+        const r = (x) => Math.round(x * 100) / 100;
+        return { n: s.length, median: r(at(0.5)), p95: r(at(0.95)), max: r(s[s.length - 1]) };
       };
-      return { cpu: stat(w.cpu), gpu: w.ext ? stat(w.gpu) : 'unavailable' };
+      return { cpu: stat(w.cpu), gpu: w.ext ? stat(w.gpu) : 'unavailable', work: stat(w.work) ?? 'unavailable', interval: stat(w.interval) };
     });
 
   /**
@@ -622,17 +657,17 @@ async (page) => {
     }
   md.push(
     '',
-    '| Tier | Screen | Renderer | Draw calls | Triangles | Frameloop | Textures | Render CPU, median / p95 | GPU, median / p95 | Landing: frames to idle / after idle |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Tier | Screen | Renderer | Draw calls | Triangles | Frameloop | Textures | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Landing: frames to idle / after idle |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   );
   // Times: the lab's are over the timed tricks, the welcome screen's over its looping preview.
   for (const r of out.rows)
     for (const [screen, c] of Object.entries(r.screens)) {
       const t = c.trick;
-      const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} ms` : x ?? '');
+      const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} / ${x.max} ms` : x ?? '');
       const l = t && t.landing;
       const landing = !l ? '' : l.dropped ? `dropped (${l.dropped})` : `${l.toIdle ?? 'n/a'} / ${l.afterIdle}`;
-      md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${landing} |`);
+      md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t ? ms(t.work) : ''} | ${t ? ms(t.interval) : ''} | ${landing} |`);
     }
   if (switches === 'all') {
     const names = Object.keys(out.rows[0]?.switches ?? {});
@@ -640,6 +675,40 @@ async (page) => {
     for (const r of out.rows) {
       const v = names.map((n) => r.switches[n]);
       md.push(`| ${r.tier} | ${v.join(' | ')} | ${Math.max(...v)} |`);
+    }
+  }
+  // The targets (ADR-62), over the lab's timed tricks: a tier passes when every number it could measure is inside its target.
+  const TARGETS = {
+    high: { gpu: 4, work: 4, interval: 20, calls: 60 },
+    medium: { gpu: 3, work: 4, interval: 20, calls: 40 },
+    low: { gpu: 2, work: 4, interval: 20, calls: 20 },
+  };
+  out.targets = [];
+  for (const r of out.rows) {
+    const T = TARGETS[r.tier];
+    const t = r.screens.lab && r.screens.lab.trick;
+    if (!T || !t) continue;
+    const check = (x, key, limit) => (x && typeof x === 'object' ? { value: x[key], limit, pass: x[key] < limit } : { value: null, limit, pass: null });
+    const most = switches === 'all' ? Math.max(...Object.values(r.switches)) : r.screens.lab.calls;
+    out.targets.push({
+      tier: r.tier,
+      gpu: check(t.gpu, 'p95', T.gpu),
+      work: check(t.work, 'p95', T.work),
+      longest: check(t.interval, 'max', T.interval),
+      calls: { value: most, limit: T.calls, pass: most < T.calls },
+    });
+  }
+  out.pass = out.targets.length > 0 && out.targets.every((t) => [t.gpu, t.work, t.longest, t.calls].every((c) => c.pass !== false));
+  if (out.targets.length) {
+    const cell = (c, unit) => (c.pass === null ? `not measured (under ${c.limit}${unit})` : `${c.value}${unit} of under ${c.limit}${unit}: ${c.pass ? 'pass' : 'FAIL'}`);
+    md.push(
+      '',
+      `| Tier | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, ${switches === 'all' ? 'every switch on' : 'as loaded'} | Targets |`,
+      '| --- | --- | --- | --- | --- | --- |',
+    );
+    for (const t of out.targets) {
+      const ok = [t.gpu, t.work, t.longest, t.calls].every((c) => c.pass !== false);
+      md.push(`| ${t.tier} | ${cell(t.gpu, ' ms')} | ${cell(t.work, ' ms')} | ${cell(t.longest, ' ms')} | ${cell(t.calls, '')} | ${ok ? 'pass' : 'FAIL'} |`);
     }
   }
   out.markdown = md.join('\n');

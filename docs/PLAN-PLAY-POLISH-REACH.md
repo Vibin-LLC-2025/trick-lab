@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 5 are committed. Step 6 is next.
+- Steps 1 to 6 are committed. Step 7 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 41 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 42 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -59,7 +59,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 41 commits a
 | c297ea4 | 4: one texture decoder instead of two |
 | 470bdc1 | This revision of the plan |
 | 9b7c140 | A memory leak fix the long-run test found: shared materials are freed with each Canvas |
-| this commit | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
+| e6ab283 | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
+| this commit | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -114,7 +115,7 @@ Reference machine: the owner's desktop (RTX 3060), Chromium, 1440 x 900, the bui
 | | High (the design target) | Medium | Low (frozen) |
 | --- | --- | --- | --- |
 | Who it is for | A desktop or laptop with a real graphics chip | A laptop with built-in graphics | Old or weak machines |
-| Graphics time per frame, in a trick and while rolling | under 4 ms | under 3 ms | as today (about 1 ms) |
+| Graphics time per frame, in a trick and while rolling | under 4 ms | under 3 ms | under 2 ms (step 6: "as today, about 1 ms" would fail by timer noise alone) |
 | The app's own work per frame | under 4 ms | under 4 ms | under 4 ms |
 | Longest single frame, after the first second on screen | 16.7 ms | 16.7 ms | 16.7 ms |
 | Draw calls, every switch on | under 60 | under 40 | under 20, unchanged |
@@ -174,12 +175,13 @@ The measurement, Medium back under its cap, the download budget, and one texture
 - **In `.github/workflows/verify.yml`:** the quick checks are one job and the long-run test its own, both on the build `verify` uploads. They have not run in CI yet: that happens on the first push.
 - **Docs and ADR-61.** The practical notes from the temporary hand-off note are now in `docs/AGENT-WORKFLOW.md`.
 
-### 6. New targets, written down
+### 6. New targets, written down. Done (ADR-62)
 - **An ADR (ADR-62)** records the owner's change of aim and the targets above, and why the caps moved: the target device changed, not a failing check.
 - **Docs in the same commit:** BRIEF.md's opening, ROADMAP.md's ground rule, CLAUDE.md's intro, rule 14 and the verify loop, PERF-BUDGET.md's target table.
 - **The browser check's caps** (`browser/ledger.spec.ts`) move to under 60, 40 and 20.
 - **The measurement** (`scripts/measure/measure.js`) reports the longest frame and the frame-time spread, not only the middle value.
-- **Done when** a run on today's build prints the new table and passes it.
+- **Done when** a run on today's build prints the new table and passes it. It does (PERF-BUDGET.md, "Step 6"): High 1.05 ms of graphics time and 1.4 ms of work, Medium 0.66 and 1.0, Low 0.2 and 0.7, at the 95th percentile.
+- **Two things settled while building it.** The longest-frame gate is under 20 ms (16.7 ms plus timer jitter; the reference browser draws at 120 frames a second). The app's own work is a new number, `perfStats.workMs`: FlightDriver's pose and the draw together.
 
 **Merge point.** The game of SKATE and the look-and-feel work are finished and not live. This is a good moment to merge `look-feel-perf` (with the leak fix) to `main`.
 

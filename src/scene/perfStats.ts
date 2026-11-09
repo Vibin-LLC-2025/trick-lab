@@ -17,6 +17,10 @@ export const perfStats = {
   /** Whether that root has finished starting up (rootReadiness.ts). */
   ready: false,
   renderMs: 0,
+  /** When this frame's work began: R3F's before-effect, ahead of every useFrame (PerfProbe). */
+  frameStart: 0,
+  /** The frame's whole work on the main thread, from that start to the end of its render: FlightDriver and the draw (ADR-62). */
+  workMs: 0,
   drawCalls: 0,
   triangles: 0,
   geometries: 0,

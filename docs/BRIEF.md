@@ -1,5 +1,7 @@
 # trick-lab: shared build brief (written 2026-11-04)
 
+**Changed 2026-11-09 (ADR-62).** This brief describes the project as it began: a lab for students on low-end Chromebooks. The owner's aim has moved: the game of SKATE, the assets and graphics, performance and how the game feels come first, designed for good hardware (a desktop or laptop with a real graphics chip). The lab stays, as the exact and repeatable experiment, and everything below about accessibility, the event log and the pure physics still holds. Where this brief says "under 20 draw calls" or "low-end Chromebooks", read `docs/PERF-BUDGET.md`, "Targets": Low keeps that budget as a frozen fallback, and High and Medium have frame-time targets. The plan in progress is `docs/PLAN-PLAY-POLISH-REACH.md`.
+
 Purpose: a browser-based 3D virtual lab by Dylan Adams-Hegarty where
 students run an experiment and get assessed, on low-end Chromebooks. Stack:
 React 19, React Three Fiber (Three.js), Zustand, Vite, TypeScript,

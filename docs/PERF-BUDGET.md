@@ -2,6 +2,26 @@
 
 Target device (quality pass, 2026-11-04, ADR-16): a desktop with a real GPU on High; a mid-range laptop on Medium; a low-end Chromebook (integrated GPU, 4 GB RAM, often throttled) on Low, which keeps the original budget below unchanged. Written 2026-11-04; re-measured 2026-11-04 after the realistic board pass and again after the quality pass (last section).
 
+## Targets (2026-11-09, ADR-62)
+
+The design target is good hardware. High is what the game is designed for, Medium is for built-in graphics, and Low is a frozen fallback. The question is whether it stays smooth, measured as time per frame on the reference machine (the owner's desktop, an RTX 3060, Chromium, 1440 x 900, the build served by `scripts/measure/serve.ts`). These replace the "under 20 draw calls" budget below for High and Medium; Low keeps it.
+
+| | High (the design target) | Medium | Low (frozen) |
+| --- | --- | --- | --- |
+| Who it is for | A desktop or laptop with a real graphics chip | A laptop with built-in graphics | Old or weak machines |
+| Graphics time per frame, in a trick and while rolling | under 4 ms | under 3 ms | under 2 ms |
+| The app's own work per frame | under 4 ms | under 4 ms | under 4 ms |
+| Longest single frame, after the first second on screen | 16.7 ms | 16.7 ms | 16.7 ms |
+| Draw calls, every switch on | under 60 | under 40 | under 20 |
+| New features | all | all but real shadows, motion blur and glow | none, except rolling |
+
+- **Read by the measurement** (`scripts/measure/measure.js`, "How to measure" below): the 95th percentile of the graphics time and of the app's work over the lab's timed tricks, and the longest interval between frames (gate: under 20 ms, which is 16.7 ms plus timer jitter). Its last table says pass or fail per tier.
+- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 34, Medium 19, Low 12 today).
+- **Downloads keep their budget** (`npm run bundle:check`).
+- **Medium's target is a stand-in:** it is measured on the reference machine with Medium chosen, not on built-in graphics.
+
+The sections below are the history: the original Chromebook budget and every measurement since.
+
 ## Frame budget
 
 At 60 fps a frame has **16.7 ms**. The app's own work per frame (FlightDriver, React commits, `gl.render`) should stay under about **8 ms** on the target. A trick lasts 0.35 to 0.70 s at real speed (1.4 to 2.8 s in slow motion), so the loop runs only for that long per pop.
@@ -63,6 +83,8 @@ The options are the query of the page the session is on (tiers, networks, screen
 - reads landings from the store (`window.__trickLabStore` under `?debug`), not the frameloop: the endpoint is the frame that draws the landing; counted are the frames from it to the point where R3F reports no pending frame (at most the one the landing's write queued) and the frames after that point over 1.5 s (must be 0);
 - measures a Canvas once it is ready: `__trickLabPerf.root` numbers each Canvas mount and `__trickLabPerf.ready` says when that root's startup is finished (`src/scene/rootReadiness.ts`: revealed, its effects made, every model on screen, `stageReady` published);
 - reports the Chromium-only probes (throttling, CPU slowdown, the cache switch) as unavailable in other browsers. GPU time is reported only where the browser exposes a timer.
+
+**From 2026-11-09 (step 6, ADR-62)** it reports the spread, not only the middle: for the render CPU time, the GPU time, the frame's whole work (`perfStats.workMs`, from R3F's before-effect to the end of the draw) and the interval between frames, the median, the 95th percentile and the longest. A last table checks each tier against the targets above (`targets` and `pass` in the JSON).
 
 Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
 
@@ -582,3 +604,27 @@ Those counts are the hard check: at a tier they must equal its first sample. The
 - **The leak.** Shared materials were freed only when the whole scene went away, so each tier change kept the last renderer's programs alive through the dispose listeners it had put on them. With the fix the growth without compiled code halved; what is left is mostly the event log, which keeps every trick by design (ADR-7).
 - **About 1 MB of the total is V8's compiled code** warming up over four tier changes (a heap snapshot diff by node type), not a leak.
 - **The limit on the total is 4 MB**, about twice the measurement, for slower and noisier CI machines. It is loose on purpose: the two builds above differ by 0.3 MB of total heap, less than run-to-run noise would be on another machine, so the heap check catches only a large leak, and the counts catch a leaked model, map or shared resource exactly. The run prints its growth, so a CI log shows how close to the limit it came.
+
+### Step 6: the new targets (ADR-62)
+
+The measurement on this step's build, 2026-11-09 (Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, dark theme, cold visits at full speed, four timed kickflips per tier). The browser draws at 120 frames a second here, so a frame interval is 8.3 ms.
+
+| Tier | Screen | Draw calls | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Landing: frames to idle / after idle |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| high | home (the preview) | 30 | 0.6 / 1.3 / 4 ms | 0.66 / 1.7 / 2.1 ms | 0.6 / 1.4 / 4.4 ms | 8.3 / 8.4 / 8.5 ms | |
+| high | lab | 31 | 0.6 / 1.4 / 2.8 ms | 0.79 / 1.05 / 1.57 ms | 0.7 / 1.4 / 3.4 ms | 8.3 / 8.4 / 16.6 ms | 1 / 0 |
+| medium | home (the preview) | 16 | 0.5 / 1.3 / 2.4 ms | 0.52 / 0.66 / 0.66 ms | 0.6 / 1.4 / 2.5 ms | 8.3 / 8.4 / 8.5 ms | |
+| medium | lab | 17 | 0.4 / 0.8 / 1.4 ms | 0.59 / 0.66 / 1.77 ms | 0.5 / 1 / 1.6 ms | 8.3 / 8.4 / 8.6 ms | 1 / 0 |
+| low | lab | 10 | 0.2 / 0.4 / 0.9 ms | 0.18 / 0.2 / 3.25 ms | 0.3 / 0.7 / 1.8 ms | 8.3 / 8.4 / 8.5 ms | 1 / 0 |
+
+The targets table the script prints:
+
+| Tier | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, every switch on | Targets |
+| --- | --- | --- | --- | --- | --- |
+| high | 1.05 ms of under 4 ms: pass | 1.4 ms of under 4 ms: pass | 16.6 ms of under 20 ms: pass | 34 of under 60: pass | pass |
+| medium | 0.66 ms of under 3 ms: pass | 1 ms of under 4 ms: pass | 8.6 ms of under 20 ms: pass | 19 of under 40: pass | pass |
+| low | 0.2 ms of under 2 ms: pass | 0.7 ms of under 4 ms: pass | 8.5 ms of under 20 ms: pass | 12 of under 20: pass | pass |
+
+- **One frame on High took two refreshes** (16.6 ms) in four tricks: inside the target. Nothing took three.
+- **The app's own work is nearly all the render call:** the work is 0.1 ms above the render CPU time, which is FlightDriver's pose.
+- **Loading is unchanged:** the complete scene at 1.07 s on High, 1.02 s on Medium, 0.45 s on Low, cold at full speed.

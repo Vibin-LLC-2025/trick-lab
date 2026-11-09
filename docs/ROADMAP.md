@@ -2,7 +2,9 @@
 
 Where Trick Lab goes next (written 2026-11-04). Trick Lab is a portfolio piece, so the next work goes into visual quality and new tricks on a typical laptop. Running well on Chromebooks and other low-end devices stays supported as a lower quality level, planned step by step below, and is not the thing that holds the design back.
 
-The ground rule for both lists: **every new visual feature gets an off switch, and the Low setting uses it.** The look can then grow without shutting out weak devices.
+The ground rule for both lists was: **every new visual feature gets an off switch, and the Low setting uses it.** The look could then grow without shutting out weak devices.
+
+**Changed 2026-11-09 (ADR-62).** The owner's aim moved to the game of SKATE, the graphics, performance and how the game feels, on good hardware. The rule is now: **High is the design target, and Low is a frozen fallback that does not get new features** (rolling is the one exception). A new switch is added only where a player would want one. The tight draw-call caps became frame-time targets (`docs/PERF-BUDGET.md`, "Targets"). The work in progress is `docs/PLAN-PLAY-POLISH-REACH.md`; the Chromebook list below is parked.
 
 ## Where things stand
 

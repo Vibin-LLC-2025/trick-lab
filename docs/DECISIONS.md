@@ -658,3 +658,32 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **A leak it found.** The shared materials in `resources.ts` were freed only when `TrickScene` unmounted, although rule 7 said "when the Canvas unmounts", and a tier change remounts only the Canvas. Each renderer that draws a shared material adds a dispose listener to it, and the listener holds that renderer's program cache (the heap snapshot's retainer path: the material's `_listeners.dispose`, a closure, the program cache). So every tier change kept the last renderer's programs alive. Fixed in 9b7c140: `SharedResources`, inside the Canvas, frees them when that Canvas unmounts, and the TSL twins are freed only by the renderer that registered them, since the next Canvas's renderer can register its own before the old Canvas has unmounted. Rule 7 now says so. Over the long run the heap without compiled code grew 530 KB before the fix and 260 KB after (PERF-BUDGET.md, step 5).
 
 **Consequence.** Any step that touches the 3D view or the game runs `npm run test:browser` as well as `verify`. The checks take about 4 minutes here. They prove counts and frames, not the picture: a visual change is still looked at in a real browser with a GPU, on every tier. The first run in CI happens when the branch is pushed; until then the CI jobs are unproven.
+
+## ADR-62: Good hardware is the design target: frame-time targets replace the tight draw-call caps, and Low is frozen (2026-11-09)
+
+**Context.** Step 6 of `docs/PLAN-PLAY-POLISH-REACH.md`. The owner changed the project's aim on 2026-11-09: the lab, students and Chromebooks matter less, and the work goes into the game of SKATE, the assets and graphics, performance, and how the game feels. Until now every tier but High had to stay under 20 draw calls (the original Chromebook budget, ADR-16), and ROADMAP.md's ground rule gave every new visual feature an off switch that Low used. Medium drew 19 of its 20, so the plan's rolling wheels, skate spot and dust could not be added to it. No check was failing: the device the app is designed for changed.
+
+**Decision.**
+- **High is what the game is designed for:** a desktop or laptop with a real graphics chip. **Medium** is for a laptop with built-in graphics and gets every new feature except real shadows, motion blur and glow. **Low is frozen:** a simple fallback for old or weak machines that keeps its look and its cap, and gets no new feature except rolling (a sliding texture costs almost nothing).
+- **The question is "does it stay smooth", measured as time per frame**, on the reference machine (the owner's desktop, an RTX 3060, Chromium, 1440 x 900, the build served by `scripts/measure/serve.ts`):
+
+  | | High | Medium | Low |
+  | --- | --- | --- | --- |
+  | Graphics time per frame, in a trick and while rolling | under 4 ms | under 3 ms | under 2 ms |
+  | The app's own work per frame | under 4 ms | under 4 ms | under 4 ms |
+  | Longest single frame, after the first second on screen | 16.7 ms | 16.7 ms | 16.7 ms |
+  | Draw calls, every switch on | under 60 | under 40 | under 20, unchanged |
+
+- **How each is read.** `scripts/measure/measure.js` now reports, over the lab's timed tricks, the median, the 95th percentile and the longest of: the graphics time (a GPU timer query), the app's own work (`perfStats.workMs`: from R3F's before-effect to the end of the draw, so FlightDriver's pose and the render call together; one more `performance.now()` a frame), and the interval between frames. Its last table checks the 95th percentile of the first two and the longest interval against the targets and says pass or fail. The longest-frame gate is under 20 ms: 16.7 ms plus the timer's jitter. On a 60 Hz display that fails on any missed refresh (33.3 ms); on a 120 Hz one, as the reference machine's browser runs, one missed refresh (16.7 ms) passes and two (25 ms) fail.
+- **Low's graphics target is under 2 ms.** The plan said "as today (about 1 ms)". Today's Low measures 0.2 to 1.0 ms depending on the run, and GPU timer results move by 0.3 ms or more between runs of one build (PERF-BUDGET.md, "How to measure"), so a 1 ms gate would fail by chance. 2 ms still fails if Low doubles.
+- **Draw calls stay a gate, with room.** The browser checks enforce the caps (`GATE` in `browser/helpers.ts`: 60, 40, 20) and the expected worst case with every switch on (`LEDGER`: 34, 19, 12 today), which moves only in the commit of a step that adds or removes a draw.
+- **Downloads keep their budget** (`npm run bundle:check`): the target device changed, not the network.
+- **The ground rule changes.** "Every new visual feature gets an off switch, and the Low setting uses it" becomes: Low does not get new features, and a new switch is added only where a player would want one.
+
+**Measured** (2026-11-09, this step's build, feet on, dark theme; the whole table is in PERF-BUDGET.md, "Step 6"): High 1.05 ms of graphics time, 1.4 ms of work, longest interval 16.6 ms, 34 draw calls; Medium 0.66 ms, 1.0 ms, 8.6 ms, 19; Low 0.2 ms, 0.7 ms, 8.5 ms, 12. Every tier passes.
+
+**Consequence.**
+- Medium has room for 20 more draw calls and High for 25, which the plan's steps 12, 14 and 19 use 3 and 4 of.
+- **Medium's target is a stand-in.** It is measured on the reference machine with Medium chosen, not on built-in graphics. One game on a real laptop (step 20) is worth more than the number.
+- The automatic step-down (ADR-59) still protects a device that cannot keep up: it judges real tricks at 40 ms a frame, far above these targets.
+- CLAUDE.md's rule 14 and verify loop, BRIEF.md's opening, ROADMAP.md's ground rule and PERF-BUDGET.md's targets say the same from this commit.
