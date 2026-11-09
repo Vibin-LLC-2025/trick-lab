@@ -641,8 +641,8 @@ Fine per-pixel grain is what PNG cannot compress, so the grain is smooth noise a
 | --- | --- |
 | Ground on Medium and High | `ground.glb` (lazy chunk sharing the GLTF loader, preloaded at once, `dispose={null}`), receives the shadow on High |
 | Ground on Low, and the fallback | an untextured `PlaneGeometry` of the same size in `resources.ts`, `#616466`, roughness `0.93`, one draw call. A ground that fails to load falls back to it without marking the board as failed |
-| Ground anisotropy (`ART.quality[tier].groundAnisotropy`) | High `16`, Medium `8` (the board's Medium is 4; the ground is seen at grazing angles), Low `1` (unused) |
-| Fog | `Fog(clearColor[theme], 5.5, 15)`; the colour equals `--scene-bg` and switches with the theme. Near: the farthest flight-box corner from the farthest camera is 5.3 m. Far: the nearest visible point of the plane edge from the lowest orbit is 16.3 m in the worst case (both tested) |
+| Ground anisotropy (`ART.quality[tier].groundAnisotropy`) | High `16`, Medium `8` (the board's Medium is 4; the ground is seen at grazing angles), Low `4` (its joint texture, ADR-54; was `1` and unused while Low's ground had no texture) |
+| Fog | `Fog(clearColor[theme], 5.5, 15)`; the colour equals `--scene-bg` and switches with the theme. By the distance from the camera, not view depth (ADR-55, 2026-11-09). Near: the farthest flight-box corner from the farthest camera is 5.3 m. Far: the nearest visible point of the plane edge, from the lowest orbit and the welcome camera, is at least 19 m on any stage from 0.5:1 to 50:1 (both tested) |
 | Environment scene | sky dome radius `10`, 48 x 32 segments, zenith `#8d9cae`, horizon `#d0d2d1`, gradient exponent `0.55`; concrete below `#6b6a66` at `0.55`, blended over `0.06` of the radius under the horizon; sun disc `#fff1e0` at `40`, angular radius `0.05` rad, in the key light's direction. PMREM blur `0.04`, `environmentIntensity` `0.90` |
 | Hemisphere light | sky `#dde2e6`, ground `#6b6a66`, `0.35` |
 | Key light | `#fff1e0`, `2.7`, position and target unchanged |

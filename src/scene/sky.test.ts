@@ -75,7 +75,8 @@ describe('the sky dome', () => {
       expect(elevation).toBeGreaterThanOrEqual(-S.dome.below - 1e-5);
       if (Math.abs(r - S.dome.radius) < 1e-4) sky++;
       else {
-        expect(r).toBeCloseTo(S.dome.radius * 0.99, 4);
+        expect(r).toBeCloseTo(S.dome.radius * S.skyline.radius, 4);
+        expect(S.skyline.radius).toBeLessThan(1);
         expect(elevation).toBeLessThanOrEqual(S.skyline.height[1] + 1e-5);
         city++;
       }
@@ -111,9 +112,11 @@ describe('the welcome camera sees the sky but not the end of the ground', () => 
     const cam = new PerspectiveCamera(C.fov, 1, C.near, C.far);
     const ray = new Vector3();
     const hit = new Vector3();
-    const view = new Vector3();
     let nearestEdge = Infinity;
-    for (const aspect of [0.5, 1, 1.6, 2.2]) {
+    // To 50:1: a 2560 x 400 window's welcome stage is about 5.5:1, where by
+    // view depth the edge showed 10 m deep (review of Phase C, 2026-11-09).
+    // The fog is by distance from the camera (ADR-55).
+    for (const aspect of [0.5, 1, 1.6, 2.2, 3.6, 5.5, 10, 50]) {
       const d = fitDistance({ from: V.position, target: V.target, fov: C.fov, aspect, points: framingPoints(C.fit), margin: C.fit.margin });
       cam.aspect = aspect;
       cam.position.copy(target).addScaledVector(dir, d);
@@ -126,8 +129,7 @@ describe('the welcome camera sees the sky but not the end of the ground', () => 
           if (ray.y >= 0) continue;
           hit.copy(cam.position).addScaledVector(ray, -cam.position.y / ray.y);
           if (Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2)) < 0.97) continue;
-          view.copy(hit).applyMatrix4(cam.matrixWorldInverse);
-          nearestEdge = Math.min(nearestEdge, -view.z);
+          nearestEdge = Math.min(nearestEdge, hit.distanceTo(cam.position));
         }
     }
     expect(nearestEdge).toBeGreaterThan(ART.fog.far);

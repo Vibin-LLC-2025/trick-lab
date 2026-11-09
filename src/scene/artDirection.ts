@@ -50,7 +50,8 @@ export const QUALITY: Record<
      * The ground's maps (ground pass, 2026-11-04, ADR-31). The ground is seen
      * at grazing angles over most of the frame in a low orbit, where the
      * board's 4x on Medium leaves the slabs past a few metres a blur, so
-     * Medium gets 8x. Low draws an untextured plane, so its 1 is unused.
+     * Medium gets 8x. Low's is its slab joint texture's (ADR-54): 4x, as
+     * designed; it was 1 and unused while Low's ground had no texture.
      */
     groundAnisotropy: number;
     powerPreference: 'high-performance' | 'low-power';
@@ -58,7 +59,7 @@ export const QUALITY: Record<
 > = {
   high: { renderer: 'webgpu', antialias: true, dpr: [1, 2], shadows: true, environment: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
   medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: false, environment: true, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
-  low: { renderer: 'webgl', antialias: true, dpr: [1, 1], shadows: false, environment: false, anisotropy: 1, groundAnisotropy: 1, powerPreference: 'low-power' },
+  low: { renderer: 'webgl', antialias: true, dpr: [1, 1], shadows: false, environment: false, anisotropy: 1, groundAnisotropy: 4, powerPreference: 'low-power' },
 };
 
 export const ART = {
@@ -97,6 +98,8 @@ export const ART = {
       setbackChance: 0.4,
       setback: [0.45, 0.8] as readonly [number, number],
       strength: 0.32,
+      /** The city's quads sit at this fraction of the dome's radius, just inside the sky. */
+      radius: 0.99,
     },
     dome: { radius: 25, below: 8, rings: [-8, 0, 1.5, 4, 8, 14, 22, 32, 45, 60, 75, 90] as readonly number[], azimuthSegments: 72 },
   },
@@ -147,16 +150,19 @@ export const ART = {
   quality: QUALITY,
   /**
    * Linear fog to the clear colour (ground pass, 2026-11-04, ADR-31), so the
-   * ground fades into the background instead of ending at an edge. three's
-   * Fog is smoothstep(near, far, view depth). `near` 5.5 m: the farthest
-   * point of the flight box (a deck corner at the top of a 0.6 m pop) from
-   * the farthest allowed camera (maxDistance 4.5 m; 1.25 times the fit is
-   * less, even on the narrowest stage) is 5.3 m, so the board, the feet and
-   * the trails are never fogged. `far` 15 m: from the lowest orbit
-   * (maxPolarAngle 1.25 rad, whose frame reaches the horizon) the nearest
-   * visible point of the plane's edge is 16.3 m deep in the worst case (a
-   * 2.2:1 stage at minDistance), so the edge is never seen. Both are tested
-   * in artDirection.test.ts. Colour per theme is the clear colour, nothing else.
+   * ground fades into the background instead of ending at an edge:
+   * smoothstep(near, far, distance from the camera). By distance, not
+   * three's view depth (ADR-55, 2026-11-09, rangeFog.ts): a desktop stage
+   * has no widest shape, and by depth a 5.5:1 stage saw the edge 10 m deep.
+   * `near` 5.5 m: the farthest point of the flight box (a deck corner at the
+   * top of a 0.6 m pop) from the farthest allowed camera (maxDistance 4.5 m;
+   * 1.25 times the fit is less, even on the narrowest stage) is 5.3 m, so the
+   * board, the feet and the trails are never fogged. `far` 15 m: from the
+   * lowest orbit (maxPolarAngle 1.25 rad, whose frame reaches the horizon)
+   * and from the welcome camera, the nearest visible point of the plane's
+   * edge is at least 19 m away on any stage from 0.5:1 to 50:1, so the edge
+   * is never seen. Tested in artDirection.test.ts and sky.test.ts. Colour
+   * per theme is the clear colour, nothing else.
    */
   fog: { color: SCENE_BG, near: 5.5, far: 15 },
   /**
@@ -434,7 +440,12 @@ export const ART = {
     wood: { color: '#cdb68c' },
     trucks: { color: '#a9adb3' },
     wheels: { color: '#efe9dc', segments: 16 },
-    primitive: { roughness: 0.6, metalness: 0.15 },
+    /**
+     * The primitive board's one standard material (the Medium and High
+     * fallback), and its yoke's width across the board as a multiple of the
+     * axle housing's diameter (ADR-54).
+     */
+    primitive: { roughness: 0.6, metalness: 0.15, yokeWidth: 1.4 },
   },
   /**
    * Low, designed (ADR-54, 2026-11-09): flat, toon-like shading in clean
@@ -442,8 +453,9 @@ export const ART = {
    * (MeshToonMaterial) over `gradient`'s steps of light, so a surface is lit,
    * half lit or in shade; colours are the board's and the shoes' own. The
    * ground is `ground.color` with dark slab joints (`joint`: colour and width
-   * as a fraction of a bay, about 2 cm), a 256 px texture repeated once per bay, so the
-   * board still rests centred in a bay. No environment map on Low (about 80
+   * as a fraction of a bay, about 2 cm), a 256 px texture repeated once per
+   * bay, so the board still rests centred in a bay, filtered at Low's
+   * `groundAnisotropy`. No environment map on Low (about 80
    * ms of startup on a throttled Chromebook, measured 2026-11-04).
    */
   low: {

@@ -48,8 +48,8 @@ export function skyDomeGeometry(theme: Theme): THREE.BufferGeometry {
       index.push(a, c, b, b, c, d);
     }
   }
-  // The city: a quad per block (two where it has a setback), at 0.99 of the radius.
-  const inner = D.radius * 0.99;
+  // The city: a quad per block (two where it has a setback), just inside the sky.
+  const inner = D.radius * ART.sky.skyline.radius;
   const quad = (from: number, to: number, roof: number) => {
     const base = position.length / 3;
     onDome(position, 0, from, inner);

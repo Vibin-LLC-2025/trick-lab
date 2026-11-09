@@ -10,6 +10,7 @@ import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
 import { frame, perfStats } from './perfStats';
+import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
 import { isNodeRenderer } from './rendererKind';
 import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
@@ -22,6 +23,8 @@ import { skyDomeGeometry } from './skyDome';
 // code delays the first frame by sharing the bandwidth (measured 2026-11-09).
 const start = useTrickStore.getState();
 prefetchModels(modelsFor(start.quality, start.feetVisible));
+// Fog by distance on WebGLRenderer (ADR-55), before any program compiles.
+rangeFogOnWebGL();
 
 /**
  * Store changes that can change the picture (inputs move the feet, and a
@@ -96,6 +99,8 @@ function onCreated(state: RootState) {
   noteRenderer(state.gl);
   // R3F gives ACES; the tone mapping is ART's (ADR-52), on every renderer.
   state.gl.toneMapping = ART.renderer.toneMapping;
+  // Fog by distance (ADR-55): the WebGPURenderer's node, before the first frame compiles.
+  applyRangeFog(state.scene, isNodeRenderer(state.gl));
   if (DEBUG) {
     const w = window as unknown as { __trickLab?: RootState; __trickLabPerf?: typeof perfStats };
     w.__trickLab = state;
@@ -235,7 +240,7 @@ export default function TrickScene() {
     >
       {/* sRGB output from R3F; the tone mapping is ART.renderer.toneMapping, set in onCreated (ADR-52). */}
       <color attach="background" args={[ART.clearColor[theme]]} />
-      {/* Fog to the same colour, so the ground fades into the background (ADR-31). */}
+      {/* Fog to the same colour, so the ground fades into the background (ADR-31), by distance (ADR-55). */}
       <fog attach="fog" args={[ART.fog.color[theme], ART.fog.near, ART.fog.far]} />
       <Sky theme={theme} />
       <Lights shadows={Q.shadows} theme={theme} />

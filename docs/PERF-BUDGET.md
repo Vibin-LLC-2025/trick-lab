@@ -412,3 +412,16 @@ Low against step 8 (6edd17d), three runs each, the welcome screen's first lit fr
 | Startup long tasks over 50 ms (4x CPU) | the PMREM, 188 ms | the first frame's compile, 70 to 98 ms |
 
 The first version of this step kept the asynchronous warm-up without the environment map, and Low's lit scene came 0.5 s later at any CPU speed (the parallel compile, with nothing drawn, reported ready late); it now reveals at once. The measurement script's first-frame watcher also counts a frame drawn in the tick where the content first shows: on a demand loop with nothing else to draw it used to wait for a later frame and report the first frame late.
+
+### Phase C review: fog by distance (ADR-55)
+
+Against step 9 (6395a38) in the same session, two runs each, 1440 x 900, light, the lab, a kickflip:
+
+| | Low | Medium | High |
+| --- | --- | --- | --- |
+| Draw calls | 10 and 10 | 17 and 17 | 31 and 31 |
+| GPU per frame, median, before | 0.87, 0.99 ms | 1.25, 1.11 ms | 0.59, 0.59 ms |
+| GPU per frame, median, after | 1.00, 0.99 ms | 1.05, 1.31 ms | 0.59, 0.59 ms |
+| Frames after a landing | 0 | 0 | 0 |
+
+No change beyond noise: a length per fragment in place of three's negation per vertex. At 2560 x 400 (a 5.5:1 welcome stage, 5.9:1 in the lab) the plane's edge no longer shows on any tier or theme.

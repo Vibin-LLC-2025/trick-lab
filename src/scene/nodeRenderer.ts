@@ -1,12 +1,14 @@
 // The WebGPURenderer path (ADR-50), its own lazy chunk: Medium and High load
 // it, Low never does. It makes the renderer, the TSL twins of the two GLSL
 // materials in resources.ts, and the environment map, since three's WebGL
-// PMREMGenerator cannot run on it. Where the browser has no WebGPU the
-// renderer runs on its own WebGL2 backend, with the same materials.
+// PMREMGenerator cannot run on it, and the range fog (ADR-55). Where the
+// browser has no WebGPU the renderer runs on its own WebGL2 backend, with the
+// same materials.
 import { Color, type Object3D, type Texture } from 'three';
 import { MeshBasicNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
-import { attribute, float, Fn, If, length, max, mix, positionWorld, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
 import { ART, type QUALITY } from './artDirection';
+import { setNodeFog } from './rangeFog';
 import { setNodeMaterials, uniforms } from './resources';
 
 // The effects ride in this chunk (ADR-51).
@@ -80,7 +82,28 @@ export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, tim
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
   setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial() });
+  setNodeFog(rangeFogNode());
   return renderer;
+}
+
+/**
+ * Range fog (ADR-55): the scene's Fog colour, near and far, faded by the
+ * fragment's distance from the camera instead of three's view depth. One
+ * callback per render copies the rendered scene's Fog (TrickScene's <fog>),
+ * so a theme change is a uniform write, not a new node and a recompile.
+ */
+export function rangeFogNode() {
+  const color = uniform(new Color());
+  const near = uniform(0);
+  const far = uniform(1);
+  color.onRenderUpdate(({ scene }) => {
+    const f = scene?.fog;
+    if (!f || !('near' in f)) return;
+    color.value.copy(f.color);
+    near.value = f.near;
+    far.value = f.far;
+  });
+  return fog(color, smoothstep(near, far, positionView.length()));
 }
 
 /** The environment map on a WebGPURenderer: the node PMREMGenerator, the same blur as the WebGL path. */

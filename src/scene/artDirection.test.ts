@@ -65,7 +65,11 @@ describe('fog and ground (ground pass, ADR-31)', () => {
   const F = ART.fog;
   const C = ART.camera;
   const [gx, gz] = ART.ground.size;
-  const fogAt = (depth: number) => MathUtils.smoothstep(depth, F.near, F.far);
+  // By distance from the camera (ADR-55), as both renderers apply it.
+  const fogAt = (distance: number) => MathUtils.smoothstep(distance, F.near, F.far);
+  // A desktop window's stage has no widest shape (2560 x 400 makes about
+  // 5.5:1; review of Phase C, 2026-11-09), so the edge is checked to 50:1.
+  const STAGES = [368 / 744, 1, 1.6, 2.2, 3.6, 5.5, 10, 50];
 
   it('fogs to the clear colour, per theme, and to nothing else', () => {
     expect(F.color).toBe(SCENE_BG);
@@ -84,15 +88,16 @@ describe('fog and ground (ground pass, ADR-31)', () => {
     expect(fogAt(farthest + spread)).toBe(0);
   });
 
-  it('hides the plane edge: from every low orbit, the ground near its edge is fully fogged', () => {
+  it('hides the plane edge: from every low orbit, on every stage shape, the ground near its edge is fully fogged', () => {
     const cam = new PerspectiveCamera(C.fov, 1, C.near, C.far);
     const target = new Vector3(...C.target);
+    const points = framingPoints(C.fit);
     const ray = new Vector3();
     const hit = new Vector3();
-    const view = new Vector3();
     let nearestEdge = Infinity;
-    for (const aspect of [0.5, 1, 1.6, 2.2])
-      for (const distance of [C.minDistance, 2.4, C.maxDistance])
+    for (const aspect of STAGES) {
+      const fit = fitDistance({ from: C.position, target: C.target, fov: C.fov, aspect, points, margin: C.fit.margin });
+      for (const distance of [C.minDistance, 2.4, C.maxDistance, Math.max(C.maxDistance, fit * 1.25)])
         for (let a = 0; a < 16; a++) {
           const az = (a / 16) * Math.PI * 2;
           const polar = C.maxPolarAngle;
@@ -113,10 +118,10 @@ describe('fog and ground (ground pass, ADR-31)', () => {
               hit.copy(cam.position).addScaledVector(ray, t);
               const edge = Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2));
               if (edge < 0.97 || edge > 1) continue;
-              view.copy(hit).applyMatrix4(cam.matrixWorldInverse);
-              nearestEdge = Math.min(nearestEdge, -view.z);
+              nearestEdge = Math.min(nearestEdge, hit.distanceTo(cam.position));
             }
         }
+    }
     expect(nearestEdge).toBeGreaterThan(F.far);
     expect(fogAt(nearestEdge)).toBe(1);
   });

@@ -225,7 +225,7 @@ The runtime then needs a `KTX2Loader` with a self-hosted Basis transcoder. Copy 
 
 **Decision.** Four parts, no new dependency, no post-processing, no extra render pass.
 - A concrete ground built by the asset pipeline (`src/asset/groundSpec.ts`, `groundTextures.ts`, `ground.ts`, built through `scripts/lib/build.ts` into `public/models/ground.glb`): one texture tile is one 1.6 x 1.2 m slab bay (the old pad) with a 12 mm wide, 4 mm deep expansion joint along its edges and a faint worn painted centre mark where the mark mesh was, baked into a 1024 px grey colour map (tinted by the base colour factor, like the medium grip), a 1024 px normal map and a 256 px roughness map; seeded, deterministic, tileable. One 40.0 x 39.6 m quad (25 x 33 bays, odd so a bay centre is under the board) whose UVs repeat the tile by `KHR_texture_transform`. Its own budget: 500 KB, 1 draw call, 64 triangles, 3 textures at 1024 px (measured 434.9 KB, 1, 2, 3); `assets:check` also checks the size (at least 24 m, odd whole bays), the surface on y 0 and the centring. Medium and High load it lazily like the board; Low and the fallback draw an untextured plane of the same size and the concrete's mean colour (one draw call), so Chromebooks download and pay nothing extra. The slab, edge lines and mark mesh are gone on every tier: two draw calls fewer.
-- Linear fog to the clear colour (near 5.5 m, far 15 m), so the ground fades into the background. The fog colour is the clear colour per theme; nothing else about the scene depends on the theme. Near and far are tested against the farthest board point and the nearest visible plane edge.
+- Linear fog to the clear colour (near 5.5 m, far 15 m), so the ground fades into the background. The fog colour is the clear colour per theme; nothing else about the scene depends on the theme. Near and far are tested against the farthest board point and the nearest visible plane edge. (By distance from the camera since ADR-55, 2026-11-09: by view depth, a stage wider than about 3.6:1 saw the plane's edge.)
 - A procedural outdoor environment (`src/scene/outdoorEnvironment.ts`: sky dome with a vertical gradient, a sun disc in the key light's direction, concrete below) prefiltered once through PMREMGenerator exactly as before, and a hemisphere light (sky above, concrete below) instead of the ambient light. Retuned by measuring the canvas: environment 0.90, hemisphere 0.35, key 2.7 (was 2.2; its direction is unchanged, so the High shadow placement holds). The lit ground lands on `#787978` to `#7e7f7e` against the `#7b7a77` target.
 - The Medium and Low footprint was checked on the textured ground and left alone; the wheels' resting spots carry a faint smudge and a little polish in the texture.
 
@@ -517,9 +517,11 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 - **Tone mapping: Khronos Neutral, exposure 1.3** (was ACES at 1.0). Compared side by side with the grade on the welcome screen and the detail view, both themes: AgX washed the picture out; ACES desaturated the sky and moved the deck's orange; Neutral kept the colours as designed. Neutral is darker in the mid-tones, so the exposure rose until the lit concrete measured as before (#6e6f70 at 1.3, #737474 under ACES; dark's golden hour #6c5f53).
 - **The ground** keeps its colour and roughness: the light and the fill were tuned to it instead (above), so no GLB changed.
 
-**Cost.** One draw call on every tier (High 31, Medium 17, Low 13 in the lab); the dome is 1,000 to 1,100 vertices built at mount.
+**Cost.** One draw call on every tier (High 31, Medium 17, Low 13 in the lab); the dome is 1,748 vertices and 2,020 triangles, built at mount.
 
 **Consequence.** `sky.test.ts` covers the colours meeting the fog, the gradient, the city and the dome, and the welcome camera's sky and fogged plane edge.
+
+**Update (Phase C review, 2026-11-09).** The reviewer found the plane's edge showing from the lowered welcome camera on a wide stage (a 2560 x 400 window, 5.5:1): the fog was by view depth and the test stopped at 2.2:1. The fog is now by distance from the camera (ADR-55) and the test runs to 50:1. The city's radius (`ART.sky.skyline.radius`) moved into ART, and the dome's vertex count above is corrected (it was given as 1,000 to 1,100).
 
 ## ADR-53: A lacquered deck print and a suede sheen on High (2026-11-09)
 
@@ -528,7 +530,7 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Decision.**
 - **Clearcoat on the High deck print** (`KHR_materials_clearcoat`, `GRAPHIC_CLEARCOAT` in `src/asset/spec.ts`): factor 0.6, roughness 0.22, a sealed heat-transfer print that catches a second, sharper highlight over the worn graphic. Only `board-high.glb`; the Medium board is unchanged byte for byte.
 - **Sheen on the suede upper** (`KHR_materials_sheen`, `UPPER_SHEEN` in `src/asset/shoeSpec.ts`): colour `#62666d`, roughness 0.55, a soft lift on the edges that turn from the light. `shoes.glb` is High only. A first try at `#8d929a` turned the black shoes dusty grey; at `#62666d` they stay black with a suede edge.
-- Factors only, no texture: the files grow by under 0.1 KB and the asset budgets do not move. The loaders turn both into a physical material on either renderer.
+- Factors only, no texture: the files grow by 120 bytes (`board-high.glb`) and 136 bytes (`shoes.glb`), and the asset budgets do not move. The loaders turn both into a physical material on either renderer.
 
 **Measured** (High, 1440 x 900 and 2560 x 1440, against step 7 in the same session): draw calls unchanged (30 and 31); GPU time unchanged within noise (the welcome loop 1.38 to 1.25 ms and 2.56 to 2.49 ms; the lab 1.11 and 2.82 ms both times). The six poses side by side: the print reads lacquered, the shoes read suede. Kept.
 
@@ -546,3 +548,17 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Result.** Low draws 10 calls in the lab (was 13; gate 20) and downloads no model; see PERF-BUDGET.md, step 9, for the startup.
 
 **Consequence.** `primitiveLift` is gone from ART; the tests that read it (rest height, clearance, the sim's volume, the flight's contact) now read the built geometry or the asset's numbers.
+
+**Update (Phase C review, 2026-11-09).** Two numbers moved into ART: the primitive yoke's width (`ART.board.primitive.yokeWidth`) and the joint texture's filtering, which now reads Low's `groundAnisotropy`. That was 1 and unused while Low's ground had no texture; it is 4, the value the joints were built and checked with.
+
+## ADR-55: Fog by the distance from the camera (2026-11-09)
+
+**Context.** Review of Phase C (ADR-52). three's Fog fades by view depth, the distance along the camera's axis. A desktop stage has no widest shape: a 2560 x 400 window makes the welcome stage 5.5:1, and there a ray toward the frame's side met the ground plane's edge (20 m out) only 10 m deep, two thirds fogged, a hard line under the haze at both ends of the frame. ADR-31's check stopped at a 2.2:1 stage. Measured the same way, the lab's lowest orbit showed the edge from about 3.6:1 (since ADR-31), and so did the welcome camera once ADR-52 lowered it to 8 degrees.
+
+**Decision.** The fog fades by the distance from the camera (range fog), on both renderers, with the same colour, near and far (`ART.fog`, unchanged), in `src/scene/rangeFog.ts`:
+- **WebGLRenderer** (Low, and the fallback): three's four fog chunks, which every built-in material includes (the GLBs' too), hand the view position to the fragment, and the fragment takes its length as the fog's depth; three's own fog factor and mix run unchanged (`rangeFogOnWebGL`, at TrickScene's module load, before any program compiles). Per fragment, not per vertex: the first try wrote the distance per vertex, and since a distance is not linear across a triangle, Low's ground (two triangles with corners 28 m away) came out fully fogged in the browser. If a three upgrade changes a chunk, the edit is skipped with a warning (depth fog) and `rangeFog.test.ts` fails.
+- **WebGPURenderer** (Medium, High): `scene.fogNode`, which three reads before `scene.fog`: three's `fog()` with `smoothstep(near, far, positionView.length())`, per fragment, its colour, near and far copied from the scene's Fog once per render, so a theme change is a uniform write and no recompile (`rangeFogNode` in nodeRenderer.ts, put on the scene in TrickScene's `onCreated`).
+
+**Why not a bigger ground, or a cap on the stage's width.** By depth, any plane fails at some width (at 10:1 a 20 m edge is 6 m deep). Capping the horizontal view either crops the flight or backs the camera off until the board is in the fog. By distance, the nearest visible edge from any allowed camera, the welcome one included, is at least 19 m on every stage from 0.5:1 to 50:1, past `far` (15 m); the farthest board point was already bounded as a distance (5.3 m, inside `near`, 5.5 m), so nothing about the board changes.
+
+**Consequence.** The ground at the frame's sides fogs a little sooner than at its centre, as a real haze does, and the fog no longer swings as the camera turns. The cost is a length per fragment where three did a negation per vertex. `artDirection.test.ts` and `sky.test.ts` check the edge by distance to 50:1 (the 2560 x 400 case included); `rangeFog.test.ts` checks the chunk edits against this three's chunks and in every built-in material's resolved shaders, and that only a node renderer's scene gets the node. Checked in the browser at 2560 x 400, welcome and the lab's lowest orbit, High, Medium and Low, both themes: the edge line is gone, the ground fades evenly into the haze, no console errors.

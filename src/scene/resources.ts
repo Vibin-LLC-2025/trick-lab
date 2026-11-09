@@ -67,7 +67,7 @@ function primitiveHardware() {
   const plateBottom = BP.center[1] - BP.size[1] / 2;
   for (const s of [1, -1]) {
     box(BP.size, s * BP.center[0], BP.center[1], BP.center[2], B.trucks.color);
-    box([AX.size[0], plateBottom - AX.center[1], AX.size[0] * 1.4], s * AX.center[0], (plateBottom + AX.center[1]) / 2, 0, B.trucks.color);
+    box([AX.size[0], plateBottom - AX.center[1], AX.size[0] * B.primitive.yokeWidth], s * AX.center[0], (plateBottom + AX.center[1]) / 2, 0, B.trucks.color);
     box(AX.size, s * AX.center[0], AX.center[1], AX.center[2], B.trucks.color);
     for (const z of [WHEEL.centerZ, -WHEEL.centerZ]) {
       const w = new THREE.CylinderGeometry(WHEEL.radius, WHEEL.radius, WHEEL.width, B.wheels.segments);
@@ -495,7 +495,7 @@ function jointTexture() {
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
-  t.anisotropy = 4;
+  t.anisotropy = ART.quality.low.groundAnisotropy;
   t.needsUpdate = true;
   return t;
 }
