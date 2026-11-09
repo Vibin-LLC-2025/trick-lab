@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTrickStore } from '../store';
 import { newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
-import { flightPace, noteFramesStoreChange, recordFrame, type TrickFrames } from './flightPace';
+import { flightPace, newTrickFrames, noteFramesStoreChange, recordFrame, type TrickFrames } from './flightPace';
 
 const empty = (): TrickFrames => ({ intervals: new Float32Array(900), count: 0, flightId: -1, wasPlaying: false });
 
@@ -169,6 +169,50 @@ describe('the step-down on a slow device, end to end (ADR-59)', () => {
   it.each([60, 30])('never steps a smooth device down for short flights either (%i fps, a 0.15 m pop at 2x)', (fps) => {
     const { s } = playAt(fps, { pop: 0.15, rate: 2, tricks: 12 });
     expect(s.quality).toBe('high');
+  });
+
+  // Second re-check of Phase D (2026-11-09): stalls over a second must not fill the pool and stop the step-down.
+  it('keeps stalls out of the pool, so long stalls never stop a later slow stretch from stepping down', () => {
+    const store = createTrickStore(() => 1000);
+    store.setState({ quality: 'high', qualityAuto: true, paces: [], paceJudged: false });
+    const frames = empty();
+    store.getState().setPaceSource((flightId) => flightPace(frames, flightId));
+    const clock = newFlightClock();
+    store.subscribe((s, prev) => noteStoreChange(clock, s, prev));
+    store.subscribe((s, prev) => noteFramesStoreChange(frames, s, prev));
+    const frame = (delta: number) => {
+      tickFlightClock(clock, store.playhead, store.getState(), delta);
+      const s = store.getState();
+      recordFrame(frames, s.status, s.flightId, delta);
+    };
+    store.getState().applyPreset('kickflip');
+    // Seven 0.6 m flights at 0.05x, every frame a 1.25 s stall: what filled the pool before.
+    store.getState().setInput('pop', 0.6);
+    store.getState().setRate(0.05);
+    for (let t = 0; t < 7; t++) {
+      store.getState().popTrick();
+      for (let i = 0; i < 5000 && store.getState().status === 'playing'; i++) frame(1.25);
+    }
+    expect(frames.count).toBe(0);
+    expect(store.getState().quality).toBe('high');
+    // Then a slow stretch at 15 fps at 1x: it steps down.
+    store.getState().setInput('pop', 0.35);
+    store.getState().setRate(1);
+    for (let t = 0; t < 12 && store.getState().quality === 'high'; t++) {
+      for (let i = 0; i < 3; i++) frame(1 / 15);
+      store.getState().popTrick();
+      for (let i = 0; i < 5000 && store.getState().status === 'playing'; i++) frame(1 / 15);
+    }
+    expect(store.getState().quality).toBe('medium');
+  });
+
+  it('empties a full pool that still cannot be judged, so new evidence can come in', () => {
+    const f = newTrickFrames(4);
+    f.flightId = 1;
+    f.count = 4;
+    f.intervals.set([0, 0, 0, 0]);
+    expect(flightPace(f, 1)).toBeNull();
+    expect(f.count).toBe(0);
   });
 
   // Review of Phase D (2026-11-09): a pause, a scrub and a resume between two frames, on a smooth device.

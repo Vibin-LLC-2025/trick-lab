@@ -2,7 +2,7 @@
 // each frame while a flight plays, and the pace source it registers with the
 // store. The store asks once per landing, outside the frame loop, so the
 // median's sort never runs in a frame.
-import { trickPace } from '../store/pace';
+import { PACE, trickPace } from '../store/pace';
 import type { PlaybackStatus, TrickState } from '../store';
 
 export interface TrickFrames {
@@ -28,13 +28,19 @@ export const newTrickFrames = (max: number): TrickFrames => ({ intervals: new Fl
  * pop, a resume, a tab shown again) is left out, since its interval spans
  * the time before it, when nothing played: a new flight, a store playback
  * change (noteFramesStoreChange) or a hidden tab (PerfProbe) ends the run.
- * No allocation.
+ * A stall over `PACE.ignoreOverMs` is never stored: judging leaves it out
+ * anyway, and kept in the pool it would take a place for nothing (review of
+ * Phase D, 2026-11-09: long stalls filled all 900 places and stopped the
+ * step-down for good). No allocation.
  */
 export function recordFrame(frames: TrickFrames, status: PlaybackStatus, flightId: number, deltaSeconds: number) {
   const playing = status === 'playing';
   if (playing) {
     if (frames.flightId !== flightId) frames.flightId = flightId;
-    else if (frames.wasPlaying && frames.count < frames.intervals.length) frames.intervals[frames.count++] = deltaSeconds * 1000;
+    else if (frames.wasPlaying && frames.count < frames.intervals.length) {
+      const ms = deltaSeconds * 1000;
+      if (ms > 0 && ms <= PACE.ignoreOverMs) frames.intervals[frames.count++] = ms;
+    }
   }
   frames.wasPlaying = playing && frames.flightId === flightId;
 }
@@ -56,13 +62,14 @@ export function noteFramesStoreChange(frames: TrickFrames, s: Pick<TrickState, '
  * interval in ms of the pool, once it covers enough time (store/pace.ts),
  * then the pool starts again; null if the record is not this flight's (it
  * drew no playing frame: a pop resolved at once) or the pool is still short,
- * in which case it carries on into the next flight.
+ * in which case it carries on into the next flight. A full pool is emptied
+ * whatever it gave, so new evidence can always come in.
  */
 export function flightPace(frames: TrickFrames, flightId: number): number | null {
   if (frames.flightId !== flightId) return null;
   frames.flightId = -1;
   frames.wasPlaying = false;
   const pace = trickPace(frames.intervals, frames.count);
-  if (pace !== null) frames.count = 0;
+  if (pace !== null || frames.count >= frames.intervals.length) frames.count = 0;
   return pace;
 }
