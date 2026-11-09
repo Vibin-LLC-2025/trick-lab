@@ -19,6 +19,7 @@ import {
 import type { TrickId } from '../sim/tricks';
 import { useTrickStore, type TrickState } from '../store';
 import { Inputs } from './Inputs';
+import { barPress, CONTROLS_MODE, FlickHint, TimingBar } from './RoughControls';
 import { Toggle } from './Toggle';
 
 /**
@@ -254,22 +255,27 @@ function Controls() {
   const auto = useTrickStore((s) => s.skateAuto);
   const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
   const label = cpu ? "Computer's go" : 'Pop';
+  // ROUGH (step 8): `?controls=flick` has no sliders and no Pop button on the student's go; `?controls=bar` times the Pop.
+  const flick = CONTROLS_MODE === 'flick';
   return (
     <>
-      <Inputs />
+      {flick ? <FlickHint /> : <Inputs />}
       <section className="panel" aria-label="Pop">
         <div className="skate__controls">
           {/* aria-disabled, not disabled: the button stays focusable and explains itself. */}
-          <button
-            type="button"
-            className="btn btn--primary skate__pop"
-            aria-label={label}
-            aria-keyshortcuts="Space"
-            aria-disabled={status === 'playing' || undefined}
-            onClick={popTrick}
-          >
-            {label} <kbd aria-hidden="true">Space</kbd>
-          </button>
+          {(cpu || !flick) && (
+            <button
+              type="button"
+              className="btn btn--primary skate__pop"
+              aria-label={label}
+              aria-keyshortcuts="Space"
+              aria-disabled={status === 'playing' || undefined}
+              onClick={CONTROLS_MODE === 'bar' ? barPress : popTrick}
+            >
+              {label} <kbd aria-hidden="true">Space</kbd>
+            </button>
+          )}
+          {CONTROLS_MODE === 'bar' && !cpu && <TimingBar />}
           <div className="skate__toggles">
             <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
             <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />

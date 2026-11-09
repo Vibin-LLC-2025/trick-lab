@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 7 are committed. Step 8 is next: two rough controls, then the owner picks.
+- Steps 1 to 7 are committed. Step 8's two rough controls are committed and waiting for the owner's pick; step 9 does not start without it.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 43 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 44 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -61,7 +61,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 43 commits a
 | 9b7c140 | A memory leak fix the long-run test found: shared materials are freed with each Canvas |
 | e6ab283 | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
 | 2dcf12f | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
-| this commit | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
+| fa866c2 | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
+| this commit | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. Waiting for the owner's pick |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -225,6 +226,11 @@ Both are built quickly, behind a URL switch (`?controls=flick` and `?controls=ba
   - it is still fun after ten minutes.
 - **The pad is a page element**, not part of the 3D view. In the game, dragging on the stage no longer turns the camera where the pad is.
 - **Done when** the owner has picked. The other one's code is deleted in step 9.
+
+As built, rough (2026-11-09): `src/sim/controls.ts` (the two pure mappings, tested), `src/ui/RoughControls.tsx` (the pad, the bar, inline styles) and `popAttempt` in the store. Open the game with `?controls=flick#/skate` or `?controls=bar#/skate`; with neither it is today's sliders and Pop.
+- **Flick it:** the crouch reaches the highest pop in 2 seconds, so a 0.35 m pop is a hold of about 0.9 s. A drag of 60 pixels is 1 rev/s (a kickflip at that pop is about 112 pixels to the right). By keyboard each arrow adds 3 rev/s per second held. Right is a kickflip and left a heelflip; down (toward the heels) is backside and up frontside. The plan said "along the board" for scoop; up and down was chosen so the mouse and the arrow keys agree, and it is one line to swap.
+- **The bar:** a 1.2 s sweep with the band centred at 0.8 s, 280, 200 and 120 ms wide on Easy, Normal and Hard. Outside the band the rates scale by up to 50, 60 and 70 percent per half sweep.
+- **Known rough edges, on purpose:** in flick mode the shoes and the motion cues do not follow the wind-up, the trick guide still talks about sliders, and neither control announces anything of its own.
 
 ### 9. The chosen controls, built properly
 - **The store owns an attempt in progress**, with an id, so a late or doubled callback does nothing. It reads an injected clock, so tests are exact.

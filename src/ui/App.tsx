@@ -21,6 +21,7 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { LeaveDialog, Skate, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
 import { TopBar } from './TopBar';
+import { barPress, CONTROLS_MODE, FlickPad, roughOwnsSpace } from './RoughControls';
 import { PreviewToggle } from './Utilities';
 import { ViewPanel } from './ViewPanel';
 
@@ -80,7 +81,10 @@ function useGlobalShortcuts() {
       if (preset) s.applyPreset(preset);
       else if (e.key === ' ') {
         if (spaceIsNative(target)) return;
-        s.popTrick();
+        // ROUGH (step 8): a rough control owns the student's Space. The bar starts or releases; the flick pad listens itself.
+        if (roughOwnsSpace(s)) {
+          if (CONTROLS_MODE === 'bar') barPress();
+        } else s.popTrick();
       } else if (e.key === 's' || e.key === 'S') s.toggleSlowMotion();
       else if (e.key === '[') s.stepRate(-1);
       else if (e.key === ']') s.stepRate(1);
@@ -215,6 +219,8 @@ export function App() {
           <PerfBadge />
           {canPause && <PreviewToggle />}
           {screen === 'skate' && <TurnChip />}
+          {/* ROUGH (step 8): the flick pad, over the lower half of the stage. */}
+          {screen === 'skate' && CONTROLS_MODE === 'flick' && <FlickPad />}
           {/* The student's landed trick, over the stage (ADR-57); never on the welcome preview. */}
           {screen !== 'home' && <Celebration />}
         </section>

@@ -91,6 +91,13 @@ export interface PlaybackSlice {
   scrubFrom: number | null;
   /** Pops with the current inputs. Under reduced motion the trick resolves at once. */
   popTrick: () => void;
+  /**
+   * ROUGH (step 8): the student's pop with inputs a game control made (a
+   * flick gesture, a timed release) instead of the sliders' values. Same
+   * rules, log and announcements as popTrick; on the computer's turn it is
+   * the computer's go, and the inputs are ignored. Step 9 replaces it.
+   */
+  popAttempt: (inputs: TrickInputs) => void;
   togglePause: () => void;
   /** The speed slider. Snaps to the nearest stop. Not announced (the slider speaks its value). */
   setRate: (rate: number) => void;
