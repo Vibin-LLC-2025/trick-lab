@@ -101,3 +101,34 @@ export function releaseModels(urls: readonly string[]) {
   for (const url of urls) pending.delete(url);
   release?.(urls);
 }
+
+/**
+ * The models on screen (ADR-56): each model component counts its URL while it
+ * is mounted (the shoe twice), and a ground that failed for good counts too,
+ * since its plane is final. The loading picture waits for the tier's set
+ * (StageReady in TrickScene).
+ */
+const shown = new Map<string, number>();
+const shownListeners = new Set<() => void>();
+
+/** Counts `url` as on screen until the returned function is called (an effect's cleanup). */
+export function noteShown(url: string): () => void {
+  shown.set(url, (shown.get(url) ?? 0) + 1);
+  for (const l of shownListeners) l();
+  return () => {
+    const n = (shown.get(url) ?? 1) - 1;
+    if (n > 0) shown.set(url, n);
+    else shown.delete(url);
+  };
+}
+
+/** Whether every one of `urls` is on screen (none asked: true). */
+export const allShown = (urls: readonly string[]) => urls.every((url) => shown.has(url));
+
+/** Calls `listener` whenever a model comes on screen, until the returned function is called. */
+export function onShown(listener: () => void): () => void {
+  shownListeners.add(listener);
+  return () => {
+    shownListeners.delete(listener);
+  };
+}

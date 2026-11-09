@@ -425,3 +425,21 @@ Against step 9 (6395a38) in the same session, two runs each, 1440 x 900, light, 
 | Frames after a landing | 0 | 0 | 0 |
 
 No change beyond noise: a length per fragment in place of three's negation per vertex. At 2560 x 400 (a 5.5:1 welcome stage, 5.9:1 in the lab) the plane's edge no longer shows on any tier or theme.
+
+### Step 10: the loading picture (ADR-56)
+
+Against step 9 (6395a38) in the same session, the welcome screen, 1440 x 900, light, cache off, three runs each at 3 Mbps with 60 ms latency:
+
+| | Low | Medium | High |
+| --- | --- | --- | --- |
+| Stage before the 3D view, step 9 | blank to the first lit frame | blank, then the stand-in board | blank, then the stand-in board |
+| Loading picture on screen (now) | 0.77 s | 0.77 s | 0.77 to 1.06 s |
+| First lit frame, step 9 | 1.39 to 1.42 s | 3.43 to 3.48 s | 4.04 to 4.07 s |
+| First lit frame, now | 1.47 to 1.48 s | 3.50 to 3.52 s | 4.12 to 4.20 s |
+| All models on screen, step 9 | none | 3.85 to 3.91 s | 5.08 to 5.10 s |
+| All models on screen, now | none | 3.95 to 3.97 s | 5.16 to 5.21 s |
+| The picture lifts (now) | 1.49 s | 3.96 s | 5.48 s |
+
+The picture is 26 KB (27 KB on the wire with headers) and shares the link with the 3D code: the scene comes 50 to 90 ms later at 3 Mbps, about the picture's own transfer time; at full speed the difference is within noise. It lifts 20 to 50 ms after the tier's scene is complete. The `measure.js` table now has a "Loading picture" and a "Picture lifts" column. Draw calls (High 30 and 31, Medium 16 and 17, Low 9 and 10), triangles and frame times are unchanged: the picture is DOM. Frames after a landing: 0 on every tier.
+
+Checked in the browser: the stage shows the picture at 0.7 and 1.6 s on High at 3 Mbps (where step 9 showed a blank stage); popping in the lab before the models arrive lifts it at once; under reduced motion it goes with no fade; blocking `ground.glb` lifts it on High with the plain ground (1.8 s), blocking `board-high.glb` or `shoes.glb` lifts it on Low (1.5 s).

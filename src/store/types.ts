@@ -141,6 +141,13 @@ export interface UiSlice {
   boardAssetFailed: boolean;
   /** Set when the whole 3D view fails (SceneBoundary). Not persisted, not logged. Pops then resolve at once, like reduced motion (ADR-6). */
   sceneUnavailable: boolean;
+  /**
+   * Set once, by the scene, when the stage first shows the tier's real scene:
+   * lit, with every model of the tier drawn (ADR-56). The loading picture
+   * covers the stage until then. Not persisted, not logged, not exported, not
+   * announced (the picture is decorative; the scene description is the text).
+   */
+  stageReady: boolean;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
   /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs, default off (ADR-48). Not logged, not exported. */
@@ -186,6 +193,8 @@ export interface UiSlice {
   setBoardAssetFailed: () => void;
   /** Called by SceneBoundary when the 3D view cannot render: announces once and resolves a flight in the air. */
   setSceneUnavailable: () => void;
+  /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */
+  setStageReady: () => void;
   announce: (message: string) => void;
   requestFocus: (target: FocusTarget) => void;
 }

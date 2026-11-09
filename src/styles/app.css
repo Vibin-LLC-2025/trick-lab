@@ -148,6 +148,24 @@ a {
   height: 100%;
 }
 
+/* The loading picture (ADR-56, DESIGN.md 14.6): a still of the scene over
+   the 3D view until it first shows the tier's real models, then a fade.
+   Under the stage's overlays (later in the markup); no pointer events, so
+   the orbit works through it. The reduced-motion tokens make the fade 0 ms. */
+.app__still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+.app__still[data-lifted] {
+  opacity: 0;
+}
+
 .app__setup,
 .app__results,
 .app__play {

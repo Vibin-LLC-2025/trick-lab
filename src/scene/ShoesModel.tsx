@@ -6,6 +6,7 @@ import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { applyAnisotropy } from './BoardModel';
 import { useModel } from './gltf';
+import { noteShown } from './modelCache';
 import { SHOES_URL } from './modelUrls';
 
 /**
@@ -16,6 +17,8 @@ import { SHOES_URL } from './modelUrls';
 export function ShoesModel({ castShadow }: { castShadow: boolean }) {
   const { nodes, materials } = useModel(SHOES_URL);
   const invalidate = useThree((s) => s.invalidate);
+  // On screen: the loading picture waits for it (ADR-56).
+  useEffect(() => noteShown(SHOES_URL), []);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].anisotropy);
   useEffect(() => {
     applyAnisotropy(materials, anisotropy);

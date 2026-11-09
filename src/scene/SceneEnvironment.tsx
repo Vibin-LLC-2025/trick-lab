@@ -33,8 +33,9 @@ import { rendererFor } from './sceneTier';
  *    invalidate for the environment, rule 4).
  * Compiling only after the environment exists matters: an envMap changes the
  * program, so a frame drawn before it would compile every material twice.
+ * `onReveal` is called once, at step 3 (StageReady, ADR-56).
  */
-export function SceneEnvironment({ children }: { children?: ReactNode }) {
+export function SceneEnvironment({ children, onReveal }: { children?: ReactNode; onReveal?: () => void }) {
   // Read the renderer, scene and camera through get() inside the effect: they
   // are long-lived three objects we mutate, not React state.
   const get = useThree((s) => s.get);
@@ -45,6 +46,10 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
   const environment = useTrickStore((s) => rendererFor(s).environment);
   // The warm-up (hidden content, compile, reveal) runs once per Canvas; a theme change only swaps the map.
   const revealed = useRef(false);
+  const onRevealRef = useRef(onReveal);
+  useEffect(() => {
+    onRevealRef.current = onReveal;
+  }, [onReveal]);
   // The map in use. A theme change keeps showing it until the next one is ready, then frees it.
   const current = useRef<{ texture: Texture; dispose: () => void } | null>(null);
 
@@ -69,6 +74,7 @@ export function SceneEnvironment({ children }: { children?: ReactNode }) {
       if (cancelled) return;
       revealed.current = true;
       if (content.current) content.current.visible = true;
+      onRevealRef.current?.();
       // frameloop is "demand": ask for the frame that shows the lit scene.
       get().invalidate();
     };

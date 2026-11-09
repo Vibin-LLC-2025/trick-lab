@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useThree, type RootState } from '@react-three/fiber';
+import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
 import { previewAnimates, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
-import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted } from './modelCache';
+import { allShown, noteRenderer, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted } from './modelCache';
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
 import { PerfProbe } from './PerfProbe';
@@ -158,6 +158,70 @@ function PostEffects() {
   return null;
 }
 
+/**
+ * Tells the store when the stage first shows the tier's real scene (ADR-56),
+ * so the loading picture lifts off it: the scene revealed (SceneEnvironment's
+ * warm-up done), every model of the tier on screen (modelCache's noteShown,
+ * or a ground that failed for good), and the frame that draws them rendered
+ * (it compiles the models' programs, which can block for a moment), then the
+ * next animation frame, so the picture fades off a scene on screen. One
+ * after-render callback, then none: no per-frame code. A frame is asked for
+ * from the effect, never from inside that callback: on a demand loop the loop
+ * has already decided to stop by then, and the request would be lost. A model
+ * that fails moves the scene to Low (sceneTier), whose Canvas has no models
+ * to wait for. Once per page: after that, a tier change shows its own
+ * fallbacks as before.
+ */
+function StageReady({ revealed }: { revealed: boolean }) {
+  const get = useThree((s) => s.get);
+  const ready = useTrickStore((s) => s.stageReady);
+  const tier = useTrickStore(sceneTier);
+  const feet = useTrickStore((s) => s.feetVisible);
+  const urls = useMemo(() => modelsFor(tier, feet), [tier, feet]);
+
+  useEffect(() => {
+    if (ready || !revealed) return;
+    let cancelled = false;
+    let raf = 0;
+    let stopFrames: (() => void) | null = null;
+    const check = () => {
+      if (stopFrames || !allShown(urls)) return;
+      stopFrames = addAfterEffect(() => {
+        stopFrames?.();
+        raf = requestAnimationFrame(() => {
+          if (!cancelled) useTrickStore.getState().setStageReady();
+        });
+      });
+      get().invalidate();
+    };
+    const stopShown = onShown(check);
+    check();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      stopShown();
+      stopFrames?.();
+    };
+  }, [ready, revealed, urls, get]);
+  return null;
+}
+
+/** The lit content and its readiness (ADR-56), both per Canvas: a remount starts unrevealed. */
+function Stage({ shadows }: { shadows: boolean }) {
+  const [revealed, setRevealed] = useState(false);
+  const onReveal = useCallback(() => setRevealed(true), []);
+  return (
+    <>
+      {/* The pad and board stay hidden until their shaders are compiled with the environment. */}
+      <SceneEnvironment onReveal={onReveal}>
+        <Pad shadows={shadows} />
+        <FlightDriver shadows={shadows} />
+      </SceneEnvironment>
+      <StageReady revealed={revealed} />
+    </>
+  );
+}
+
 type Tier = ReturnType<typeof rendererFor>;
 type GlDefaults = { canvas: unknown };
 
@@ -244,11 +308,7 @@ export default function TrickScene() {
       <fog attach="fog" args={[ART.fog.color[theme], ART.fog.near, ART.fog.far]} />
       <Sky theme={theme} />
       <Lights shadows={Q.shadows} theme={theme} />
-      {/* The pad and board stay hidden until their shaders are compiled with the environment. */}
-      <SceneEnvironment>
-        <Pad shadows={Q.shadows} />
-        <FlightDriver shadows={Q.shadows} />
-      </SceneEnvironment>
+      <Stage shadows={Q.shadows} />
       <SceneCamera />
       <InvalidateOnStoreChange />
       <PostEffects />

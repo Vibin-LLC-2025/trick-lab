@@ -14,6 +14,7 @@ import { PerfBadge } from './PerfBadge';
 import { Playback, Replay } from './Playback';
 import { Presets } from './Presets';
 import { SceneBoundary } from './SceneBoundary';
+import { StageStill } from './StageStill';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { LeaveDialog, Skate, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
@@ -206,6 +207,8 @@ export function App() {
               <TrickScene />
             </Suspense>
           </SceneBoundary>
+          {/* Over the 3D view until it first shows the tier's real scene (ADR-56); under the overlays below. */}
+          <StageStill />
           <PerfBadge />
           {canPause && <PreviewToggle />}
           {screen === 'skate' && <TurnChip />}

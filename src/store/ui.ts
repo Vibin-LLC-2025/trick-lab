@@ -155,6 +155,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     ...readQuality(),
     boardAssetFailed: false,
     sceneUnavailable: false,
+    stageReady: false,
     feetVisible: readFeetVisible(),
     legsVisible: readLegsVisible(),
     footPathsVisible: readFootPathsVisible(),
@@ -266,6 +267,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // One announcement: the failure, then the result if a trick was in the air.
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
+    },
+    setStageReady: () => {
+      if (!get().stageReady) set({ stageReady: true });
     },
     announce: (message) => set({ announcement: { message, nonce: ++nonce } }),
     requestFocus: (target) => set({ focusRequest: { ...target, nonce: ++nonce } }),

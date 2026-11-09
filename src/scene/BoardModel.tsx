@@ -5,6 +5,7 @@ import { PARTS } from '../asset/spec';
 import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { preloadModel, useModel } from './gltf';
+import { noteShown } from './modelCache';
 import { boardUrlFor, SHOES_URL } from './modelUrls';
 
 /**
@@ -38,6 +39,8 @@ export function applyAnisotropy(materials: Record<string, unknown>, anisotropy: 
 export function BoardModel({ url, castShadow }: { url: string; castShadow: boolean }) {
   const { nodes, materials } = useModel(url);
   const invalidate = useThree((s) => s.invalidate);
+  // On screen: the loading picture waits for it (ADR-56).
+  useEffect(() => noteShown(url), [url]);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].anisotropy);
   // The demand frameloop needs one frame once the model replaces the fallback.
   useEffect(() => {

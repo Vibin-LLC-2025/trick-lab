@@ -21,9 +21,10 @@
 //   cpu     1                     CPU slowdown for the loads (4 is a rough Chromebook stand-in; GPU unchanged)
 //
 // What it records, per tier:
-// - loading, per network: first contentful paint (the UI), the first frame of
-//   the lit 3D scene, the frame where every model of the tier is on screen,
-//   when each GLB finished, and the bytes transferred by kind;
+// - loading, per network: first contentful paint (the UI), when the loading
+//   picture arrived and when it lifted (ADR-56; builds before it have none),
+//   the first frame of the lit 3D scene, the frame where every model of the
+//   tier is on screen, when each GLB finished, and the bytes transferred by kind;
 // - per screen at full speed: draw calls and triangles (the most seen over
 //   half a second of frames, after a forced frame), and the tier's renderer;
 // - in the lab, one trick at the current speed: gl.render CPU time and, where
@@ -79,7 +80,14 @@ async (page) => {
       // Blocked storage: the app's defaults apply.
     }
     const want = (q.get('m-models') ?? '').split(',').filter(Boolean);
-    const m = (window.__measure = { firstFrame: null, models: want.length ? null : 'none', seen: {} });
+    const m = (window.__measure = { firstFrame: null, models: want.length ? null : 'none', lifted: null, seen: {} });
+    // The loading picture lifts (ADR-56): marked lifted to fade, or removed at once under reduced motion.
+    new MutationObserver(() => {
+      if (m.lifted !== null) return;
+      const still = document.querySelector('.app__still');
+      if (still) m.seen.still = true;
+      if ((still && still.hasAttribute('data-lifted')) || (!still && m.seen.still)) m.lifted = performance.now();
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-lifted'] });
     let previous = -1;
     const watch = () => {
       const lab = window.__trickLab;
@@ -131,11 +139,16 @@ async (page) => {
     return `${origin}${base}?${q.toString().replace(/=(&|$)/g, '$1')}${HASH[screen]}`;
   };
 
+  // Done when the lit scene and the models are in and, if there was a loading picture, it lifted.
   const settle = (timeout) =>
-    page.waitForFunction(() => window.__measure && window.__measure.firstFrame !== null && window.__measure.models !== null, null, {
-      timeout,
-      polling: 200,
-    });
+    page.waitForFunction(
+      () => {
+        const m = window.__measure;
+        return m && m.firstFrame !== null && m.models !== null && (m.lifted !== null || !m.seen.still);
+      },
+      null,
+      { timeout, polling: 200 },
+    );
 
   const kb = (b) => Math.round(b / 102.4) / 10;
 
@@ -159,11 +172,13 @@ async (page) => {
           if (kind === 'models') glb[r.name.split('/').pop()] = { start: Math.round(r.startTime), end: Math.round(r.responseEnd), bytes: r.transferSize };
         }
         const fcp = performance.getEntriesByName('first-contentful-paint')[0];
+        const still = res.find((r) => r.name.includes('/stills/') && r.responseStatus !== 404);
         return {
           tier,
           net,
           timedOut,
           fcp: fcp ? Math.round(fcp.startTime) : null,
+          picture: still ? { loaded: Math.round(still.responseEnd), lifted: m.lifted === null ? null : Math.round(m.lifted), bytes: still.transferSize } : null,
           firstFrame: m.firstFrame === null ? null : Math.round(m.firstFrame),
           models: typeof m.models === 'number' ? Math.round(m.models) : m.models,
           glb,
@@ -339,11 +354,12 @@ async (page) => {
   // A table per section, ready for PERF-BUDGET.md.
   const md = [];
   md.push(`Measured ${out.when.slice(0, 10)}, ${out.viewport}, ${out.gpu}, feet ${feet}, legs ${out.legs}, ${theme} theme, cache off${cpu > 1 ? `, loads at ${cpu}x CPU` : ''}.`);
-  md.push('', '| Tier | Network | UI (FCP) | First 3D frame | All models on screen | JS | Models |', '| --- | --- | --- | --- | --- | --- | --- |');
+  md.push('', '| Tier | Network | UI (FCP) | Loading picture | First 3D frame | All models on screen | Picture lifts | JS | Models |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const r of out.rows)
     for (const l of r.loading) {
       const s = (ms) => (ms === null || ms === 'none' ? (ms === 'none' ? 'none' : 'timed out') : `${(ms / 1000).toFixed(2)} s`);
-      md.push(`| ${r.tier} | ${l.net === 'full' ? 'full speed' : `${l.net} Mbps`} | ${s(l.fcp)} | ${s(l.firstFrame)} | ${s(l.models)} | ${kb(l.bytes.js)} KB | ${kb(l.bytes.models)} KB |`);
+      const p = (k) => (l.picture ? s(l.picture[k]) : 'none');
+      md.push(`| ${r.tier} | ${l.net === 'full' ? 'full speed' : `${l.net} Mbps`} | ${s(l.fcp)} | ${p('loaded')} | ${s(l.firstFrame)} | ${s(l.models)} | ${p('lifted')} | ${kb(l.bytes.js)} KB | ${kb(l.bytes.models)} KB |`);
     }
   md.push('', '| Tier | Screen | Renderer | Draw calls | Triangles | Frameloop | Textures | gl.render CPU, median / p95 | GPU, median / p95 | Idle frames after the landing |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   // Times: the lab's are over the timed tricks, the welcome screen's over its looping preview.

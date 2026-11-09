@@ -6,6 +6,7 @@ import { useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { applyAnisotropy } from './BoardModel';
 import { preloadModel, useModel } from './gltf';
+import { noteShown } from './modelCache';
 import { GROUND_URL } from './modelUrls';
 
 /**
@@ -17,6 +18,8 @@ import { GROUND_URL } from './modelUrls';
  */
 export function GroundModel({ receiveShadow }: { receiveShadow: boolean }) {
   const { nodes, materials } = useModel(GROUND_URL);
+  // On screen: the loading picture waits for it (ADR-56).
+  useEffect(() => noteShown(GROUND_URL), []);
   const invalidate = useThree((s) => s.invalidate);
   const anisotropy = useTrickStore((s) => ART.quality[s.quality].groundAnisotropy);
   // The demand frameloop needs one frame once the model replaces the fallback.

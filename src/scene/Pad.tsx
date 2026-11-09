@@ -1,6 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { useTrickStore } from '../store';
 import { AssetBoundary } from './Board';
+import { noteShown } from './modelCache';
+import { GROUND_URL } from './modelUrls';
 import { geo, mat } from './resources';
 import { groundTextured, sceneTier } from './sceneTier';
 
@@ -36,11 +38,17 @@ function GroundPlane({ receiveShadow }: { receiveShadow: boolean }) {
  *   of the same size. A failed ground does not count as a failed board: the
  *   board keeps its tier and nothing is announced.
  */
+/** A ground that failed for good: its plane is final, so the loading picture need not wait for the GLB (ADR-56). */
+function FailedGround({ receiveShadow }: { receiveShadow: boolean }) {
+  useEffect(() => noteShown(GROUND_URL), []);
+  return <GroundPlane receiveShadow={receiveShadow} />;
+}
+
 export function Pad({ shadows }: { shadows: boolean }) {
   const textured = useTrickStore(groundTextured);
   if (!textured) return <GroundPlane receiveShadow={shadows} />;
   return (
-    <AssetBoundary fallback={<GroundPlane receiveShadow={shadows} />} reportToStore={false}>
+    <AssetBoundary fallback={<FailedGround receiveShadow={shadows} />} reportToStore={false}>
       <Suspense fallback={<GroundPlane receiveShadow={shadows} />}>
         <GroundModel receiveShadow={shadows} />
       </Suspense>

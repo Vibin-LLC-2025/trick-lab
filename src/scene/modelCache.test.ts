@@ -15,7 +15,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 // The loader drei's useGLTF builds, with the meshopt decoder it gives it: the real one, for the texture check.
 import { GLTFLoader, MeshoptDecoder } from 'three-stdlib';
 import { useGLTF } from '@react-three/drei';
-import { noteRenderer, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted, takePrefetched } from './modelCache';
+import { allShown, noteRenderer, noteShown, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted, takePrefetched } from './modelCache';
 import { disposeModel, missingTextures, shareEarlyDownloads } from './gltf';
 import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL } from './modelUrls';
 
@@ -75,6 +75,35 @@ describe('the models each tier shows (ADR-48)', () => {
     expect(modelsUnusedBy('medium').sort()).toEqual([BOARD_HIGH_URL, SHOES_URL].sort());
     expect(modelsUnusedBy('low').sort()).toEqual([BOARD_HIGH_URL, BOARD_URL, GROUND_URL, SHOES_URL].sort());
     for (const q of ['high', 'medium'] as const) for (const url of modelsFor(q, true)) expect(modelsUnusedBy(q)).not.toContain(url);
+  });
+});
+
+describe('the models on screen (ADR-56)', () => {
+  it("counts each model while it is mounted, the shoe's two mounts as one model, and tells a listener each time one comes", () => {
+    const heard: number[] = [];
+    let n = 0;
+    const stop = onShown(() => heard.push(++n));
+    const tier = modelsFor('high', true);
+    expect(allShown([])).toBe(true);
+    expect(allShown(tier)).toBe(false);
+    const offBoard = noteShown(BOARD_HIGH_URL);
+    const offGround = noteShown(GROUND_URL);
+    const offLeft = noteShown(SHOES_URL);
+    const offRight = noteShown(SHOES_URL);
+    expect(allShown(tier)).toBe(true);
+    expect(heard).toEqual([1, 2, 3, 4]);
+    // One shoe unmounting leaves the other on screen; the second takes the model off.
+    offLeft();
+    expect(allShown(tier)).toBe(true);
+    offRight();
+    expect(allShown(tier)).toBe(false);
+    expect(allShown(modelsFor('high', false))).toBe(true);
+    stop();
+    noteShown(SHOES_URL)();
+    expect(heard).toHaveLength(4);
+    offBoard();
+    offGround();
+    expect(allShown(modelsFor('medium', true))).toBe(false);
   });
 });
 

@@ -163,3 +163,17 @@ The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its t
 ## High finish (2026-11-09, ADR-53)
 
 `scripts/lib/build.ts` writes two glTF material extensions, factors only: `KHR_materials_clearcoat` on the High board's Graphic material (`GRAPHIC_CLEARCOAT` in `src/asset/spec.ts`, factor 0.6, roughness 0.22) and `KHR_materials_sheen` on the shoe's Upper material (`UPPER_SHEEN` in `src/asset/shoeSpec.ts`, colour `#62666d`, roughness 0.55). `board-high.glb` 596.2 KB and `shoes.glb` 209.0 KB; `board.glb` and `ground.glb` unchanged.
+
+## The loading picture (2026-11-09, ADR-56)
+
+`public/stills/welcome-light.webp` and `welcome-dark.webp` are stills of the real scene, rendered in a browser (the scene needs a GPU), so they are not part of `npm run assets`. Rebuild them when the welcome view changes (its camera, the sky, the light, the board's or the shoes' look):
+
+```
+npm run build && npx tsx scripts/measure/serve.ts dist 4173
+playwright-cli -s=still open "http://localhost:4173/"
+playwright-cli -s=still --raw run-code --filename=scripts/still/capture.js > stills.json
+playwright-cli -s=still close
+npx tsx scripts/still/write.ts stills.json
+```
+
+`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.8. `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.

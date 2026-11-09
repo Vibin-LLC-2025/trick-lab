@@ -763,6 +763,12 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 - **Deck print**: a clear lacquer, clearcoat 0.6 at roughness 0.22, High only.
 - **Shoe upper**: a suede sheen, `#62666d` at roughness 0.55, High only (the shoes are High only).
 
+### 14.6 The loading picture (ADR-56)
+
+- **What**: a still of the real scene per theme (`public/stills/welcome-{light,dark}.webp`, 1600 x 800, WebP 0.8, about 26 KB), the welcome screen's camera and still pose, on High. Spec in `src/asset/stillSpec.ts`; built by `scripts/still` (ASSET-PIPELINE.md).
+- **Where**: `.app__still`, an `img` over the stage (`position: absolute; inset: 0; object-fit: cover`), after the canvas and before the stage's overlays (perf badge, preview toggle, turn chip), so they stay on top. `pointer-events: none`. Decorative: `alt=""`, `aria-hidden="true"`.
+- **When**: from the first paint until the scene first shows the tier's real models (`stageReady`), or a trick plays, or the 3D view fails. Then `data-lifted` fades it to 0 over `--dur-slow` with `--ease-out` (0 ms under reduced motion, where it is removed at once), and it leaves the DOM. Once per page.
+
 ### 14.5 Low, designed (ADR-54)
 
 - **Shading**: toon, three steps of light (0.42, 0.72, 1). Board, shoes and ground only; the sky, trails, cues and footprints as on every tier.
