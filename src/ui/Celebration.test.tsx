@@ -119,6 +119,18 @@ describe('the SKATE letters (ADR-57)', () => {
     act(() => vi.advanceTimersByTime(STAMP_MS));
     expect(document.querySelectorAll('.skate__letter--new')).toHaveLength(0);
     expect(you()[1]).toHaveClass('skate__letter--got');
+    // The letter that ends the game stamps in too: the scoreboard is not remounted at the end (review of Phase D).
+    act(() =>
+      useTrickStore.setState((s) => ({
+        skate: { ...s.skate, phase: 'you-copy', letters: { you: 4, computer: 0 }, secondTry: true, call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 } },
+      })),
+    );
+    act(() => vi.advanceTimersByTime(STAMP_MS));
+    act(() => useTrickStore.getState().setInput('flick', 0));
+    act(() => useTrickStore.getState().popTrick());
+    act(() => useTrickStore.getState().land());
+    expect(useTrickStore.getState().skate.phase).toBe('over');
+    expect(you()[4]).toHaveClass('skate__letter--got', 'skate__letter--new');
     // A new game starts clean: no stamp for letters going back to none.
     act(() => useTrickStore.setState((s) => ({ skate: { ...s.skate, letters: { you: 0, computer: 0 } } })));
     expect(document.querySelectorAll('.skate__letter--got, .skate__letter--new')).toHaveLength(0);

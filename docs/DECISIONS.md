@@ -591,6 +591,8 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 
 **Consequence.** One 14 KB font download on first paint (after the page's own CSS; text shows in the stand-in face meanwhile). DESIGN.md 14.7 holds the tokens, sizes, timings and contrast ratios; `tokens.css` holds the ratios next to each colour. The trick in play is 24 px in the display face (was 28 px bold): the face is wide, so a long name wraps to two lines in the 360 px column.
 
+**Update (Phase D review, 2026-11-09).** The letter that ended a game never stamped in: the game column put the scoreboard in a different place at the end (after the result instead of first), so React remounted it, and a new row starts with the letters it already has. The scoreboard now keeps one place in the tree from the game into its end (the result above it, the turn panels below dropping away); `Celebration.test.tsx` earns the fifth letter through the store's scoring and checks it stamps.
+
 ## ADR-58: Sound, synthesized and off by default (2026-11-09)
 
 **Context.** Step 12 of `docs/PLAN-LOOK-FEEL-PERF.md`. The owner wants sound, off by default with a switch. Recorded samples would be downloads to license and to fetch past school filters.
@@ -604,6 +606,8 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 
 **Measured.** 3.3 KB more JavaScript in the main bundle (1.5 KB gzipped); no audio work at all while sound is off; in the browser the context runs straight after the switch's click, and at 0.25x the landing's sound came 2.17 s after the pop, as the slowed board landed.
 
+**Update (Phase D review, 2026-11-09).** Turning sound off left what was already queued to play: a loss queues the bail, the letter and the jingle up to 1.2 s ahead. The player now keeps every voice it starts until it ends, and `stop()` (called by `useSound` when sound turns off) cuts them all and resets the stagger. Checked in the browser: a pop and its landing queued 0.22 s ahead, then sound off: all six voices stopped at once. And with sound saved on, the page's first click or key now unlocks the audio, so a first cue from a timer (the computer's own turn in a game) never has to start the audio context outside a gesture, which stricter browsers refuse.
+
 ## ADR-59: An automatic step-down when tricks run choppy (2026-11-09)
 
 **Context.** Step 13 of `docs/PLAN-LOOK-FEEL-PERF.md`. The first visit picks a tier from what the browser says about the device (ADR-16), and that guess can be wrong: a machine that looks capable can still draw High's tricks at a stutter. The student should not have to know to open View.
@@ -615,3 +619,5 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 - **Remembered**: the tier stepped to is saved as `trick-lab.quality-step`, and later visits cap the device's pick at it (`capQuality`), so the next visit starts on the tier that ran. A tier the student picks in View wins, as before (ADR-16), and moves back up.
 
 **Checked.** In the browser on the RTX 3060 (High by the device's pick): three kickflips ran smoothly and kept High. With 45 ms of main-thread work forced into every animation frame (about 20 frames a second), the third trick's announcement carried the step-down, the scene moved to Medium, and the next visit downloaded `board.glb` and showed Medium in View. CPU throttling alone (20x) did not trigger it: this scene's per-frame CPU work is about 0.6 ms, so tricks stayed smooth, which is right. The measurement script always sets a tier (`m-quality`), so it is never stepped down.
+
+**Update (Phase D review, 2026-11-09).** The 12-frame minimum missed the very devices this is for: a normal-speed kickflip lasts 0.53 s, so at 20 frames a second it records about 10 intervals and was never judged (the reviewer reproduced it at 20, 15 and 10 frames a second, and in Chromium with 65 ms of work per frame). A trick is now judged by the time its frames cover: at least 250 ms in at least 2 intervals. The gaps the 250 ms cut-off guarded against now never enter the record: the first frame of a run of playing (after a pop, a resume or a hidden tab, `recordFrame` in flightPace.ts) is left out, since it spans the time before it; only one-off stalls over a second are dropped. `flightPace.test.ts` drives the real store and flight clock through three kickflips at 60, 30, 20, 15, 10 and 5 frames a second, recording each frame as PerfProbe does: High steps down at 20 and below and is kept at 30 and 60. In Chromium with 65 ms of work per frame, the third trick now steps High to Medium.

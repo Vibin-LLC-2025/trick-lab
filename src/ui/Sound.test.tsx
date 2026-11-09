@@ -13,14 +13,18 @@ vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-s
 
 function fakePlayer() {
   const played: [string, number][] = [];
-  const player: SoundPlayer & { played: typeof played; unlocks: number } = {
+  const player: SoundPlayer & { played: typeof played; unlocks: number; stops: number } = {
     played,
     unlocks: 0,
+    stops: 0,
     unlock: () => {
       player.unlocks += 1;
     },
     play: (kind, rate) => {
       played.push([kind, rate]);
+    },
+    stop: () => {
+      player.stops += 1;
     },
     dispose: () => {},
   };
@@ -89,6 +93,30 @@ describe('useSound (ADR-58)', () => {
     // An unrelated store change does not replay the last cue.
     act(() => useTrickStore.getState().toggleFeet());
     expect(player.played).toHaveLength(3);
+  });
+
+  it('silences what is still queued when sound turns off (review of Phase D)', () => {
+    const player = fakePlayer();
+    render(<Listener player={player} />);
+    act(() => useTrickStore.getState().toggleSound());
+    act(() => useTrickStore.getState().cue('letter'));
+    act(() => useTrickStore.getState().cue('lose'));
+    expect(player.stops).toBe(0);
+    act(() => useTrickStore.getState().toggleSound());
+    expect(player.stops).toBe(1);
+    act(() => useTrickStore.getState().cue('pop'));
+    expect(player.played.map(([k]) => k)).toEqual(['pop', 'letter', 'lose']);
+  });
+
+  it("with sound saved on, unlocks the audio on the page's first click or key, before any timer can ask for a sound", () => {
+    useTrickStore.setState({ soundOn: true });
+    const player = fakePlayer();
+    render(<Listener player={player} />);
+    expect(player.unlocks).toBe(0);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    expect(player.unlocks).toBe(1);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+    expect(player.unlocks).toBe(1);
   });
 
   it('does not play a cue that came before it mounted', () => {

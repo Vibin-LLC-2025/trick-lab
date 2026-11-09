@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTrickStore } from '../store';
-import { flightPace } from './flightPace';
-import { frame, perfStats, TRICK_FRAMES_MAX, trickFrames } from './perfStats';
+import { flightPace, recordFrame } from './flightPace';
+import { frame, perfStats, trickFrames } from './perfStats';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
 
 /**
@@ -22,17 +22,19 @@ export function PerfProbe() {
   useEffect(() => {
     const { setPaceSource } = useTrickStore.getState();
     setPaceSource((flightId) => flightPace(trickFrames, flightId));
-    return () => setPaceSource(null);
+    // A hidden tab draws nothing; the frame after it spans the gap, so it is left out.
+    const onVisibility = () => {
+      trickFrames.wasPlaying = false;
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      setPaceSource(null);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
   useFrame(({ gl, scene, camera }, delta) => {
     const s = useTrickStore.getState();
-    if (s.status === 'playing') {
-      if (trickFrames.flightId !== s.flightId) {
-        trickFrames.flightId = s.flightId;
-        trickFrames.count = 0;
-      }
-      if (trickFrames.count < TRICK_FRAMES_MAX) trickFrames.intervals[trickFrames.count++] = delta * 1000;
-    }
+    recordFrame(trickFrames, s.status, s.flightId, delta);
     if (isNodeRenderer(gl)) gl.info.reset();
     const t0 = performance.now();
     // Through the effects where the tier has them (ADR-51), straight otherwise.

@@ -15,12 +15,19 @@ describe("a trick's pace", () => {
     expect(trickPace([10, 20, 30, 40, ...frames(25, 10)], 14)).toBe(25);
   });
 
-  it('leaves out gaps over 250 ms (a hidden tab) and nothing-frames, and needs enough frames to judge', () => {
+  it('leaves out one-off stalls over a second and nothing-frames, and judges by the time covered, not a frame count', () => {
     expect(trickPace([5000, ...frames(50, 12)], 13)).toBe(50);
-    expect(trickPace([0, ...frames(20, 12)], 13)).toBe(20);
-    expect(trickPace(frames(20, PACE.minFrames - 1), PACE.minFrames - 1)).toBeNull();
+    expect(trickPace([0, ...frames(20, 13)], 14)).toBe(20);
+    // A slow device's short trick is judged: 0.53 s at 20 frames a second is about 10 intervals.
+    expect(trickPace(frames(50, 10), 10)).toBe(50);
+    // Even at 5 frames a second.
+    expect(trickPace(frames(200, 3), 3)).toBe(200);
+    // Too little to judge: under 250 ms covered, or a single interval.
+    expect(trickPace(frames(16, 10), 10)).toBeNull();
+    expect(trickPace([600], 1)).toBeNull();
+    expect(PACE.minCoveredMs).toBe(250);
     // Only the first `count` are this trick's.
-    expect(trickPace([...frames(20, 12), ...frames(90, 12)], 12)).toBe(20);
+    expect(trickPace([...frames(20, 13), ...frames(90, 12)], 13)).toBe(20);
   });
 
   it('calls a tier choppy when two of its three tricks ran under 25 frames a second', () => {

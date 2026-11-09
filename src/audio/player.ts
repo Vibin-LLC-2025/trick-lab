@@ -12,6 +12,8 @@ export interface SoundPlayer {
   unlock(): void;
   /** Plays a sound now, or just after the last one if that was asked for a moment ago. `rate` is the playback speed. */
   play(kind: SoundKind, rate: number): void;
+  /** Silences every sound playing or queued (sound turned off) and resets the stagger, so the next plays at once. */
+  stop(): void;
   /** Closes the audio context. */
   dispose(): void;
 }
@@ -44,7 +46,7 @@ function envelope(ctx: AudioContext, gain: number, t: number, dur: number): Gain
   return g;
 }
 
-function voice(ctx: AudioContext, out: AudioNode, noise: AudioBuffer, v: Voice, start: number, pitch: number, stretch: number) {
+function voice(ctx: AudioContext, out: AudioNode, noise: AudioBuffer, live: Set<AudioScheduledSourceNode>, v: Voice, start: number, pitch: number, stretch: number) {
   const t = start + v.at * stretch;
   const dur = v.dur * stretch;
   const g = envelope(ctx, v.gain, t, dur);
@@ -70,7 +72,9 @@ function voice(ctx: AudioContext, out: AudioNode, noise: AudioBuffer, v: Voice, 
     filter.connect(g);
     source = src;
   }
+  live.add(source);
   source.onended = () => {
+    live.delete(source);
     source.disconnect();
     filter?.disconnect();
     g.disconnect();
@@ -85,6 +89,8 @@ export function createSoundPlayer(make: MakeContext = browserContext): SoundPlay
   let noise: AudioBuffer | null = null;
   let last = -Infinity;
   let tried = false;
+  // Every voice started and not yet ended, so stop() can cut the ones still queued.
+  const live = new Set<AudioScheduledSourceNode>();
 
   const ready = (): AudioContext | null => {
     if (!ctx && !tried) {
@@ -111,9 +117,23 @@ export function createSoundPlayer(make: MakeContext = browserContext): SoundPlay
       const start = Math.max(c.currentTime + 0.01, last + STAGGER);
       last = start;
       const { pitch, stretch } = FOLLOWS_SPEED[kind] ? slowMotion(rate) : { pitch: 1, stretch: 1 };
-      for (const v of SOUNDS[kind]) voice(c, master, noise, v, start, pitch, stretch);
+      for (const v of SOUNDS[kind]) voice(c, master, noise, live, v, start, pitch, stretch);
+    },
+    stop: () => {
+      for (const source of live) {
+        source.onended = null;
+        try {
+          source.stop();
+        } catch {
+          // Already stopped.
+        }
+        source.disconnect();
+      }
+      live.clear();
+      last = -Infinity;
     },
     dispose: () => {
+      live.clear();
       void ctx?.close().catch(() => {});
       ctx = null;
       master = null;

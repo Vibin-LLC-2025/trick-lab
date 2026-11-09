@@ -401,20 +401,17 @@ export function Skate() {
   useComputerTurns();
   const phase = useTrickStore((s) => s.skate.phase);
   if (phase === 'off') return <Setup />;
-  if (phase === 'over') {
-    return (
-      <>
-        <GameOver />
-        <Scoreboard />
-      </>
-    );
-  }
+  const over = phase === 'over';
+  // The scoreboard keeps one place in the tree from the game into its end
+  // (the result goes above it, the turn panels below drop away), so it is not
+  // remounted and the letter that ends the game stamps in too (ADR-57).
   return (
     <>
+      {over && <GameOver />}
       <Scoreboard />
-      <TurnCard />
-      <Controls />
-      <LastTrick />
+      {!over && <TurnCard />}
+      {!over && <Controls />}
+      {!over && <LastTrick />}
     </>
   );
 }

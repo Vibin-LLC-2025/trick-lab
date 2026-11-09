@@ -107,6 +107,37 @@ describe('the player', () => {
     expect(started[0]!.freq).toBeCloseTo(win.kind === 'tone' ? win.from : 0, 6);
   });
 
+  it('stops every voice still queued and resets the stagger, so the next sound plays at once (review of Phase D)', () => {
+    const { ctx, started } = fakeContext();
+    const stops: unknown[] = [];
+    const createOscillator = ctx.createOscillator;
+    const createBufferSource = ctx.createBufferSource;
+    ctx.createOscillator = vi.fn(() => {
+      const s = createOscillator();
+      s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
+      return s;
+    });
+    ctx.createBufferSource = vi.fn(() => {
+      const s = createBufferSource();
+      s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
+      return s;
+    });
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    player.play('land', 1);
+    player.play('letter', 1);
+    player.play('lose', 1);
+    const voices = SOUNDS.land.length + SOUNDS.letter.length + SOUNDS.lose.length;
+    // Each voice is told when to stop as it is scheduled.
+    expect(stops).toHaveLength(voices);
+    player.stop();
+    // ...and stopped again, now, by stop().
+    expect(stops).toHaveLength(2 * voices);
+    expect(stops.slice(voices).every((a) => (a as unknown[]).length === 0)).toBe(true);
+    started.length = 0;
+    player.play('pop', 1);
+    expect(Math.min(...started.map((s) => s.at))).toBeCloseTo(10.01, 9);
+  });
+
   it('resumes a suspended context (the browser holds audio until a gesture), and closes it when done', () => {
     const { ctx } = fakeContext('suspended');
     const player = createSoundPlayer(() => ctx as unknown as AudioContext);
