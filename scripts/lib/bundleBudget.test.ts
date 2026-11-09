@@ -7,11 +7,13 @@ const MANIFEST: Manifest = {
   '_artDirection-AAAA1111.js': { file: 'assets/artDirection-AAAA1111.js', imports: ['index.html'] },
   '_shoeSpec-BBBB2222.js': { file: 'assets/shoeSpec-BBBB2222.js' },
   'index.html': { file: 'assets/index-CCCC3333.js', css: ['assets/index-DDDD4444.css'], assets: ['assets/bungee-latin-400-normal-EEEE.woff2'] },
+  'node_modules/three/examples/jsm/libs/basis/basis_transcoder.js': { file: 'assets/basis_transcoder-LLLL.js' },
   'node_modules/three/examples/jsm/libs/basis/basis_transcoder.wasm': { file: 'assets/basis_transcoder-FFFF.wasm' },
+  'src/scene/Spare.tsx': { file: 'assets/Spare-MMMM.js' },
   'src/scene/BoardModel.tsx': {
     file: 'assets/BoardModel-GGGG.js',
     imports: ['index.html', 'src/scene/TrickScene.tsx', '_artDirection-AAAA1111.js'],
-    assets: ['assets/basis_transcoder-FFFF.wasm'],
+    assets: ['assets/basis_transcoder-FFFF.wasm', 'assets/basis_transcoder-LLLL.js'],
   },
   'src/scene/GroundModel.tsx': { file: 'assets/GroundModel-HHHH.js', imports: ['index.html', 'src/scene/BoardModel.tsx'] },
   'src/scene/ShoesModel.tsx': { file: 'assets/ShoesModel-IIII.js', imports: ['_shoeSpec-BBBB2222.js', 'src/scene/BoardModel.tsx'] },
@@ -30,7 +32,7 @@ const COMMON = [
   'assets/shoeSpec-BBBB2222.js',
 ];
 const MODELS = ['assets/nodeRenderer-KKKK.js', 'assets/BoardModel-GGGG.js', 'assets/GroundModel-HHHH.js'];
-const TRANSCODER = ['basis/basis_transcoder.js', 'basis/basis_transcoder.wasm'];
+const TRANSCODER = ['assets/basis_transcoder-LLLL.js', 'assets/basis_transcoder-FFFF.wasm'];
 const sorted = (xs: string[]) => [...xs].sort();
 
 /** Every file of the fixture build, small and compressible. */
@@ -40,7 +42,7 @@ function fixture(): Map<string, Uint8Array> {
     files.set(m.file, new Uint8Array(200).fill(97));
     for (const c of m.css ?? []) files.set(c, new Uint8Array(200).fill(98));
   }
-  for (const f of ['index.html', ...TRANSCODER, 'models/board-high.glb', 'models/board.glb', 'models/ground.glb', 'models/shoes.glb', 'stills/welcome-dark.webp', 'stills/welcome-light.webp'])
+  for (const f of ['index.html', 'models/board-high.glb', 'models/board.glb', 'models/ground.glb', 'models/shoes.glb', 'stills/welcome-dark.webp', 'stills/welcome-light.webp'])
     files.set(f, new Uint8Array(200).fill(99));
   return files;
 }
@@ -81,7 +83,7 @@ describe('the download budget (PLAN-PLAY-POLISH-REACH step 3)', () => {
     const files = fixture();
     const r = checkBundle(buildOf(files), [...files.keys()]);
     expect(r.failures).toEqual([]);
-    expect(r.unused).toEqual(['assets/basis_transcoder-FFFF.wasm']);
+    expect(r.unused).toEqual(['assets/Spare-MMMM.js']);
     // Shared files count once per visit.
     const high = r.visits.find((v) => v.visit.tier === 'high' && v.visit.feet)!;
     expect(new Set(high.files.map((f) => f.path)).size).toBe(high.files.length);

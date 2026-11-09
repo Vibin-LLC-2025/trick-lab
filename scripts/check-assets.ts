@@ -2,12 +2,13 @@
 // committed GLBs in public/models and fails if any file exceeds its budget
 // (src/asset/spec.ts BUDGETS, from docs/BRIEF-BOARD.md and the quality tiers
 // pass of 2026-11-04). Prints one table per file either way. Also checks the
-// KTX2 transcoder (ADR-49) and the loading pictures (ADR-56,
-// src/asset/stillSpec.ts).
+// loading pictures (ADR-56, src/asset/stillSpec.ts). The KTX2 transcoder is
+// three's own file, emitted by Vite into the build (ADR-49, step 4 of
+// PLAN-PLAY-POLISH-REACH), so there is no copy left to check.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ASSET_FILES, BASIS_DIR, BASIS_FILES, BASIS_SOURCE, type AssetKey } from '../src/asset/spec';
+import { ASSET_FILES, type AssetKey } from '../src/asset/spec';
 import { STILL, STILL_THEMES, stillFile } from '../src/asset/stillSpec';
 import { evaluateBudget, formatTable } from './lib/budget';
 import { inspectGlb } from './lib/inspect';
@@ -29,13 +30,6 @@ async function main() {
     console.log(formatTable(rows));
     console.log('');
     for (const r of rows) if (!r.ok) failures.push(`${file}: ${r.check.trim()}`);
-  }
-  // The KTX2 textures need three's own transcoder, served from public/ (ADR-49).
-  for (const f of BASIS_FILES) {
-    const served = resolve(ROOT, 'public', BASIS_DIR, f);
-    const same = existsSync(served) && readFileSync(served).equals(readFileSync(resolve(ROOT, BASIS_SOURCE, f)));
-    console.log(`Transcoder: public/${BASIS_DIR}${f} ${same ? 'matches' : 'does NOT match'} ${BASIS_SOURCE}${f}`);
-    if (!same) failures.push(`public/${BASIS_DIR}${f}: not three's transcoder (run npm run assets)`);
   }
   // The loading pictures (ADR-56): made in a browser (scripts/still), so checked, not rebuilt here.
   for (const theme of STILL_THEMES) {

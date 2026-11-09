@@ -3,7 +3,6 @@
 import { useGLTF } from '@react-three/drei';
 import { LoaderUtils, Material, Mesh, Texture, type WebGLRenderer } from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { BASIS_DIR } from '../asset/spec';
 import { isUnwanted, onReleaseModels, RELEASE_AFTER_MS, takePrefetched, whenRenderer } from './modelCache';
 
 // useGLTF(path, useDraco, useMeshopt, extendLoader). Draco is off: drei would
@@ -18,10 +17,13 @@ type GLTF = Parameters<Parameters<GLTFLoader['load']>[1]>[0];
 
 /**
  * The textures are KTX2 (Basis Universal, ADR-49): the worker transcodes each
- * to a format the GPU keeps compressed. Its transcoder is served from our own
- * public/basis/ (copied from three by npm run assets), never a CDN.
+ * to a format the GPU keeps compressed. Its transcoder is three's own, which
+ * KTX2Loader names with `new URL(..., import.meta.url)`: Vite emits it into
+ * the build with a content hash, served from this site, never a CDN. One copy
+ * (PLAN-PLAY-POLISH-REACH step 4; until then public/basis/ held a second), and
+ * a three upgrade that changes it changes its name.
  */
-const ktx2 = new KTX2Loader().setTranscoderPath(`${import.meta.env.BASE_URL}${BASIS_DIR}`);
+const ktx2 = new KTX2Loader();
 let ktx2Ready: Promise<void> | null = null;
 /**
  * Ready to read KTX2 textures. The transcoder starts downloading at the first

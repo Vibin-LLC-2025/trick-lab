@@ -8,8 +8,9 @@
 //   display face;
 // - the 3D chunk (TrickScene) and, on the tiers that have them, the model
 //   chunks and the WebGPURenderer's (ADR-50), each with its static imports;
-// - public files at run time: the tier's models (modelFiles.ts), the theme's
-//   loading picture (stillSpec.ts) and, on Medium and High, the KTX2 transcoder.
+// - on Medium and High, the KTX2 transcoder (three's own, emitted by Vite, ADR-49);
+// - public files at run time: the tier's models (modelFiles.ts) and the theme's
+//   loading picture (stillSpec.ts).
 // Shared files count once per visit. An emitted file no visit lists counts
 // nowhere (the check prints it). Sizes are compressed the way the live host
 // sends them (serve.ts's GZIP set, gzip level 6); WebP and WOFF2 as they are.
@@ -47,14 +48,20 @@ export function lazyChunks(v: Visit): string[] {
   return chunks;
 }
 
-/** The KTX2 transcoder (ADR-49), fetched on Medium and High: its JavaScript loader and its WebAssembly. */
-export const TRANSCODER: readonly Item[] = [{ public: 'basis/basis_transcoder.js' }, { public: 'basis/basis_transcoder.wasm' }];
+/**
+ * The KTX2 transcoder (ADR-49), fetched on Medium and High: its JavaScript
+ * loader and its WebAssembly, three's own files, which KTX2Loader names with
+ * `new URL(..., import.meta.url)`, so Vite emits them (manifest keys).
+ */
+export const TRANSCODER: readonly string[] = [
+  'node_modules/three/examples/jsm/libs/basis/basis_transcoder.js',
+  'node_modules/three/examples/jsm/libs/basis/basis_transcoder.wasm',
+];
 
 /** The public files a visit fetches at run time. */
 export function publicItems(v: Visit): Item[] {
   const items: Item[] = modelFilesFor(v.tier, v.feet).map((f) => ({ public: f }));
   items.push({ public: stillFile(v.theme) });
-  if (v.tier !== 'low') items.push(...TRANSCODER);
   return items;
 }
 
@@ -81,8 +88,8 @@ export const FILE_BUDGETS: Record<string, number> = {
   'src/scene/BoardModel.tsx': 49 * KB,
   'src/scene/GroundModel.tsx': 1 * KB,
   'src/scene/ShoesModel.tsx': 1 * KB,
-  'basis/basis_transcoder.js': 17 * KB,
-  'basis/basis_transcoder.wasm': 255 * KB,
+  [TRANSCODER[0]!]: 17 * KB,
+  [TRANSCODER[1]!]: 255 * KB,
   'models/board-high.glb': 470 * KB,
   'models/board.glb': 140 * KB,
   'models/ground.glb': 148 * KB,
@@ -149,6 +156,12 @@ export function inventory(v: Visit, manifest: Manifest): { name: string; path: s
   if (!font) throw new Error(`the manifest has no ${FONT}`);
   add(FONT, font.file);
   for (const key of lazyChunks(v)) chunk(key);
+  if (v.tier !== 'low')
+    for (const key of TRANSCODER) {
+      const m = manifest[key];
+      if (!m) throw new Error(`the manifest has no ${key}`);
+      add(key, m.file);
+    }
   for (const i of publicItems(v)) add(itemName(i), itemName(i));
   return [...out].map(([path, name]) => ({ name: budgetKey(name), path }));
 }

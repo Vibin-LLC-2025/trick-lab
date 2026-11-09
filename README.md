@@ -79,7 +79,7 @@ src/audio/   the synthesized sounds and their Web Audio player
 src/ui/      DOM: the welcome screen, the game of SKATE, presets, sliders, playback, telemetry, objectives, event log, announcer, dialogs, the loading picture, the celebration
 scripts/     build-board.ts (npm run assets), check-assets.ts (npm run assets:check), lib/ (build, inspect, budget, webp), measure/ (the repeatable measurement), still/ (the loading pictures)
 public/models/            the generated, committed GLBs: board.glb (Medium), board-high.glb and shoes.glb (High), ground.glb (the concrete ground, Medium and High)
-public/basis/, public/stills/  three's KTX2 transcoder, served from this site; the loading pictures
+public/stills/  the loading pictures (three's KTX2 transcoder is emitted into the build by Vite, served from this site)
 ```
 
 ### The board asset pipeline

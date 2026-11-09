@@ -546,12 +546,3 @@ export const GROUND_GLB = 'models/ground.glb';
 
 export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB };
 
-/**
- * The Basis Universal transcoder the runtime's KTX2Loader fetches (ADR-49):
- * copied from three's own examples by npm run assets into public/ under this
- * folder, so it always matches the installed three and is never a CDN.
- */
-export const BASIS_DIR = 'basis/';
-export const BASIS_FILES = ['basis_transcoder.js', 'basis_transcoder.wasm'] as const;
-/** Where the installed three keeps them, from the project root. */
-export const BASIS_SOURCE = 'node_modules/three/examples/jsm/libs/basis/';

@@ -6,7 +6,7 @@ Written 2026-11-04, realistic board pass. The board is a **procedural, scripted 
 
 | Command | What it does |
 | --- | --- |
-| `npm run assets` | Builds the four GLBs in `public/models/` (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes, and copies three's Basis transcoder into `public/basis/` |
+| `npm run assets` | Builds the four GLBs in `public/models/` (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes. The KTX2 transcoder is three's own, emitted by Vite into the build (ADR-49), so nothing is copied |
 | `npm run assets:check` | Reads the committed GLB and prints the budget table; exits 1 on any miss. Last step of `npm run verify` |
 
 The GLB is committed, so a fresh clone runs without building it. A test (`scripts/lib/budget.test.ts`) fails if the committed file's triangle count no longer matches the geometry source, which means "run `npm run assets`". Another test builds the GLB twice in memory and requires identical bytes.
@@ -158,7 +158,7 @@ Every texture in all four GLBs is now KTX2: Basis Universal ETC1S at quality 255
 | `shoes.glb` | 520.4 KB | **208.9 KB** | shoe-sole 62.3, shoe-upper 56.1 KB | 2.00 MB (was 8.00) |
 | `ground.glb` | 432.7 KB | **143.4 KB** | concrete-color 107.5, concrete-normal 11.1, concrete-roughness 21.4 KB | 3.00 MB (was 12.00) |
 
-The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder from `public/basis/`, which `npm run assets` copies from `node_modules/three/examples/jsm/libs/basis/` and `npm run assets:check` compares byte for byte with it. `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
+The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder: three's own `basis_transcoder.js` and `.wasm`, which `KTX2Loader` names with `new URL(..., import.meta.url)`, so Vite emits them into the build with a content hash (until 2026-11-09 a second copy in `public/basis/`, ADR-49's update). `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
 
 ## High finish (2026-11-09, ADR-53)
 

@@ -1,6 +1,3 @@
-# The Basis transcoder is three's file, served as is and checked byte for byte
-# against node_modules by npm run assets:check (ADR-49): never convert its line endings.
-public/basis/** binary
 # The loading pictures (ADR-56) are WebP renders: never diffed or converted as text.
 public/stills/** binary
 # The display face (ADR-57): a font file, never converted as text.
