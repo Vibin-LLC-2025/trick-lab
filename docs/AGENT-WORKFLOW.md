@@ -16,7 +16,7 @@ Design and implementation ran in parallel without talking to each other. What ma
 ## What the agents were told
 
 - Follow `docs/BRIEF.md` exactly and stay inside their own files (implementation does not touch `src/styles/` or `DESIGN.md`).
-- No Playwright in the project; browser checks use the global `playwright-cli` with a named session over HTTP.
+- No Playwright in the project; browser checks use the global `playwright-cli` with a named session over HTTP. (Since 2026-11-09, ADR-61, `@playwright/test` is a pinned dev dependency for the checks CI runs; looking at the app by hand still uses `playwright-cli`.)
 - House writing rules: no em-dashes, absolute dates, model aliases.
 
 ## Implementation pass notes (2026-11-04)
@@ -96,6 +96,21 @@ What the asset fork did: a detail level through `deck.ts`, `hardware.ts`, `board
 Review by the lead before accepting: `npm run verify` (208 tests, 16 files) and `npm run build` green; the `assets:check` tables read; the spec diff read; the review greps from CLAUDE.md run over the scene (no allocation in `useFrame`, no geometry or material JSX, no `Html`, no logging from components); the shoes looked at in the browser, which is the only real review of a procedural shoe.
 
 Left open: timings for High with the shadow pass at DPR 2; the bail ignores the board's yaw; the stance is regular only (goofy would need the mirror and ADR-10's signs flipped together); KTX2; a Chromebook run.
+
+## Practical notes for the next agent (2026-11-09)
+
+Things that cost time in the play, polish and reach plan's threads, kept here so they cost it once.
+
+- **Serving a build.** `npx tsx scripts/measure/serve.ts dist 4173`, in the background with a long timeout. `npm run test:browser` starts it by itself.
+- **Stale servers.** A stopped background task can leave its node process alive and still serving the old build, and Playwright reuses whatever answers on port 4173 when run locally. Before trusting a run, list them in PowerShell and stop the stale ones: `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'serve\.ts' }`. Or compare the script hash in the served `index.html` with `dist/index.html`.
+- **The browser checks run the last build**, not the source. Run `npm run verify` (or `npx vite build`) first, or they test yesterday's code.
+- **Git Bash rewrites arguments that start with `/`**: `--base=/trick-lab/` became `/Program Files/Git/trick-lab/`. Prefix such commands with `MSYS_NO_PATHCONV=1`.
+- **Python or Node snippets with backticks or template strings** can fail when passed inline to the Bash tool. Write the script to a file in the scratchpad and run the file.
+- **playwright-cli:** always `-s=<name>`, close it by name, serve over HTTP (`file://` is blocked).
+- **The long-run test samples at the end of each block of ten tricks**, not straight after a quality change: the motion cues' geometry uploads only once drawn, and a landed flight hides them, so a Canvas fresh from a change counts one geometry fewer until its first pop.
+- **Heap numbers are noisy.** About 1 MB per four quality changes is V8's compiled code warming up, not a leak. To tell a leak from warming up, take a heap snapshot and leave out the nodes of type `code` (`objectHeap` in `browser/soak.spec.ts`), or diff two snapshots by node type and follow a retainer path.
+- **The draw-call numbers** with every switch on are in `browser/helpers.ts` (`LEDGER`): a step that adds or removes a draw call changes them in the same commit.
+- **Line endings.** The working tree is CRLF on this machine (`core.autocrlf`); git stores LF. A script that edits a file by search and replace must match either.
 
 ## Where agents help and where they do not
 

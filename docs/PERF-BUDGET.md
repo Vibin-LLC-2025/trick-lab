@@ -561,3 +561,24 @@ The budgets are step 14's sizes plus about 5 percent: per file (for example `mod
 
 The KTX2 loader now fetches the transcoder Vite emits from three's own files instead of a second copy in `public/basis/`. `dist/` went from 4,527,311 to 3,942,373 bytes (584,938 smaller). A build with `--base=/trick-lab/` loads every texture compressed on High and Medium, with one transcoder download of the same size (15,469 and 247,919 bytes transferred); `npm run bundle:check` lists it from the manifest and finds nothing built that no visit downloads.
 
+### Step 5: browser checks, the long-run test and a leak (ADR-61)
+
+`npm run test:browser` (Playwright, Chromium with SwiftShader, no GPU, the build served by `serve.ts`): 16 checks in about 4.5 minutes on this desktop, 2026-11-09. Every screen starts on every tier with no console error; every switch combination stays inside the tier's cap (High 34, Medium 19, Low 12 with everything on); a landing draws at most the one frame its own write queued, then none in 1.5 s.
+
+The long-run test: 5 warm-up tricks on High, then 50 in blocks of ten on High, Low, High, Low, High. A sample is taken after the warm-up and at the end of each block, one second and two frames after the last landing and after two garbage collections.
+
+| | Geometries | Textures |
+| --- | --- | --- |
+| High, all four samples | 19 | 24 |
+| Low, both samples | 8 | 2 |
+
+Those counts are the hard check: at a tier they must equal its first sample. The heap, first High sample to last:
+
+| Build | Total heap (`Runtime.getHeapUsage`) | Without compiled code (heap snapshot) |
+| --- | --- | --- |
+| before the leak fix (c297ea4) | 2.44 MB | 530 KB |
+| with the fix (9b7c140), four runs | 2.07 to 2.13 MB | 255 to 260 KB |
+
+- **The leak.** Shared materials were freed only when the whole scene went away, so each tier change kept the last renderer's programs alive through the dispose listeners it had put on them. With the fix the growth without compiled code halved; what is left is mostly the event log, which keeps every trick by design (ADR-7).
+- **About 1 MB of the total is V8's compiled code** warming up over four tier changes (a heap snapshot diff by node type), not a leak.
+- **The limit on the total is 4 MB**, about twice the measurement, for slower and noisier CI machines. It is loose on purpose: the two builds above differ by 0.3 MB of total heap, less than run-to-run noise would be on another machine, so the heap check catches only a large leak, and the counts catch a leaked model, map or shared resource exactly. The run prints its growth, so a CI log shows how close to the limit it came.

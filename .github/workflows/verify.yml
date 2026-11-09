@@ -20,3 +20,49 @@ jobs:
       - run: npm ci
       # Typecheck, lint, tests, the GLB budget check, then a build and its download budget.
       - run: npm run verify
+      # The build verify just made, for the browser checks below.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+
+  # The browser checks (ADR-61): every screen on every quality level, the
+  # draw-call caps and the frames a landing draws, in Chromium without a GPU.
+  browser:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser -- --grep-invert @soak
+
+  # The long-run test, as its own job: 55 tricks across four quality changes
+  # take minutes on a machine without a GPU, and must not hold up the quick checks.
+  soak:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser -- --grep @soak

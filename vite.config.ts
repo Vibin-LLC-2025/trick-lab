@@ -1,4 +1,4 @@
-/// <reference types="vitest/config" />
+import { configDefaults } from 'vitest/config';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -11,6 +11,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // browser/ holds the Playwright checks (npm run test:browser), not unit tests.
+    exclude: [...configDefaults.exclude, 'browser/**'],
     // The clearance and GLB-build suites take 1 to 3 s alone and 6 to 11 s when 20 workers run them
     // together, over the 5 s default (three timeouts in one run, 2026-11-05). 30 s still catches a hang.
     testTimeout: 30_000,

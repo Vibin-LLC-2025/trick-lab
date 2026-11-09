@@ -26,7 +26,8 @@
     "assets": "tsx scripts/build-board.ts",
     "assets:check": "tsx scripts/check-assets.ts",
     "bundle:check": "tsx scripts/check-bundle.ts",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run assets:check && vite build && npm run bundle:check"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run assets:check && vite build && npm run bundle:check",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
@@ -41,6 +42,7 @@
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
+    "@playwright/test": "1.64.1",
     "@resvg/resvg-js": "2.6.2",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

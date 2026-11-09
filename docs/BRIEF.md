@@ -221,7 +221,10 @@ Reset clears inputs to defaults and board pose, keeps the log.
   pop by Space, assert announcer and objectives; theme toggle).
 - Do not install Playwright. Browser verification uses the globally
   installed `playwright-cli` with a named session against the Vite dev
-  server over HTTP (never file://).
+  server over HTTP (never file://). (Changed 2026-11-09, ADR-61: with the
+  owner's yes, `@playwright/test` is a pinned dev dependency, Chromium
+  only, for the browser checks CI runs, `npm run test:browser`. Checks by
+  hand still use `playwright-cli`.)
 
 ## AI-assisted development artifacts
 

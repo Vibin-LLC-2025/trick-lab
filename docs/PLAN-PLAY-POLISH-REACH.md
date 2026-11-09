@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 4 are committed. Step 5 is in the working tree, not yet committed.
+- Steps 1 to 5 are committed. Step 6 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 38 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 41 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -57,8 +57,9 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 38 commits a
 | f12eac5 | 2: the legs in one draw (ADR-60). Every switch on: High 34, Medium 19, Low 12 draw calls |
 | fec3a19 | 3: a download budget at the end of `npm run verify` |
 | c297ea4 | 4: one texture decoder instead of two |
-| not committed | 5: browser checks. See the step for what is left |
-| not committed | A memory leak fix the long-run test found (`src/scene/TrickScene.tsx`, `resources.ts`, `nodeRenderer.ts`, `renderers.test.ts`) |
+| 470bdc1 | This revision of the plan |
+| 9b7c140 | A memory leak fix the long-run test found: shared materials are freed with each Canvas |
+| this commit | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -163,16 +164,15 @@ What the steps are expected to add (every switch on):
 ### 1 to 4. Done
 The measurement, Medium back under its cap, the download budget, and one texture decoder. See "Where it stands".
 
-### 5. Browser checks in CI (in progress)
+### 5. Browser checks in CI. Done (ADR-61)
 `@playwright/test`, pinned, Chromium only, run in CI after the build as `npm run test:browser`. It is not part of `verify`.
 
-Left to do:
-- **Commit the leak fix first, on its own.** It is a real bug in code that is already on `look-feel-perf`, so it should be easy to carry there.
-- **Set the long-run test's limits so they can't fail by chance.**
+- **The leak fix is its own commit** (9b7c140). It is a real bug in code that is already on `look-feel-perf`, so it should be easy to carry there.
+- **The long-run test's limits can't fail by chance.**
   - The hard check is the count of 3D objects and textures: they must equal the first sample's.
-  - Memory growth gets a loose limit, about twice what was measured (so about 4 MB), since CI machines are slower and noisier.
-- **Add it to `.github/workflows/verify.yml`.** Run the long-run test as its own job, so a slow run does not hold up the quick checks.
-- **Docs and ADR-61.** Then delete `HANDOFF.md` and commit.
+  - Memory growth has a loose limit of 4 MB, about twice what was measured (2.07 to 2.13 MB), since CI machines are slower and noisier.
+- **In `.github/workflows/verify.yml`:** the quick checks are one job and the long-run test its own, both on the build `verify` uploads. They have not run in CI yet: that happens on the first push.
+- **Docs and ADR-61.** The practical notes from the temporary hand-off note are now in `docs/AGENT-WORKFLOW.md`.
 
 ### 6. New targets, written down
 - **An ADR (ADR-62)** records the owner's change of aim and the targets above, and why the caps moved: the target device changed, not a failing check.

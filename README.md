@@ -55,11 +55,12 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | --- | --- |
 | `npm run dev` | Vite dev server |
 | `npm run verify` | Typecheck, lint, tests, the asset budget check, then a production build and the download budget check (CI runs this) |
+| `npm run test:browser` | The browser checks, against the build `verify` made: every screen on every quality level, the draw-call caps, the frames a landing draws, and a long-run memory test (Playwright, Chromium only; CI runs them after `verify`) |
 | `npm run build` / `npm run preview` | Production build to `dist/`, then serve it |
 | `npm run assets` | Rebuild the four GLBs in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
-New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-59), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-61), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## How it works
 

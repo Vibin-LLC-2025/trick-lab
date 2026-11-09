@@ -5,3 +5,5 @@ dist
 coverage
 .playwright-cli
 output
+test-results
+playwright-report
