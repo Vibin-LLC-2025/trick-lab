@@ -16,7 +16,6 @@ import {
   float,
   Fn,
   If,
-  int,
   length,
   max,
   mix,
@@ -38,7 +37,6 @@ import {
   viewportSize,
 } from 'three/tsl';
 import { ao } from 'three/examples/jsm/tsl/display/GTAONode.js';
-import { motionBlur } from 'three/examples/jsm/tsl/display/MotionBlur.js';
 import { ART } from './artDirection';
 
 const P = ART.post;
@@ -50,6 +48,26 @@ export interface Effects {
   /** Motion blur on or off (ADR-51: a trick at normal speed, with the switch on, on High). */
   setMotionBlur: (on: boolean) => void;
   dispose: () => void;
+}
+
+/**
+ * From the velocity target's NDC (y up, two units a screen) to the
+ * composite's UV (y down, one unit a screen): three's full-screen quad
+ * (QuadGeometry, which RenderPipeline draws with) puts uv.y = 0 at the top
+ * of the screen and 1 at the bottom. effects.test.ts checks that convention
+ * against three's own quad, so an upgrade that changes it fails there.
+ */
+export const NDC_TO_UV = [0.5, -0.5] as const;
+
+/**
+ * The motion blur's taps (review of Phase B, 2026-11-09): `n` positions along
+ * the pixel's motion from -0.5 to 0.5 of it, centred on the pixel, with equal
+ * weights that sum to 1, so a still picture keeps its brightness. three
+ * r187's `motionBlur` helper adds one tap more than it divides by, which
+ * brightened every still pixel while a trick played.
+ */
+export function blurTaps(n: number): { at: number; weight: number }[] {
+  return Array.from({ length: n }, (_, i) => ({ at: n === 1 ? 0 : i / (n - 1) - 0.5, weight: 1 / n }));
 }
 
 /** Rec. 709 luminance, for the glow's threshold and the grade. */
@@ -83,10 +101,12 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
   const composite = Fn(() => {
     const c = vec4(color.sample(uv())).toVar();
     if (tier.motionBlur) {
-      // The velocity is in NDC, two units a screen; the texture is one.
       If(blur.greaterThan(0), () => {
-        const v = scenePass.getTextureNode('velocity').sample(uv()).xy.mul(blur);
-        c.assign(motionBlur(color, v, int(P.motionBlur.samples)));
+        // This frame's motion of the pixel in UV, times the shutter.
+        const v = scenePass.getTextureNode('velocity').sample(uv()).xy.mul(vec2(...NDC_TO_UV)).mul(blur).toVar();
+        const sum = vec4(0).toVar();
+        for (const t of blurTaps(P.motionBlur.samples)) sum.addAssign(color.sample(uv().add(v.mul(t.at))).mul(t.weight));
+        c.assign(sum);
       });
     }
     if (aoTexture) c.rgb.mulAssign(mix(float(1), aoTexture.sample(uv()).r, P.ao.strength));
@@ -122,7 +142,7 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
   return {
     render: () => pipeline.render(),
     setMotionBlur: (on) => {
-      blur.value = on ? P.motionBlur.shutter * 0.5 : 0;
+      blur.value = on ? P.motionBlur.shutter : 0;
     },
     dispose: () => {
       occlusion?.dispose();
