@@ -2422,3 +2422,23 @@ a {
     animation: none;
   }
 }
+
+/* ---------- Touch (2026-11-10, step 21) ----------
+   Where the main pointer is a finger (tokens.css raises --control-h,
+   --control-h-lg and --range-hit there), the controls that set their own
+   height follow: a segmented option, a preset, the trick picker. The segmented
+   legend's line follows its taller row. */
+@media (pointer: coarse) {
+  .segmented__label {
+    min-height: 40px;
+  }
+
+  .segmented__legend {
+    line-height: 46px; /* the height of the options row: 40 + its padding and border */
+  }
+
+  .preset,
+  .skate__select {
+    min-height: 44px;
+  }
+}

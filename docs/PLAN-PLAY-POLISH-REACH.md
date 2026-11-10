@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74) and 20 (the smoothness pass, ADR-75) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 21 is next. One target is not met on High (step 20): about one late frame in a whole game.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74), 20 (the smoothness pass, ADR-75) and 21 (phones and touch, ADR-76) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 22 is next. The phone checklist is in "Checklists for the owner". One target is not met on High (step 20): about one late frame in a whole game.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -79,7 +79,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 22f13d2 | 17: the game's camera and instant replay (ADR-72): Filmer, Side and Above, lower than the lab's; after a made set or copy the flight again in slow motion from a low, wide camera, with a fisheye bend on High and Medium; Skip replay on Pop and Escape. The legs never hide the board (checked in six poses, both stances, High and Medium). No draw call added |
 | bf51c25 | 18: sound (ADR-73): CC0 recordings from Kenney's Impact Sounds for the pop, a new catch, the landing and the bail (11 MP3s, 32 KB, two or three takes each at a random pitch), a synthesized rolling sound that ticks on the concrete's joints, a synthesized scuff, better synthesized fallbacks, and a sound check under ?debug. Nothing sound-related downloads while sound is off; the main page went from 106.0 to 104.9 KB. The Sound switch stays in the top bar, not a second one beside Start game. The owner's list of changes is asked |
 | 57adb49 | 19: dust (ADR-74): small puffs at the wheels when a game's landing touches down, left behind as the board rolls on, and a trail behind a bailed board while it slides; Medium and High, with the Motion cues switch, never under reduced motion. One draw while it is in the air; the expected worst case did not move (High 36, Medium 21, Low 12) |
-| (step 20) | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
+| 09e176d | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
+| (step 21) | 21: phones and touch (ADR-76): no sideways scroll and working dialogs at 360, 390, 768 and 1024 px wide already; controls are now 44 px tall where the pointer is a finger; five new browser checks; the phone checklist |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -469,12 +470,13 @@ Rolling means frames run for a whole turn, not half a second, so this is measure
 - **If the owner has a laptop with built-in graphics,** one game on it on Medium.
 - **As it went (2026-11-10):** the graphics and the app's work are well inside the targets through a whole game on every level, loading is unchanged, and the long-run test passes with games in it. Medium and Low missed no refresh. **High misses about one refresh per game** (one frame in 3,000 to 5,500, 20 ms on a 100 Hz display, once 30 ms), so "no frame longer than 16.7 ms" is not met there by the letter. It comes from the page redrawing a card, not from the 3D view; nothing was changed for it and the gate was not moved. The first trick of a visit has two late frames of the same kind. The numbers are in PERF-BUDGET.md, "Step 20".
 
-### 21. Phones and touch
+### 21. Phones and touch. Done (ADR-76)
 Small, late, and the first step to drop (the owner, 2026-11-09: phones don't matter enough to move it up).
 
 - **Checked in Chromium with touch turned on** at 360 x 780, 390 x 844, 768 x 1024 and 1024 x 768: no sideways scroll, the controls reachable with a thumb, the heads-up display readable, the dialogs usable.
 - **Fixes** by the design side, in `app.css`.
 - **Real phones:** the owner, from a short checklist.
+- **As it went (2026-11-10):** the layout already held at all four sizes. The one fix: controls are 44 px tall where the pointer is a finger (they were 24 to 36). `browser/touch.spec.ts` keeps it. The checklist is under "Checklists for the owner".
 
 ### 22. Firefox and Safari
 - **Firefox and WebKit installed for playwright-cli** (the owner's yes, 2026-11-09), for testing on this machine only.
@@ -485,6 +487,24 @@ Small, late, and the first step to drop (the owner, 2026-11-09: phones don't mat
 - **Before (a0a2c86) and after**, from step 1's script, into PERF-BUDGET.md: every quality level, both themes, the game and the lab.
 - **Keyboard only, through every screen.** A screen reader spot check: the owner, from a checklist.
 - **Docs:** the README (features, numbers, screenshots, and a GIF of a turn in the game), the ROADMAP, CLAUDE.md, and this plan's status line.
+
+## Checklists for the owner
+
+### On a real phone (step 21)
+
+Open the live site on a phone, in the phone's own browser. Each line is a yes or a no.
+
+1. The welcome screen loads, and the board is shown (a moving preview, or a still picture on an older phone).
+2. Nothing is cut off at the sides, and the page never slides sideways.
+3. "Play SKATE" opens the game. Every button and switch is easy to hit with a thumb, with no wrong taps.
+4. Start a game. The board stays in view at the top while you scroll down to the sliders and Pop.
+5. Tap Pop, then tap again when the marker is in the green band: the board pops.
+6. Drag a slider with a thumb: it moves, and the page does not scroll instead.
+7. After the trick, the result and the letters are readable without zooming.
+8. "Quit game" asks first, and both of its buttons fit on the screen.
+9. Turn the phone sideways: the board and the controls are both still usable.
+10. Turn Sound on and pop: you hear it (on an iPhone, with the ring switch not on silent).
+11. The game does not stutter. If it does, open the practice lab, then View, and say which Quality it is on.
 
 ## If time runs short
 

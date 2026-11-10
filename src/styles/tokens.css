@@ -168,3 +168,17 @@
     --dur-slow: 0ms;
   }
 }
+
+/* Touch (2026-11-10, PLAN-PLAY-POLISH-REACH step 21): where the main pointer
+   is a finger, every control is at least 44 px tall (the usual thumb target;
+   the 24 px minimum of WCAG 2.2 suits a mouse), and a slider's hit area and
+   thumb grow with it. Nothing else changes: the layout already stacks on a
+   narrow screen. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 44px;
+    --control-h-lg: 48px;
+    --range-hit: 44px;
+    --range-thumb: 24px;
+  }
+}

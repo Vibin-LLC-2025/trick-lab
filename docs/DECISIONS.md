@@ -1021,3 +1021,16 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 - **What was found and left** (PERF-BUDGET.md, "Step 20"): High misses about one refresh per game, at a moment the page redraws its turn card, and the first trick of a visit has two late frames as the page draws its cards and the landing's sticker for the first time. Neither is the graphics, and neither gate was moved: on this day's 100 Hz display a single missed refresh reads 20 ms, which the "under 20 ms" gate fails.
 
 **Tests.** The long-run test (above). The measurement is run by hand; its numbers are in PERF-BUDGET.md.
+
+## ADR-76: Thumb-sized controls where the pointer is a finger (2026-11-10)
+
+**Context.** Step 21 of PLAN-PLAY-POLISH-REACH: phones and touch, small and late. Checked in Chromium with touch on at 360 x 780, 390 x 844, 768 x 1024 and 1024 x 768, on the welcome screen, the lab, the game screen before and in a game, and the two dialogs.
+
+**What was found.** The layout already held: no sideways scroll at any size, the stage pinned above the controls on a narrow screen (ADR-46), the dialogs inside the window, no text under 12 px, no console error, and a tap pops (one tap in the lab and for the computer's go, two for a timed pop). One thing was wrong for a finger: every control was 24 to 36 px tall, sized for a mouse.
+
+**Decision.**
+- **Where the main pointer is a finger (`@media (pointer: coarse)`), controls are at least 44 px tall.** `tokens.css` raises `--control-h` from 28 to 44, `--control-h-lg` from 36 to 48, a slider's hit area from 24 to 44 and its thumb from 16 to 24 px. `app.css` follows for the three controls that set their own height: a segmented option (40 px inside its 46 px row), a preset and the trick picker.
+- **A mouse or a trackpad sees no change**, also on a laptop with a touch screen, whose main pointer is still the trackpad.
+- **Nothing else moved.** In a game on a phone the student still scrolls down to Pop with the stage pinned above (ADR-46); the cards over the stage are a wide screen's (ADR-66).
+
+**Tests.** `browser/touch.spec.ts`: at the four sizes with touch on, every screen, a game and the leave dialog have no sideways scroll and no control under 40 px either way, the dialog is inside the window, and a tap on Pop starts a trick. Real phones are the owner's, from the checklist in the plan.
