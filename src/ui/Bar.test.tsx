@@ -40,7 +40,8 @@ async function kickflipUp() {
 
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
-  useTrickStore.setState({ screen: 'skate', skateAuto: false });
+  // Not a first game: the walk-through (ADR-66) has its own tests in Lesson.test.tsx.
+  useTrickStore.setState({ screen: 'skate', skateAuto: false, skateTaught: true });
   localStorage.clear();
   // 0.25 wins the coin flip for the player, and makes the computer release on the band's centre.
   vi.spyOn(Math, 'random').mockReturnValue(0.25);

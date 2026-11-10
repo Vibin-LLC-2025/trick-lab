@@ -669,13 +669,13 @@ Screenshots: `docs/screenshots/13-ground-high-dark.png`, `14-ground-light.png`, 
 
 ## 11. Game of SKATE (2026-11-06, ADR-43; game screen 2026-11-08, ADR-46)
 
-The game has its own screen (section 12): the stage beside one 360 px column, `main.app__play`, holding only what the game needs. No presets, stats, foot steps, objectives, event log, speed slider or timeline.
+The game has its own screen (section 12). Since 2026-11-09 (ADR-66) the stage fills it and the panels below are cards over the stage (11.2); on a narrow screen they stack under it, as before. `main.app__play` holds only what the game needs. No presets, stats, foot steps, objectives, event log, speed slider or timeline.
 
-- **Between games** (`.panel.turn.turn--setup`): the h2 "How to play" in `.turn__who` (22 px bold), the six rules as an `ol.skate__rules` (13 px, muted tabular numbers), the `.segmented` "Computer" level with its hint, a second `.segmented`, "How you pop" (Timing bar or Exact, ADR-65), with its hint, Start game (`.btn--primary`) in `.skate__actions`, and the session's record in `.panel__note` once a game has finished.
+- **Between games** (`.panel.turn.turn--setup`): the h2 "How to play" in `.turn__who` (22 px bold), the rules in three lines (six until ADR-66) as an `ol.skate__rules` (13 px, muted tabular numbers), the `.segmented` "Computer" level with its hint, a second `.segmented`, "How you pop" (Timing bar or Exact, ADR-65), with its hint, Start game (`.btn--primary`) in `.skate__actions`, and the session's record in `.panel__note` once a game has finished.
 - **Letters** (first panel in a game, last at the end): `.skate__score`, a `dl` with one `.skate__row` per player: the name (`.skate__who`, 72 px column) and five `.skate__letter` tiles in `.skate__letters`, 30 x 30 px, the display face at 15 px (24 x 24 mono until ADR-57). A letter not yet earned is a 1 px dashed `--color-line-strong` outline with a muted letter; an earned one is `.skate__letter--got`, a sticker: solid `--color-bad` with `--color-bad-fg` text (6.87 light, 8.13 dark), a 2 px `--color-sticker-edge` border and a slight tilt, so the count reads from fill and shape, not colour alone. One just earned stamps in (`.skate__letter--new`, section 14.7). The tiles are `aria-hidden`; a visually hidden "S K" or "no letters" reads instead. The player up is `.skate__row--up`: a bold name after an 8 px `--color-accent` dot, and a hidden ", up now". Quit game (`.btn--ghost.btn--sm`) sits in `.panel__head`.
 - **Turn card** (`.panel.turn`): tinted for whose turn it is, `.turn--you` on `--color-accent-bg` (text 13.36 light, 12.38 dark; accent 5.24 and 5.88) and `.turn--computer` on `--color-surface-2`. Top to bottom: `.turn__news`, what just happened (13 px medium); the h2 `.turn__who`, "Your turn" (in `--color-accent`) or "Computer's turn" (22 px, the display face since ADR-57); `.turn__task` with `.turn__label` (13 px muted: "Copy the computer's", "Your set", "Going for", "Copying your") over `.turn__trick`, the trick in 24 px in the display face (28 px bold until ADR-57), the largest text in the column ("Call a trick" until the student calls one); `.turn__note` "Last letter: second try", a `--color-bad` pill, on a second try; `.turn__status`, what to do now (13 px); on the computer's turn with auto on, `.turn__timer`, a 4 px bar that fills over `--skate-turn-delay` (2200 ms, decorative, hidden under reduced motion); then for the student the call picker and the trick guide.
 - **Phones (below 960 px):** the stage sticks to the top of the page, `--stage-sticky-h` tall (`clamp(150px, min(50vw, 40vh), 420px)`), ringed by 8 px of `--color-bg` so the column scrolls cleanly under it; scroll padding keeps a focused control clear of it.
-- **Controls**: the Inputs panel, then a panel with Pop (`.btn--primary.skate__pop`, full width, 44 px, 15 px; "Computer's go" on the computer's turn) and `.skate__toggles` with two `.toggle` switches: Slow motion (the `s` key) and Computer goes on its own.
+- **Controls**: the Inputs panel, then a panel with Pop (`.btn--primary.skate__pop`, full width, 44 px, 15 px; "Computer's go" on the computer's turn) and the timing bar (11.1). The two `.toggle` switches in `.skate__toggles`, Slow motion (the `s` key) and Computer goes on its own, are with the letters since ADR-66.
 - **Last trick**: the outcome card of section 4 (`.outcome`), its name prefixed "You:" or "Computer:". Hidden until the first trick of the game.
 - **Stage chip** (`.turn-chip`, over the stage's top-left corner, `aria-hidden`): `.turn-chip__who` (12 px bold uppercase) over `.turn-chip__trick` (18 px bold). `.turn-chip--you` is filled with the accent; the computer's is `--color-surface` with a `--color-line-strong` border.
 - **Game over** (`.panel.turn.turn--over`, `.turn--won` on `--color-ok-bg` or `.turn--lost` on `--color-bad-bg`, the heading in `--color-ok` or `--color-bad`): the last message, "You win!" or "The computer wins" (focus lands here), one line with the level and the session's record, then Play again (`.btn--primary`) and Change level (`.btn`). The letters follow.
@@ -697,6 +697,34 @@ Under Pop in the Controls panel, in a game played on the timing bar (not in Exac
 - **By ear.** With sound on: a tick at the start, a tick at 400 ms and a higher click on the band's centre at 800 ms, over a quiet rising tone. Tick, tick, pop.
 - **Measured 2026-11-09** (production build, 1440 x 900, High, Medium and Low): the marker as drawn trails the store's clock by 8 to 17 ms; one 3D frame is drawn during a sweep. Passes run: keyboard only (Space, Space), mouse, and emulated touch at 390 x 844 (no sideways scroll). The by-ear pass with the screen covered needs a person and has not been run.
 
+### 11.2 The game over the stage (`.hud__*`, 2026-11-09, ADR-66)
+
+Over 960 px wide the game screen is the top bar over one stage, and `main.app__play` is a layer over that stage with 12 px of padding: a grid of three columns (340 px, the rest, 300 px) and three rows (auto, the rest, auto). The layer takes no pointer events; its cards do, so the stage turns under the gaps.
+
+| Card | Class | Where | What |
+| --- | --- | --- | --- |
+| Turn card | `.hud__turn` | top left, 340 px, as tall as it needs, scrolling inside itself if the stage is short | the turn card; between games "How to play"; at the end the result |
+| Letters | `.hud__score` | top right, 300 px | both players' letters, Quit game, and in a game the two switches |
+| Last trick | `.hud__last` | under the letters | the outcome card |
+| Tray | `.hud__tray` | bottom centre, up to 920 px | the Inputs panel with its three sliders side by side, and a 300 px panel with Pop and the timing bar |
+
+- **Cards.** Each is a `.panel` with a 1 px `--color-line-strong` border, `--radius-lg`, a soft shadow (`0 2px 10px` black at 25 percent) and an opaque background: `--color-surface`, or the turn card's own tint. Opaque on purpose: no text sits on the 3D picture, so the contrast figures in this document hold over any ground.
+- **The middle stays clear.** The board, its highest pop and the celebration are in the middle column, which has no card. Measured 2026-11-09 at 1440 x 900, 1280 x 720 and 1024 x 700: nothing overlaps the board, and the page does not scroll.
+- **The stage's turn chip** (`.turn-chip`) is hidden here, since the turn card is over the stage; it stays on a narrow screen.
+- **A narrow screen (960 px and below):** the stacked layout of section 11 (the stage pinned on top, the panels under it). `.hud__tray` is `display: contents` there, so its two panels flow with the rest.
+- **Order.** The DOM order is the letters, the turn card, the tray, the last trick: Tab goes top right, top left, then the bottom, then back up to the last trick, which has no control.
+
+### 11.3 The first game's walk-through (`.lesson`, 2026-11-09, ADR-66)
+
+In the turn card, in place of the trick guide, on the player's first go of their first game.
+
+- **Box.** `.lesson`: 1 px `--color-line-strong`, `--radius-md`, `--color-surface`, 8 px by 12 px of padding.
+- **Title.** `.lesson__title`, 13 px bold: "First game: your first trick, in 3 steps" (2 in Exact).
+- **Prompts.** `ol.lesson__steps`, numbered, 13 px. Each `li.lesson__step` is muted until its turn. `.lesson__step--now` (also `aria-current="step"`) is bold in `--color-text`. `.lesson__step--done` is struck through and ends with a hidden "Done." for a screen reader. So the state is weight and a line, never colour alone.
+- **The words.** "Set the sliders for the kickflip: Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0." (with "Call the kickflip, then" in front when the player is up to set and has not called), "Press Pop, or Space, to start the bar.", "Press Pop again when the marker is in the band.".
+- **Skip.** "Skip the walk-through", `.btn--ghost.btn--sm`, under the prompts.
+- **Before the game.** One `.panel__note` under Start game on a device that has not played: "Your first game walks you through your first trick."
+
 ## 12. Screens and the welcome screen (2026-11-08, ADR-45)
 
 The app opens on a welcome screen instead of every control at once. Three screens share one grid, chosen by `data-screen` on `.app`; the stage keeps its place in the DOM so the 3D view never reloads.
@@ -716,7 +744,7 @@ Over the game and the lab: a 44 px `--color-surface` strip with the column borde
 ### 12.3 Screen layouts
 
 - **Lab:** the top bar over the three columns of section 9, unchanged inside.
-- **Game:** the top bar over the stage and one game column (`.app__play`, `--col-play` 360 px, the same surface as the side columns); its content is section 11.
+- **Game:** the top bar over the stage, which fills the screen, with the game's cards over it (`.app__play`, section 11.2, ADR-66; one 360 px column beside the stage until then); its content is section 11.
 - **Below 960 px:** everything stacks: the top bar, the stage, then the columns.
 
 ### 12.4 The trick list (`.tricks`, 2026-11-09, ADR-64)

@@ -15,6 +15,8 @@ export const createInputsSlice: StateCreator<TrickState, [], [], InputsSlice> = 
     if (get()[key] === next) return;
     set({ [key]: next, activePreset: null } as Pick<InputsSlice, InputKey | 'activePreset'>);
     get().log('input.changed', { input: key, label: INPUT_NAMES[key], value: next, valueText: valueText(key, next) });
+    // The first game's walk-through says its next prompt when the setup is reached (ADR-66).
+    get().lessonMoved();
   },
 
   applyPreset: (id) => {

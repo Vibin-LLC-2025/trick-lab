@@ -15,6 +15,7 @@ export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash,
 export { liveProgress, type Playhead } from './playhead';
 
 export type { Random, Schedule } from './skate';
+export { TAUGHT_KEY } from './skate';
 export { hasRecords, RECORD_TRICKS, recordCounts, type Records, type Today, type TrickRecord } from './records';
 export type { TrickState, TrickEvent, EventType, FocusTarget, LabFold, LeaveTarget, Screen, Theme, Quality, Stance, CameraView, PlaybackStatus, PlaybackRate, SoundKind, PopMode, PendingPop, LastRelease } from './types';
 

@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 9 and step 11 are committed. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and deleted the other. Step 10 is next. Step 11 was taken out of order while waiting for the pick.
+- Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick. Step 12 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 47 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 48 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -64,7 +64,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 47 commits a
 | fa866c2 | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
 | e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. The owner picked the bar |
 | 2dc5543 | 11, out of order: records and the trick list (ADR-64) |
-| this commit | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
+| ef7e8ea | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
+| this commit | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -258,7 +259,14 @@ As built, where it differs from the list below or adds to it:
 - **An ADR, BRIEF.md and DESIGN.md.**
 - **Done when** the owner's five checks from step 8 hold on the finished version, by mouse, by touch (emulated) and by keyboard.
 
-### 10. The game screen, as a game
+### 10. The game screen, as a game. Done (ADR-66)
+As built, where it differs from the list below:
+- **"The sliders show only in Exact" could not work as written.** It was written before the pick. With the timing bar the sliders are the control in both ways of popping, so they are always in the tray at the bottom.
+- **The first game walks you through your first go, whatever its trick.** The coin flip stays, so that go may be a copy of the computer's trick; it is a kickflip when you are up to set and have not called yet. Three prompts on the bar, two in Exact. It gives the slider values, the one place the game does.
+- **"The computer goes on its own by default" was already so** (ADR-46). Nothing changed.
+- **A narrow screen keeps the stacked layout** until step 21.
+- **Room is short for more interface:** the stylesheet is 7.5 of 8.0 KB and the main script 103.0 of 106.0 KB.
+
 Today the game uses the lab's side panel. The design side draws the new screen in DESIGN.md first, then it is built.
 
 - **The stage fills the screen.** The letters, whose turn it is and the trick in play sit over it as a heads-up display (page elements over the stage, not inside the 3D view).

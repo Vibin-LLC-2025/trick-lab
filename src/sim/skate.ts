@@ -7,7 +7,8 @@
 // Randomness always comes in as a parameter.
 import { BAR, clampRelease, timedAttempt, type Band } from './bar';
 import { airtimeFor, type TrickInputs } from './flight';
-import { CLEAN_ROLL, CLEAN_YAW, INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
+import { displayValue, inputDirection } from './format';
+import { CLEAN_ROLL, CLEAN_YAW, DEFAULT_INPUTS, INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
 
 export const SKATE_WORD = 'SKATE';
 /** Letters that end a game: one per letter of SKATE. */
@@ -200,33 +201,49 @@ export function aimFor(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInpu
   return { pop, flick: call.flips / T, scoop: call.halfShoves / 2 / T };
 }
 
+/** The slider steps nearest a call's exact rates at one pop height, and how far off they land against the clean limits (under 1 is clean). */
+function setupAt(call: Pick<SkateCall, 'flips' | 'halfShoves'>, pop: number): { inputs: TrickInputs; score: number } {
+  const T = airtimeFor(pop);
+  const flick = snapInput('flick', call.flips / T);
+  const scoop = snapInput('scoop', call.halfShoves / 2 / T);
+  const rollOff = Math.abs(flick * T * 360 - call.flips * 360);
+  const yawOff = Math.abs(scoop * T * 360 - call.halfShoves * 180);
+  return { inputs: { pop, flick, scoop }, score: Math.max(rollOff / CLEAN_ROLL, yawOff / CLEAN_YAW) };
+}
+
 /**
  * The slider setup that lands a call cleanest (ADR-63): for each pop on the
  * slider grid, the flick and scoop steps nearest the rates that turn exactly
  * the call's flips and half shoves, scored by its worse axis against the
  * clean limits; the best score wins, and of equal scores the lowest pop.
  * Every settable trick has a clean one (skate.test.ts): the double flips
- * only at pop 0.55 m with flick 3.0. Tests and the first game's walk-through
- * use it, since `aimFor`'s exact rates are off the slider grid.
+ * only at pop 0.55 m with flick 3.0. Tests use it, since `aimFor`'s exact rates are off the slider
+ * grid; the first game's walk-through uses `lessonSetup`.
  */
 export function cleanSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInputs {
   const P = INPUT_LIMITS.pop;
   let best: TrickInputs = { pop: P.min, flick: 0, scoop: 0 };
   let bestScore = Infinity;
   for (let pop = P.min; pop <= P.max + 1e-9; pop = snapInput('pop', pop + P.step)) {
-    const T = airtimeFor(pop);
-    const flick = snapInput('flick', call.flips / T);
-    const scoop = snapInput('scoop', call.halfShoves / 2 / T);
-    const rollOff = Math.abs(flick * T * 360 - call.flips * 360);
-    const yawOff = Math.abs(scoop * T * 360 - call.halfShoves * 180);
-    const score = Math.max(rollOff / CLEAN_ROLL, yawOff / CLEAN_YAW);
+    const { inputs, score } = setupAt(call, pop);
     if (score < bestScore - 1e-9) {
       bestScore = score;
-      best = { pop, flick, scoop };
+      best = inputs;
     }
     if (pop >= P.max) break;
   }
   return best;
+}
+
+/**
+ * The setup the first game's walk-through asks for (ADR-66): the one at the
+ * pop height the sliders start on, 0.35 m, when that lands clean, so a first
+ * trick is one slider to move; otherwise the cleanest (the double flips need
+ * the highest pop).
+ */
+export function lessonSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInputs {
+  const first = setupAt(call, DEFAULT_INPUTS.pop);
+  return first.score < 1 ? first.inputs : cleanSetup(call);
 }
 
 /** A standard normal draw (Box-Muller), clamped to 3 deviations so one wild draw cannot decide a game. */
@@ -530,3 +547,50 @@ export function turnView(g: SkateGame): TurnView | null {
       return null;
   }
 }
+
+/**
+ * The first game's walk-through (ADR-66): the player's first go, as two or
+ * three short prompts, with `at` the one to do now. It is for whatever trick
+ * that go is: the computer's set to copy, the trick the player called, or a
+ * kickflip when they are up to set and have not called yet. The one place
+ * the game gives slider values (the trick guide never does, ADR-44): the
+ * clean setup of the trick, so a first try at the bar is a fair one.
+ */
+export interface Lesson {
+  steps: readonly string[];
+  at: number;
+}
+
+const KICKFLIP: Pick<SkateCall, 'name' | 'flips' | 'halfShoves'> = { name: 'Kickflip', flips: 1, halfShoves: 0 };
+
+/** "Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0". */
+const setupWords = (i: TrickInputs) => {
+  const rate = (key: 'flick' | 'scoop', label: string) => {
+    const word = inputDirection(key, i[key]);
+    return `${label} ${displayValue(key, i[key])}${word ? ` toward ${word}` : ''}`;
+  };
+  return `Pop ${displayValue('pop', i.pop)} m, ${rate('flick', 'Flick')}, ${rate('scoop', 'Scoop')}`;
+};
+
+/**
+ * The walk-through for the game as it stands, or null when it is not the
+ * player's go. `timed`: the game is played on the timing bar. `inputs`: the
+ * sliders now. `barRunning`: the bar has been started and not released.
+ */
+export function lessonFor(g: SkateGame, timed: boolean, inputs: TrickInputs, barRunning: boolean): Lesson | null {
+  if (turnOf(g) !== 'you') return null;
+  const trick = g.call ?? KICKFLIP;
+  const setup = lessonSetup(trick);
+  const set = `the sliders for the ${trick.name.toLowerCase()}: ${setupWords(setup)}.`;
+  const steps = [
+    g.call ? `Set ${set}` : `Call the kickflip, then set ${set}`,
+    timed ? 'Press Pop, or Space, to start the bar.' : 'Press Pop, or Space.',
+    ...(timed ? ['Press Pop again when the marker is in the band.'] : []),
+  ];
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  const ready = g.call !== null && near(inputs.pop, setup.pop) && near(inputs.flick, setup.flick) && near(inputs.scoop, setup.scoop);
+  return { steps, at: !ready ? 0 : timed && barRunning ? 2 : 1 };
+}
+
+/** The walk-through's prompt to do now, as heard: "Step 1 of 3: Set the sliders for the kickflip: ...". */
+export const lessonText = (l: Lesson) => `Step ${l.at + 1} of ${l.steps.length}: ${l.steps[l.at]}`;

@@ -137,6 +137,11 @@ recognition. "Exact" (Pop does exactly what the sliders say) is one choice
 away at the game's start, for anyone who cannot or will not time a bar. The
 lab is always exact. The mapping is `src/sim/bar.ts`.
 
+The game screen (2026-11-09, ADR-66): on a wide screen the stage fills it and
+the game's panels are cards over the stage, a heads-up display, with the
+sliders, Pop and the timing bar in a tray along the bottom. A player's first
+game walks them through their first go in three prompts.
+
 Event log: `{ id, t (ms since session start),
 type, payload }`. Types: `input.changed` (which slider, value),
 `preset.applied`, `trick.popped` (inputs), `trick.resolved` (name, landed,
@@ -287,6 +292,8 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .fold, .fold--part, .fold__heading, .fold__heading--sub, .fold__toggle, .fold__body (the lab's sections that open, ADR-47)
 .skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
 .skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar, ADR-65)
+.hud__turn, .hud__score, .hud__last, .hud__tray (the game's cards over the stage, ADR-66)
+.lesson, .lesson__title, .lesson__steps, .lesson__step, .lesson__step--now, .lesson__step--done (the first game's walk-through, ADR-66)
 .app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)
 .home, .home__eyebrow, .home__title, .home__lede, .home__choices, .home__utilities, .home__hint, .choice, .choice--primary, .choice__title, .choice__text, .preview-toggle (welcome screen, ADR-45)
 .eventlog, .eventlog__row, .eventlog__t, .eventlog__type

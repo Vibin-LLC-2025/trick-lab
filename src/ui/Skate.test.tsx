@@ -32,7 +32,8 @@ beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
   // The game screen; the computer waits for its button unless a test turns auto on. These tests are about the
   // screen's flow, so Pop is Exact (one press, one trick); the timing bar, the default, has its own in Bar.test.tsx.
-  useTrickStore.setState({ screen: 'skate', skateAuto: false, popMode: 'exact' });
+  // Nor is it a first game: the walk-through (ADR-66) has its own in Lesson.test.tsx.
+  useTrickStore.setState({ screen: 'skate', skateAuto: false, popMode: 'exact', skateTaught: true });
   localStorage.clear();
   // 0.25 wins the coin flip for the student, makes the computer hit its aim (skate.test.ts) and pick the heelflip first on Normal.
   vi.spyOn(Math, 'random').mockReturnValue(0.25);
@@ -47,8 +48,10 @@ describe('game screen (ADR-46)', () => {
   it('explains how to play, picks a level and starts by keyboard, with focus on whose turn it is', async () => {
     const user = await setup();
     expect(screen.getByRole('heading', { level: 2, name: 'How to play' })).toBeInTheDocument();
-    expect(within(game()).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(game()).getByText('On your last letter you get a second try.')).toBeInTheDocument();
+    // The whole game in three lines (ADR-66: it was six; the first game's walk-through teaches the rest by doing).
+    expect(within(game()).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(game()).getByText('No trick twice, and two tries on your last letter. Spell S K A T E and you lose.')).toBeInTheDocument();
+    expect(within(game()).queryByText(/walks you through/)).toBeNull();
     const normal = within(game()).getByRole('radio', { name: 'Normal' });
     expect(normal).toBeChecked();
     normal.focus();

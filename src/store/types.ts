@@ -355,6 +355,16 @@ export interface SkateSlice {
   cancelPop: () => void;
   /** Internal: drops a running bar without announcing, and returns "Pop cancelled. " for the caller's own announcement, or "" if none was running. */
   dropPop: () => string;
+  /** The player has been through the first game's walk-through, or skipped it (ADR-66). Persisted under trick-lab.skate-taught. Not logged. */
+  skateTaught: boolean;
+  /** The walk-through is running: this game is the player's first, and they have not popped in it yet (ADR-66). Its prompts are derived (lessonFor). Not logged. */
+  skateLesson: boolean;
+  /** Ends the walk-through for good, and says so. */
+  skipLesson: () => void;
+  /** Internal, the player's pop: the walk-through is over, and remembered as done. */
+  endLesson: () => void;
+  /** Internal, a slider or the call changed: says the walk-through's next prompt when its setup has just been reached. */
+  lessonMoved: () => void;
 }
 
 /**

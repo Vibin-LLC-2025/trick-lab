@@ -112,7 +112,6 @@
   /* Layout */
   --col-setup: 272px;
   --col-results: 312px;
-  --col-play: 360px;      /* the game's column (ADR-45) */
   /* How long the computer waits before its go (ADR-46): times the turn card's
      countdown bar. Must equal COMPUTER_DELAY_MS in src/ui/Skate.tsx (tested). */
   --skate-turn-delay: 2200ms;

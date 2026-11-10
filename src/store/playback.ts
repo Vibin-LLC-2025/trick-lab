@@ -121,6 +121,8 @@ export const createPlaybackSlice =
       const go = s.computerGo();
       const by = go ? ('computer' as const) : ('you' as const);
       const mine = go ? null : timed;
+      // The player's first pop of their first game ends its walk-through (ADR-66).
+      if (!go) s.endLesson();
       const inputs = go
         ? tidy(go.inputs)
         : mine

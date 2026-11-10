@@ -30,6 +30,8 @@ function makeStore(queue: number[] = [YOU_FIRST]) {
       };
     },
   );
+  // Not a first game: the walk-through (ADR-66) has its own tests in lesson.test.ts.
+  store.setState({ skateTaught: true });
   const runDue = () => {
     for (const job of jobs) {
       if (job.live && job.at <= t) {

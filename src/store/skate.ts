@@ -9,6 +9,8 @@ import {
   coinFlip,
   computerAttempt,
   computerTurn,
+  lessonFor,
+  lessonText,
   lettersText,
   newSkateGame,
   SKATE_LEVELS,
@@ -30,6 +32,8 @@ import type { PopMode, SkateSlice, TrickState } from './types';
 export const SKATE_AUTO_KEY = 'trick-lab.skate-auto';
 /** How the player pops in a game: on the timing bar, or exactly (ADR-65). */
 export const POP_MODE_KEY = 'trick-lab.pop-mode';
+/** The first game's walk-through has been done or skipped (ADR-66). */
+export const TAUGHT_KEY = 'trick-lab.skate-taught';
 
 /** A source of numbers in [0, 1). The store takes one so tests can script the coin flip and the computer. */
 export type Random = () => number;
@@ -47,6 +51,7 @@ export const initialSkate = (level: SkateGame['level'] = 'normal') => ({
   skateRecord: { you: 0, computer: 0 },
   pendingPop: null,
   lastRelease: null,
+  skateLesson: false,
 });
 
 const POP_MODE_ANNOUNCEMENT: Record<PopMode, string> = {
@@ -72,6 +77,20 @@ export const createSkateSlice =
     let popSeq = 0;
     /** Cancels the running bar's end, if one is scheduled. */
     let cancelEnd: (() => void) | null = null;
+    /** The walk-through's prompt last said, so each is said once as it is reached (ADR-66). */
+    let lessonAt = 0;
+
+    /** The walk-through's prompts for the state as it is, or null when it is not running or not the player's go. */
+    const lesson = () => {
+      const s = get();
+      return s.skateLesson ? lessonFor(s.skate, s.popMode === 'timed', s, s.pendingPop !== null) : null;
+    };
+    /** The walk-through's opening, for the announcement that starts the player's first go. */
+    const lessonLead = () => {
+      const l = lesson();
+      lessonAt = l?.at ?? 0;
+      return l ? ` First game, so here is your first trick in ${l.steps.length} steps. ${lessonText(l)}` : '';
+    };
 
     /** Drops the running bar: no attempt, no letter. True if there was one. */
     const drop = (): boolean => {
@@ -101,6 +120,27 @@ export const createSkateSlice =
       skateAuto: readPref(SKATE_AUTO_KEY) !== 'off',
       skateLeave: null,
       popMode: readPref(POP_MODE_KEY) === 'exact' ? 'exact' : 'timed',
+      skateTaught: readPref(TAUGHT_KEY) === 'yes',
+
+      skipLesson: () => {
+        if (!get().skateLesson) return;
+        get().endLesson();
+        get().announce('Walk-through skipped.');
+      },
+
+      endLesson: () => {
+        if (!get().skateLesson) return;
+        savePref(TAUGHT_KEY, 'yes');
+        set({ skateLesson: false, skateTaught: true });
+      },
+
+      lessonMoved: () => {
+        const l = lesson();
+        if (!l) return;
+        // The setup has just been reached: say what comes next. Moving away from it again is not news.
+        if (l.at === 1 && lessonAt === 0) get().announce(lessonText(l));
+        lessonAt = l.at;
+      },
 
       setPopMode: (popMode) => {
         const s = get();
@@ -160,11 +200,12 @@ export const createSkateSlice =
         const skate = withComputerCall(startSkateGame(s.skate.level, first), random);
         const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
         // A fresh game starts with the board on the pad and no result from before (ADR-46). The speed is kept.
-        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null });
+        // A player's first game walks them through their first go (ADR-66).
+        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught });
         s.log('skate.started', { level: skate.level, first });
         s.requestFocus({ kind: 'skate-heading' });
         const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
-        s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}`);
+        s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}${lessonLead()}`);
       },
 
       toggleSkateAuto: () => {
@@ -217,7 +258,9 @@ export const createSkateSlice =
         const skate = callTrick(s.skate, id);
         set({ skate });
         // Not logged on its own: the student's trick.popped carries the call.
-        s.announce(`You called ${withArticle(skate.call!.name)}. Land it and the computer has to copy it.`);
+        const l = lesson();
+        if (l) lessonAt = l.at;
+        s.announce(`You called ${withArticle(skate.call!.name)}. Land it and the computer has to copy it.${l ? ` ${lessonText(l)}` : ''}`);
       },
 
       quitSkate: () => {
@@ -229,7 +272,7 @@ export const createSkateSlice =
           s.log('skate.ended', { winner: null, reason: 'quit', ...score(s.skate) });
           s.announce(`${cancelled}Game of SKATE ended.`);
         }
-        set({ skate: newSkateGame(s.skate.level), skateMessage: '', lastRelease: null });
+        set({ skate: newSkateGame(s.skate.level), skateMessage: '', lastRelease: null, skateLesson: false });
         s.requestFocus({ kind: 'skate-heading' });
       },
 
@@ -285,7 +328,7 @@ export const createSkateSlice =
           out.push(`Letters: you ${lettersText(game.letters.you)}, computer ${lettersText(game.letters.computer)}.`);
         }
         // What happened, then what to do next (the panel shows the two apart).
-        out.push(skateInstruction(game));
+        out.push(`${skateInstruction(game)}${lessonLead()}`);
         return out;
       },
 

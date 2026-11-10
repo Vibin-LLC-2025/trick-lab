@@ -100,7 +100,8 @@ a {
    Three screens (ADR-45, DESIGN.md 12), one grid, picked by data-screen:
    - home: the welcome text (left) beside the preview stage (right).
    - lab: the top bar over setup (left), stage (centre), results (right).
-   - skate: the top bar over the stage (left) and the game column (right).
+   - skate: the top bar over the stage, which fills the screen; the game's
+     panels are cards over it (ADR-66, below).
    Each side column is one surface and scrolls on its own; the stage holds
    still. Below 960px everything stacks under the stage. */
 
@@ -119,10 +120,10 @@ a {
 }
 
 .app[data-screen="skate"] {
-  grid-template-columns: minmax(0, 1fr) var(--col-play);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "top top"
-    "stage play";
+    "top"
+    "stage";
 }
 
 .app[data-screen="home"] {
@@ -194,6 +195,138 @@ a {
 
 .app__play {
   grid-area: play;
+}
+
+/* ---------- The game, over the stage (ADR-66, DESIGN.md 11.2) ----------
+   On a wide screen the stage fills the game screen and the game's panels are
+   cards over it, a heads-up display: the turn card top left, the letters and
+   the last trick top right, the tray (sliders, Pop, the timing bar) along the
+   bottom. Between games and at the end, how to play and the result sit where
+   the turn card does, so the board is never covered. The layer itself takes
+   no pointer events, so the stage still turns under the gaps. Opaque cards:
+   text never sits on the 3D picture. Below 960px the panels stack under the
+   stage as before. */
+@media (min-width: 961px) {
+  .app[data-screen="skate"] .app__play {
+    grid-area: stage;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr) minmax(0, 300px);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "turn . score"
+      "turn . last"
+      "tray tray tray";
+    gap: var(--space-2);
+    padding: var(--space-3);
+    overflow: visible;
+    border: 0;
+    background: none;
+    pointer-events: none;
+  }
+
+  :is(.hud__turn, .hud__score, .hud__last, .hud__tray > .panel) {
+    margin-top: 0;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
+    pointer-events: auto;
+  }
+
+  :is(.hud__score, .hud__last, .hud__tray > .panel, .turn--setup) {
+    background: var(--color-surface);
+  }
+
+  .hud__turn {
+    grid-area: turn;
+    align-self: start;
+    max-height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .hud__score {
+    grid-area: score;
+  }
+
+  .hud__last {
+    grid-area: last;
+    align-self: start;
+  }
+
+  .hud__tray {
+    grid-area: tray;
+    justify-self: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: end;
+    gap: var(--space-2);
+    width: min(100%, 920px);
+  }
+
+  .hud__tray .inputs {
+    flex-direction: row;
+    gap: var(--space-4);
+  }
+
+  .hud__tray .field {
+    flex: 1;
+  }
+
+  .app[data-screen="skate"] .turn-chip {
+    display: none;
+  }
+}
+
+/* The tray is only a wrapper where the panels stack. */
+@media (max-width: 960px) {
+  .hud__tray {
+    display: contents;
+  }
+}
+
+/* The first game's walk-through (ADR-66, DESIGN.md 11.3). Markup:
+     <div class="lesson"><p class="lesson__title">First game: ...</p>
+       <ol class="lesson__steps"><li class="lesson__step lesson__step--done">...</li>
+         <li class="lesson__step lesson__step--now" aria-current="step">...</li><li class="lesson__step">...</li></ol>
+       <button class="btn btn--ghost btn--sm">Skip the walk-through</button></div>
+   The prompt to do now is bold in the text colour (and aria-current); one
+   that is done is struck through and muted (and says "Done." to a screen
+   reader); one still to come is muted. */
+.lesson {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.lesson__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.lesson__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: 1.4em;
+  list-style: decimal;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-muted);
+}
+
+.lesson__step--now {
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.lesson__step--done {
+  text-decoration: line-through;
 }
 
 @media (max-width: 960px) {

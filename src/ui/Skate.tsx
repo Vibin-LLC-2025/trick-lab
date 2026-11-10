@@ -5,6 +5,7 @@ import {
   CLEAN_ONLY_NOTE,
   computerTurn,
   GUIDE_TIP,
+  lessonFor,
   lettersText,
   openTricks,
   SETTABLE_GROUPS,
@@ -107,12 +108,17 @@ function Letters({ who, count, up }: { who: SkatePlayer; count: number; up: bool
   );
 }
 
+/** Both players' letters, Quit, and while a game is in play its two switches (DESIGN.md 11.2: the top-right card over the stage). */
 function Scoreboard() {
   const game = useTrickStore((s) => s.skate);
   const requestLeave = useTrickStore((s) => s.requestLeave);
+  const slow = useTrickStore((s) => s.rate < 1);
+  const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
+  const auto = useTrickStore((s) => s.skateAuto);
+  const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
   const up = turnView(game)?.who ?? null;
   return (
-    <section className="panel" aria-labelledby="skate-letters-heading">
+    <section className="panel hud__score" aria-labelledby="skate-letters-heading">
       <div className="panel__head">
         <h2 id="skate-letters-heading" className="panel__title">
           Letters
@@ -127,6 +133,12 @@ function Scoreboard() {
         <Letters who="you" count={game.letters.you} up={up === 'you'} />
         <Letters who="computer" count={game.letters.computer} up={up === 'computer'} />
       </dl>
+      {skateActive(game) && (
+        <div className="skate__toggles">
+          <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
+          <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
+        </div>
+      )}
     </section>
   );
 }
@@ -146,6 +158,45 @@ function Guide({ call }: { call: SkateCall }) {
       </dl>
       <p className="panel__note">{GUIDE_TIP}</p>
       {cleanOnly && <p className="panel__note">{CLEAN_ONLY_NOTE}</p>}
+    </div>
+  );
+}
+
+/**
+ * The first game's walk-through (ADR-66, DESIGN.md 11.3): the player's first
+ * go as two or three prompts, the one to do now marked in words and by
+ * weight, the ones done struck through and said as done. In place of the
+ * trick guide until the first pop. The store says each prompt as it is reached.
+ */
+function Lesson() {
+  // Select the parts, then derive: a selector that builds a new object would re-render forever.
+  const game = useTrickStore((s) => s.skate);
+  const timed = useTrickStore((s) => s.popMode === 'timed');
+  const pop = useTrickStore((s) => s.pop);
+  const flick = useTrickStore((s) => s.flick);
+  const scoop = useTrickStore((s) => s.scoop);
+  const barRunning = useTrickStore((s) => s.pendingPop !== null);
+  const skip = useTrickStore((s) => s.skipLesson);
+  const lesson = lessonFor(game, timed, { pop, flick, scoop }, barRunning);
+  if (!lesson) return null;
+  return (
+    <div className="lesson">
+      <p className="lesson__title">First game: your first trick, in {lesson.steps.length} steps</p>
+      <ol className="lesson__steps">
+        {lesson.steps.map((text, i) => (
+          <li
+            key={text}
+            className={`lesson__step${i < lesson.at ? ' lesson__step--done' : i === lesson.at ? ' lesson__step--now' : ''}`}
+            aria-current={i === lesson.at ? 'step' : undefined}
+          >
+            {text}
+            {i < lesson.at && <span className="visually-hidden"> Done.</span>}
+          </li>
+        ))}
+      </ol>
+      <button type="button" className="btn btn--ghost btn--sm" onClick={skip}>
+        Skip the walk-through
+      </button>
     </div>
   );
 }
@@ -232,10 +283,11 @@ function TurnStatus() {
 function TurnCard() {
   const game = useTrickStore((s) => s.skate);
   const message = useTrickStore((s) => s.skateMessage);
+  const lesson = useTrickStore((s) => s.skateLesson);
   const view = turnView(game);
   if (!view) return null;
   return (
-    <section className={`panel turn turn--${view.who}`} aria-labelledby="skate-heading">
+    <section className={`panel turn turn--${view.who} hud__turn`} aria-labelledby="skate-heading">
       {message && <p className="turn__news">{message}</p>}
       {/* Focus target when a game starts (tabIndex -1: focusable by script, not in tab order; Space still pops from here). */}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
@@ -248,7 +300,7 @@ function TurnCard() {
       {game.secondTry && <p className="turn__note">Last letter: second try</p>}
       <TurnStatus />
       {game.phase === 'you-set' && <CallPicker />}
-      {view.who === 'you' && game.call && <Guide call={game.call} />}
+      {view.who === 'you' && lesson ? <Lesson /> : view.who === 'you' && game.call && <Guide call={game.call} />}
     </section>
   );
 }
@@ -294,19 +346,15 @@ function TimingBar() {
   );
 }
 
-/** The sliders, Pop (or the computer's go), the timing bar unless the game is Exact, and the game's two switches. */
+/** The tray along the bottom of the stage (DESIGN.md 11.2): the sliders, then Pop (or the computer's go) with the timing bar unless the game is Exact. */
 function Controls() {
   const status = useTrickStore((s) => s.status);
   const cpu = useTrickStore((s) => computerTurn(s.skate));
   const pressPop = useTrickStore((s) => s.pressPop);
   const timed = useTrickStore((s) => s.popMode === 'timed');
-  const slow = useTrickStore((s) => s.rate < 1);
-  const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
-  const auto = useTrickStore((s) => s.skateAuto);
-  const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
   const label = cpu ? "Computer's go" : 'Pop';
   return (
-    <>
+    <div className="hud__tray">
       <Inputs />
       <section className="panel" aria-label="Pop">
         <div className="skate__controls">
@@ -323,13 +371,9 @@ function Controls() {
             {label} <kbd aria-hidden="true">Space</kbd>
           </button>
           {timed && <TimingBar />}
-          <div className="skate__toggles">
-            <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
-            <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
-          </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -342,7 +386,7 @@ function LastTrick() {
   const who = cpu ? 'Computer' : 'You';
   // No role="status": the single Announcer is the live region, so the result is not read twice.
   return (
-    <section className="panel" aria-labelledby="skate-last-heading">
+    <section className="panel hud__last" aria-labelledby="skate-last-heading">
       <h2 id="skate-last-heading" className="panel__title">
         Last trick
       </h2>
@@ -371,13 +415,11 @@ const POP_MODES: readonly { mode: PopMode; label: string; hint: string }[] = [
   { mode: 'exact', label: 'Exact', hint: 'No bar: the board does exactly what the sliders say, every time.' },
 ];
 
+/** The whole game in three lines (ADR-66: the first game's walk-through teaches the rest by doing). */
 const RULES = [
-  'A coin flip decides who sets first.',
-  'The setter calls a trick, then tries to land it.',
-  'Landed: the other player has to copy it. Miss the copy and take a letter.',
-  'Missed: no letter, and the other player sets next.',
-  'On your last letter you get a second try.',
-  'No trick can be set twice. Spell S K A T E and you lose.',
+  'A coin flip decides who sets first. The setter calls a trick, then tries to land it.',
+  'Landed: the other player has to copy it, or take a letter. Missed: the other player sets next.',
+  'No trick twice, and two tries on your last letter. Spell S K A T E and you lose.',
 ];
 
 /** Between games: how to play, the computer's level and Start. */
@@ -389,10 +431,11 @@ function Setup() {
   const setLevel = useTrickStore((s) => s.setSkateLevel);
   const popMode = useTrickStore((s) => s.popMode);
   const setPopMode = useTrickStore((s) => s.setPopMode);
+  const taught = useTrickStore((s) => s.skateTaught);
   const start = useTrickStore((s) => s.startSkate);
   const played = record.you + record.computer;
   return (
-    <section className="panel turn turn--setup" aria-labelledby="skate-heading">
+    <section className="panel turn turn--setup hud__turn" aria-labelledby="skate-heading">
       {/* Focus target after quitting (tabIndex -1). */}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
         How to play
@@ -435,6 +478,7 @@ function Setup() {
           Start game
         </button>
       </div>
+      {!taught && <p className="panel__note">Your first game walks you through your first trick.</p>}
       {played > 0 && (
         <p className="panel__note">
           This session: you won {record.you} of {played}.
@@ -460,7 +504,7 @@ function GameOver() {
   const won = game.winner === 'you';
   const level = SKATE_LEVELS[game.level].label.toLowerCase();
   return (
-    <section className={`panel turn turn--over turn--${won ? 'won' : 'lost'}`} aria-labelledby="skate-heading">
+    <section className={`panel turn turn--over turn--${won ? 'won' : 'lost'} hud__turn`} aria-labelledby="skate-heading">
       {message && <p className="turn__news">{message}</p>}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
         {won ? 'You win!' : 'The computer wins'}
@@ -482,10 +526,12 @@ function GameOver() {
 }
 
 /**
- * The game screen's column (ADR-46, DESIGN.md 11): between games, how to
- * play and Start; in a game, only what the game needs: both players'
- * letters, the turn card, the sliders, Pop and its timing bar (ADR-65), and
- * the last trick; at the end, who won. The computer's go comes on its own
+ * The game screen (ADR-46; as a game, over the stage, ADR-66, DESIGN.md
+ * 11.2): between games, how to play and Start, where the turn card will be; in a game, only
+ * what the game needs, as a heads-up display: the turn card, both players'
+ * letters, the last trick, and along the bottom the tray with the sliders,
+ * Pop and its timing bar (ADR-65); at the end, who won. On a narrow screen
+ * the same panels stack under the stage. The computer's go comes on its own
  * unless switched off.
  */
 export function Skate() {
@@ -507,7 +553,7 @@ export function Skate() {
   );
 }
 
-/** Whose turn it is, large, over the stage (ADR-46). Decorative: the turn card says the same in the DOM. */
+/** Whose turn it is, large, over the stage where the panels stack under it (a narrow screen, ADR-46); hidden where the turn card itself is over the stage (ADR-66). Decorative: the turn card says the same in the DOM. */
 export function TurnChip() {
   // Select the game, then derive: a selector that builds a new object would re-render forever.
   const game = useTrickStore((s) => s.skate);

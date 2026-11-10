@@ -17,6 +17,8 @@ function makeStore(queue: number[] = []) {
     () => (t += 10),
     () => queue.shift() ?? aim.value,
   );
+  // Not a first game: the walk-through (ADR-66) has its own tests in lesson.test.ts.
+  store.setState({ skateTaught: true });
   return Object.assign(store, { aim });
 }
 
