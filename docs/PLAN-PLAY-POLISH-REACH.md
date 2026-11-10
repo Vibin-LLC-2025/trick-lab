@@ -82,7 +82,7 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 09e176d | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
 | 56b0691 | 21: phones and touch (ADR-76): no sideways scroll and working dialogs at 360, 390, 768 and 1024 px wide already; controls are now 44 px tall where the pointer is a finger; five new browser checks; the phone checklist |
 | 2c6cb34 | 22: Firefox and Safari (ADR-77): a pass by hand in Firefox 156 and WebKit 26.6. Firefox passes everything. WebKit's Windows build plays on every level but has no audio and loses the picture after a canvas resize; real Safari is the owner's check. No code changed |
-| (step 23) | 23: everything measured before and after, the keyboard pass, the README, the ROADMAP, the owner's checklists and the table of choices |
+| f8692cf | 23: everything measured before and after, the keyboard pass, the README, the ROADMAP, the owner's checklists and the table of choices |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
