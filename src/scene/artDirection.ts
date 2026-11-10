@@ -782,5 +782,31 @@ export const ART = {
    * picture).
    */
   replay: { rate: 0.3, bend: 0.28 },
+  /**
+   * Dust (step 19, ADR-74): soft discs facing the camera, on Medium and High,
+   * in a game. Metres and seconds (the roll's, so slow motion slows it).
+   * - `color`, `opacity`: pale concrete dust; the opacity is a puff's centre
+   *   at its thickest, and its edge fades to nothing.
+   * - `segments`: the rim's vertices. `fadeIn`: the part of its life a puff
+   *   takes to appear. `sit`: how much of its radius its centre is above the
+   *   ground, so it rests on the ground and not half inside it.
+   * - `touchdown`: `perWheel` puffs at each wheel, living about `life`,
+   *   swelling from `radius[0]` to `radius[1]`, lifting `rise` and drifting
+   *   out sideways at up to about `spread` m/s. A sketchy landing's are
+   *   `sketchy` times the size and a bail's `bail` times.
+   * - `slide`: under a bailed board while it slides (ADR-68): `puffs` of
+   *   them, born one after another over the first `until` of the slide,
+   *   between `behind[0]` and `behind[1]` behind the deck centre the way it
+   *   slides (its trailing end) and within `across` to either side.
+   */
+  dust: {
+    color: '#d6d0c4',
+    opacity: 0.3,
+    segments: 10,
+    fadeIn: 0.12,
+    sit: 0.55,
+    touchdown: { perWheel: 3, life: 0.55, radius: [0.025, 0.1] as readonly [number, number], rise: 0.05, spread: 0.22, sketchy: 1.3, bail: 1.2 },
+    slide: { puffs: 12, until: 0.55, life: 0.45, radius: [0.02, 0.085] as readonly [number, number], rise: 0.03, spread: 0.12, behind: [0.28, 0.42] as readonly [number, number], across: 0.13 },
+  },
   spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },
 } as const;

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Matrix4, MathUtils, Vector3, type Bone, type Group, type InstancedBufferAttribute, type InstancedMesh } from 'three';
+import { Matrix4, MathUtils, Vector3, type Bone, type BufferAttribute, type Group, type InstancedBufferAttribute, type InstancedMesh, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
@@ -8,6 +8,7 @@ import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } fro
 import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
+import { dust, spawnDust, stepDust, writeDust } from './dust';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
 import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
@@ -17,6 +18,7 @@ import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
+import { dustShown } from './sceneTier';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
 import { replayClock, replayProgress } from './replayClock';
 import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
@@ -32,6 +34,9 @@ const head = useTrickStore.playhead;
 const pathProgress = uniforms.pathProgress;
 /** The ground shadows' per-instance opacity (resources.ts, ADR-38). */
 const shadowOpacity = geo.shadow.getAttribute('aOpacity') as InstancedBufferAttribute;
+/** The dust's two arrays (resources.ts, ADR-74), written while dust is in the air. */
+const dustPosition = geo.dust.getAttribute('position') as BufferAttribute;
+const dustColor = geo.dust.getAttribute('color') as BufferAttribute;
 
 /** Reused for every ground shadow instance (no allocation). */
 const footprintMatrix = new Matrix4();
@@ -91,7 +96,7 @@ function applySegment(b: Bone, s: Segment) {
  * poses into refs (no React state per frame), applies them to the Board
  * group, the two shoe groups, the four leg bones (ADR-37), the ground shadows (ADR-38),
  * the foot paths' playhead and the motion cues' fade, and commits progress
- * to the store at most 10 times a second for the timeline. When progress reaches 1 it calls `land()`, which
+ * to the store at most 10 times a second for the timeline. It also writes the dust (ADR-74, dust.ts) on those frames. When progress reaches 1 it calls `land()`, which
  * resolves the trick and sends the Canvas back to demand mode. When not
  * playing (idle, paused, done, scrubbing) it poses everything from the
  * store's progress on demand frames; the feet follow the live inputs while
@@ -122,6 +127,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const riderOuter = useRef<Group>(null);
   const riderInner = useRef<Group>(null);
   const settle = useRef<Settle>(newSettle());
+  const dustMesh = useRef<Mesh>(null);
+  const dusty = useTrickStore(dustShown);
   const home = useTrickStore((s) => s.screen === 'home');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
@@ -141,6 +148,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         // A landing starts its clock at touchdown, and after a gap goes on from where it was (ADR-68).
         if (s.landing === 'plays' && prev.landing !== 'plays') landingClock.t = 0;
         if (landingMoves(s) && !landingMoves(prev)) landingClock.running = false;
+        // A game's landing kicks up dust (ADR-74): placed on the next frame, at the wheels where they are then.
+        if (s.landing !== 'none' && prev.landing === 'none') dust.pending = true;
+        else if (s.landing === 'none' && prev.landing !== 'none') dust.pending = dust.live = false;
         // The instant replay starts from the pop (ADR-72).
         if (replayMoves(s) && !replayMoves(prev)) {
           replayClock.t = 0;
@@ -150,7 +160,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     [],
   );
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     const s = useTrickStore.getState();
     const c = clock.current;
     // The flight on screen and how far through it: the preview's on the welcome screen, the store's elsewhere.
@@ -185,6 +195,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // screen; elsewhere the ground is back on the spot. The roll keeps the
     // playback speed, so a slow-motion trick passes over slow ground.
     const r = rollMotion;
+    // The seconds this frame moved the roll or the landing on: the dust's clock too (ADR-74).
+    let moved = 0;
     if (s.screen !== 'skate') {
       if (r.distance !== 0 || r.speed !== 0) resetRoll(r);
     } else if (s.roll === 'still') {
@@ -192,6 +204,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     } else if (rollMoves(s)) {
       const dt = r.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
       r.running = true;
+      moved = dt;
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
     }
     writeSlides(r.distance, noseOf(s.stance));
@@ -206,8 +219,10 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const L = landingClock;
       if (s.landing === 'plays') {
         if (landingMoves(s)) {
-          L.t += L.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+          const dt = L.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+          L.t += dt;
           L.running = true;
+          moved = Math.max(moved, dt);
         }
         if (L.t >= settleSeconds(s.flight)) s.landingDone();
       }
@@ -231,6 +246,24 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       g.position.y = REST_Y + p.y;
       // 'YZX' and the stance signs (ADR-32, ADR-10, ADR-25) live in setBoardRotation.
       setBoardRotation(g.rotation, p, s.stance);
+    }
+    // Dust (ADR-74): placed on the first frame that sees the landing, then
+    // moved on only while the roll or the landing still draws frames, so none
+    // is ever left hanging in a picture that has stopped. Not in a replay.
+    const dm = dustMesh.current;
+    if (!dm || !g) dust.pending = dust.live = false;
+    else {
+      const nose = noseOf(s.stance);
+      if (dust.pending && s.landing !== 'none' && s.result) spawnDust(dust, g.rotation.y, s.result.grade, r.distance);
+      if (dust.live) {
+        if (replaying || !(rollMoves(s) || landingMoves(s))) dust.live = false;
+        else if (stepDust(dust, moved, bail ? bail.forward * nose : 0, bail ? bail.side : 0, nose, r.distance)) {
+          writeDust(dust, dustPosition.array as Float32Array, dustColor.array as Float32Array, state.camera.matrixWorld.elements, r.distance, nose);
+          dustPosition.needsUpdate = true;
+          dustColor.needsUpdate = true;
+        }
+      }
+      dm.visible = dust.live;
     }
     // Hidden feet cost nothing: the feet model and its clearance against the
     // board's volume run only while a shoe group is mounted. Turned on
@@ -312,6 +345,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
           </Board>
         </group>
       </group>
+      {/* The dust (ADR-74): one mesh, drawn only while dust is in the air. Never culled: its vertices move. */}
+      {dusty && <mesh ref={dustMesh} geometry={geo.dust} material={shaderMat('dust', nodeRenderer)} renderOrder={2} frustumCulled={false} visible={false} />}
       <group ref={riderOuter}>
         <group ref={riderInner}>
           {feetVisible && <Feet front={front} back={back} shadows={shadows} />}

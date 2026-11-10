@@ -8,8 +8,8 @@
 // while a trick plays at normal speed), the occlusion, a glow round the
 // brightest highlights, tone mapping and the colour space, then the grade
 // and the vignette. That is two full-screen passes on top of the scene.
-import { UnsignedByteType, type Camera, type Object3D } from 'three';
-import { RenderPipeline, type WebGPURenderer } from 'three/webgpu';
+import { MaterialBlending, UnsignedByteType, type Camera, type Object3D } from 'three';
+import { BlendMode, RenderPipeline, type WebGPURenderer } from 'three/webgpu';
 import {
   clamp,
   dot,
@@ -94,7 +94,11 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
   const scenePass = pass(scene as never, camera as never);
   const targets: Record<string, unknown> = { output, normal: packNormalToRGB(normalView) };
   if (tier.motionBlur) targets.velocity = velocity;
-  scenePass.setMRT(mrt(targets as never));
+  // The normals follow each material's own blending: an opaque material writes
+  // them as before, and a see-through one can leave them alone by writing them
+  // with no alpha (the dust, ADR-74: a disc facing the camera has nothing to
+  // do with the ground behind it, and the occlusion would shade its shape).
+  scenePass.setMRT(mrt(targets as never).setBlendMode('normal', new BlendMode(MaterialBlending)));
   // Packed normals fit in 8 bits a channel: half the bandwidth of the default half-float target.
   scenePass.getTexture('normal').type = UnsignedByteType;
   const color = scenePass.getTextureNode('output');

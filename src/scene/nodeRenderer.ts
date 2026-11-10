@@ -4,9 +4,9 @@
 // PMREMGenerator cannot run on it, and the range fog (ADR-55). Where the
 // browser has no WebGPU the renderer runs on its own WebGL2 backend, with the
 // same materials.
-import { Color, Vector2, type Object3D, type Texture } from 'three';
+import { Color, DoubleSide, Vector2, type Object3D, type Texture } from 'three';
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
-import { abs, attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, float, Fn, fog, If, length, max, mix, mrt, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { ART, type QUALITY } from './artDirection';
 import { setNodeFog } from './rangeFog';
 import { legsCloth, setNodeMaterials, uniforms } from './resources';
@@ -91,6 +91,19 @@ export function legsNodeMaterial() {
   return m;
 }
 
+/**
+ * The dust (resources.ts mat.dust, ADR-74): the same plain material, and one
+ * thing more. The effects' scene pass also writes each fragment's normal for
+ * the occlusion (effects.ts); a puff writes none (no alpha, so what is behind
+ * it stays), or the occlusion would shade every disc's outline onto the ground.
+ */
+export function dustNodeMaterial() {
+  const m = new MeshBasicNodeMaterial({ color: ART.dust.color, vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide, forceSinglePass: true });
+  m.mrtNode = mrt({ normal: vec4(0) });
+  m.name = 'dust (TSL)';
+  return m;
+}
+
 type Tier = (typeof QUALITY)[keyof typeof QUALITY];
 
 /**
@@ -103,7 +116,7 @@ export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, tim
   const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: timestamps });
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
-  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() }, renderer);
+  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial(), dust: dustNodeMaterial() }, renderer);
   setNodeFog(rangeFogNode());
   return renderer;
 }

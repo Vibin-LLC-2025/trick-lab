@@ -2,8 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { drawCalls, expectTier, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
 // The draw-call caps (ADR-62): every switch combination, on the welcome
-// screen at rest, on the game screen at rest (with the skate spot, ADR-69)
-// and in the lab over a 360 flip, fits the tier's cap and its
+// screen at rest, on the game screen at rest (with the skate spot, ADR-69),
+// over a 360 flip and through its landing (the dust, ADR-74: one draw on
+// Medium and High while it is in the air, which the motion cues' draw has
+// left by then), and in the lab over a 360 flip, fits the tier's cap and its
 // expected worst case (LEDGER). The switches are the store's own actions, as the View
 // panel's switches call them; none of them remounts the Canvas.
 
@@ -32,6 +34,27 @@ async function setSwitches(page: Page, c: Switches) {
   await page.waitForTimeout(300);
 }
 
+/**
+ * The most draw calls over the landing's own frames: up to 1.5 s from
+ * touchdown, ending when the board has come to rest and the instant replay
+ * (which shows the cues again) or the next go begins.
+ */
+const landingCalls = (page: Page) =>
+  page.evaluate(async () => {
+    const w = window as unknown as DebugWindow;
+    const landingOn = () => {
+      const s = w.__trickLabStore.getState();
+      return s.replay !== 'plays' && s.roll !== 'push' && s.result !== null;
+    };
+    let calls = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1500 && landingOn()) {
+      await new Promise((r) => requestAnimationFrame(r));
+      if (landingOn()) calls = Math.max(calls, w.__trickLabPerf.drawCalls);
+    }
+    return calls;
+  });
+
 for (const tier of TIERS)
   test(`every switch combination fits the ledger on ${tier}`, async ({ page }) => {
     test.setTimeout(240_000);
@@ -39,6 +62,8 @@ for (const tier of TIERS)
     const errors = await open(page, tier, 'lab', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
     await expectTier(page, tier);
     const seen: Record<string, number> = {};
+    /** The game's landing alone, per combination: the frames after touchdown. */
+    const landed: Record<string, number> = {};
     // The lab, over a 360 flip (preset 7).
     await page.keyboard.press('7');
     for (const c of COMBOS) {
@@ -68,7 +93,10 @@ for (const tier of TIERS)
         st.getState().callSkateTrick('360-flip');
       });
       const { calls } = await popAndLand(page);
-      seen[`skate/${name(c)}`] = Math.max(rest, calls);
+      // The landing's own frames follow: its dust, where the tier and the switches have it.
+      const landing = await landingCalls(page);
+      landed[name(c)] = landing;
+      seen[`skate/${name(c)}`] = Math.max(rest, calls, landing);
     }
     // The welcome screen at rest (its preview has no trails or cues).
     await page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().setScreen('home'));
@@ -82,5 +110,8 @@ for (const tier of TIERS)
     expect(most, JSON.stringify(seen)).toBeLessThanOrEqual(LEDGER[tier]);
     // Every switch on reaches the ledger's number: the count saw the full scene.
     expect(Math.max(seen['lab/feet+legs+trails+cues']!, seen['skate/feet+legs+trails+cues']!)).toBe(LEDGER[tier]);
+    // The dust (ADR-74) follows the Motion cues switch, and the cues themselves have faded by the landing: so a
+    // landing with the switch on draws exactly one more than with it off on Medium and High, and the same on Low.
+    for (const c of COMBOS.filter((c) => c.cues)) expect(landed[name(c)]! - landed[name({ ...c, cues: false })]!, name(c)).toBe(tier === 'low' ? 0 : 1);
     expect(errors).toEqual([]);
   });

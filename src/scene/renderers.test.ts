@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
 import { ShaderMaterial } from 'three';
 import { QUALITY } from './artDirection';
-import { footPathNodeMaterial, legsNodeMaterial, shadowNodeMaterial } from './nodeRenderer';
+import { dustNodeMaterial, footPathNodeMaterial, legsNodeMaterial, shadowNodeMaterial } from './nodeRenderer';
 import { drawCallsOf, isNodeRenderer } from './rendererKind';
 import { disposeSharedResources, mat, setNodeMaterials, shaderMat, uniforms } from './resources';
 
@@ -72,18 +72,32 @@ describe('the shader materials and their TSL twins', () => {
     const path = footPathNodeMaterial();
     const shadow = shadowNodeMaterial();
     const legs = legsNodeMaterial();
-    setNodeMaterials({ footPath: path, shadow, legs }, {});
+    const dust = dustNodeMaterial();
+    setNodeMaterials({ footPath: path, shadow, legs, dust }, {});
     expect(shaderMat('footPath', true)).toBe(path);
     expect(shaderMat('shadow', true)).toBe(shadow);
     expect(shaderMat('shadow', false)).toBe(mat.shadow);
     expect(shaderMat('legs', true)).toBe(legs);
     expect(shaderMat('legs', false)).toBe(mat.legs);
+    expect(shaderMat('dust', true)).toBe(dust);
+    expect(shaderMat('dust', false)).toBe(mat.dust);
+  });
+
+  it('gives the dust the same plain material on both renderers, and keeps its twin out of the occlusion (ADR-74)', () => {
+    const dust = dustNodeMaterial();
+    expect(dust.transparent).toBe(true);
+    expect(dust.depthWrite).toBe(false);
+    expect(dust.vertexColors).toBe(true);
+    expect(dust.side).toBe(mat.dust.side);
+    expect(dust.color.getHex()).toBe(mat.dust.color.getHex());
+    // Its own normal output for the effects' scene pass: none (no alpha), so the ground's stays.
+    expect(dust.mrtNode).toBeTruthy();
   });
 
   it('frees the shared resources with each Canvas, and the twins only with the renderer that registered them', () => {
     const older = {};
     const newer = {};
-    const twins = () => ({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() });
+    const twins = () => ({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial(), dust: dustNodeMaterial() });
     const disposed = (m: { addEventListener: (t: 'dispose', f: () => void) => void }) => {
       let n = 0;
       m.addEventListener('dispose', () => n++);

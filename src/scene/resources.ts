@@ -24,6 +24,7 @@ import { TRUCK, WHEEL } from '../asset/spec';
 import { hexToRgb } from '../asset/textures';
 import { LEG } from '../sim/legs';
 import { ART } from './artDirection';
+import { DUST_PUFFS, PUFF_VERTICES } from './dust';
 
 const B = ART.board;
 
@@ -514,6 +515,33 @@ function spotShadow() {
   return g;
 }
 
+/**
+ * The dust (step 19, ADR-74, scene/dust.ts): every puff a fan of triangles,
+ * a centre and a rim, in one geometry and one draw call. FlightDriver writes
+ * the positions and each vertex colour's alpha while dust is in the air (the
+ * two arrays are made here once and never replaced); the colour stays white,
+ * so the material's own colour shows.
+ */
+function dustPuffs() {
+  const n = DUST_PUFFS * PUFF_VERTICES;
+  const col = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) col.set([1, 1, 1, 0], i * 4);
+  const idx: number[] = [];
+  for (let p = 0; p < DUST_PUFFS; p++) {
+    const c = p * PUFF_VERTICES;
+    for (let j = 0; j < PUFF_VERTICES - 1; j++) idx.push(c, c + 1 + j, c + 1 + ((j + 1) % (PUFF_VERTICES - 1)));
+  }
+  const g = new THREE.BufferGeometry();
+  const position = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
+  const color = new THREE.BufferAttribute(col, 4);
+  position.setUsage(THREE.DynamicDrawUsage);
+  color.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('position', position);
+  g.setAttribute('color', color);
+  g.setIndex(idx);
+  return g;
+}
+
 export const geo = {
   shoeSole,
   shoeUpper,
@@ -534,6 +562,7 @@ export const geo = {
   ground: groundPlane(),
   shadow: shadowFootprint(),
   spotShadow: spotShadow(),
+  dust: dustPuffs(),
 };
 
 const std = (color: string, roughness: number, metalness = 0) =>
@@ -688,6 +717,11 @@ export const mat = {
   // The skate spot's soft shadows (ADR-69): the vertex colour's alpha, fogged
   // like the ground they lie on, no depth writes so they never hide it.
   spotShadow: new THREE.MeshBasicMaterial({ color: ART.spot.shadow.color, vertexColors: true, transparent: true, depthWrite: false }),
+  // The dust (ADR-74): the vertex colour's alpha, facing the camera whichever
+  // way it turns (both sides, one pass), fogged and tone mapped like the
+  // ground it rises from, no depth writes. Its twin on the WebGPURenderer
+  // (nodeRenderer.ts dustNodeMaterial) also keeps it out of the occlusion.
+  dust: new THREE.MeshBasicMaterial({ color: ART.dust.color, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }),
   // The sky dome (skyDome.ts, ADR-52): vertex colours, both faces (the
   // winding is not worth tracking for a backdrop), no fog (it is the
   // backdrop the fog fades into), no depth writes and drawn first, so
@@ -716,10 +750,10 @@ export const mat = {
 };
 
 /** The materials written as shaders: a GLSL one in `mat` (a ShaderMaterial, or the legs' patched standard material), a TSL twin for the WebGPURenderer. */
-export type ShaderKey = 'footPath' | 'shadow' | 'legs';
+export type ShaderKey = 'footPath' | 'shadow' | 'legs' | 'dust';
 
 /** The TSL twins (ADR-50), registered by nodeRenderer.ts when a WebGPURenderer starts; null until then. */
-const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null };
+const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null, dust: null };
 
 /** The renderer the registered TSL twins belong to. */
 let nodeOwner: object | null = null;
