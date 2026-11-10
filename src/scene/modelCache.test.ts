@@ -17,7 +17,7 @@ import { GLTFLoader, MeshoptDecoder } from 'three-stdlib';
 import { useGLTF } from '@react-three/drei';
 import { allShown, noteRenderer, noteShown, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted, takePrefetched } from './modelCache';
 import { disposeModel, missingTextures, shareEarlyDownloads } from './gltf';
-import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL } from './modelUrls';
+import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL, SPOT_URL } from './modelUrls';
 
 type Loader = Parameters<typeof shareEarlyDownloads>[0];
 
@@ -73,7 +73,8 @@ describe('the models each tier shows (ADR-48)', () => {
   it('frees on a move down only what the new tier never shows', () => {
     expect(modelsUnusedBy('high')).toEqual([]);
     expect(modelsUnusedBy('medium').sort()).toEqual([BOARD_HIGH_URL, SHOES_URL].sort());
-    expect(modelsUnusedBy('low').sort()).toEqual([BOARD_HIGH_URL, BOARD_URL, GROUND_URL, SHOES_URL].sort());
+    // The skate spot too (ADR-69): only the game screen on Medium and High shows it.
+    expect(modelsUnusedBy('low').sort()).toEqual([BOARD_HIGH_URL, BOARD_URL, GROUND_URL, SHOES_URL, SPOT_URL].sort());
     for (const q of ['high', 'medium'] as const) for (const url of modelsFor(q, true)) expect(modelsUnusedBy(q)).not.toContain(url);
   });
 });

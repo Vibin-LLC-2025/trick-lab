@@ -4,12 +4,12 @@
 // PMREMGenerator cannot run on it, and the range fog (ADR-55). Where the
 // browser has no WebGPU the renderer runs on its own WebGL2 backend, with the
 // same materials.
-import { Color, type Object3D, type Texture } from 'three';
+import { Color, DoubleSide, Vector2, type Object3D, type Texture } from 'three';
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
-import { abs, attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, float, Fn, fog, If, length, max, mix, mrt, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { ART, type QUALITY } from './artDirection';
 import { setNodeFog } from './rangeFog';
-import { setNodeMaterials, uniforms } from './resources';
+import { legsCloth, setNodeMaterials, uniforms } from './resources';
 
 // The effects ride in this chunk (ADR-51).
 export { createEffects, type Effects } from './effects';
@@ -82,10 +82,25 @@ export function legsNodeMaterial() {
   const lo = q.mod(2);
   const hi = q.div(2).floor();
   const b2 = (v: typeof q) => abs(v.x.sub(v.y)).mul(2).add(v.y);
-  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: LG.roughness });
+  const s = LG.cloth.strength;
+  // The twill cloth (ADR-70), the same texture and strength as the GLSL material.
+  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: LG.roughness, normalMap: legsCloth, normalScale: new Vector2(s, s) });
   m.alphaTestNode = b2(lo).mul(4).add(b2(hi)).add(0.5).div(16);
   m.maskShadowNode = attribute('aCast', 'float').greaterThan(0.5);
   m.name = 'legs (TSL)';
+  return m;
+}
+
+/**
+ * The dust (resources.ts mat.dust, ADR-74): the same plain material, and one
+ * thing more. The effects' scene pass also writes each fragment's normal for
+ * the occlusion (effects.ts); a puff writes none (no alpha, so what is behind
+ * it stays), or the occlusion would shade every disc's outline onto the ground.
+ */
+export function dustNodeMaterial() {
+  const m = new MeshBasicNodeMaterial({ color: ART.dust.color, vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide, forceSinglePass: true });
+  m.mrtNode = mrt({ normal: vec4(0) });
+  m.name = 'dust (TSL)';
   return m;
 }
 
@@ -101,7 +116,7 @@ export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, tim
   const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: timestamps });
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
-  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial() }, renderer);
+  setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial(), dust: dustNodeMaterial() }, renderer);
   setNodeFog(rangeFogNode());
   return renderer;
 }

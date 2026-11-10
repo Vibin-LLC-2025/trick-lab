@@ -1,6 +1,7 @@
 // The timing bar (ADR-65), pure: how the moment a pop is released turns the
 // setup into the attempt. The sliders say what the player is going for; Pop
-// starts a bar that sweeps for `sweepMs`, and Pop again releases. Inside the
+// starts a bar that sweeps for `sweepMs`, round and round until Pop again
+// releases it (ADR-78): it never releases itself. Inside the
 // level's band around `centreMs` the attempt is exactly the setup. Outside it
 // the flick and the scoop scale with how far outside the release was: early
 // under-rotates, late over-rotates. The pop height is never changed. The
@@ -29,8 +30,14 @@ export interface Band {
 
 const clamp = (x: number, min: number, max: number) => Math.min(max, Math.max(min, x));
 
-/** A release time inside the sweep: before it is 0, and no release by its end is a release at its end. */
+/** A release time inside the sweep: before it is 0, after it is its end. The computer's drawn release is held to it (skate.ts). */
 export const clampRelease = (releaseMs: number) => clamp(releaseMs, 0, BAR.sweepMs);
+
+/**
+ * Where in its sweep a bar that started `elapsedMs` ago is (ADR-78): the bar
+ * goes round, so after the sweep's end it starts again from 0.
+ */
+export const barLap = (elapsedMs: number) => Math.max(0, elapsedMs) % BAR.sweepMs;
 
 /** How far a release was from the band's centre, signed ms: negative early, positive late. */
 export const barOff = (releaseMs: number) => clampRelease(releaseMs) - BAR.centreMs;
@@ -58,15 +65,13 @@ const A_LITTLE_MS = 60;
 /**
  * What a release did, said so the player can name the mistake: "In the band:
  * exactly what you set.", "A little early: 4 percent less spin than you
- * set.", "Late: 22 percent more spin than you set.". `timedOut`: the bar ran
- * to its end with no second press.
+ * set.", "Late: 22 percent more spin than you set.".
  */
-export function barFeedback(releaseMs: number, band: Band, timedOut = false): string {
+export function barFeedback(releaseMs: number, band: Band): string {
   const miss = barMiss(releaseMs, band);
   if (miss === 0) return 'In the band: exactly what you set.';
   const percent = Math.max(1, Math.round(Math.abs(barScale(releaseMs, band) - 1) * 100));
   const spin = `${percent} percent ${miss < 0 ? 'less' : 'more'} spin than you set`;
-  if (timedOut) return `No release, so the bar ran out: ${spin}.`;
   const when = miss < 0 ? 'early' : 'late';
   return `${Math.abs(miss) < A_LITTLE_MS ? `A little ${when}` : when.charAt(0).toUpperCase() + when.slice(1)}: ${spin}.`;
 }

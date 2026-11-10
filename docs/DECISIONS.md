@@ -406,7 +406,7 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 **Decision.**
 - **One column, only the game.** `main.app__play` holds `Skate` alone: between games, How to play (the six rules), the computer's level and Start; in a game, the letters, the turn card, the sliders with Pop and two switches, and the last trick's outcome; at the end, who won with Play again and Change level. The presets, telemetry grid, foot steps, objectives, event log, speed slider, timeline, Pause and Reset are not on this screen. DESIGN.md 11.
 - **Whose turn, and the trick.** `turnView` (pure, `src/sim/skate.ts`) gives the card's words: "Your turn" or "Computer's turn", what they are doing ("Copy the computer's", "Your set", "Going for", "Copying your") and the trick. The card is tinted for the player up and the trick is the largest text in the column; the letters mark the player up; a chip over the stage's corner repeats the turn and the trick (decorative, `aria-hidden`). Words always carry it, so colour is never the only cue.
-- **The computer goes on its own.** `useComputerTurns` in `Skate.tsx`: on the computer's turn, with nothing in the air, auto on and no dialog open, it calls `popTrick` after `COMPUTER_DELAY_MS` (2200 ms, long enough to read the last result and see the computer's call; a countdown bar fills over `--skate-turn-delay`, tested equal). The same action as the button and Space, so the store decides everything and nothing new is logged. One rule (`computerWaiting`) decides both the timer and the bar, and the bar shows only while the wait runs, so after a dialog both start over together; the callback checks the rule once more before it pops. "Computer goes on its own" (`skateAuto`, persisted under `trick-lab.skate-auto`, default on, announced, not logged) switches it off; then the computer waits for "Computer's go" or Space, as in ADR-43. Reduced motion and a failed 3D view do not hold it: they are about motion, and under both the computer's trick resolves at once with no animation; the pace is the switch's job, which every student has.
+- **The computer goes on its own.** `useComputerTurns` in `Skate.tsx`: on the computer's turn, with nothing in the air, auto on and no dialog open, it calls `popTrick` after `COMPUTER_DELAY_MS` (amended by ADR-78 on 2026-11-10: and only once the student's go has come to rest, its landing played out and the board stopped) (2200 ms, long enough to read the last result and see the computer's call; a countdown bar fills over `--skate-turn-delay`, tested equal). The same action as the button and Space, so the store decides everything and nothing new is logged. One rule (`computerWaiting`) decides both the timer and the bar, and the bar shows only while the wait runs, so after a dialog both start over together; the callback checks the rule once more before it pops. "Computer goes on its own" (`skateAuto`, persisted under `trick-lab.skate-auto`, default on, announced, not logged) switches it off; then the computer waits for "Computer's go" or Space, as in ADR-43. Reduced motion and a failed 3D view do not hold it: they are about motion, and under both the computer's trick resolves at once with no animation; the pace is the switch's job, which every student has.
 - **A clean start.** `startSkate` puts the board back on the pad and clears the last result (the speed is kept), and the coin flip is the turn card's first news.
 - **Focus.** Starting a game moves focus to the turn heading (Space pops from there); turns never move it (the Pop button is the same element for both players, relabelled). The end of a game moves focus to the result heading, because the turn controls under it are gone: the one exception to "resolving a trick never moves focus", made so focus is never dropped to the page. Quitting moves it to How to play.
 - **Leaving a game in play asks first.** `requestLeave` (the top bar's Home and other mode, and Quit game) opens a native modal dialog, "Leave this game?" or "Quit this game?", with Keep playing first so the modal focuses the safe choice; Leave or Quit ends the game (logged as quit, ADR-45). Esc keeps playing. The browser's Back still leaves at once (its navigation cannot be held), and any leave still waiting is dropped. A game that ends behind the dialog (a trick already in the air lands) drops the leave too: the dialog closes and focus goes to the result. A modal open holds the keyboard shortcuts and the computer's turn.
@@ -610,6 +610,8 @@ Occlusion (decided in the browser, kickflip preset, 2026-11-05; screenshots kept
 
 **Update (Phase D review, 2026-11-09).** Turning sound off left what was already queued to play: a loss queues the bail, the letter and the jingle up to 1.2 s ahead. The player now keeps every voice it starts until it ends, and `stop()` (called by `useSound` when sound turns off) cuts them all and resets the stagger. Checked in the browser: a pop and its landing queued 0.22 s ahead, then sound off: all six voices stopped at once. And with sound saved on, the page's first click or key now unlocks the audio, so a first cue from a timer (the computer's own turn in a game) never has to start the audio context outside a gesture, which stricter browsers refuse.
 
+**Update (step 18, 2026-11-10).** The impacts now play free CC0 recordings, downloaded once sound is on, with these synthesized sounds as their fallback: ADR-73.
+
 ## ADR-59: An automatic step-down when tricks run choppy (2026-11-09)
 
 **Context.** Step 13 of `docs/PLAN-LOOK-FEEL-PERF.md`. The first visit picks a tier from what the browser says about the device (ADR-16), and that guess can be wrong: a machine that looks capable can still draw High's tricks at a stutter. The student should not have to know to open View.
@@ -741,7 +743,7 @@ Every difference is 4 points or less. Easy and Normal are untouched (a kickflip 
 **Context.** Steps 8 and 9 of `docs/PLAN-PLAY-POLISH-REACH.md`. In a game the player's attempt was their slider values, exactly: once you knew a trick's numbers you landed it every time, and only the computer could miss. Two rough controls were built (step 8): "flick it yourself" (hold to crouch, drag to flick and scoop) and "sliders plus a timing bar". The owner played both on 2026-11-09 and picked the timing bar. The other control and every rough leftover are deleted in this step.
 
 **Decision.**
-- **The mapping** (`src/sim/bar.ts`, pure). The sliders say what you are going for. Pop starts a bar that sweeps for 1,200 ms; Pop again releases it. Inside the level's band, centred at 800 ms, the attempt is exactly the setup. Outside it the flick and the scoop are multiplied by `1 + k * miss / 600`, where `miss` is how many ms outside the band the release was, negative when early: early under-rotates, late over-rotates. The pop height never changes. No release by the sweep's end is a release at its end.
+- **The mapping** (`src/sim/bar.ts`, pure). The sliders say what you are going for. Pop starts a bar that sweeps for 1,200 ms; Pop again releases it. Inside the level's band, centred at 800 ms, the attempt is exactly the setup. Outside it the flick and the scoop are multiplied by `1 + k * miss / 600`, where `miss` is how many ms outside the band the release was, negative when early: early under-rotates, late over-rotates. The pop height never changes. No release by the sweep's end is a release at its end. (Superseded in part by ADR-78 on 2026-11-10: the bar goes round until the second press and never releases itself.)
 
   | Level | Band | k | The scale at the sweep's two ends |
   | --- | --- | --- | --- |
@@ -750,7 +752,7 @@ Every difference is 4 points or less. Easy and Normal are untouched (a kickflip 
   | Hard | 740 to 860 ms | 0.7 | 0.14 and 1.40 |
 
 - **The scaled rates are not held to the sliders' limits.** A double flip needs flick 3.0, the slider's limit, so with a clamp a late release could never miss it (found by the test that every trick bails at the sweep's end). The most a release makes of a rate is about 4.2 rev/s. The feet clearance check (ADR-29) now covers 4.2 rev/s on both axes and both signs.
-- **The store owns the bar** (`pendingPop` in the skate slice: an id, the start time, the sliders as the bar started, the level). It reads the store's injected clock and ends through an injected scheduler (`createTrickStore(now, random, today, schedule)`: `setTimeout` in the app, a fake in tests), so every timing test is exact. Each callback carries the bar's id: a press and the end in the same tick, or an end that arrives after the game was quit, does nothing.
+- **The store owns the bar** (`pendingPop` in the skate slice: an id, the start time, the sliders as the bar started, the level). It reads the store's injected clock and ends through an injected scheduler (`createTrickStore(now, random, today, schedule)`: `setTimeout` in the app, a fake in tests), so every timing test is exact. Each callback carries the bar's id: a press and the end in the same tick, or an end that arrives after the game was quit, does nothing. (Superseded in part by ADR-78 on 2026-11-10: with no end of its own the bar needs no scheduler, and `createTrickStore(now, random, today)` takes none.)
 - **One action, `pressPop`**, behind the Pop button and Space on the game screen. On the player's go it starts the bar, then releases it; anywhere else it is the plain pop (the computer's go, Exact, or the message that says what is wrong). One press is one action; key repeat is ignored, as before.
 - **The attempt is the sliders as the bar started.** Moving a slider during the sweep changes nothing. (The first plan disabled the sliders for those 1.2 seconds; a snapshot does the same job without taking focus from a slider.) The call cannot be changed under a running bar.
 - **Cancelled with no attempt and no letter, and said ("Pop cancelled.")**, on a screen change, quitting, a new game, Reset, a dialog opening (shortcuts, leave) and the tab being hidden. Where the action has its own announcement the two are one message ("Pop cancelled. Game of SKATE ended.").
@@ -804,3 +806,255 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **What was checked in a browser** (2026-11-09, the production build, High, Medium and Low, 1440 x 900, and the layout also at 1280 x 720 and 1024 x 700): a whole game on Hard from Start game to "The computer wins" by keyboard alone (Tab, the arrow keys, Enter) and another by mouse alone, on every level, with the computer going on its own, no console errors, and focus on the result at the end; and the first game's walk-through by keyboard alone (the call from the picker, the Flick slider by 19 presses of the right arrow, the bar by Enter and Enter) to a clean kickflip.
 
 **Left out.** The cards do not move out of the board's way: the camera frames the board for the whole stage, and at the sizes checked the board and its highest pop stay clear of them. A stage shorter than about 600 px would crowd; the turn card scrolls inside itself there. Phones are step 21. The README's picture of the game is retaken here; the others wait for the last pass.
+
+## ADR-67: The board rolls in the game: the world slides, the board stays (2026-11-10)
+
+**Context.** Step 12 of `docs/PLAN-PLAY-POLISH-REACH.md`. The board popped on the spot on an empty pad: no speed, no place. The owner chose "roll in, roll away, nothing to clear" (decision 14), and no rough look first (decision 26): decide, build it in full, list the numbers for the owner's one list of changes.
+
+**Decision.**
+- **The board stays where it is and the world moves.** The flight model, the feet, the camera, the lights and the shadows are untouched: a board in the air moves with the ground, so a trick is the same trick rolling or still.
+- **What moves is texture, not geometry.** The ground's three maps (colour, normal, roughness) slide along +X by their own repeat per metre rolled, and Low's slab-joint texture the same way; each offset is kept to the fraction of one texture width, and with repeat wrapping a whole width looks the same, so the wrap cannot show (tested: every ground map is in the same place 9.6 m later, the six bays where all three tiles line up; and in the browser, pixel for pixel). The plane itself never moves, so its edge stays where the fog hides it.
+- **The wheels turn by a print, not by a mesh each.** The plan's "two axle pairs, one more draw call" was written before the wheels were read: their texture is bands around the lathe, the same all the way round, so a spinning wheel would look exactly like a still one. Instead the wheels get a print on their outer face (in the colour of `assets/source/wheel-print.svg`, DESIGN.md 7.5's "outer face flat"): a long arc and a short one, not evenly spaced, so a fast turn cannot read as a slow or backward one. The lathe's u runs once round each wheel, so one slide of the map, one turn per circumference rolled, turns all four; the heel side's u is mirrored in `buildWheel` so all four turn forward. The wheel map is 64 texels round on Medium too (was 16) and repeats in u. **No draw call is added on any tier** (the plan expected one each); the GLBs grew by 0.4 KB.
+- **Low rolls too** (the ground's joints slide), and its wheels, plain colour all round, show no turn. Low gets no new feature (ADR-62).
+- **When it rolls.** Only in a game, on the game screen, while the flight animates (ADR-6). The store owns whether (`roll`: still, push, slow; `src/store/roll.ts`); FlightDriver owns how fast (`src/scene/roll.ts`) and says when a slowing board has stopped (`rollRested`), as it says when a flight lands.
+  - It **pushes off at the start of a go**: the player's timing bar (the push takes 0.7 s, so the board is at speed by the band at 0.8 s), an Exact pop (the push runs under the flight), and the computer's wait: the computer stops, pushes off and pops inside its 2.2 s (ADR-46).
+  - It **slows to a stop after the landing** (1.3 s), and after a bar dropped with no pop. Frames stop once it has stopped (rule 4).
+  - It is **held**, at its speed, while the flight is paused or a dialog is open, and goes on after.
+  - It is **cut short**, stopped at once, by leaving the game screen, quitting, a new game, Reset, reduced motion turning on, or the 3D view failing. Away from the game screen the ground is back on the spot, a bay centred under the board.
+  - The roll keeps the **playback speed**, so slow motion slows the ground with the trick.
+- **Where the player waits, the board waits.** The plan said "from the start of a turn". On the player's turn that would roll, and run the graphics card, for as long as they think about the sliders; the go starts at the bar instead, which is the push.
+- **The scene description says it:** "Rolling along the concrete, nose first." while pushing or cruising, "Rolling to a stop." while slowing.
+
+**The numbers, for the owner's list** (`ART.roll` in `src/scene/artDirection.ts`, one place; WHEEL_PRINT in `src/asset/spec.ts` for the print, then `npm run assets`):
+
+| What | Chosen | Why |
+| --- | --- | --- |
+| Cruise | 2.4 m/s | An easy flat-ground roll, about a jog. The 1.6 m joints pass about one and a half a second |
+| Push to the cruise | 0.7 s | Inside the bar's 0.8 s to its band, so a timed pop leaves at speed |
+| Slow to a stop | 1.3 s, steady | With the push it fits inside the computer's 2.2 s wait; a real board coasts far longer, but the next go would wait for it |
+| Wheel print | two arcs on the outer face, 100 and 25 degrees, 0.18 inset | Visible at the game's distance, not evenly spaced (no wagon-wheel effect) |
+
+**Rules changed.** CLAUDE.md rule 4 (frames run while the board rolls in a game, `rollMoves`) and rule 5 (FlightDriver also runs the roll and writes the textures' offsets).
+
+**Left out.** The landing's own motions (step 13), the spot that slides past (step 14), the rolling sound (step 18). A push animation for the legs: the rider's legs are posed by the trick model, and a push is a step off the board, which the model has no pose for.
+
+## ADR-68: Landings with weight: the board rolls on, rocks, or falls and slides (2026-11-10)
+
+**Context.** Step 13 of `docs/PLAN-PLAY-POLISH-REACH.md`. Frames stopped the moment the board touched down, so a landing had no weight, and a bail looked like a landing with the feet beside the board; the bailed board itself ended at the rest height with whatever roll it had, partly through the pad. The owner asked for no rough look (decision 26): decide, build in full, list the numbers.
+
+**Decision.**
+- **One pose for everyone** (`src/sim/settle.ts`, pure): `writeSettle(flight, seconds since touchdown)` gives the landing's motion; the board, its shadow, the shoes, the legs and the foot trails and the scene's text all read it.
+  - **Clean:** nothing of its own. The board rolls on straight and slows to a stop (ADR-67); the feet stay exactly as pinned.
+  - **Sketchy:** the board rocks once onto its back wheels (5 degrees nose up, pivoting on the rear axle, so the back wheels stay on the pad) over 0.5 s, and swerves (up to 7 degrees and back over 1 s, ending 5 cm to one side, the kickflip side's way for a kickflip and the other way for a heelflip). The rider rides it: the board and the rider are each in a pair of groups that make the same rigid move.
+  - **Bail:** the rider stops at once (the roll stops: the camera stays with the rider), and the board falls over onto the side it is nearest (wheels down, a rail, or upside down on its kicks; a 90 degree fall takes 0.4 s, from rest, so the angle goes with the square of the time) and slides away, 0.6 m along the nose and 15 cm away from the feet, slowing steadily to a stop over 1.1 s. The feet stay where they stepped down, cleared against the moving board every frame as the flight's clearance does (ADR-29): a board that lay under a shoe slides out and the shoe comes down to the pad, one that slides under a shoe lifts it.
+- **The board falls over its own edge.** `src/sim/boardSection.ts` holds the board seen end on: the convex hull of both built boards, pasted as 51 points (src/sim may not import src/asset), and a test rebuilds it from the boards and fails on a 0.1 mm drift. `contactRise(roll)` is how high the deck centre sits on the pad at a roll. A falling board's height follows it, so its lowest point stays on the pad, tested within 1 mm against every vertex of the built board through every landing.
+- **A bail in the air comes down on the pad too** (`flight.ts`, for flights that do not land only): from the peak its lowest point never goes below the pad, and a board that rests lower than wheels down (upside down) sinks to that height as it falls. A bail used to end at the rest height with any roll, through the pad on a rail or floating 4 cm upside down. The feet's own step down to the pad is unchanged: the floor's extra height comes off them as the bail goes on. `feet.pinned.test.ts` is unchanged; one flight test changed on purpose and says so.
+- **The store owns whether** (`landing`: none, plays, over, in `src/store/roll.ts`); FlightDriver owns the clock, at the playback speed, and says when it has played out (`landingDone`), as it does for a landing and for the roll. Only in a game, on the game screen (the lab stays the exact experiment: its timeline ends at the touchdown).
+  - **Cut short** to its end pose at once by a change of quality level (the owner's or the automatic step-down), reduced motion turning on, the 3D view failing, or quitting; gone with a screen change or the next go (a pop, or the board rolling in for one). The store does this, since the 3D view may be gone.
+  - **Under reduced motion** (ADR-6) the end pose shows at once: a bailed board lies where it slid, with nothing moving.
+  - **The computer** rolls in once the board has stopped and the landing is over; the longest landing (1.1 s) and the push (0.7 s) fit inside its 2.2 s wait (tested).
+- **The frame rule** (the plan's, replacing the first version's frame-by-frame gate): once everything has come to rest, frames stop and stay stopped. A new browser check plays a sketchy landing and a bail on every level and counts no frame between one and three seconds after rest.
+- **The scene's text** says what the landing did: "The board rocks onto its back wheels and swerves; the feet ride it out", "The board falls onto its side and slides away from the feet" (or upside down, or on its wheels), then the same in the past once over.
+- **Fixed here: rolling for a regular rider.** ADR-67 slid the ground the goofy way for both stances, so a regular rider rolled tail first. The ground now slides the way the nose points; the wheels' print turns in the board's own frame, the same for both.
+
+**The numbers, for the owner's list** (`SETTLE` in `src/sim/settle.ts`):
+
+| What | Chosen |
+| --- | --- |
+| Sketchy rock | 5 degrees nose up, onto the back wheels, 0.5 s |
+| Sketchy swerve | up to 7 degrees and back, 1.0 s, ending 5 cm to the side |
+| Bail fall | 0.4 s for a quarter turn, from rest |
+| Bail slide | 0.6 m forward, 15 cm away from the feet, 1.1 s to a stop |
+| Clean | no motion of its own: the roll's 1.3 s slow-down |
+
+**Draw calls.** None added: the moves are four groups.
+
+**Left out.** A landing's sound (step 18) and dust (step 19). The legs bend for a sketchy landing only as the feet move (the legs model follows the shoes); a stumble of the rider's own after a bail would need a pose the model does not have.
+
+## ADR-69: A skate spot that rolls past (2026-11-10)
+
+**Context.** Step 14 of PLAN-PLAY-POLISH-REACH: the game happens on an empty plane. Rolling (ADR-67) needs something going by for the speed to read, and the place should look like somewhere people skate.
+
+**Decision.**
+- **What it is.** A red kerb (6 m long, 15 cm high, its top front edge chamfered), a flat rail (2.8 m, 32 cm), a ledge (3.8 m, 42 cm, with a dark angle iron on its edge) and a wall (11.2 m, 1.7 m high). One model, `public/models/spot.glb`, generated by `npm run assets` from `src/asset/spotSpec.ts` (the numbers), `spot.ts` (the boxes) and `spotTextures.ts` (the concrete).
+- **One mesh, one material.** The pieces are painted by vertex colour over a near-white concrete colour map and its normal map (512 px each, one seamless metre tiled by a texture transform). 120 triangles, 59 KB. Budget (`BUDGETS.spot`): 1 draw call, 15,000 triangles, 300 KB, 3 textures at 1024 px.
+- **Behind the board.** Every piece lies at z below -1.05 m, so between the ground and the sky as every camera looks from the +Z side. It never comes between a camera and the board or the feet. Step 17's game camera and replay must stay on that side; their six poses are checked there.
+- **It rolls past.** FlightDriver sets the spot group's x from the roll's distance and the stance's nose (`sceneryX` in `scene/roll.ts`), wrapped over a 50 m loop (`ART.spot.loop`). Every piece lies within 5.6 m of its centre, so at the wrap the nearest piece is 19.4 m from the board: past the range fog's far end (15 m) for any camera within 4 m of the board along x (tested). Nothing is cleared or ground on: scenery only.
+- **Soft shadows on Medium and High, not real ones.** The plan proposed real shadow casting on High only. Instead, one decal mesh (`geo.spotShadow` in `scene/resources.ts`) lies under every piece: its footprint stretched away from the key light by the piece's height, `ART.spot.shadow.opacity` at the core and fading to nothing over `soft` metres. One draw call on both tiers, no shadow-map cost, and Medium gets shadows it otherwise could not have. On High the board's own real shadow still falls on the spot (it receives shadows).
+- **Where.** The game screen only, on Medium and High (`Spot.tsx`). Low gets no new features (ADR-62). The lab stays a clean experiment, and the welcome screen is unchanged.
+- **Downloads.** `SpotModel` is its own lazy chunk, fetched when the game screen first shows. So the spot is in no first visit, and the download budget is unchanged. On Low it is freed with the other models (`modelFilesUnusedBy`).
+- **Not culled.** Both meshes have `frustumCulled` off (a few hundred vertices). The draw count is then the same whether the spot is in view or rolled away, and the ledger counts the true worst case.
+
+**Draw calls.** +2 on High and Medium (the spot and its shadows), 0 on Low. Every switch on, on the game screen in a 360 flip: High 36, Medium 21, Low 12 (`LEDGER`). The browser check now measures the game screen too, at rest and in flight, for every switch combination. The plan expected +2 / +1; Medium is +2 because of the soft shadows.
+
+**Scenery, not content.** While it downloads or if it fails, there is simply no spot (an `AssetBoundary` with no fallback that does not report to the store). Nothing is announced, and the scene's description does not mention it.
+
+**Left out.** Grinding or sliding on the pieces, more pieces, and a second layout. The colours and sizes are numbers in `spotSpec.ts`, the shadow's in `ART.spot.shadow`.
+
+## ADR-70: The rider's legs on by default on High and Medium, in better trousers (2026-11-10)
+
+**Context.** Step 15 of PLAN-PLAY-POLISH-REACH. ADR-48 hid the legs by default for three reasons: the owner chose shoes only, the legs were the weakest visual, and from the overhead rider view they cover the board. ADR-60 then put them in one draw call. The owner's plan now has them on by default on High and Medium, with better trousers.
+
+**Decision.**
+- **The default follows the quality level.** Without a saved choice the legs are on with High and Medium and off on Low (`legsByDefault`, `readLegsVisible(quality)` in `store/ui.ts`). They move with the level when the student changes it or the automatic step-down does (ADR-59). A saved choice (`trick-lab.legs` on or off, written by the Legs switch) wins on every level, as before. Low is frozen (ADR-62), so its default stays off.
+- **Better trousers** (`ART.legs`, `scene/resources.ts`, the same on both renderers):
+  - A turned-up **cuff** 3.2 cm tall, 6.05 cm round, its fold line darker (`fold`). It ends 2.5 cm below the ankle joint (`cuff.drop`), so it sits over the shoe collar. At the joint itself it left 2 to 3 cm of ankle showing at the back of a shank leaning forward. Above it the trouser **bunches** in two soft rolls over 5 cm.
+  - The **sock is gone** from view. The ankle inside the shoe is a dark sock (`#2f3035`), so a glimpse past the cuff reads as shadow, not as a white ball.
+  - A **twill cloth**: a 64 px normal map of diagonal ribs made in code (`twillNormal`, mipmapped, wrapped), with UVs in metres (22 tiles round a leg, a tile per 1.6 cm along it), at strength 0.55. It reads close up and averages away at a distance.
+- **The fade at the hips, checked again.** The dither's dotted band read clearly above each knee from the rider view. The fade now runs from clear at 0.55 of the thigh (from the hip) to opaque at 0.88, instead of 0.35 to 0.85, so the band is a third shorter.
+
+**What was found, and moved.** The plan asks that the legs never hide the board from the game's camera, checked in six poses in both stances. From today's overhead rider camera (the lab's and, until step 17, the game's), at the peak of a 360 flip a shank can cover up to about a fifth of the board, as ADR-48 said. The camera is the fix: step 17's game camera is "lower and closer, like a friend filming", and from there the legs stand above the board on screen. The six-pose check moves to step 17, as a requirement on each of its angles and the replay's. The lab keeps its rider view, where the legs can still cover part of the board at the peak; its Legs switch and its Detail camera remain.
+
+**Draw calls.** None added to the worst case (the ledger has always counted the legs on). By default there is one more call on Medium and two on High (the legs and the shanks' shadow), since they are now shown.
+
+**Downloads.** The loading pictures (ADR-56) now show the legs, as the High welcome screen does. At WebP quality 0.8 they grew from 27 to 36.5 KB, past their download budget. They are now encoded at 0.6 (`STILL.quality`): 26.4 and 26.5 KB, with no visible difference at the stage's size. No limit was raised.
+
+**Tests.** `store.test.ts`: the default on each level, a saved choice winning, and legs nobody chose following the level by hand and by the step-down. `ui.test.tsx`: the switch starts pressed above Low. `legs.test.ts`: the cuff (sock only below its edge, wider than the trouser above) and the cloth (a seamless map of unit normals, on the material, UVs in metres).
+
+## ADR-71: Decks: the student's choice of four, and the computer's own (2026-11-10)
+
+**Context.** Step 16 of PLAN-PLAY-POLISH-REACH. The owner approved four deck drawings on 2026-11-10 (decision 25): Dusk, Bolt and Ripple for the student, Circuit for the computer. They are in `assets/source/decks/`. With today's graphic, the student chooses between four, and the computer rides its own so you can see whose go it is.
+
+**Decision.**
+- **Each new deck is a KTX2 texture per board level**, in `public/models/decks/` (`deck-<name>-<medium|high>.ktx2`). `npm run assets` builds them (`npm run assets -- decks` alone) from the SVG, at that board GLB's deck-bottom size with the same wear baked over it and the same encoding (`buildDeckTexture` in `scripts/lib/build.ts`, numbers in `src/asset/deckSpec.ts`). So a deck texture stands in for the Graphic material's map. The High board keeps its own wear roughness map and clear coat. Today's deck stays inside the GLBs, with no file of its own.
+- **Budgets.** `assets:check` reads each file's KTX2 header: the GLB's deck-bottom size, the full mip chain, sRGB, and at most 40 KB (Medium) or 96 KB (High) (`DECK_BUDGET`). Built 2026-11-10: 16.5 to 25.5 KB on Medium, 37.5 to 57.5 KB on High. `budget.test.ts` checks that each committed file is byte for byte a fresh build.
+- **Downloaded only when shown.** No first visit downloads a deck (today's is the default), so the download budget is unchanged. The choice itself is in the first page download: its names live in `deckSpec.ts`, which imports only types from the board spec (the sizes are in `deckTexture.ts`, for the scripts), and the page's main chunk is 105.5 of its 106 KB. A returning student with a saved deck downloads one file for the tier. The computer's Circuit downloads the first time its go comes round.
+- **The swap** (`scene/deckSwap.ts`, one registry made in `gltf.ts` with the models' own KTX2 loader):
+  - per board model, it keeps the GLB's own map and every deck texture loaded for it;
+  - each request has a number, so a slow download that finishes after a later choice is never applied;
+  - a failed download leaves the material as it was and is tried again on the next ask;
+  - before a model is freed (a move down a tier), its own map goes back on and every deck texture is freed once, one still downloading included.
+  - A swapped texture is matched to the map it replaces (orientation, colour space, wrapping, filtering, anisotropy, UV channel). It reaches the WebGPURenderer's materials without a rebuild (checked on High).
+- **Which deck shows** (`shownDeck`, `boardRider` in `store/deck.ts`):
+  - in a game, the rider of the go in view, while its flight plays and its landing shows, so a landing never changes deck under the board; between goes, whoever is up;
+  - everywhere else, the student's.
+  - The computer's go shows Circuit, and its shoes' soles and laces take Circuit's teal (`ART.computer.shoe`, `scene/riderLook.ts`) on High's shoe model and Medium's simple shoes.
+- **The choice.** A "Deck" radio group on the welcome screen (`.segmented`, under the two ways in): Trick Lab, Dusk, Bolt, Ripple. Saved under `trick-lab.deck` and announced ("Dusk deck."). Never logged, not reset, not exported. Its hint names the computer's deck, and on Low says the decks show on High and Medium.
+- **A failed download keeps the current deck and says so.** The store puts the choice back to the deck the board kept (today's, if the failing deck was the saved one) and announces "The Ripple deck could not be downloaded. Keeping the Trick Lab deck." A failed Circuit only writes a console warning: the computer's board keeps the student's deck.
+- **Low is frozen** (ADR-62): its board has no graphic, so no deck changes it, and the computer's shoes keep Low's colours.
+
+**Draw calls.** None: a texture swap.
+
+**Tests.**
+- `deckSwap.test.ts`: rapid changes (a late download is never applied), a failed download and its retry, back to today's without a download, a model freed with a download still running (every texture freed exactly once, its own map back on), and a model loaded again after a tier change.
+- `deck.test.ts`: the choice, its saving, the failure path, and whose board is on screen through a game.
+- `Screens.test.tsx`: the radio group by keyboard.
+- `browser/decks.spec.ts`: on High and Medium, a deck reaches the board's material and comes off again; a blocked download leaves the board, puts the choice back and says so.
+
+## ADR-72: The game's camera, and the instant replay (2026-11-10)
+
+**Context.** Step 17 of PLAN-PLAY-POLISH-REACH. The game used the lab's rider view: from above the heels, where at the peak of a 360 flip a shank could cover up to a fifth of the board (ADR-70). A game wants a lower camera, like a friend filming, and a slow replay of a made trick. By the owner's decision 26 there is no rough version: the angles are chosen here and built in full, and every choice is a number in one place.
+
+**Decision.**
+- **Three fixed angles on the game screen**, chosen by a "Camera" radio group in the letters card (`.segmented`, arrow keys): Filmer (the default), Side and Above. Each is `look(elevation, azimuth, targetY)` in `ART.camera.views` (degrees above the ground, degrees round toward the nose, the point looked at): film 12, 30, 0.32 m; side 7, 0, 0.32 m; above 34, -20, 0.28 m. Each backs off until the flight fits the stage, as the lab's views do (ADR-18). The orbit is off in the game; the lab keeps its free camera and its two views. Saved under `trick-lab.game-camera`, announced ("Camera: side on, low."), never logged, not reset, not exported.
+- **Every angle looks from the heel side (+Z)**, so the skate spot stays behind the board (ADR-69), and every one keeps the flight before the fog and the plane's edge in full fog on any stage shape (tested in `gameCamera.test.ts`).
+- **The legs never hide the board.** Checked 2026-11-10 in six poses of a 360 flip (0, 0.15, 0.35, 0.55, 0.75, 1), both stances, on High and Medium, at each angle and in the replay: from Filmer and Side the legs are above the board in every pose; from Above, the steepest, the shanks pass over the board's edges at the peak but the deck stays in view. This closes the check moved here by ADR-70.
+- **The instant replay.** After the student's made set or copy (`scoreSkate`; since ADR-78 on 2026-11-10, after every go of the student's, made or missed, except the one that ends the game), with the "Instant replay" switch on (the default, `trick-lab.instant-replay`) and motion allowed, the replay is due; once the board has rolled to a stop it plays (`replay`: none, due, plays, in `store/replay.ts`).
+  - It plays the same flight from pop to landing at `ART.replay.rate` (0.3) of its speed, from its own low, wide camera (`look(4, 40, 0.36)`, field of view 60 degrees, `ART.camera.fovs`), with a barrel bend of `ART.replay.bend` (0.28) in the effects' composite (`bendUv` in `effects.ts`, no extra pass or draw).
+  - Its clock is `scene/replayClock.ts`, run by FlightDriver; the store's `progress`, `status`, events, records, sound cues and the automatic step-down (which records frames only while `status` is `playing`) never see it. The landing's own motion is not played again.
+  - Nothing else moves: the computer rolls in only once it has ended (`computerWaiting` waits for `replay === 'none'`).
+  - Pop reads "Skip replay" while it plays (`aria-keyshortcuts` "Space Escape"), so focus never moves; Space and Escape skip it. A pop, leaving the screen, quitting, the shortcuts dialog, reduced motion, a lost 3D view or switching it off ends it. The scene description says it is a slow replay and how to skip it.
+  - The switch is hidden under reduced motion, where no replay plays.
+- **Low.** The angles and the replay are camera and clock, not graphics, so Low has them too (ADR-62 freezes Low's graphics). Low has no effects composite, so its replay has no bend.
+
+**Numbers to change** (all in `src/scene/artDirection.ts`): `ART.camera.views.film`, `.side`, `.above`, `.replay`; `ART.camera.fovs.replay`; `ART.replay.rate` and `.bend`. The default angle is `gameViewFrom` in `store/replay.ts`.
+
+**Draw calls.** None.
+
+**Tests.** `replay.test.ts` (when it is due, plays, is skipped and is cut short; the computer waits), `gameCamera.test.ts` (each angle's side, framing and fog; `viewFor`; `bendUv`; the replay's clock), `Skate.test.tsx` (the camera group and the switch by keyboard, Skip replay and Escape), `roll.test.ts` (the computer rolls in after the replay). `browser/landing.spec.ts`: a made trick in a game now replays before it comes to rest, and from one second after the replay no frame is drawn, on every tier. Its hang guard went from 15 to 40 seconds: without a GPU, High draws a frame in 0.1 to 0.6 s, and the replay adds about 20 frames. Frame times on real hardware are measured in steps 20 and 23.
+
+## ADR-73: Recorded impacts, a synthesized roll, and the sound check (2026-11-10)
+
+**Context.** Step 18 of PLAN-PLAY-POLISH-REACH, with the owner's decision 17: free public-domain (CC0) recordings for the impacts, a synthesized rolling sound, and a synthesized fallback. Updates ADR-58, which said nothing is downloaded and nothing is licensed. The plan picks and builds in; the owner listens and lists changes after.
+
+**Decision.**
+- **The recordings** come from Kenney's Impact Sounds (1.0), CC0, which downloads without an account (fetched 2026-11-10, https://kenney.nl/assets/impact-sounds). No Freesound login was needed. The 15 source files used and the pack's licence text are in `assets/source/sounds/kenney-impact-sounds/`. Picked by what each sound is, and by measuring length, level and brightness:
+  - **pop**, three takes: the bright plank knocks (`impactPlank_medium_001` to `003`), cut to 0.26 s before their ring: the tail's crack.
+  - **catch** (new), three takes: the softer shoe-on-concrete steps (`footstep_concrete_000`, `003`, `004`), 0.11 s, levelled 7 dB under the pop: shoes slapping onto grip tape.
+  - **land**, three takes: the heavy wood thuds (`impactWood_heavy_000`, `002`, `004`), 0.3 s.
+  - **bail**, two takes, each mixed in the build from four layers: a knock, two smaller bounces 0.12 to 0.31 s later, and a scrape of grit, 0.7 s.
+  - **Stayed synthesized:** the scuff of a sketchy landing (the pack has no scrape; a sketchy landing plays the landing's recording with the synthesized scuff over it), the roll (below), a letter and the two jingles (game sounds, not the board's).
+- **Built by `npm run sounds`** (`scripts/build-sounds.ts`, ffmpeg on the PATH; not part of verify, since the files are committed): each take's layers placed and mixed, leading silence cut, a 60 Hz high-pass, cut to length with a fade, levelled to its peak, and encoded as mono MP3 at 64 kbit/s, which every target browser decodes. The build is repeatable (byte for byte, checked three times). Everything about a take is in `src/audio/soundSpec.ts`; `public/sounds/CREDITS.md` is generated with each file's sources, licence and date. A swap is one line there and `npm run sounds`.
+- **Budgets** (`assets:check`): each file at most 12 KB, the set at most 150 KB. Built: 1.4 to 5.9 KB each, 32 KB in all.
+- **Each play** picks a take at random and plays it up to 4 percent higher or lower (`PITCH_JITTER`), so ten pops in a row are not one sound ten times. Slow motion lowers and stretches a recording by the rule of ADR-58 (`slowMotion`), through its playback rate. The player skips any silence the decoder leaves at a file's start, so a pop lands on time (Chromium leaves none, measured).
+- **Nothing is downloaded while sound is off.** The player is its own chunk (3.9 KB), loaded the first time sound is on; the recordings are fetched when the audio is unlocked. The audio context itself is made in the main page (`audio/context.ts`), inside the switch's press, so a browser that wants a gesture gets one while the chunk is on its way. The first pop after turning sound on is the synthesized one; the recordings take over once they have arrived (a few kilobytes each). A file that fails to load leaves its sound synthesized and logs a warning. Moving the player out of the main page took it from 106.0 to 104.9 of its 106 KB.
+- **The synthesized fallback is better**: the pop, the landing and the bail are knocks made of a few ringing tones at a wooden bar's partials (1, 2.76 and 5.4 times the lowest) over a click, in place of one sliding beep.
+- **The catch** is timed from the flight: when a flight that lands starts, resumes or changes speed, `useSound` schedules it at the front foot's catch (`CATCH.front` of the airtime, now defined in `sim/flight.ts`) on the audio clock; a pause or a scrub cancels it (`catchIn` in `store/sound.ts`). A bail has no catch. Measured in Chromium: scheduled 0.39 s after the pop of a 0.534 s kickflip, which is 0.73 of the airtime.
+- **The rolling sound** is synthesized: two noise layers, a mid hiss and a low rumble, whose filters and gains go with the speed, and a tick (a clack and a small thump) each time an axle crosses a joint in the concrete, the front axle then the back. It follows the store's roll (`rollSound`: pushing or slowing on the ground in a game; silent in the air, while held and once stopped), reading the speed and distance FlightDriver last wrote (`scene/rollState.ts`). On each change it sets the speed ramp on the audio clock and schedules the next 2 s of ticks from the same model as `scene/roll.ts` (`audio/rolling.ts`, whose numbers a test checks against `ART.roll`, `TRUCK` and `BAY`), and a one-second timer renews it from the roll as it is then. Nothing per frame. A test runs the scene's `stepRoll` and finds every tick within 10 ms.
+- **The cues are still the store's.** A sketchy landing has its own cue, `sketchy`. The catch and the roll are not cues: the player follows the store's state for them, as the plan says.
+- **The sound check**: under `?debug`, a "Sound check" panel at the end of the lab's results lists every sound with a button for each take and for its synthesized version, at normal speed and at 0.25x. It loads the player only through `useSound`'s loader, so the bundler keeps one chunk (a second import split React out of the main page).
+- **Not beside "Start game".** The plan asked for the Sound switch beside "Start game". On the game screen it is already in the top bar, one press away, and a second switch would give screen readers two buttons named "Sound". So there is still one switch, on every screen.
+
+**Tests.** `recordings.test.ts` (the files, budgets and credits; a take at random, off pitch, from its first sound; slow motion; the scuff; the fallback; the sound check; the catch; the roll model against `stepRoll`; the roll's schedule and its renewal; the store's `rollSound` and `catchIn`), `audio.test.ts` (updated: the new sounds), `Sound.test.tsx` (the hook schedules and cancels the catch and follows the roll), `browser/sound.spec.ts` (with sound off no sound file and no player chunk is downloaded through a game; on, all 11 files download and decode and every sound check button plays, with no console error).
+
+**What the owner reviews.** Each sound alone at `?debug` in the lab (Sound check), then in a game. The list of changes is a follow-up commit.
+
+## ADR-74: Dust at the wheels and under a sliding board (2026-11-10)
+
+**Context.** Step 19 of PLAN-PLAY-POLISH-REACH: a small puff at the wheels on touchdown and under a sliding board, one draw call, on High and Medium, with no switch of its own (it follows the Motion cues switch, and is off under reduced motion).
+
+**Decision.**
+- **What you see.** In a game, a landing kicks up three small puffs at each wheel, which swell, lift a little, drift out sideways and thin away in about half a second, and are left behind as the board rolls on. A sketchy landing's are 1.3 times the size and a bail's 1.2 times. A bailed board also trails twelve puffs from its trailing end while it slides (ADR-68), over the first 55 percent of the slide.
+- **Where.** The game screen only, on Medium and High. Low gets no new features (ADR-62). The lab has none: nothing draws frames there after a landing (rule 4), and it stays the plain experiment.
+- **No switch of its own.** `dustShown` in `scene/sceneTier.ts`: the game screen, not Low, the Motion cues switch on, and not under reduced motion. That one line is the place to change if the owner wants it tied to something else.
+- **One draw call, worked out on the CPU.** Every puff is a soft disc facing the camera: a fan of ten triangles, its centre at the puff's opacity and its rim at none, all 24 in one geometry (`geo.dust` in resources.ts). `scene/dust.ts` holds the model: where each puff starts, how it drifts, swells and fades, as plain functions of the seconds since touchdown, with no randomness (a puff's numbers come from its index, so the same landing draws the same dust). FlightDriver writes the two arrays (264 vertices) on its own frames, only while dust is in the air; the mesh is hidden otherwise, so it costs nothing at rest.
+  - The first version of the plan had a points draw with a shader driven by a time uniform. WebGPU draws points one pixel wide, and a shader would have to exist twice (GLSL and TSL, rule 7). A plain `MeshBasicMaterial` with the alpha in the vertex colours, like the spot's shadows, draws the same thing on both renderers.
+- **No new frames.** The dust does not keep the frame loop running. It moves only on frames the roll or the landing already draws (`rollMoves`, `landingMoves`), by the same seconds, so it slows with slow motion. If those frames stop first (the board came to rest early, or a dialog opened), the dust is removed on the one frame the store's change draws. Its lives are shorter than what always follows: a touchdown puff 0.55 s against a roll-out of at least 0.9 s, and a bail's trail is over within the slide's 1.1 s (tested). So nothing is ever left hanging in a still picture, and rule 4's "no frame between one and three seconds after rest" holds unchanged.
+- **Not in the instant replay** (ADR-72), which shows the flight before its landing, and not on the welcome screen.
+- **Kept out of the occlusion.** The effects' scene pass (ADR-51) also writes each fragment's normal, which the ambient occlusion reads with the depth. A see-through disc facing the camera wrote its own normal over the ground's, and the occlusion shaded every disc's ten-sided outline onto the ground (seen in the first browser look, on High). Two changes:
+  - the pass's normal target now follows each material's own blending (`setBlendMode('normal', MaterialBlending)` in effects.ts). An opaque material writes its normal as before;
+  - the dust's material on the WebGPURenderer (`dustNodeMaterial` in nodeRenderer.ts, registered like the three shader twins) writes a normal with no alpha, so what is behind it stays.
+- **Numbers** in `ART.dust` (artDirection.ts): the colour `#d6d0c4` at 0.3 at a puff's thickest, radii 25 to 100 mm at the wheels and 20 to 85 mm in the trail, lives 0.55 and 0.45 s.
+
+**Draw calls.** One on High and Medium while a game's landing has dust in the air. The expected worst case (`LEDGER`) did not move: High 36, Medium 21, Low 12. The motion cues' one draw has faded out by the landing, so a landing with dust draws what the board at rest with its cues draws. The plan expected +1; the browser check now measures the game's landing too, and checks that a landing with the Motion cues switch on draws exactly one more than with it off on Medium and High, and the same on Low.
+
+**Tests.** `dust.test.ts` (the geometry and material; puffs at the four wheels for any yaw, drifting out to their own side; more for a sketchy landing and a bail; gone within its life; soft discs facing the camera; falling behind with the roll for either stance; the bail's trail born behind the board as it slides, and over before the slide ends; no reallocation; `dustShown`), `renderers.test.ts` (the dust's twin), `browser/ledger.spec.ts` (above). Looked at in Chromium with a GPU on High, Medium and Low: a clean landing, a sketchy one and a bail, in slow motion; no errors, and no frame drawn once everything had come to rest.
+
+## ADR-75: The smoothness pass: a whole game measured, the dust built early, games in the long-run test (2026-11-10)
+
+**Context.** Step 20 of PLAN-PLAY-POLISH-REACH. Since rolling (ADR-67) frames run for a whole go, so four lab tricks no longer say how the game runs.
+
+**Decision.**
+- **The measurement plays a whole game** (`scripts/measure/measure.js`, `game=on` by default, `gos` caps it at 60): on the game screen with exact pops and the computer waiting for a key, the student's sets land and bail in turn and every copy bails, so the game has clean landings, bails, the computer's goes and replays, and ends. It reports the first go of the visit apart from the rest, with the count of intervals over 20 and 34 ms, and the targets table gets a row per tier for the game after its first go. The targets themselves (ADR-62) are unchanged.
+- **The dust's program is built before the first pop:** FlightDriver draws a newly mounted dust mesh once, empty, on a frame of its own. It was the only program first used in the middle of a landing.
+- **The long-run test plays games** (`browser/soak.spec.ts`): five lab tricks and five goes of a game per block, sampled back in the lab. `gameGo` in `browser/helpers.ts` plays one go. Its timeout went from 10 to 20 minutes, as a guard against a hang: a game's go without a GPU takes several seconds.
+- **What was found and left** (PERF-BUDGET.md, "Step 20"): High misses about one refresh per game, at a moment the page redraws its turn card, and the first trick of a visit has two late frames as the page draws its cards and the landing's sticker for the first time. Neither is the graphics, and neither gate was moved: on this day's 100 Hz display a single missed refresh reads 20 ms, which the "under 20 ms" gate fails.
+
+**Tests.** The long-run test (above). The measurement is run by hand; its numbers are in PERF-BUDGET.md.
+
+## ADR-76: Thumb-sized controls where the pointer is a finger (2026-11-10)
+
+**Context.** Step 21 of PLAN-PLAY-POLISH-REACH: phones and touch, small and late. Checked in Chromium with touch on at 360 x 780, 390 x 844, 768 x 1024 and 1024 x 768, on the welcome screen, the lab, the game screen before and in a game, and the two dialogs.
+
+**What was found.** The layout already held: no sideways scroll at any size, the stage pinned above the controls on a narrow screen (ADR-46), the dialogs inside the window, no text under 12 px, no console error, and a tap pops (one tap in the lab and for the computer's go, two for a timed pop). One thing was wrong for a finger: every control was 24 to 36 px tall, sized for a mouse.
+
+**Decision.**
+- **Where the main pointer is a finger (`@media (pointer: coarse)`), controls are at least 44 px tall.** `tokens.css` raises `--control-h` from 28 to 44, `--control-h-lg` from 36 to 48, a slider's hit area from 24 to 44 and its thumb from 16 to 24 px. `app.css` follows for the three controls that set their own height: a segmented option (40 px inside its 46 px row), a preset and the trick picker.
+- **A mouse or a trackpad sees no change**, also on a laptop with a touch screen, whose main pointer is still the trackpad.
+- **Nothing else moved.** In a game on a phone the student still scrolls down to Pop with the stage pinned above (ADR-46); the cards over the stage are a wide screen's (ADR-66).
+
+**Tests.** `browser/touch.spec.ts`: at the four sizes with touch on, every screen, a game and the leave dialog have no sideways scroll and no control under 40 px either way, the dialog is inside the window, and a tap on Pop starts a trick. Real phones are the owner's, from the checklist in the plan.
+
+## ADR-77: Firefox and Safari: a pass by hand, nothing changed (2026-11-10)
+
+**Context.** Step 22 of PLAN-PLAY-POLISH-REACH. Firefox and WebKit were installed for the global `playwright-cli` on this machine (the owner's yes, 2026-11-09). The pinned `@playwright/test` and the browser checks stay Chromium only (ADR-61).
+
+**Decision.**
+- **A pass by hand, not new automatic checks.** The results are the "Browsers" table in PERF-BUDGET.md.
+- **Firefox passes everything**, on the WebGPURenderer's WebGL2 fallback (its WebGPU is blocked on this machine), MP3 recordings included.
+- **WebKit starts and plays on every level, with two things this build cannot answer:** it has no Web Audio, so the sound is unchecked, and after the canvas changes size it stops showing the picture the app still draws. Neither is treated as the app's fault without real Safari, and no workaround was written against a test build's behaviour. Both are on the owner's checklist.
+- **No code changed.**
+
+## ADR-78: A game you can watch: the bar goes round, every go is replayed, a slower game (2026-11-10)
+
+**Context.** The owner reported the game as broken on 2026-11-10: after a click on Pop it "lags for a second and then speeds up super fast until the computer turn is done", so the trick could not be seen. Measured on the owner's machine (RTX 3060, High, in Chrome and in the T3 Code preview): 100 frames a second, the worst frame 15 ms, no long task, the flight at exactly its speed, so the frames were not at fault. What one click on Pop did: the bar started (ADR-65) and nothing else moved for 1.2 s; the bar ran out, which counted as the latest release, so the flick came out 30 percent over and the trick bailed; the whole flight took its real 0.53 s, smeared by High's motion blur; a miss was never replayed (ADR-72); and the computer's 2.2 s wait (ADR-46) had started at the student's touchdown, under the 1.1 s of the bail's landing, so the computer popped about a second after the board stopped. About 4.5 s from the click to the end of the computer's go, of which the student's own trick was half a second. The owner chose: the bar repeats until the player acts, replays stay on their switch, and a much slower game.
+
+**Decision.**
+- **The bar goes round.** At the end of its sweep the marker starts again from the left, and the bar runs until the second press (or a cancel, ADR-65). It never pops on its own, so there is no time-out and no letter for one. A press is read where the marker is on its lap: `barLap` in `src/sim/bar.ts` is the time since the bar started, modulo the sweep, so the sweep's end is the next lap's start (the latest release, then the earliest). The marker's CSS animation repeats (`infinite` in app.css, a one-word change to the design agent's file, made with the owner's decision). The sound's count (tick, tick, click, over the rising tone) repeats too: each lap is put on the audio clock a quarter second before it is due (`BAR_SOUND.lapLead`), at the one start time plus whole sweeps, so it never drifts from the marker. The store needs no scheduler any more, so `createTrickStore` takes none, and `TimedPop` and `LastRelease` lose `timedOut` along with the "No release, so the bar ran out" wording. The mapping from a release to an attempt (bands, `k`, the scale at the sweep's ends) is unchanged, and so is the computer's go.
+- **Every go of the student's is replayed**, made or missed, while the "Instant replay" switch is on (on by default; off means none). Not the go that ends the game, where the result takes the screen, and still never the computer's.
+- **The game plays slower: `GAME_PACE` is 0.4** (`src/store/speed.ts`). On the game screen everything that moves with the playback speed runs at 0.4 of it: the flight (a 0.53 s kickflip takes 1.3 s), the landing's motion, the roll, and their sounds (lower and longer, by ADR-58's rule). `playRate(s)` is the one place it is applied; the flight clock, FlightDriver's roll and landing, the catch's timing, useSound and the motion blur all read it. Slow motion in the game is slower still (0.25 of the pace, so 0.1x) and says the speed seen ("Slow motion on, 0.1 times speed."; "Slow motion off, game speed."). Motion blur runs only at 1x (ADR-51), so it is off in a game. The lab keeps its speeds: it is the exact experiment. The instant replay keeps its own speed, `ART.replay.rate` (0.3), now only a little slower than the game, seen from its low camera.
+- **The computer waits for the student's go to come to rest.** `computerWaiting` also needs the landing played out and the board stopped, so its 2.2 s and its countdown bar start then. At the game's pace the landing outlasts the old wait, which would have popped the computer's go in the middle of it.
+
+**Not adopted.** A larger bar over the stage while it runs, and a relabelled Pop ("Release"): offered, not chosen; DESIGN.md 11.1 is the design agent's. A replay of the computer's go.
+
+**Tests.** `src/sim/bar.test.ts` (`barLap`), `src/store/bar.test.ts` (no pop after ten sweeps, a press on a later lap read on that lap, the sweep's end as the next lap's start), `src/ui/Bar.test.tsx` (the button through three sweeps), `src/audio/audio.test.ts` (laps a sweep apart from one start, cut by a release and by sound off), `src/store/replay.test.ts` (a miss is replayed; the game's last go is not), `src/store/roll.test.ts` (the computer's wait starts at rest; a bail's replay plays before the computer rolls in), `src/scene/flightClock.test.ts` and `src/store/store.test.ts` (the pace, and slow motion's words in a game).

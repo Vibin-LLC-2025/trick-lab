@@ -1,9 +1,11 @@
 import { Suspense, lazy, useEffect } from 'react';
+import { PLANE } from '../asset/groundSpec';
 import { useTrickStore } from '../store';
 import { AssetBoundary } from './Board';
 import { noteShown } from './modelCache';
 import { GROUND_URL } from './modelUrls';
 import { geo, mat } from './resources';
+import { groundPerMetre, slideTexture } from './roll';
 import { groundTextured, sceneTier } from './sceneTier';
 
 /**
@@ -24,6 +26,11 @@ const GroundModel = lazy(() => loadGroundModel().then((m) => ({ default: m.Groun
  */
 function GroundPlane({ receiveShadow }: { receiveShadow: boolean }) {
   const low = useTrickStore(sceneTier) === 'low';
+  // Low's slab joints slide with the roll (ADR-67); the plain colour of the fallback shows no roll.
+  useEffect(() => {
+    const joints = mat.toonGround.map;
+    return low && joints ? slideTexture(joints, groundPerMetre(joints.repeat.x, PLANE.x)) : undefined;
+  }, [low]);
   return <mesh geometry={geo.ground} material={low ? mat.toonGround : mat.ground} receiveShadow={receiveShadow} />;
 }
 

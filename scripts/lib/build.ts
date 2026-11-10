@@ -22,6 +22,11 @@ import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURE
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
+import { DECKS, type FileDeck } from '../../src/asset/deckSpec';
+import { deckTexture } from '../../src/asset/deckTexture';
+import { buildSpot } from '../../src/asset/spot';
+import { SPOT_MATERIAL, SPOT_PARTS, SPOT_TEXTURES } from '../../src/asset/spotSpec';
+import { spotColor, spotNormal } from '../../src/asset/spotTextures';
 import { solePixels, upperPixels, upperTint } from '../../src/asset/shoeTextures';
 import {
   GRAPHIC_CLEARCOAT,
@@ -121,9 +126,9 @@ export async function encodeKtx2(r: Raster, role: TextureRole): Promise<Uint8Arr
   });
 }
 
-/** Rasterize the design's SVG at the texture size and drop the alpha (the field is opaque). */
-function deckGraphic(T: { width: number; height: number }): Pixels {
-  const svg = readFileSync(GRAPHIC_SVG, 'utf8');
+/** Rasterize a deck drawing (today's by default) at the texture size and drop the alpha (the field is opaque). */
+function deckGraphic(T: { width: number; height: number }, svgPath: string = GRAPHIC_SVG): Pixels {
+  const svg = readFileSync(svgPath, 'utf8');
   const img = new Resvg(svg, { fitTo: { mode: 'width', value: T.width } }).render();
   if (img.width !== T.width || img.height !== T.height) throw new Error(`deck graphic rasterized at ${img.width} x ${img.height}`);
   const rgba = img.pixels;
@@ -139,6 +144,17 @@ function deckGraphic(T: { width: number; height: number }): Pixels {
 /** The graphic with the deck wear baked over it (ADR-40), and the wear's roughness field. */
 function wornDeckBottom(T: { width: number; height: number }) {
   return wearDeckBottom(deckGraphic(T));
+}
+
+/**
+ * One deck's texture for a board level (step 16, ADR-71): its drawing at that
+ * GLB's deck-bottom size with the same wear baked over it, encoded as that
+ * GLB's deck bottom is (colour, KTX2, full mip chain), so it can stand in for
+ * the Graphic material's map. The wear's roughness map stays the GLB's.
+ */
+export function buildDeckTexture(deck: FileDeck, level: DetailLevel): Promise<Uint8Array> {
+  const T = deckTexture(level);
+  return encodeKtx2(rgb(wearDeckBottom(deckGraphic(T, resolve(ROOT, DECKS[deck].svg))).color), 'color');
 }
 
 export interface BuildReport {
@@ -432,6 +448,41 @@ export const buildBoardGlb = (level: DetailLevel = 'medium') => buildGlb(boardSp
 /** The right shoe GLB (public/models/shoes.glb). */
 export const buildShoesGlb = () => buildGlb(shoeSpec());
 
+/**
+ * The skate spot (step 14, ADR-69): one mesh of every piece, painted by its
+ * vertex colour over a near-white concrete map and its normal map, each one
+ * tile repeated over the group by a texture transform.
+ */
+function spotSpec(): AssetSpec {
+  const T = SPOT_TEXTURES;
+  const repeat: [number, number] = [T.uvSpan / T.tile, T.uvSpan / T.tile];
+  const color = spotColor();
+  return {
+    rootName: 'Spot',
+    extras: { units: 'metres', source: 'procedural, scripts/build-board.ts', design: 'src/asset/spotSpec.ts' },
+    textures: [
+      { key: 'color', file: T.color.file, pixels: grey(color.width, color.height, color.grey), wrap: 'repeat', repeat },
+      { key: 'normal', file: T.normal.file, pixels: rgb(spotNormal()), wrap: 'repeat', repeat },
+    ],
+    materials: [
+      {
+        key: SPOT_PARTS[0].material,
+        name: SPOT_MATERIAL.name,
+        baseColor: [1, 1, 1, 1],
+        roughness: SPOT_MATERIAL.roughness,
+        metalness: SPOT_MATERIAL.metalness,
+        map: 'color',
+        normalMap: { key: 'normal', scale: 1 },
+      },
+    ],
+    parts: SPOT_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: buildSpot() })),
+    droppedTriangles: 0,
+  };
+}
+
+/** The skate spot GLB (public/models/spot.glb). */
+export const buildSpotGlb = () => buildGlb(spotSpec());
+
 /** The concrete ground GLB (public/models/ground.glb). */
 export const buildGroundGlb = () => buildGlb(groundSpec());
 
@@ -440,5 +491,6 @@ export function buildAsset(key: AssetKey): Promise<{ glb: Uint8Array; report: Bu
   if (key === 'board') return buildBoardGlb('medium');
   if (key === 'boardHigh') return buildBoardGlb('high');
   if (key === 'ground') return buildGroundGlb();
+  if (key === 'spot') return buildSpotGlb();
   return buildShoesGlb();
 }

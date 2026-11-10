@@ -358,7 +358,8 @@ export const TEXTURES = {
   grip: { file: 'grip.png', width: 512, height: 512, wrap: 'repeat', tile: 0.2 },
   deckBottom: { file: 'deck-bottom.png', width: 1024, height: 256, wrap: 'clamp' },
   ply: { file: 'ply.png', width: 16, height: 128, wrap: 'clamp' },
-  wheel: { file: 'wheel.png', width: 16, height: 256, wrap: 'clamp' },
+  // 64 wide since the wheel print (ADR-67): u runs once around the wheel, and repeats so the print can turn.
+  wheel: { file: 'wheel.png', width: 64, height: 256, wrap: 'repeat' },
 } as const;
 
 export type TextureKey = keyof typeof TEXTURES;
@@ -376,7 +377,7 @@ export const TEXTURES_HIGH = {
   /** The deck wear's roughness (glTF green; one grey channel), at half the graphic's size (ADR-40). */
   deckRoughness: { file: 'deck-bottom-roughness.png', width: 1024, height: 256, wrap: 'clamp' },
   ply: { file: 'ply-high.png', width: 32, height: 256, wrap: 'clamp' },
-  wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'clamp' },
+  wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'repeat' },
 } as const;
 
 export type TextureHighKey = keyof typeof TEXTURES_HIGH;
@@ -417,6 +418,26 @@ export const WHEEL_BANDS = {
   raceRows: 3,
   /** High tier only: the urethane core face around the bearing is a shade warmer. */
   core: '#e2dac6',
+} as const;
+
+/**
+ * The wheel print (step 12, ADR-67): marks on each wheel's outer face, so
+ * the eye sees the wheels turn when the board rolls. In the colour of
+ * assets/source/wheel-print.svg, on the outer face flat (DESIGN.md 7.5,
+ * r 0.011 to 0.020: lathe segment 12 of the medium profile, 20 of the high
+ * one). The lathe's u runs once around the wheel, so the mark is arcs in u:
+ * a long one and a short one, not evenly spaced, so a fast turn cannot read
+ * as a slow one or as backwards (the wagon-wheel effect needs a repeating
+ * mark). `inset` keeps them off the face's edges, as a fraction of its width.
+ */
+export const WHEEL_PRINT = {
+  color: '#9d9789',
+  arcs: [
+    [0.06, 0.34],
+    [0.56, 0.63],
+  ] as readonly (readonly [number, number])[],
+  inset: 0.18,
+  segment: { medium: 12, high: 20 },
 } as const;
 
 export type WheelBandKind = 'shield' | 'race' | 'urethane' | 'shoulder' | 'tread' | 'core';
@@ -523,6 +544,12 @@ export const BUDGETS = {
    * plane). Colour, normal and roughness maps of one slab bay.
    */
   ground: { drawCalls: 1, triangles: 64, fileBytes: 500 * 1024, textures: 3, textureMaxSide: 1024 },
+  /**
+   * The skate spot (step 14, ADR-69): a kerb, a flat rail, a ledge and a
+   * wall in one mesh, loaded on Medium and High on the game screen only.
+   * The plan's proposal: 300 KB, 15,000 triangles, 3 textures at 1024 px.
+   */
+  spot: { drawCalls: 1, triangles: 15000, fileBytes: 300 * 1024, textures: 3, textureMaxSide: 1024 },
 } as const satisfies Record<string, AssetBudget>;
 
 export type AssetKey = keyof typeof BUDGETS;
@@ -543,6 +570,7 @@ export const BOARD_GLB = 'models/board.glb';
 export const BOARD_HIGH_GLB = 'models/board-high.glb';
 export const SHOES_GLB = 'models/shoes.glb';
 export const GROUND_GLB = 'models/ground.glb';
+export const SPOT_GLB = 'models/spot.glb';
 
-export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB };
+export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB, spot: SPOT_GLB };
 

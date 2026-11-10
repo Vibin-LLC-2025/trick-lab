@@ -13,8 +13,20 @@ vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-s
 
 function fakePlayer() {
   const played: [string, number][] = [];
-  const player: SoundPlayer & { played: typeof played; unlocks: number; stops: number; bars: number; barStops: number } = {
+  const rolls: string[] = [];
+  const catches: (number | null)[] = [];
+  const player: SoundPlayer & { played: typeof played; unlocks: number; stops: number; bars: number; barStops: number; rolls: string[]; catches: (number | null)[] } = {
     played,
+    rolls,
+    catches,
+    roll: (state) => {
+      rolls.push(state);
+    },
+    catchIn: (seconds) => {
+      catches.push(seconds);
+    },
+    audition: () => {},
+    takes: () => 0,
     unlocks: 0,
     stops: 0,
     bars: 0,
@@ -160,5 +172,39 @@ describe('useSound (ADR-58)', () => {
     render(<Listener player={player} />);
     act(() => useTrickStore.getState().toggleFeet());
     expect(player.played).toEqual([]);
+  });
+});
+
+describe('useSound follows the catch and the roll (step 18, ADR-73)', () => {
+  it('schedules the catch when a landing flight starts, cancels it on a pause, and rolls the wheels only on the ground', () => {
+    const player = fakePlayer();
+    render(<Listener player={player} />);
+    const s = () => useTrickStore.getState();
+    act(() => {
+      useTrickStore.setState({ skateTaught: true });
+      s().setPopMode('exact');
+      s().setScreen('skate');
+      s().toggleSound();
+      s().startSkate();
+      for (let i = 0; i < 50 && s().skate.first !== 'you'; i++) s().startSkate();
+      s().callSkateTrick('kickflip');
+      s().setInput('flick', 1.9);
+    });
+    player.catches.length = 0;
+    player.rolls.length = 0;
+    act(() => s().popTrick());
+    // In the air: the catch is ahead, and the wheels are silent.
+    expect(player.catches.at(-1)).toBeGreaterThan(0);
+    expect(player.rolls.at(-1) ?? 'off').toBe('off');
+    act(() => s().togglePause());
+    expect(player.catches.at(-1)).toBeNull();
+    act(() => s().togglePause());
+    expect(player.catches.at(-1)).toBeGreaterThan(0);
+    act(() => s().land());
+    // Back on the ground, slowing to a stop; the landing's sound is the store's cue.
+    expect(player.rolls.at(-1)).toBe('slow');
+    expect(player.played.at(-1)?.[0]).toBe('land');
+    act(() => s().rollRested());
+    expect(player.rolls.at(-1)).toBe('off');
   });
 });

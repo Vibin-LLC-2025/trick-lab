@@ -84,4 +84,4 @@ Tests sit next to the code they test, named `*.test.ts` or `*.test.tsx`.
 | `npm run dev` | Runs the app at http://localhost:5173 while you edit (updates live) |
 | `npm run build` then `npm run preview` | Builds the real website and serves it at http://localhost:4173. Use this for performance checks |
 | `npm run verify` | Runs every check: types, code style, tests, board budget, then a production build and its download budget. Run it before committing |
-| `npm run test:browser` | Runs the browser checks against the build `verify` just made (about 4 minutes). Run it after changing the 3D view or the game |
+| `npm run test:browser` | Runs the browser checks against the build `verify` just made (about 12 minutes). Run it after changing the 3D view or the game |

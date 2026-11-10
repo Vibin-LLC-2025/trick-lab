@@ -6,7 +6,7 @@ Written 2026-11-04, realistic board pass. The board is a **procedural, scripted 
 
 | Command | What it does |
 | --- | --- |
-| `npm run assets` | Builds the four GLBs in `public/models/` (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes. The KTX2 transcoder is three's own, emitted by Vite into the build (ADR-49), so nothing is copied |
+| `npm run assets` | Builds the five GLBs in `public/models/` (the spot since 2026-11-10) (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes. The KTX2 transcoder is three's own, emitted by Vite into the build (ADR-49), so nothing is copied |
 | `npm run assets:check` | Reads the committed GLB and prints the budget table; exits 1 on any miss. Last step of `npm run verify` |
 
 The GLB is committed, so a fresh clone runs without building it. A test (`scripts/lib/budget.test.ts`) fails if the committed file's triangle count no longer matches the geometry source, which means "run `npm run assets`". Another test builds the GLB twice in memory and requires identical bytes.
@@ -94,7 +94,7 @@ Export from Blender as glTF binary with the same conventions (metres, Y up, nose
 | `board-high.glb` | High | 1,709.4 KB (of which PNG 1,496.4 KB) | 7 | 42,736 | 5: grip 1024 x 1024 RGB, grip normal 512 x 512, graphic 2048 x 512, ply 32 x 256, wheel 64 x 512 (12.21 MB on the GPU with mips) |
 | `shoes.glb` | High | 241.8 KB | 3 | 9,214 | 2: upper 512 x 512, sole band 16 x 64 |
 
-**High board.** The same `src/asset` code with a detail level (`buildBoard('high')`): outline intervals 48, a six-step bevel per side generated from the 4 mm bevel circle (`RINGS_HIGH`; the medium ring table is that at 0, 30, 60 and 90 degrees), rounded-box fillets at 4 segments, cylinders at 24 to 32, bolt heads at 16 with a round 4 mm socket, hexagon nuts, and wheels at 64 radial segments over a 28-point profile that models the 608 bearing (shield, races, bore). The grip colour map is the medium recipe scaled to 1024 px with the same seed; its normal map is derived from the same height field, box filtered to 512 px (at 1024 px the noise PNG alone was 2.1 MB and the file 3.3 MB, over the 2.5 MB gate), strength 0.6. The deck graphic is rasterised at 2048 x 512. Not done: a wheel print (the lathe's polar UVs would smear a square mark) and a hex bolt socket.
+**High board.** The same `src/asset` code with a detail level (`buildBoard('high')`): outline intervals 48, a six-step bevel per side generated from the 4 mm bevel circle (`RINGS_HIGH`; the medium ring table is that at 0, 30, 60 and 90 degrees), rounded-box fillets at 4 segments, cylinders at 24 to 32, bolt heads at 16 with a round 4 mm socket, hexagon nuts, and wheels at 64 radial segments over a 28-point profile that models the 608 bearing (shield, races, bore). The grip colour map is the medium recipe scaled to 1024 px with the same seed; its normal map is derived from the same height field, box filtered to 512 px (at 1024 px the noise PNG alone was 2.1 MB and the file 3.3 MB, over the 2.5 MB gate), strength 0.6. The deck graphic is rasterised at 2048 x 512. Not done: a hex bolt socket. The wheel print came with rolling (ADR-67, 2026-11-10): not the square mark of `wheel-print.svg`, which the lathe's polar UVs would smear, but two arcs in its colour on the outer face (`WHEEL_PRINT` in `spec.ts`), on both boards; the wheel map is 64 texels round on Medium too and repeats in u, and the heel side's u is mirrored so one slide of the map turns all four wheels forward.
 
 **Shoes.** One right shoe (the runtime mirrors it, `Feet.tsx`): the footprint is a half-width function per side (superellipse heel and toe, a smoothstep from heel to ball width, a cosine-windowed arch dip), the sole is 12 nested footprint rings lofted like the deck with a 16 x 64 band texture for the foxing stripe, the upper is a 73 x 48 lofted grid of superellipse arches with a height profile and a valley for the ankle and tongue, welded for smooth normals, with a seeded 512 x 512 canvas weave carrying the toe cap, heel tab, tongue and eyelets; the laces are 11 merged 8-segment cylinders. Nodes `Shoe_Sole`, `Shoe_Upper`, `Shoe_Laces`. Origin at the footprint centre on the sole bottom, toe +X, up +Y, lateral +Z; `SHOE` in `shoeSpec.ts` must equal `FOOT` in `src/sim/feet.ts` (`shoe.test.ts`). Every number is in `shoeSpec.ts`; the look is DESIGN.md 8.3.
 
@@ -176,4 +176,39 @@ playwright-cli -s=still close
 npx tsx scripts/still/write.ts stills.json
 ```
 
-`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.8. `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
+`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.6 (0.8 until 2026-11-10, ADR-70). `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
+
+## The skate spot (2026-11-10, ADR-69)
+
+A fifth asset, `public/models/spot.glb`: a kerb, a flat rail, a ledge and a wall in one mesh, behind the board. `npm run assets -- spot` builds it alone.
+
+| File | What it holds | Tests |
+| --- | --- | --- |
+| `src/asset/spotSpec.ts` | `SPOT` (every piece's size, place and colour, the span and the loop), `SPOT_FOOTPRINTS` (what the soft shadows cover), `SPOT_TEXTURES`, `SPOT_PARTS`, `SPOT_MATERIAL` | `spot.test.ts` |
+| `src/asset/spot.ts` | `buildSpot()`: boxes and the kerb's chamfered profile, each face with its vertex colour (the paint, divided by the colour map's mean so it shows true) and world-scaled UVs | `spot.test.ts` (budget, span, behind the board, every face wound outward) |
+| `src/asset/spotTextures.ts` | one seamless metre of concrete: a near-white colour map and a normal map from the same tiling value noise | `spot.test.ts` (power of two, mean, seamless) |
+| `scripts/lib/build.ts` | `spotSpec()`: one material, colour and normal maps with the repeat transform | `budget.test.ts` (the committed file equals a fresh build) |
+| `scripts/lib/budget.ts` | the spot's rows: within the span, on the ground, behind the board | `npm run assets:check` |
+
+`assets:check` for `spot.glb` (2026-11-10): 59.2 KB of 300 KB, 1 of 1 draw call, 120 of 15,000 triangles, 2 of 3 textures (colour 18.4 KB and normal 35.5 KB KTX2, 512 px), within the span (+- 5.6 m), on the ground, behind the board.
+
+## Deck graphics (2026-11-10, ADR-71)
+
+Four more deck bottoms, each a KTX2 texture per board level in `public/models/decks/`, built by `npm run assets` (`npm run assets -- decks` alone) from the drawings in `assets/source/decks/`. Each is rasterized with resvg at that board's deck-bottom size, gets the same wear baked over it as the GLB's own, and is encoded the same way (colour, ETC1S, full mip chain). The runtime swaps it in for the Graphic material's map (`src/scene/deckSwap.ts`); today's graphic stays inside the GLBs.
+
+| File | Medium (1024 x 256) | High (2048 x 512) |
+| --- | --- | --- |
+| Dusk | 19.2 KB | 41.7 KB |
+| Bolt | 16.5 KB | 37.5 KB |
+| Ripple | 25.5 KB | 57.5 KB |
+| Circuit (the computer's) | 17.1 KB | 37.6 KB |
+
+`assets:check` reads each file's KTX2 header: the size of its board's deck bottom, the full mip chain (11 and 12 levels), sRGB, and `DECK_BUDGET` (40 KB and 96 KB). `budget.test.ts` rebuilds each and compares it byte for byte with the committed file.
+
+## Sounds (2026-11-10, ADR-73)
+
+- **Sources:** CC0 recordings from Kenney's Impact Sounds (1.0), in `assets/source/sounds/kenney-impact-sounds/` with the pack's `License.txt`. Only the files a take uses are kept.
+- **Recipe:** `src/audio/soundSpec.ts`: per sound, two or three takes; per take, its layers (a source file, where it starts, its level), its length, its fade and the peak it is levelled to.
+- **Build:** `npm run sounds` (`scripts/build-sounds.ts`, needs ffmpeg): mix the layers, cut leading silence, high-pass at 60 Hz, cut and fade, level to the peak (measured with volumedetect, then applied), encode mono MP3 at 64 kbit/s with no tags, one thread. Repeatable byte for byte. Writes `public/sounds/<kind>-<n>.mp3` and `public/sounds/CREDITS.md`.
+- **Check:** `npm run assets:check` reads every file: an MP3, at most 12 KB, all of them at most 150 KB, and each listed in CREDITS.md.
+- **Swap a sound:** copy the new CC0 file into the sources folder, point the take at it in `soundSpec.ts`, run `npm run sounds`, and commit the sources, the MP3s and CREDITS.md together. A source from somewhere else needs its own entry in CREDITS.md (`SOUND_SOURCE`).

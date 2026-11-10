@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BAR, barFeedback, barMiss, barOff, barScale, barWhen, clampRelease, timedAttempt, type Band } from './bar';
+import { BAR, barFeedback, barLap, barMiss, barOff, barScale, barWhen, clampRelease, timedAttempt, type Band } from './bar';
 import { cleanSetup, SETTABLE_TRICKS, SKATE_LEVEL_ORDER, SKATE_LEVELS } from './skate';
 import { INPUT_LIMITS, resolveTrick } from './tricks';
 
@@ -102,9 +102,19 @@ describe('the timing bar, pure (ADR-65)', () => {
     expect(barFeedback(200, NORMAL)).toBe('Early: 50 percent less spin than you set.');
     // A hair outside is still said as a miss, never as 0 percent.
     expect(barFeedback(BAR.centreMs + NORMAL.halfMs + 2, NORMAL)).toBe('A little late: 1 percent more spin than you set.');
-    expect(barFeedback(BAR.sweepMs, NORMAL, true)).toBe('No release, so the bar ran out: 30 percent more spin than you set.');
     expect(barWhen(BAR.centreMs, NORMAL)).toBe('in the band');
     expect(barWhen(BAR.centreMs + NORMAL.halfMs + 10, NORMAL)).toBe('a little late');
     expect(barWhen(100, NORMAL)).toBe('early');
+  });
+
+  it('goes round: after the sweep the bar starts again from the beginning (ADR-78)', () => {
+    expect(barLap(0)).toBe(0);
+    expect(barLap(BAR.centreMs)).toBe(BAR.centreMs);
+    expect(barLap(BAR.sweepMs - 1)).toBe(BAR.sweepMs - 1);
+    // The sweep's end is the next lap's start: the earliest release, not the latest.
+    expect(barLap(BAR.sweepMs)).toBe(0);
+    expect(barLap(BAR.sweepMs * 3 + BAR.centreMs)).toBe(BAR.centreMs);
+    // A clock that stepped back is a release at the start.
+    expect(barLap(-5)).toBe(0);
   });
 });

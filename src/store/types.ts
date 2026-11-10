@@ -2,7 +2,10 @@ import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
+import type { DeckId, PlayerDeck } from '../asset/deckSpec';
 import type { Records } from './records';
+import type { GameView, ReplayState } from './replay';
+import type { LandingState, RollState } from './roll';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
 export type { Stance };
@@ -35,7 +38,7 @@ export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
  * a SKATE letter earned (either player's), and a game won or lost. The
  * player (src/audio) plays it only while sound is on.
  */
-export type SoundKind = 'pop' | 'land' | 'bail' | 'letter' | 'win' | 'lose';
+export type SoundKind = 'pop' | 'land' | 'sketchy' | 'bail' | 'letter' | 'win' | 'lose';
 /** One of SPEEDS in store/speed.ts. */
 export type PlaybackRate = number;
 export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' };
@@ -119,6 +122,30 @@ export interface PlaybackSlice {
    * if given, opens the one announcement that also carries the result.
    */
   land: (lead?: string) => void;
+  /** Rolling (step 12, ADR-67, store/roll.ts): still, speeding up or cruising, or slowing to a stop. Not logged. */
+  roll: RollState;
+  /** Internal: a go starts in a game (a bar, a pop, the computer's wait), so the board pushes off. Does nothing where rollAllowed is false. */
+  startRoll: () => void;
+  /** Internal: a landing, or a bar dropped with no pop: the board slows to a stop. */
+  slowRoll: () => void;
+  /** Internal: cut short (a screen change, quit, a new game, reset, reduced motion, the 3D view failing): stopped at once. */
+  stopRoll: () => void;
+  /** Called by FlightDriver when a slowing board has stopped. If the computer is waiting for its go, it pushes off again. */
+  rollRested: () => void;
+  /** The landing's own motion in a game (step 13, ADR-68, sim/settle.ts): none, playing, or over (its end pose). Not logged. */
+  landing: LandingState;
+  /** Called by FlightDriver when the landing's motion has played out. If the computer is waiting for its go, it rolls in. */
+  landingDone: () => void;
+  /** Internal: cut short (a change of quality level, reduced motion, the 3D view failing, a quit): the end pose at once. */
+  endLanding: () => void;
+  /**
+   * The instant replay (step 17, ADR-72, store/replay.ts): due after the
+   * student's made set or copy, playing once the board has come to rest.
+   * Not logged; scoring, records and the step-down never see it.
+   */
+  replay: ReplayState;
+  /** The replay is over (FlightDriver at its end) or skipped (Pop, Space or Escape): the computer's go may come. */
+  endReplay: () => void;
 }
 
 /** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */
@@ -126,7 +153,7 @@ export type PopMode = 'timed' | 'exact';
 
 /** A timing bar that is running (ADR-65): the player pressed Pop and has not released yet. */
 export interface PendingPop {
-  /** Goes up by one per bar, so a late or doubled callback does nothing. */
+  /** Goes up by one per bar: the marker is keyed on it, so each bar's sweep starts from the left. */
   id: number;
   /** The store's clock when the bar started, ms. */
   startedAt: number;
@@ -138,18 +165,15 @@ export interface PendingPop {
 /** A release of the timing bar, as the skate slice hands it to the pop. */
 export interface TimedPop {
   intended: TrickInputs;
-  /** When the bar was released, ms into the sweep. */
+  /** When the bar was released, ms into the sweep (on whichever lap, ADR-78). */
   releaseMs: number;
   level: SkateLevel;
-  /** The bar ran to its end with no second press. */
-  timedOut: boolean;
 }
 
 /** The last release of the bar in this game, the player's or the computer's: where the bar's marker rests. */
 export interface LastRelease {
   by: SkatePlayer;
   ms: number;
-  timedOut: boolean;
 }
 
 export interface AssessmentSlice {
@@ -179,6 +203,10 @@ export interface UiSlice {
   viewResetNonce: number;
   /** The camera preset that SceneCamera places and "Reset view" returns to (ADR-38). Persisted under trick-lab.camera-view, default rider. Not logged, not reset, not exported. */
   cameraView: CameraView;
+  /** The game screen's fixed camera (step 17, ADR-72). Persisted under trick-lab.game-camera, default the filmer. Not logged, not reset, not exported. */
+  gameView: GameView;
+  /** The "Instant replay" switch (ADR-72). Persisted under trick-lab.instant-replay, default on. Never plays under reduced motion. Not logged. */
+  instantReplay: boolean;
   /** Persisted under trick-lab.quality. Not logged: the event contract has no UI events. */
   quality: Quality;
   /** True while the tier is the device's auto-pick, false once the student chose one. */
@@ -231,9 +259,17 @@ export interface UiSlice {
    * not logged, not exported.
    */
   soundCue: { nonce: number; kind: SoundKind } | null;
+  /**
+   * The student's deck graphic (step 16, ADR-71): today's or one of the three
+   * the owner approved. Persisted under trick-lab.deck, default today's. Not
+   * logged, not reset, not exported. The computer rides its own (shownDeck).
+   */
+  deck: PlayerDeck;
+  /** The deck chosen before the last change: what a failed download goes back to. Not persisted. */
+  deckBefore: PlayerDeck;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
-  /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs, default off (ADR-48). Not logged, not exported. */
+  /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs; without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
   legsVisible: boolean;
   /** Foot trails: the route of each shoe through the trick, with arrowheads (DESIGN.md 8.5). Persisted under trick-lab.foot-trails, default off. Not logged. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   footPathsVisible: boolean;
@@ -260,6 +296,10 @@ export interface UiSlice {
   resetView: () => void;
   /** Moves the camera to a preset, persisted and announced; a no-op if unchanged. */
   setCameraView: (view: CameraView) => void;
+  /** Chooses the game's camera: persisted and announced, never logged (ADR-72). */
+  setGameView: (view: GameView) => void;
+  /** The "Instant replay" switch: persisted and announced, never logged. Off ends a replay on screen. */
+  toggleInstantReplay: () => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
   /** Shows or hides the legs, persisted and announced. */
@@ -293,6 +333,14 @@ export interface UiSlice {
   celebrate: (trick: string, clean: boolean) => void;
   /** Turns sound on or off, persisted and announced (ADR-58). */
   toggleSound: () => void;
+  /** Chooses the student's deck: persisted and announced, never logged (ADR-71). */
+  setDeck: (deck: PlayerDeck) => void;
+  /**
+   * The scene could not download a deck's texture (ADR-71). If it is the
+   * student's choice, the choice goes back to the deck the board kept
+   * (today's, if that was the one failing) and says so. Never logged.
+   */
+  deckFailed: (deck: DeckId) => void;
   /** Internal: asks for a sound. Called from store actions only. */
   cue: (kind: SoundKind) => void;
   announce: (message: string) => void;

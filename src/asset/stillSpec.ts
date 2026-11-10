@@ -20,8 +20,13 @@ export const STILL = {
   dir: 'stills',
   width: 1600,
   height: 800,
-  /** WebP quality the browser encodes with (0 to 1). */
-  quality: 0.8,
+  /**
+   * WebP quality the browser encodes with (0 to 1). 0.6 since the legs are on
+   * by default (2026-11-10, ADR-70): at 0.8 the stills grew from 27 to 36.5 KB,
+   * past their download budget; 0.6 gives 26.5 KB and looks the same at the
+   * stage's size.
+   */
+  quality: 0.6,
   /** Per file: it downloads beside the 3D code, so it stays small (assets:check). */
   maxBytes: 80 * 1024,
 } as const;

@@ -3,6 +3,7 @@
 import { useGLTF } from '@react-three/drei';
 import { LoaderUtils, Material, Mesh, Texture, type WebGLRenderer } from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { createDeckRegistry } from './deckSwap';
 import { isUnwanted, onReleaseModels, RELEASE_AFTER_MS, takePrefetched, whenRenderer } from './modelCache';
 
 // useGLTF(path, useDraco, useMeshopt, extendLoader). Draco is off: drei would
@@ -136,6 +137,14 @@ export function shareEarlyDownloads(loader: GLTFLoader) {
   };
 }
 
+/**
+ * The deck graphics (step 16, ADR-71): a deck's texture is read with the
+ * models' own KTX2 loader, once the renderer is known, and swapped in for the
+ * board's Graphic map (deckSwap.ts). Freed with the board model.
+ */
+const decks = createDeckRegistry((url) => textureSupport().then(() => ktx2.loadAsync(url)));
+export const showDeck = decks.show;
+
 /** A tier's GLB, suspending until it is in. */
 export const useModel = (url: string) => useGLTF(url, DRACO, MESHOPT, shareEarlyDownloads);
 
@@ -175,6 +184,8 @@ export function releaseLoaded(urls: readonly string[]) {
     if (!gltf) continue;
     loaded.delete(url);
     useGLTF.clear(url);
+    // Its own deck map back on, and the deck textures freed (ADR-71), so each texture is freed once.
+    decks.release(url);
     disposeModel(gltf);
   }
 }

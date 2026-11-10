@@ -3,7 +3,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { describeScene } from '../sim/format';
 import { skateActive } from '../sim/skate';
 import { PRESETS } from '../sim/tricks';
-import { previewCanPlay, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
+import { previewCanPlay, replayMoves, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
 import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
 import { FootMotion } from './FootMotion';
@@ -27,6 +27,9 @@ import { ViewPanel } from './ViewPanel';
 
 // Code-split three.js so the accessible DOM UI paints before the 3D chunk loads.
 const TrickScene = lazy(() => import('../scene/TrickScene'));
+// The sound check (ADR-73): only under ?debug, in its own chunk with the sound player.
+const SoundCheck = lazy(() => import('./SoundCheck'));
+const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 /** Text entry: every shortcut stays out of the way. */
 function isTyping(el: Element | null) {
@@ -50,7 +53,8 @@ const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
  * The keys each screen answers to (ADR-45), each backed by a DOM control on
  * that screen. The theme and the shortcuts dialog work everywhere. The game
  * adds Space (Pop, which starts and releases the timing bar, ADR-65, or the
- * computer's go) and s (its Slow motion switch, ADR-46),
+ * computer's go, or skips the instant replay, ADR-72), s (its Slow motion
+ * switch, ADR-46) and Escape (skips the replay),
  * but not the presets (off in a game), Reset (it would end the game) or the
  * speed steps (the game has no speed slider). The lab has them all, and the
  * perf badge, whose switch is in its View panel. The welcome screen has
@@ -60,7 +64,7 @@ const EVERYWHERE = ['t', 'T', '?'];
 const PLAY = [' ', 's', 'S'];
 export const SCREEN_KEYS: Record<Screen, ReadonlySet<string>> = {
   home: new Set(EVERYWHERE),
-  skate: new Set([...EVERYWHERE, ...PLAY]),
+  skate: new Set([...EVERYWHERE, ...PLAY, 'Escape']),
   lab: new Set([...EVERYWHERE, ...PLAY, '[', ']', 'p', 'P', 'r', 'R', ...PRESET_BY_KEY.keys()]),
 };
 
@@ -92,6 +96,8 @@ function useGlobalShortcuts() {
       else if (e.key === 'p' || e.key === 'P') s.togglePerf();
       else if (e.key === 't' || e.key === 'T') s.toggleTheme();
       else if (e.key === '?') s.setShortcutsOpen(true);
+      // Escape skips the game's instant replay (ADR-72), and is left alone otherwise.
+      else if (e.key === 'Escape' && replayMoves(s)) s.endReplay();
       else handled = false;
       if (handled) e.preventDefault();
     };
@@ -240,6 +246,11 @@ export function App() {
             <FootMotion />
             <Objectives />
             <EventLog />
+            {DEBUG && (
+              <Suspense fallback={null}>
+                <SoundCheck />
+              </Suspense>
+            )}
           </aside>
         )}
       </div>

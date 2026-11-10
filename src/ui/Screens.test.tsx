@@ -201,3 +201,44 @@ describe('welcome screen (ADR-45)', () => {
     expect(types()).not.toContain('skate.set');
   });
 });
+
+describe('the deck choice (step 16, ADR-71)', () => {
+  const announcer = () => document.querySelector('[aria-live="polite"]')!;
+
+  it("is a radio group on the welcome screen, today's deck first and chosen, Circuit kept for the computer", async () => {
+    await setup();
+    const group = screen.getByRole('group', { name: 'Deck' });
+    const radios = within(group).getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('value'))).toEqual(['classic', 'dusk', 'bolt', 'ripple']);
+    expect(within(group).getByRole('radio', { name: 'Trick Lab' })).toBeChecked();
+    expect(group).toHaveAccessibleDescription(/The computer rides its own, Circuit\./);
+    expect(within(group).queryByRole('radio', { name: 'Circuit' })).toBeNull();
+  });
+
+  it('changes with the arrow keys, saved and announced, never logged', async () => {
+    const user = await setup();
+    within(screen.getByRole('group', { name: 'Deck' })).getByRole('radio', { name: 'Trick Lab' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'Dusk' })).toBeChecked();
+    expect(useTrickStore.getState().deck).toBe('dusk');
+    expect(localStorage.getItem('trick-lab.deck')).toBe('dusk');
+    expect(announcer()).toHaveTextContent('Dusk deck.');
+    await user.keyboard('{ArrowRight}');
+    expect(useTrickStore.getState().deck).toBe('bolt');
+    expect(types()).toEqual([]);
+  });
+
+  it('says on Low that the decks show on the higher levels', async () => {
+    useTrickStore.setState({ quality: 'low' });
+    await setup();
+    expect(screen.getByRole('group', { name: 'Deck' })).toHaveAccessibleDescription(/Decks show on the High and Medium quality levels\./);
+  });
+
+  it('goes back to the deck the board kept when a download fails, and says so', async () => {
+    const user = await setup();
+    await user.click(screen.getByRole('radio', { name: 'Ripple' }));
+    act(() => useTrickStore.getState().deckFailed('ripple'));
+    expect(screen.getByRole('radio', { name: 'Trick Lab' })).toBeChecked();
+    expect(announcer()).toHaveTextContent('The Ripple deck could not be downloaded. Keeping the Trick Lab deck.');
+  });
+});

@@ -19,7 +19,8 @@ import {
   type SkatePlayer,
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
-import { useTrickStore, type PopMode, type TrickState } from '../store';
+// The computer's wait (ADR-46) is the store's, shared by the timer and the countdown bar, so the two always start together.
+import { computerWaiting, GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, useTrickStore, type PopMode, type TrickState } from '../store';
 import { Inputs } from './Inputs';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
@@ -30,20 +31,6 @@ import { Toggle } from './Toggle';
  * equal --skate-turn-delay in tokens.css, which times the countdown bar (tested).
  */
 export const COMPUTER_DELAY_MS = 2200;
-
-/**
- * Whether the computer's wait is running (ADR-46): it is up on the game
- * screen, nothing is in the air, auto is on and no dialog is open. Shared by
- * the timer and the countdown bar, so the two always start together.
- */
-const computerWaiting = (s: TrickState) =>
-  s.screen === 'skate' &&
-  computerTurn(s.skate) &&
-  s.skateAuto &&
-  s.status !== 'playing' &&
-  s.status !== 'paused' &&
-  !s.shortcutsOpen &&
-  s.skateLeave === null;
 
 /** The turn a wait belongs to: a new turn, a landing or a second try starts a new wait. */
 const turnKey = (s: TrickState) => `${s.skate.phase}|${s.flightId}|${s.skate.secondTry}`;
@@ -116,6 +103,10 @@ function Scoreboard() {
   const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
   const auto = useTrickStore((s) => s.skateAuto);
   const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
+  const replay = useTrickStore((s) => s.instantReplay);
+  const toggleInstantReplay = useTrickStore((s) => s.toggleInstantReplay);
+  // No replay plays under reduced motion (ADR-72), so its switch is not offered there.
+  const reduced = useTrickStore((s) => s.reducedMotion);
   const up = turnView(game)?.who ?? null;
   return (
     <section className="panel hud__score" aria-labelledby="skate-letters-heading">
@@ -137,9 +128,30 @@ function Scoreboard() {
         <div className="skate__toggles">
           <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
           <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
+          {!reduced && <Toggle label="Instant replay" pressed={replay} onClick={toggleInstantReplay} />}
         </div>
       )}
+      <CameraChoice />
     </section>
+  );
+}
+
+/** The game's camera (step 17, ADR-72): three fixed angles as a radio group (arrow keys move and choose). The lab keeps its free camera. */
+function CameraChoice() {
+  const view = useTrickStore((s) => s.gameView);
+  const setGameView = useTrickStore((s) => s.setGameView);
+  return (
+    <fieldset className="segmented">
+      <legend className="segmented__legend">Camera</legend>
+      <div className="segmented__options">
+        {GAME_VIEWS.map((v) => (
+          <label key={v} className="segmented__option">
+            <input className="segmented__input" type="radio" name="game-camera" value={v} checked={view === v} onChange={() => setGameView(v)} />
+            <span className="segmented__label">{GAME_VIEW_LABEL[v]}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -309,12 +321,13 @@ const BAR_HELP = 'Pop starts the bar. Press Pop again in the band: early spins l
 
 /**
  * The timing bar under Pop (ADR-65, DESIGN.md 11.1): the level's band, and a
- * marker that sweeps across while the bar runs and rests where the last
+ * marker that sweeps across while the bar runs, round again from the left
+ * after each sweep until the second press (ADR-78), and rests where the last
  * release was, the player's or the computer's. The picture is decorative
  * (aria-hidden): the note under it says the same in words, and the bar's
  * start and the result are announced by the store. The sweep is a CSS
- * animation started by the same store change that started the bar, so it
- * trails the store's clock by a frame at most. The two custom properties
+ * animation started by the same store change that started the bar and
+ * repeated each sweep, so it trails the store's clock by a frame at most. The two custom properties
  * carry the band and the marker's place; all the styling is in app.css.
  */
 function TimingBar() {
@@ -332,7 +345,7 @@ function TimingBar() {
     : !last
       ? BAR_HELP
       : last.by === 'you'
-        ? `Your release. ${barFeedback(last.ms, band, last.timedOut)}`
+        ? `Your release. ${barFeedback(last.ms, band)}`
         : `The computer released ${barWhen(last.ms, band)}.`;
   return (
     <>
@@ -352,7 +365,9 @@ function Controls() {
   const cpu = useTrickStore((s) => computerTurn(s.skate));
   const pressPop = useTrickStore((s) => s.pressPop);
   const timed = useTrickStore((s) => s.popMode === 'timed');
-  const label = cpu ? "Computer's go" : 'Pop';
+  // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
+  const replaying = useTrickStore(replayMoves);
+  const label = replaying ? 'Skip replay' : cpu ? "Computer's go" : 'Pop';
   return (
     <div className="hud__tray">
       <Inputs />
@@ -364,7 +379,7 @@ function Controls() {
             type="button"
             className="btn btn--primary skate__pop"
             aria-label={label}
-            aria-keyshortcuts="Space"
+            aria-keyshortcuts={replaying ? 'Space Escape' : 'Space'}
             aria-disabled={status === 'playing' || undefined}
             onClick={pressPop}
           >

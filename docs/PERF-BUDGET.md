@@ -16,7 +16,7 @@ The design target is good hardware. High is what the game is designed for, Mediu
 | New features | all | all but real shadows, motion blur and glow | none, except rolling |
 
 - **Read by the measurement** (`scripts/measure/measure.js`, "How to measure" below): the 95th percentile of the graphics time and of the app's work over the lab's timed tricks, and the longest interval between frames (gate: under 20 ms, which is 16.7 ms plus timer jitter). Its last table says pass or fail per tier.
-- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 34, Medium 19, Low 12 today).
+- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 36, Medium 21, Low 12 since step 14's skate spot, ADR-69, measured on the game screen too, through the landing: step 19's dust, ADR-74, is one draw on High and Medium while a game's landing has dust in the air, and it did not move these numbers, because the motion cues' one draw has faded out by the landing).
 - **Downloads keep their budget** (`npm run bundle:check`).
 - **Medium's target is a stand-in:** it is measured on the reference machine with Medium chosen, not on built-in graphics.
 
@@ -85,6 +85,8 @@ The options are the query of the page the session is on (tiers, networks, screen
 - reports the Chromium-only probes (throttling, CPU slowdown, the cache switch) as unavailable in other browsers. GPU time is reported only where the browser exposes a timer.
 
 **From 2026-11-09 (step 6, ADR-62)** it reports the spread, not only the middle: for the render CPU time, the GPU time, the frame's whole work (`perfStats.workMs`, from R3F's before-effect to the end of the draw) and the interval between frames, the median, the 95th percentile and the longest. A last table checks each tier against the targets above (`targets` and `pass` in the JSON).
+
+**From 2026-11-10 (step 20, ADR-75)** it plays a whole game of SKATE on the game screen (`game=on`, the default; `gos=60` caps it): every go a real Space press, the student's sets landing and bailing in turn and every copy bailing, so the game ends. The first go of the visit and the rest of the game are reported apart, with the count of frame intervals over 20 and 34 ms, and the targets table has a row per tier for the game after its first go.
 
 Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
 
@@ -628,3 +630,131 @@ The targets table the script prints:
 - **One frame on High took two refreshes** (16.6 ms) in four tricks: inside the target. Nothing took three.
 - **The app's own work is nearly all the render call:** the work is 0.1 ms above the render CPU time, which is FlightDriver's pose.
 - **Loading is unchanged:** the complete scene at 1.07 s on High, 1.02 s on Medium, 0.45 s on Low, cold at full speed.
+
+### Step 20: the smoothness pass (ADR-75)
+
+Rolling means frames run for a whole go, not half a second, so the measurement now plays a whole game of SKATE on each tier (`game=on`, the default; "How to measure" and the script's header say how). Measured 2026-11-10 on step 20's build: Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, dark theme, cold visits at full speed. The browser drew at 100 frames a second on this day, so a frame interval is 10 ms and one missed refresh reads 20 ms (step 6's run was at 120: 8.3 and 16.7 ms).
+
+**Loading** is where it was (the target: the full scene in about 1.0 to 1.2 s at full speed), with the skate spot, the decks and the dust in the build:
+
+| Tier | UI (FCP) | Loading picture | First 3D frame | All models on screen | Picture lifts |
+| --- | --- | --- | --- | --- | --- |
+| high | 0.11 s | 0.07 s | 1.15 s | 1.15 s | 1.22 s |
+| medium | 0.10 s | 0.06 s | 1.08 s | 1.08 s | 1.12 s |
+| low | 0.10 s | 0.07 s | 0.46 s | none | 0.49 s |
+
+**A whole game**, every go a real Space press, played to its end:
+
+| Tier | Part of the game | Frames | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Intervals over 20 ms / over 34 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| high | the first go | 335 | 0.8 / 2.2 / 6.1 ms | 1.18 / 2.23 / 4.39 ms | 1 / 2.3 / 6.3 ms | 10 / 10.1 / 10.2 ms | 0 / 0 |
+| high | the rest: 32 goes (14 clean, 4 sketchy, 14 bails, 4 replays), played to the end | 5566 | 0.7 / 1.7 / 4.6 ms | 0.98 / 1.9 / 2.82 ms | 0.8 / 1.9 / 4.8 ms | 10 / 10.1 / 20.1 ms | 1 / 0 |
+| medium | the first go | 166 | 0.7 / 2.1 / 3.3 ms | 0.79 / 2.56 / 3.87 ms | 0.8 / 2.7 / 4.4 ms | 10 / 10.1 / 10.5 ms | 0 / 0 |
+| medium | the rest: 19 goes (8 clean, 1 sketchy, 10 bails, 2 replays), played to the end | 3261 | 0.6 / 1.5 / 3.8 ms | 0.79 / 0.85 / 2.16 ms | 0.7 / 1.7 / 4.3 ms | 10 / 10.1 / 11.2 ms | 0 / 0 |
+| low | the first go | 337 | 0.2 / 0.6 / 1.3 ms | 0.13 / 0.16 / 2.63 ms | 0.4 / 0.9 / 3.9 ms | 10 / 10.1 / 10.3 ms | 0 / 0 |
+| low | the rest: 14 goes (6 clean, 1 sketchy, 7 bails, 1 replays), played to the end | 2098 | 0.2 / 0.4 / 1.7 ms | 0.14 / 0.15 / 1.88 ms | 0.3 / 0.6 / 2.2 ms | 10 / 10.1 / 10.5 ms | 0 / 0 |
+
+The targets table the script prints (the game's rows are new):
+
+| Tier | Over | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, every switch on | Targets |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | the lab's tricks | 0.66 ms of under 4 ms: pass | 1.5 ms of under 4 ms: pass | 20 ms of under 20 ms: FAIL | 34 of under 60: pass | FAIL |
+| high | a whole game, after its first go | 1.9 ms of under 4 ms: pass | 1.9 ms of under 4 ms: pass | 20.1 ms of under 20 ms: FAIL | | FAIL |
+| medium | the lab's tricks | 0.59 ms of under 3 ms: pass | 2 ms of under 4 ms: pass | 10.2 ms of under 20 ms: pass | 19 of under 40: pass | pass |
+| medium | a whole game, after its first go | 0.85 ms of under 3 ms: pass | 1.7 ms of under 4 ms: pass | 11.2 ms of under 20 ms: pass | | pass |
+| low | the lab's tricks | 0.1 ms of under 2 ms: pass | 1.5 ms of under 4 ms: pass | 10.2 ms of under 20 ms: pass | 12 of under 20: pass | pass |
+| low | a whole game, after its first go | 0.15 ms of under 2 ms: pass | 0.6 ms of under 4 ms: pass | 10.5 ms of under 20 ms: pass | | pass |
+
+What it says:
+
+- **The graphics and the app's own work are well inside the targets through a whole game** on every tier: on High the graphics card's time is 1.9 ms of 4 at the 95th percentile and the app's work 1.9 ms of 4. A game costs the graphics card about 1 ms a frame more than the lab's tricks on High (the skate spot and its shadows).
+- **Medium and Low missed no refresh in a whole game.**
+- **High misses about one refresh in a game, and the "longest frame" target is not met there.** Over four more High runs (12 lab tricks and a whole game each): a game's longest interval was 20.1, 19.9, 30 and 20.1 ms, one frame in 2,900 to 5,600 each time, and the lab's 12 tricks had one frame of 20 ms in each run. The target is no frame longer than 16.7 ms, and a single missed refresh at 100 Hz is 20 ms, so by the letter this fails; on step 6's 120 Hz run the same single missed refresh read 16.6 ms and passed. The gate was not moved.
+  - **It is not the graphics.** The longest GPU time in a game was 2.8 ms and the longest frame of the app's own work 6.1 ms, both inside one 10 ms refresh. A probe that logged every late frame with what the store had just done found the late frame once, 40 ms after the turn changed (the page redrawing its turn card while the board rolled), and in two other whole games (4,076 and 2,610 frames) found none.
+  - **No fix was made for it:** nothing in the scene causes it, and it is one frame in thousands. If it matters, the next thing to try is making the turn card's update cheaper (it is the page's own layout, outside the 3D view).
+- **The first trick of a visit.** In a browser started fresh for each run (five runs), the first go on High had one late frame of 20 to 30 ms just after the first pop and one about 50 ms after the first landing, when the student went first; none when the computer went first. Both come as the page draws its cards and the landing's sticker for the first time, not from the graphics card: every effect the first pop turns on is a number set on a program that already exists (the motion blur, the replay's bend).
+  - **The one program that was new at the first landing is the dust's** (step 19). It is now built before the first pop: the mesh is drawn once, empty, when the game screen opens. The late frame after the landing went from 20 to 30 ms (two of five runs at 30) to 20 ms in each of four runs; the one after the pop is the page's and stayed.
+  - Later goes of the same visit have neither.
+- **The long-run test now plays games.** Half of every block of ten is five goes of a game on the game screen (the roll, the landings' motion, the dust, the skate spot, the computer's deck, replays), then back to the lab for the sample. The counts stayed flat: 23 geometries and 28 textures on High at every sample, 8 and 2 on Low; the heap grew 1,963 KB (limit 4,096), 271 KB without compiled code. It takes about 6 minutes here (it was about 3).
+- **Not done here:** a game on a laptop with built-in graphics on Medium. That is the owner's, from the checklist at the end of the plan.
+
+### Step 22: Browsers (Firefox and Safari, ADR-77)
+
+A quick pass by hand, 2026-11-10, on step 21's build served like GitHub Pages, through `playwright-cli` with its own Firefox 156.0 and WebKit 26.6 (the engine Safari uses, in Playwright's build for Windows), installed on this machine for the pass. 1280 x 800, each quality level: the lab (load, preset 1, Space, the landing), the Sound switch, then the game (Start game, one go, everything at rest).
+
+| | Chromium (the browser checks) | Firefox 156 | WebKit 26.6 (Playwright's Windows build) |
+| --- | --- | --- | --- |
+| The 3D view starts, High / Medium / Low | yes / yes / yes | yes / yes / yes | yes / yes / yes |
+| Renderer on High and Medium | WebGPU (WebGL2 in the checks, which hide it) | WebGPU's WebGL2 fallback: this Firefox has `navigator.gpu` but blocks it ("disabled by blocklist") | WebGPU's WebGL2 fallback: no `navigator.gpu` |
+| Textures load (KTX2), models on screen | yes | yes: 25 textures on High, 18 on Medium, every model | yes: the same counts |
+| Draw calls, lab at rest, High / Medium / Low | 33 / 18 / 10 | 33 / 18 / 10 | 33 / 18 / 10 |
+| The keyboard pops and the trick lands | yes | yes | yes |
+| A go in the game, to rest (roll, landing, replay) | yes | yes | yes |
+| Sound: the recordings (MP3) decode | yes | yes: all 11 | not checkable: this build has no Web Audio at all (`AudioContext` is undefined). The app stays silent, with no error |
+| The layout holds, no sideways scroll | yes | yes | yes |
+| Console errors on a clean load | none | none | none |
+
+- **Firefox: nothing to fix.** It looks like Chromium's picture on every level. Errors seen in one run ("Couldn't load texture blob") came from the pass's own script leaving a page while it was still loading; a clean load has none.
+- **WebKit: one thing that could not be settled here.** On a first load every level draws correctly. After the canvas changes size (going from the lab to the game inside the page, or resizing the window), this build shows the stage's background colour where the picture should be. The app is still drawing: reading the canvas's own pixels straight after a draw gives the full picture, the canvas is visible and on top, the context is not lost, and nothing is logged. More frames, hiding and showing the canvas, and resizing again do not bring it back. That points at this Windows build's compositor, not at the app (every WebGL app resizes its canvas), but it is not proof for Safari on a Mac or an iPhone. **Real Safari is the owner's check**, with sound, from the list in the plan.
+- **No code changed in this step.**
+
+### Step 23: everything, before and after
+
+The plan's baseline (a0a2c86) and its last build (step 22's), measured the same day with the same script: 2026-11-10, Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, cold visits, both builds served by `serve.ts`, the baseline built in a worktree. The display ran at 100 Hz, so a frame interval is 10 ms and one missed refresh reads 20 ms. The baseline cannot play the measurement's game (it has no store under `?debug`), so the game's rows are the new build's only. Both themes were measured; they agree within run-to-run noise, so one row gives both as dark / light.
+
+**Loading**, the frame where every model is on screen (Low: the first 3D frame):
+
+| Tier | Network | Before | After |
+| --- | --- | --- | --- |
+| high | full speed | 1.05 / 1.39 s | 1.08 / 1.06 s |
+| high | 10 Mbps | 1.82 / 1.80 s | 1.83 / 1.79 s |
+| high | 3 Mbps | 5.24 / 5.22 s | 5.25 / 5.29 s |
+| medium | full speed | 1.03 / 1.05 s | 1.25 / 1.04 s |
+| medium | 10 Mbps | 1.67 / 1.64 s | 1.62 / 1.59 s |
+| medium | 3 Mbps | 4.03 / 3.77 s | 4.10 / 4.09 s |
+| low | full speed | 0.46 / 0.47 s | 0.46 / 0.45 s |
+| low | 10 Mbps | 0.74 / 0.74 s | 0.77 / 0.76 s |
+| low | 3 Mbps | 1.55 / 1.55 s | 1.58 / 1.57 s |
+
+**Bytes of a first visit** (the welcome screen, as sent):
+
+| Tier | JavaScript, before | after | Models, before | after |
+| --- | --- | --- | --- | --- |
+| high | 594.6 KB | 608.1 KB | 754.6 KB | 754.9 KB |
+| medium | 593.8 KB | 607.2 KB | 273.5 KB | 274.0 KB |
+| low | 361.9 KB | 374.2 KB | 0 KB | 0 KB |
+
+**Draw calls and triangles:**
+
+| Tier | Welcome, before | after | Lab, before | after | Game at rest, before | after | Every switch on (lab), before | after | Triangles (lab), before | after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| high | 30 | 32 | 31 | 33 | 31 | 35 | 35 | 34 | 163,961 | 168,441 |
+| medium | 16 | 17 | 17 | 18 | 17 | 20 | 20 | 19 | 18,969 | 21,209 |
+| low | 9 | 9 | 10 | 10 | 10 | 10 | 13 | 12 | 10,487 | 10,487 |
+
+**Frame times in the lab** (four timed kickflips; median / 95th percentile / longest, dark theme):
+
+| Tier | Render CPU, before | after | GPU, before | after | Frame interval, before | after |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | 0.7 / 2 / 3.3 ms | 0.6 / 1.7 / 2.6 ms | 0.66 / 0.72 / 0.79 ms | 1.05 / 1.18 / 1.44 ms | 10 / 10.1 / 19.9 ms | 10 / 10.1 / 29.9 ms |
+| medium | 0.5 / 1.7 / 2.9 ms | 0.5 / 1.7 / 2.8 ms | 0.52 / 0.59 / 0.66 ms | 0.85 / 0.92 / 0.92 ms | 10 / 10.1 / 10.5 ms | 10 / 10.1 / 10.4 ms |
+| low | 0.2 / 0.4 / 2.5 ms | 0.2 / 0.6 / 1.2 ms | 0.1 / 0.11 / 2.59 ms | 0.17 / 0.43 / 2.07 ms | 10 / 10.1 / 10.2 ms | 10 / 10.1 / 10.2 ms |
+
+**A whole game on the new build** (after its first go; dark / light):
+
+| Tier | Goes | Frames | GPU, 95th percentile | The app's work, 95th percentile | Longest frame interval | Intervals over 20 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | 25 / 15 | 4,416 / 2,444 | 1.51 / 1.51 ms of under 4 | 1.5 / 1.7 ms of under 4 | 20 / 20 ms | 0 / 0 |
+| medium | 28 / 14 | 4,894 / 2,100 | 1.18 / 1.18 ms of under 3 | 1.2 / 1.1 ms of under 4 | 10.4 / 10.6 ms | 0 / 0 |
+| low | 11 / 28 | 1,621 / 4,918 | 0.65 / 0.63 ms of under 2 | 0.6 / 0.5 ms of under 4 | 10.3 / 11.2 ms | 0 / 0 |
+
+What the plan cost and bought, in numbers:
+
+- **Loading did not move.** The complete scene is still on screen in about 1.1 s on High and Medium and under half a second on Low at full speed, with 13 KB more JavaScript (the game's controls, records, rolling, landings, the camera, the replay and the dust) and the same models. The skate spot, the decks and the sounds are downloaded only when the game or the Sound switch needs them.
+- **A draw call fewer with every switch on** (the legs became one draw, step 2), **and two to three more in the game** (the skate spot and its shadows; the dust is inside that). All far inside the caps of 60, 40 and 20.
+- **The graphics card does a little more per frame** on High and Medium: 0.4 ms more in the lab (the legs on by default with their cloth, the wheels' print), and about 1.5 ms at the 95th percentile through a game against a target of 4 and 3 ms.
+- **Medium and Low never missed a refresh**, in the lab or through a whole game.
+- **High misses a single refresh now and then, and it did before this plan too.** The baseline's lab run has the same one frame of 19.9 ms on High in both themes; the new build's has 20 to 29.9 ms, and one of 20 ms in a game of thousands of frames. By the letter the "no frame longer than 16.7 ms" target is not met on High on a 100 Hz display, on either build. Step 20 says where it comes from (the page redrawing a card, not the 3D view) and that nothing was changed for it.
+- **Memory stays flat** over the long-run test with games in it (step 20).
+
+Keyboard only, through every screen (2026-11-10, Chromium, by script): on the welcome screen, the game screen before and in a game, and the lab, every visible control is reached by Tab (8, 8, 16 and 70 of them), each with a visible focus ring and in view; Enter on the first choice opens the game with focus on its heading; Start game puts focus on the turn's heading; the leave dialog keeps Tab inside itself, Escape closes it and focus returns to "Quit game"; in the lab the number keys, Space, `r` and `?` work, the shortcuts dialog opens on Close and returns focus where it was; the live region speaks. A screen reader spot check is the owner's, from the list in the plan.

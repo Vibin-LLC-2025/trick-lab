@@ -4,7 +4,8 @@
 // Units are metres. The pad top surface is y = 0; the board's long axis is X.
 
 import { BAY, CONCRETE, PLANE, ROUGHNESS } from '../asset/groundSpec';
-import { OUTLINE, REST_Y } from '../asset/spec';
+import { OUTLINE, REST_Y, WHEEL } from '../asset/spec';
+import { SPOT } from '../asset/spotSpec';
 import { FOOT } from '../sim/feet';
 import { NeutralToneMapping, type ToneMapping } from 'three';
 import type { Quality, Theme } from '../store';
@@ -12,6 +13,17 @@ import type { Quality, Theme } from '../store';
 export type Vec3 = readonly [number, number, number];
 
 const v = (x: number, y: number, z: number): Vec3 => [x, y, z];
+/**
+ * A camera preset from its angles (step 17, ADR-72): `elevation` degrees up
+ * from the horizon, `azimuth` degrees round from the heel side (+Z) toward +X,
+ * looking at a point `targetY` up over the board. Only the direction matters
+ * (the fit sets the distance), so the position is 2 m out.
+ */
+const look = (elevation: number, azimuth: number, targetY: number) => {
+  const e = (elevation * Math.PI) / 180;
+  const a = (azimuth * Math.PI) / 180;
+  return { position: v(2 * Math.cos(e) * Math.sin(a), targetY + 2 * Math.sin(e), 2 * Math.cos(e) * Math.cos(a)), target: v(0, targetY, 0) };
+};
 
 /**
  * Scene clear color per theme. Each must equal `--scene-bg` for that theme in
@@ -402,7 +414,27 @@ export const ART = {
         ),
         target: v(0, 0.45, 0),
       },
+      /**
+       * The game's fixed angles (step 17, ADR-72, 2026-11-10), like a friend
+       * filming: lower and closer than the lab's, all on the heel side (+Z),
+       * so the skate spot (ADR-69) stays behind the board and the legs stand
+       * above it on screen. `look(elevation, azimuth, targetY)`: degrees up
+       * from the horizon and round from the heel side toward +X (the goofy
+       * nose; the camera never moves with the stance, ADR-25). The fit sets
+       * the distance, as for the lab's presets.
+       * - `film`, the default: low three-quarter toward the nose, 12 up, 30 round.
+       * - `side`: side on and low, 7 up, the board in profile against the spot.
+       * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
+       * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
+       *   (its own field of view, `fov` below), close to the board.
+       */
+      film: look(12, 30, 0.32),
+      side: look(7, 0, 0.32),
+      above: look(34, -20, 0.28),
+      replay: look(4, 40, 0.36),
     },
+    /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
+    fovs: { replay: 60 } as Partial<Record<string, number>>,
   },
   /**
    * Rotation direction (ADR-10, made goofy by ADR-24 on 2026-11-04). The
@@ -580,15 +612,30 @@ export const ART = {
    * down the thigh from behind the hips, showed the faded tube flaring
    * toward the camera as streaks beside each knee; from 0.35 to 0.85 only
    * the knee end reads there, and the side view keeps the lower thigh.
+   *
+   * Better trousers (step 15, ADR-70, 2026-11-10): the sock is gone under a
+   * turned-up `cuff` `height` tall that ends `drop` below the ankle joint,
+   * so it sits over the shoe collar (about 1.4 cm above the joint) even at
+   * the back of a shank leaning forward (at the joint it left 2 to 3 cm of
+   * ankle showing there), `radius` round, its fold line in the darker
+   * `fold` colour. Above it the trouser bunches in `bunch.count` soft rolls
+   * of `bunch.depth` over `bunch.height`. Inside it a dark `sock` ankle.
+   * The thighs' fade starts at 0.55 of the thigh (0.35 before): the dither's
+   * dotted band is shorter now the legs are on by default.
+   * `cloth`: a twill normal map, `ribs` diagonal ribs per `tile` metres of
+   * cloth, `around` tiles round a leg, at `strength`.
    */
   legs: {
     trouser: '#3b3e44',
-    sock: '#d9d5cb',
+    fold: '#2b2d32',
+    sock: '#2f3035',
     roughness: 0.95,
     thigh: { hip: 0.085, knee: 0.062 },
-    shank: { knee: 0.054, calf: 0.056, calfAt: 0.3, hem: 0.054, sock: 0.036, ankle: 0.034 },
-    hemAbove: 0.045,
-    fade: { from: 0.35, to: 0.85 },
+    shank: { knee: 0.054, calf: 0.056, calfAt: 0.3, hem: 0.057, ankle: 0.034 },
+    cuff: { height: 0.032, drop: 0.025, radius: 0.0605, edge: 0.003 },
+    bunch: { count: 2, height: 0.05, depth: 0.0025 },
+    cloth: { tile: 0.016, ribs: 4, around: 22, size: 64, strength: 0.55 },
+    fade: { from: 0.55, to: 0.88 },
     radialSegments: 16,
     capSegments: 4,
   },
@@ -697,4 +744,69 @@ export const ART = {
     /** Fade out over this fraction of the airtime once a trick is in the air. */
     fadeBy: 0.12,
   },
+  /**
+   * Rolling in the game (step 12, ADR-67). The board stays where it is and
+   * the ground's textures and the wheels' print slide (scene/roll.ts), nose
+   * first (+X). The owner's list of changes at the end of the plan reads
+   * these; nothing else needs to change with them.
+   * - `cruise`: m/s, an easy flat-ground roll (a jog is about 2.5). The
+   *   ground's 1.6 m joints pass about one and a half a second.
+   * - `pushS`: seconds from stopped to the cruise, a steady push. Shorter
+   *   than the timing bar's 0.8 s to its band, so a timed pop is at speed.
+   * - `slowS`: seconds from the cruise to a stop after a landing. With
+   *   `pushS` it fits inside the computer's 2.2 s wait (COMPUTER_DELAY_MS),
+   *   so the computer stops, pushes off and is at speed when it pops.
+   * - `wheelRadius`: the wheel the print turns on (spec.ts WHEEL.radius).
+   */
+  roll: { cruise: 2.4, pushS: 0.7, slowS: 1.3, wheelRadius: WHEEL.radius },
+  /**
+   * The skate spot (step 14, ADR-69): spot.glb, on Medium and High, on the
+   * game screen. `loop`: it wraps over this many metres as the ground rolls
+   * (spotSpec.ts says why 50). `shadow`: the soft shadow under each piece,
+   * cast along the key light (a piece h tall throws it h times the light's
+   * slope), `opacity` at its core, fading to nothing over `soft` metres
+   * round it, `lift` above the ground so it never fights it.
+   */
+  /**
+   * The computer in a game of SKATE (step 16, ADR-71): it rides its own deck
+   * (COMPUTER_DECK, Circuit, in deckSpec.ts), and its shoes' soles and laces
+   * take Circuit's teal, `shoe`, so whose go it is shows on the board and the
+   * feet. High's shoe model and Medium's primitive; Low stays as it is.
+   */
+  computer: { shoe: '#5fd0c5' },
+  /**
+   * The instant replay (step 17, ADR-72): after the student's made set or
+   * copy, the flight once more at `rate` of its own speed from the replay
+   * view, with a fisheye `bend` on High and Medium (the effects' composite:
+   * a barrel distortion, 0 for none, scaled so the corners stay inside the
+   * picture).
+   */
+  replay: { rate: 0.3, bend: 0.28 },
+  /**
+   * Dust (step 19, ADR-74): soft discs facing the camera, on Medium and High,
+   * in a game. Metres and seconds (the roll's, so slow motion slows it).
+   * - `color`, `opacity`: pale concrete dust; the opacity is a puff's centre
+   *   at its thickest, and its edge fades to nothing.
+   * - `segments`: the rim's vertices. `fadeIn`: the part of its life a puff
+   *   takes to appear. `sit`: how much of its radius its centre is above the
+   *   ground, so it rests on the ground and not half inside it.
+   * - `touchdown`: `perWheel` puffs at each wheel, living about `life`,
+   *   swelling from `radius[0]` to `radius[1]`, lifting `rise` and drifting
+   *   out sideways at up to about `spread` m/s. A sketchy landing's are
+   *   `sketchy` times the size and a bail's `bail` times.
+   * - `slide`: under a bailed board while it slides (ADR-68): `puffs` of
+   *   them, born one after another over the first `until` of the slide,
+   *   between `behind[0]` and `behind[1]` behind the deck centre the way it
+   *   slides (its trailing end) and within `across` to either side.
+   */
+  dust: {
+    color: '#d6d0c4',
+    opacity: 0.3,
+    segments: 10,
+    fadeIn: 0.12,
+    sit: 0.55,
+    touchdown: { perWheel: 3, life: 0.55, radius: [0.025, 0.1] as readonly [number, number], rise: 0.05, spread: 0.22, sketchy: 1.3, bail: 1.2 },
+    slide: { puffs: 12, until: 0.55, life: 0.45, radius: [0.02, 0.085] as readonly [number, number], rise: 0.03, spread: 0.12, behind: [0.28, 0.42] as readonly [number, number], across: 0.13 },
+  },
+  spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },
 } as const;

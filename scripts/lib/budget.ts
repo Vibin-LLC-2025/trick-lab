@@ -3,9 +3,12 @@
 // feed it hand-made stats. The asset key picks the limits (BUDGETS), the
 // expected nodes and the size checks: the two boards share the deck's outline
 // and rest height, the shoe has its own footprint, the ground its plane.
+import { DECK_BUDGET } from '../../src/asset/deckSpec';
+import { deckTexture } from '../../src/asset/deckTexture';
 import { BAY, GROUND_PARTS } from '../../src/asset/groundSpec';
 import { SHOE, SHOE_PARTS } from '../../src/asset/shoeSpec';
-import { BUDGETS, OUTLINE, PARTS, REST_Y, type AssetKey } from '../../src/asset/spec';
+import { SPOT, SPOT_PARTS } from '../../src/asset/spotSpec';
+import { BUDGETS, OUTLINE, PARTS, REST_Y, type AssetKey, type DetailLevel } from '../../src/asset/spec';
 
 export interface TextureStat {
   name: string;
@@ -75,6 +78,15 @@ function sizeRows(s: AssetStats, key: AssetKey): BudgetRow[] {
       { check: 'Centred on the origin', value: mm(off), limit: '0.0 mm +- 1 mm', ok: off <= 0.001 },
     ];
   }
+  if (key === 'spot') {
+    // Within its span of x (so the group wraps out of sight, ADR-69), on the ground, and behind the board (all of it at -Z).
+    const half = Math.max(Math.abs(s.bounds.min[0]), Math.abs(s.bounds.max[0]));
+    return [
+      { check: 'Within the span (x)', value: `+- ${half.toFixed(3)} m`, limit: `<= ${SPOT.span} m`, ok: half <= SPOT.span + 1e-3 },
+      { check: 'On the ground (min y)', value: mm(s.bounds.min[1]), limit: '0.0 mm +- 0.5 mm', ok: Math.abs(s.bounds.min[1]) <= 0.0005 },
+      { check: 'Behind the board (max z)', value: mm(s.bounds.max[2]), limit: '< -0.8 m', ok: s.bounds.max[2] < -0.8 },
+    ];
+  }
   if (key === 'shoes') {
     return [
       { check: 'Length (x)', value: mm(length), limit: `${mm(SHOE.length)} +- 3 mm`, ok: Math.abs(length - SHOE.length) <= 0.003 },
@@ -100,7 +112,7 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
   const texBytes = s.textures.reduce((n, t) => n + t.bytes, 0);
   const gpu = s.textures.reduce((n, t) => n + gpuBytes(t), 0);
   const maxSide = Math.max(0, ...s.textures.map((t) => Math.max(t.width, t.height)));
-  const expectedNodes: readonly string[] = (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : PARTS).map((p) => p.node);
+  const expectedNodes: readonly string[] = (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : key === 'spot' ? SPOT_PARTS : PARTS).map((p) => p.node);
   const missing = expectedNodes.filter((n) => !s.nodeNames.includes(n));
   const rows: BudgetRow[] = [
     { check: 'GLB file size', value: kb(s.fileBytes), limit: `<= ${kb(BUDGET.fileBytes)}`, ok: s.fileBytes <= BUDGET.fileBytes },
@@ -167,4 +179,32 @@ export function formatTable(rows: BudgetRow[]): string {
   const widths = head.map((h, i) => Math.max(h.length, ...body.map((b) => b[i]!.length)));
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join('  ').trimEnd();
   return [line(head), widths.map((w) => '-'.repeat(w)).join('  '), ...body.map(line)].join('\n');
+}
+
+/** What the deck check reads from a deck texture (step 16, ADR-71): its KTX2 header. */
+export interface DeckTextureStat {
+  bytes: number;
+  /** Null when the file is not a KTX2 container. */
+  width: number | null;
+  height: number | null;
+  levels: number;
+  /** The colour transfer function is sRGB, as the GLB's own deck bottom. */
+  srgb: boolean;
+}
+
+/**
+ * A deck texture's rows: KTX2, the size of its board level's deck bottom (so
+ * it stands in for that map), the full mip chain, sRGB, and its byte budget.
+ */
+export function evaluateDeckTexture(s: DeckTextureStat, level: DetailLevel): BudgetRow[] {
+  const T = deckTexture(level);
+  const kb = (n: number) => `${(n / 1024).toFixed(1)} KB`;
+  const full = fullMipLevels(T);
+  return [
+    { check: 'KTX2', value: s.width === null ? 'no' : 'yes', limit: 'yes', ok: s.width !== null },
+    { check: 'Size', value: `${s.width ?? '?'} x ${s.height ?? '?'}`, limit: `${T.width} x ${T.height}`, ok: s.width === T.width && s.height === T.height },
+    { check: 'Mip levels', value: String(s.levels), limit: String(full), ok: s.levels === full },
+    { check: 'sRGB', value: s.srgb ? 'yes' : 'no', limit: 'yes', ok: s.srgb },
+    { check: 'File size', value: kb(s.bytes), limit: `<= ${kb(DECK_BUDGET[level].bytes)}`, ok: s.bytes <= DECK_BUDGET[level].bytes },
+  ];
 }

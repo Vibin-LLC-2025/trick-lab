@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import type { Mesh, MeshStandardMaterial } from 'three';
+import { COMPUTER_DECK, isPlayerDeck } from '../asset/deckSpec';
 import { PARTS } from '../asset/spec';
-import { useTrickStore } from '../store';
+import { shownDeck, useTrickStore } from '../store';
 import { ART } from './artDirection';
-import { preloadModel, useModel } from './gltf';
+import { preloadModel, showDeck, useModel } from './gltf';
 import { noteShown } from './modelCache';
-import { boardUrlFor, SHOES_URL } from './modelUrls';
+import { BOARD_HIGH_URL, boardUrlFor, deckUrl, SHOES_URL } from './modelUrls';
+import { slideTexture, wheelPerMetre } from './roll';
 
 /**
  * Sets anisotropic filtering on every texture of a cached GLB's materials,
@@ -47,6 +49,24 @@ export function BoardModel({ url, castShadow }: { url: string; castShadow: boole
     applyAnisotropy(materials, anisotropy);
     invalidate();
   }, [invalidate, materials, anisotropy]);
+  // The wheels' print turns with the roll (ADR-67): a lathe's u runs once around each wheel.
+  const wheelMap = ((nodes.Wheels as Mesh | undefined)?.material as MeshStandardMaterial | undefined)?.map ?? null;
+  useEffect(() => (wheelMap ? slideTexture(wheelMap, wheelPerMetre(), false) : undefined), [wheelMap]);
+  // The deck on the board's bottom (step 16, ADR-71): the student's choice, or
+  // the computer's own on its go. A deck that cannot be downloaded leaves the
+  // board as it was; the store puts the student's choice back and says so.
+  const deck = useTrickStore(shownDeck);
+  const graphic = ((nodes.Deck_Graphic as Mesh | undefined)?.material as MeshStandardMaterial | undefined) ?? null;
+  useEffect(() => {
+    if (!graphic) return;
+    showDeck(url, graphic, deckUrl(deck, url === BOARD_HIGH_URL ? 'high' : 'medium')).then((r) => {
+      if (r === 'shown') invalidate();
+      else if (r === 'failed') {
+        if (isPlayerDeck(deck)) useTrickStore.getState().deckFailed(deck);
+        else if (deck === COMPUTER_DECK) console.warn("trick-lab: the computer's deck could not be downloaded; its board keeps the student's deck.");
+      }
+    });
+  }, [url, graphic, deck, invalidate]);
   return (
     <group dispose={null}>
       {PARTS.map(({ node }) => {

@@ -25,7 +25,7 @@
 // (-X), toes still at the toe side (-Z); everything toward the heels still
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
-import { computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
+import { CATCH, computeFlight, heightAt, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
 import { isLanded, sketchAmount } from './landing';
 
 /**
@@ -251,13 +251,8 @@ function sketchHeight(table: Float64Array, s: number): number {
   return table[i]! + (table[i + 1]! - table[i]!) * (f - i);
 }
 
-/**
- * When each foot is back on the board (ADR-36, 2026-11-05), fractions of the
- * airtime: the front foot first, 0.03 before the catch ends (the sources put
- * the front foot down first in a 360 flip and a shove-it), the back foot as
- * the board stops turning. Starting values, to refit from reference data.
- */
-export const CATCH = { front: PHASE.catch.end - 0.03, back: PHASE.catch.end } as const;
+/** When each foot is back on the board (ADR-36): defined in flight.ts beside PHASE (ADR-73). */
+export { CATCH };
 
 /**
  * Motion numbers. Windows are fractions of the airtime; distances metres.
@@ -542,7 +537,7 @@ export function writeFeetPose(out: FeetPose, inputs: TrickInputs, flight: Flight
  * 180 - yaw, kept in (-180, 180]. Height, z, pitch and roll are unchanged:
  * roll means "onto the outside edge", which FlightDriver maps per shoe.
  */
-function mirrorFoot(f: FootPose) {
+export function mirrorFoot(f: FootPose) {
   f.x = -f.x;
   let yaw = 180 - f.yaw;
   if (yaw > 180) yaw -= 360;
@@ -606,6 +601,15 @@ function writeFlightFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const sn = Math.sin(t);
   rideDeck(out.front, c, sn, board.y + tuckHeight('front', i, p), board.pitch, 1);
   rideDeck(out.back, c, sn, board.y + tuckHeight('back', i, p), board.pitch, -1);
+  // A bailing board comes down on its rail or kicks (ADR-68), up to a couple
+  // of centimetres above where the parabola alone would put it; the feet step
+  // onto the pad, not onto that height, so it comes off as the bail goes on.
+  // Level by then (pitch 0), so it is a straight drop. 0 for every landing.
+  if (!flight.landed && p >= 0.5) {
+    const extra = (board.y - heightAt(flight.peak, p)) * smooth(MOTION.bail.start, 1, p);
+    out.front.y -= extra;
+    out.back.y -= extra;
+  }
   if (isLanded(flight.rollTotal, flight.yawTotal)) {
     rideCatch(out.front, flight, p, CATCH.front, 1);
     rideCatch(out.back, flight, p, CATCH.back, -1);

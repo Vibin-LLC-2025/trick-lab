@@ -8,10 +8,11 @@ import { buildGround } from '../../src/asset/ground';
 import { PLANE } from '../../src/asset/groundSpec';
 import { buildShoe, shoeTriangles } from '../../src/asset/shoe';
 import { SHOE } from '../../src/asset/shoeSpec';
+import { DECK_BUDGET, DECK_FILES } from '../../src/asset/deckSpec';
 import { ASSET_FILES, BUDGET, BUDGETS, OUTLINE, REST_Y, type AssetKey } from '../../src/asset/spec';
-import { evaluateBudget, formatTable, fullMipLevels, gpuBytes, type AssetStats } from './budget';
-import { buildAsset } from './build';
-import { inspectGlb } from './inspect';
+import { evaluateBudget, evaluateDeckTexture, formatTable, fullMipLevels, gpuBytes, type AssetStats, type DeckTextureStat } from './budget';
+import { buildAsset, buildDeckTexture } from './build';
+import { inspectDeckTexture, inspectGlb } from './inspect';
 
 const good: AssetStats = {
   fileBytes: 200 * 1024,
@@ -192,5 +193,30 @@ describe('the committed GLBs', () => {
     expect(Buffer.from(a.glb).equals(readFileSync(resolve(PUBLIC, ASSET_FILES[key]))), `run npm run assets -- ${key}`).toBe(true);
     // Two full builds at once. The High board's 2048 px textures took 31.9 s on a GitHub runner (2026-11-10, the
     // first CI run), past the 30 s every test gets; it is about 10 s on a desktop. 120 s still catches a hang.
+  }, 120_000);
+});
+
+describe('deck textures (step 16, ADR-71)', () => {
+  const ok: DeckTextureStat = { bytes: 30 * 1024, width: 1024, height: 256, levels: 11, srgb: true };
+  const failing = (s: DeckTextureStat, level: 'medium' | 'high' = 'medium') => evaluateDeckTexture(s, level).filter((r) => !r.ok).map((r) => r.check);
+
+  it('passes a Medium deck the size of the GLB deck bottom with its full mip chain, sRGB, inside the budget', () => {
+    expect(failing(ok)).toEqual([]);
+    expect(failing({ ...ok, width: 2048, height: 512, levels: 12 }, 'high')).toEqual([]);
+  });
+
+  it('fails a file that is not KTX2, the wrong size, a short mip chain, linear, or over its budget', () => {
+    expect(failing({ ...ok, width: null, height: null, levels: 0 })).toEqual(['KTX2', 'Size', 'Mip levels']);
+    expect(failing({ ...ok, width: 2048, height: 512 })).toEqual(['Size']);
+    expect(failing({ ...ok, levels: 1 })).toEqual(['Mip levels']);
+    expect(failing({ ...ok, srgb: false })).toEqual(['sRGB']);
+    expect(failing({ ...ok, bytes: DECK_BUDGET.medium.bytes + 1 })).toEqual(['File size']);
+  });
+
+  it.each(DECK_FILES.map((d) => [d.file, d] as const))('%s passes and is byte for byte a fresh build', async (_file, { deck, level, file }) => {
+    const path = resolve(PUBLIC, file);
+    expect(failing(inspectDeckTexture(path), level)).toEqual([]);
+    const built = await buildDeckTexture(deck, level);
+    expect(Buffer.from(built).equals(readFileSync(path)), 'run npm run assets -- decks').toBe(true);
   }, 120_000);
 });

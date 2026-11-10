@@ -23,6 +23,7 @@ import {
   yawAt,
   type Pose,
 } from './flight';
+import { contactRise } from './boardSection';
 import { MOTION } from './feet';
 import { PRESETS } from './tricks';
 
@@ -335,7 +336,18 @@ describe('tail-pivot pop', () => {
         prev = y;
       }
       expect(poseAt(f, 0.5).y).toBeCloseTo(pop, 12);
-      for (const u of [0.5, 0.6, 0.8, 0.95, 1]) expect(poseAt(f, u).y).toBe(heightAt(pop, u));
+      // A landed flight keeps the parabola to the pad. A bail (pop 0.15 here
+      // does not land) keeps it until its lowest point would go below the pad,
+      // and from there rests on its rail or kicks. Changed on purpose
+      // (2026-11-10, ADR-68): a bail used to end through the pad.
+      for (const u of [0.5, 0.6, 0.8, 0.95, 1]) {
+        const y = poseAt(f, u).y;
+        if (f.landed) expect(y).toBe(heightAt(pop, u));
+        else {
+          const rest = contactRise(rollAt(f, u));
+          expect(y).toBe(Math.max(heightAt(pop, u) + Math.min(0, rest) * (1 - heightAt(pop, u) / pop), rest));
+        }
+      }
       // The pivot lifts the deck centre ahead of the plain parabola early on.
       // Changed on purpose (2026-11-05, ADR-36): up to the strike the centre
       // is the pivot lift alone, now with no roll (the flip starts after the

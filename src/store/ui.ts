@@ -1,5 +1,8 @@
 import type { StateCreator } from 'zustand';
+import { MODEL_DECK } from '../asset/deckSpec';
 import { isStance } from '../sim/feet';
+import { DECK_KEY, deckAnnouncement, deckFailedAnnouncement, deckFrom } from './deck';
+import { GAME_VIEW_ANNOUNCEMENT, GAME_VIEW_KEY, gameViewFrom, INSTANT_REPLAY_KEY, instantReplayFrom } from './replay';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
 import { capQuality, detectQuality, effectiveQuality, isQuality } from './quality';
@@ -100,8 +103,16 @@ export function readQuality(): { quality: Quality; qualityAuto: boolean } {
 }
 
 export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
-/** Legs are off until the student switches them on (ADR-37; off by default since ADR-48). */
-export const readLegsVisible = (): boolean => read(LEGS_KEY) === 'on';
+/**
+ * The legs (ADR-37): a saved choice wins. Without one they follow the
+ * quality level: on with High and Medium, off on Low (ADR-70; off everywhere
+ * from ADR-48 until then), and they change with it.
+ */
+export const legsByDefault = (quality: Quality): boolean => quality !== 'low';
+export const readLegsVisible = (quality: Quality): boolean => {
+  const saved = read(LEGS_KEY);
+  return saved === 'on' ? true : saved === 'off' ? false : legsByDefault(quality);
+};
 /** Foot trails are off until the student switches them on. */
 export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 /** Motion cues are on until the student switches them off (ADR-26). */
@@ -155,6 +166,7 @@ export const SCENE_UNAVAILABLE_ANNOUNCEMENT =
 
 export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, get) => {
   let nonce = 0;
+  const quality = readQuality();
   return {
     screen: readScreen(),
     previewPaused: read(PREVIEW_KEY) === 'paused',
@@ -167,7 +179,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     focusRequest: null,
     viewResetNonce: 0,
     cameraView: readCameraView(),
-    ...readQuality(),
+    gameView: gameViewFrom(read(GAME_VIEW_KEY)),
+    instantReplay: instantReplayFrom(read(INSTANT_REPLAY_KEY)),
+    ...quality,
     paces: [],
     paceJudged: false,
     paceSource: null,
@@ -177,8 +191,10 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     celebration: null,
     soundOn: readSoundOn(),
     soundCue: null,
+    deck: deckFrom(read(DECK_KEY)),
+    deckBefore: deckFrom(read(DECK_KEY)),
     feetVisible: readFeetVisible(),
-    legsVisible: readLegsVisible(),
+    legsVisible: readLegsVisible(quality.quality),
     footPathsVisible: readFootPathsVisible(),
     stance: readStance(),
     motionCuesVisible: readMotionCuesVisible(),
@@ -197,7 +213,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // A trick in the air lands now, as under reduced motion (ADR-6), so no
       // screen inherits a flight it has no controls to finish.
       if (inFlight(get())) get().land();
-      set({ screen, shortcutsOpen: false, skateLeave: null });
+      // The game's roll ends with its screen (ADR-67): the lab stays on the spot, and shows no landing of its own (ADR-68).
+      get().stopRoll();
+      set({ screen, shortcutsOpen: false, skateLeave: null, landing: 'none', replay: 'none' });
       get().requestFocus({ kind: 'screen-heading' });
     },
     togglePreview: () => {
@@ -213,8 +231,11 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     },
     togglePerf: () => set((s) => ({ perfVisible: !s.perfVisible })),
     setShortcutsOpen: (open) => {
-      // A dialog opening drops a running timing bar (ADR-65).
-      if (open) get().cancelPop();
+      // A dialog opening drops a running timing bar (ADR-65), and ends a replay (ADR-72).
+      if (open) {
+        get().cancelPop();
+        set({ replay: 'none' });
+      }
       set({ shortcutsOpen: open });
     },
     toggleTheme: () => {
@@ -229,6 +250,13 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // Live change (ADR-6): a flight playing or paused stops animating and
       // resolves now, through the same path as a landing, once.
       if (reducedMotion && inFlight(get())) get().land(REDUCED_MOTION_LEAD);
+      // Under reduced motion the board pops on the spot (ADR-67), and a landing shows its end at once (ADR-68).
+      if (reducedMotion) {
+        get().stopRoll();
+        get().endLanding();
+        // No replay plays under reduced motion (ADR-72).
+        set({ replay: 'none' });
+      }
     },
     resetView: () => {
       set((s) => ({ viewResetNonce: s.viewResetNonce + 1 }));
@@ -240,10 +268,26 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       set({ cameraView });
       get().announce(CAMERA_VIEW_ANNOUNCEMENT[cameraView]);
     },
+    setGameView: (gameView) => {
+      if (get().gameView === gameView) return;
+      save(GAME_VIEW_KEY, gameView);
+      set({ gameView });
+      get().announce(GAME_VIEW_ANNOUNCEMENT[gameView]);
+    },
+    toggleInstantReplay: () => {
+      const instantReplay = !get().instantReplay;
+      save(INSTANT_REPLAY_KEY, instantReplay ? 'on' : 'off');
+      set({ instantReplay });
+      if (!instantReplay) get().endReplay();
+      get().announce(instantReplay ? 'Instant replay on.' : 'Instant replay off.');
+    },
     setQuality: (quality) => {
       if (get().quality === quality && !get().qualityAuto) return;
       save(QUALITY_KEY, quality);
-      set({ quality, qualityAuto: false });
+      // The 3D view is rebuilt: a landing in play goes to its end (ADR-68).
+      get().endLanding();
+      // Legs nobody chose follow the level (ADR-70).
+      set({ quality, qualityAuto: false, legsVisible: readLegsVisible(quality) });
       get().announce(QUALITY_ANNOUNCEMENT[quality]);
     },
     toggleFeet: () => {
@@ -291,6 +335,10 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setSceneUnavailable: () => {
       if (get().sceneUnavailable) return;
       set({ sceneUnavailable: true });
+      // No view is left to bring a rolling board to a stop (ADR-67), or to play a landing out (ADR-68).
+      get().stopRoll();
+      get().endLanding();
+      set({ replay: 'none' });
       // One announcement: the failure, then the result if a trick was in the air.
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
@@ -311,7 +359,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
         return null;
       }
       save(QUALITY_STEP_KEY, lower);
-      set({ quality: lower, paces: [], paceJudged: false });
+      // The 3D view is rebuilt on the lower level: the landing just begun goes to its end (ADR-68).
+      get().endLanding();
+      set({ quality: lower, paces: [], paceJudged: false, legsVisible: readLegsVisible(lower) });
       return STEP_DOWN_ANNOUNCEMENT[lower as Exclude<Quality, 'high'>];
     },
     setPaceSource: (paceSource) => set({ paceSource }),
@@ -319,6 +369,21 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       if (!get().stageReady) set({ stageReady: true });
     },
     celebrate: (trick, clean) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick, clean } }),
+    setDeck: (deck) => {
+      const before = get().deck;
+      if (before === deck) return;
+      save(DECK_KEY, deck);
+      set({ deck, deckBefore: before });
+      get().announce(deckAnnouncement(deck));
+    },
+    deckFailed: (deck) => {
+      const s = get();
+      if (s.deck !== deck) return;
+      const kept = s.deckBefore !== deck ? s.deckBefore : MODEL_DECK;
+      save(DECK_KEY, kept);
+      set({ deck: kept, deckBefore: kept });
+      s.announce(deckFailedAnnouncement(deck, kept));
+    },
     toggleSound: () => {
       const soundOn = !get().soundOn;
       save(SOUND_KEY, soundOn ? 'on' : 'off');

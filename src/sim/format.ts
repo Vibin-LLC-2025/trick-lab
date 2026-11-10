@@ -16,6 +16,7 @@ import {
 } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
 import { describeLegs } from './legs';
+import { restSide, type RestSide } from './settle';
 import {
   directionWord,
   FLIP_WORDS,
@@ -335,6 +336,20 @@ function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done
   return landed && s.progress >= CATCH.back ? 'Feet on the board, riding it down.' : 'Feet in the air above the board.';
 }
 
+const FELL: Record<RestSide, string> = {
+  wheels: 'slides away from the feet on its wheels',
+  rail: 'falls onto its side and slides away from the feet',
+  grip: 'falls upside down and slides away from the feet',
+};
+
+/** The landing's motion in a game (ADR-68), as it plays or once it has: one sentence, empty for a clean landing. */
+function describeSettle(flight: Flight, grade: 'clean' | 'sketchy' | 'bail', playing: boolean): string {
+  if (grade === 'sketchy') return playing ? ' The board rocks onto its back wheels and swerves; the feet ride it out.' : ' The board rocked and swerved; the feet rode it out.';
+  if (grade !== 'bail') return '';
+  const fell = FELL[restSide(flight)];
+  return playing ? ` The board ${fell}.` : ` The board ${fell.replace('falls', 'fell').replace('slides', 'slid')}.`;
+}
+
 export function describeScene(s: {
   status: 'idle' | 'playing' | 'paused' | 'done';
   progress: number;
@@ -350,9 +365,18 @@ export function describeScene(s: {
   stance?: Stance;
   /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
   flightBy?: 'you' | 'computer';
+  /** Rolling in the game (ADR-67); still when left out. */
+  roll?: 'still' | 'push' | 'slow';
+  /** The landing's own motion in a game (ADR-68); none when left out. */
+  landing?: 'none' | 'plays' | 'over';
+  /** The instant replay (ADR-72); none when left out. */
+  replay?: 'none' | 'due' | 'plays';
 }): string {
-  const board =
-    s.status === 'playing'
+  // The instant replay plays the made trick again before the landing shows (ADR-72).
+  const replay = s.replay === 'plays' ? s.result : null;
+  const board = replay
+    ? `Instant replay of the ${replay.name.toLowerCase()}, in slow motion from a low camera. Press Pop or Escape to skip it.`
+    : s.status === 'playing'
       ? 'Skateboard in the air.'
       : s.status === 'paused'
         ? `Skateboard paused in the air at ${Math.round(s.progress * 100)} percent of the flight.`
@@ -360,7 +384,10 @@ export function describeScene(s: {
           ? s.progress >= 1
             ? 'Skateboard back on the pad at its landing pose.'
             : `Skateboard frozen at ${Math.round(s.progress * 100)} percent of the flight.`
-          : 'Skateboard resting flat on a concrete pad, grip side up.';
+          : s.roll === 'push' || s.roll === 'slow'
+            ? 'Skateboard flat on the concrete, grip side up.'
+            : 'Skateboard resting flat on a concrete pad, grip side up.';
+  const rolling = s.roll === 'push' ? ' Rolling along the concrete, nose first.' : s.roll === 'slow' ? ' Rolling to a stop.' : '';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
   const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
@@ -373,5 +400,6 @@ export function describeScene(s: {
         ? "Waiting for the computer's trick to land."
         : 'Waiting for this trick to land.'
       : 'No trick popped yet.';
-  return `${board}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
+  const settled = !replay && s.landing && s.landing !== 'none' && s.flight && s.result ? describeSettle(s.flight, s.result.grade, s.landing === 'plays') : '';
+  return `${board}${rolling}${settled}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

@@ -1,11 +1,13 @@
 import type { StateCreator } from 'zustand';
 import { barFeedback, barMiss, barOff, timedAttempt } from '../sim/bar';
 import { computeFlight, type TrickInputs } from '../sim/flight';
+import { settleSeconds } from '../sim/settle';
 import { describeInputs, describeResult } from '../sim/format';
 import { awaitingCall, SKATE_LEVELS, skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
-import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
+import { computerWaiting, rollAllowed } from './roll';
+import { DEFAULT_SLOW, GAME_PACE, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
 import type { PlaybackSlice, TimedPop, TrickEvent, TrickState } from './types';
 
 export const initialPlayback = () => ({
@@ -17,6 +19,9 @@ export const initialPlayback = () => ({
   flightBy: 'you' as const,
   result: null,
   scrubFrom: null,
+  roll: 'still' as const,
+  landing: 'none' as const,
+  replay: 'none' as const,
 });
 
 /**
@@ -55,8 +60,16 @@ export const createPlaybackSlice =
       release = null;
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
+      // In a game the landing has weight (ADR-68): a sketchy one rocks and swerves, a bail
+      // falls and slides. Shown as it ends at once where nothing may move (ADR-6).
+      if (skateActive(s.skate) && s.screen === 'skate') {
+        set({ landing: animates(s) && settleSeconds(s.flight) > 0 ? 'plays' : 'over' });
+      }
+      // A rolling board rolls on and slows to a stop (ADR-67); after a bail the rider has stopped, and the board slides on alone.
+      if (result.grade === 'bail') s.stopRoll();
+      else s.slowRoll();
       // The landing's sound, at the moment it lands (ADR-58); a letter and the game's end follow in scoreSkate.
-      s.cue(result.landed ? 'land' : 'bail');
+      s.cue(result.landed ? (result.grade === 'sketchy' ? 'sketchy' : 'land') : 'bail');
       s.log('trick.resolved', {
         by,
         trick: result.id,
@@ -134,6 +147,8 @@ export const createPlaybackSlice =
         ? { how: 'timed', releaseMs: Math.round(bar.ms), offMs: Math.round(barOff(bar.ms)), setFlick: round(bar.set.flick, 3), setScoop: round(bar.set.scoop, 3) }
         : { how: 'exact' };
       const flightId = s.flightId + 1;
+      // A new go ends the last landing (ADR-68), and a replay still to come (ADR-72).
+      set({ landing: 'none', replay: 'none' });
       // The new flight owns the playhead from its first frame.
       head.flightId = flightId;
       head.progress = 0;
@@ -146,17 +161,19 @@ export const createPlaybackSlice =
         result: null,
         scrubFrom: null,
         // Where the bar's marker rests: this release, or nothing after an exact pop.
-        lastRelease: go ? { by, ms: go.releaseMs, timedOut: false } : mine ? { by, ms: mine.releaseMs, timedOut: mine.timedOut } : null,
+        lastRelease: go ? { by, ms: go.releaseMs } : mine ? { by, ms: mine.releaseMs } : null,
       });
       // In a game the student's pop carries the trick in play too: the one they called, or the one to copy.
       if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call, ...how });
       else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null, ...how });
       else s.log('trick.popped', { by, ...inputs, preset: s.activePreset, ...how });
       s.cue('pop');
+      // In a game the board rolls through the go (ADR-67); already rolling after a bar or the computer's wait.
+      s.startRoll();
       if (mine) {
         // The bar's start was announced; what the release did waits for the result (ADR-65).
         const band = SKATE_LEVELS[mine.level].band;
-        release = { flightId, text: barFeedback(mine.releaseMs, band, mine.timedOut), inBand: barMiss(mine.releaseMs, band) === 0 };
+        release = { flightId, text: barFeedback(mine.releaseMs, band), inBand: barMiss(mine.releaseMs, band) === 0 };
         if (!animates(s)) resolve([]);
         return;
       }
@@ -165,6 +182,23 @@ export const createPlaybackSlice =
       // leave the board at its final pose; the timeline steps through the flight.
       if (!animates(s)) resolve([lead]);
       else s.announce(lead);
+    };
+
+    /**
+     * The go has come to rest: the board has stopped and the landing has
+     * played out. A replay that is due plays now (ADR-72), and the computer
+     * waits for it; otherwise the computer rolls in before it pops, its wait
+     * outlasting both (ART.roll, SETTLE).
+     */
+    const rollIn = () => {
+      const s = get();
+      if (s.roll !== 'still' || s.landing === 'plays') return;
+      if (s.replay === 'due') {
+        if (animates(s) && s.screen === 'skate') set({ replay: 'plays' });
+        else set({ replay: 'none' });
+        return;
+      }
+      if (computerWaiting(s)) s.startRoll();
     };
 
     return {
@@ -218,6 +252,12 @@ export const createPlaybackSlice =
         const s = get();
         const rate = s.rate < 1 ? 1 : s.slowRate;
         set({ rate });
+        // In a game the speed said is the one seen: the game's pace times this one (ADR-78).
+        if (s.screen === 'skate') {
+          const seen = Math.round(rate * GAME_PACE * 1000) / 1000;
+          s.announce(rate === 1 ? 'Slow motion off, game speed.' : `Slow motion on, ${speedText(seen)}.`);
+          return;
+        }
         s.announce(rate === 1 ? 'Slow motion off, normal speed.' : `Slow motion on, ${speedText(rate)}.`);
       },
 
@@ -250,5 +290,37 @@ export const createPlaybackSlice =
       },
 
       land: (lead) => resolve(lead ? [lead] : []),
+
+      startRoll: () => {
+        const s = get();
+        // The board rolls in for the go: the last landing's board is gone (ADR-68).
+        if (s.roll !== 'push' && rollAllowed(s)) set({ roll: 'push', landing: 'none' });
+      },
+      slowRoll: () => {
+        if (get().roll === 'push') set({ roll: 'slow' });
+      },
+      stopRoll: () => {
+        if (get().roll !== 'still') set({ roll: 'still' });
+      },
+      rollRested: () => {
+        if (get().roll !== 'slow') return;
+        set({ roll: 'still' });
+        rollIn();
+      },
+      landingDone: () => {
+        if (get().landing !== 'plays') return;
+        set({ landing: 'over' });
+        rollIn();
+      },
+      endLanding: () => {
+        if (get().landing === 'plays') set({ landing: 'over' });
+      },
+      endReplay: () => {
+        const s = get();
+        if (s.replay === 'none') return;
+        set({ replay: 'none' });
+        // The board is at rest: the computer's go may come now.
+        rollIn();
+      },
     };
   };

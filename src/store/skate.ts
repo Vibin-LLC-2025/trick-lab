@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import { BAR } from '../sim/bar';
+import { barLap } from '../sim/bar';
 import {
   afterAttempt,
   awaitingCall,
@@ -23,8 +23,9 @@ import {
   withComputerCall,
   type SkateGame,
 } from '../sim/skate';
-import { inFlight } from './playback';
+import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
+import { computerWaiting } from './roll';
 import type { Clock } from './assessment';
 import type { PopMode, SkateSlice, TrickState } from './types';
 
@@ -37,13 +38,6 @@ export const TAUGHT_KEY = 'trick-lab.skate-taught';
 
 /** A source of numbers in [0, 1). The store takes one so tests can script the coin flip and the computer. */
 export type Random = () => number;
-
-/**
- * Runs `fn` once, `ms` from now, and returns what cancels it. The store takes
- * one for the timing bar's end (ADR-65): setTimeout in the app, a fake in
- * tests, so the bar's timing is exact there.
- */
-export type Schedule = (fn: () => void, ms: number) => () => void;
 
 export const initialSkate = (level: SkateGame['level'] = 'normal') => ({
   skate: newSkateGame(level),
@@ -68,15 +62,14 @@ const letters = (n: number) => SKATE_WORD.slice(0, n);
  * it how each flight ended (scoreSkate), so the rules run on the same
  * recognized result the outcome card shows. Every random draw (the coin flip,
  * the computer's call and its release of the bar) comes from `random`. The
- * timing bar (ADR-65) is owned here too: it reads `now` and ends through
- * `schedule`, both handed in, so nothing in it depends on a real timer.
+ * timing bar (ADR-65) is owned here too: it reads `now`, handed in, so
+ * nothing in it depends on a real timer. It goes round until the second
+ * press (ADR-78), so nothing ends it but the player or a cancel.
  */
 export const createSkateSlice =
-  (random: Random, now: Clock, schedule: Schedule): StateCreator<TrickState, [], [], SkateSlice> =>
+  (random: Random, now: Clock): StateCreator<TrickState, [], [], SkateSlice> =>
   (set, get) => {
     let popSeq = 0;
-    /** Cancels the running bar's end, if one is scheduled. */
-    let cancelEnd: (() => void) | null = null;
     /** The walk-through's prompt last said, so each is said once as it is reached (ADR-66). */
     let lessonAt = 0;
 
@@ -95,24 +88,19 @@ export const createSkateSlice =
     /** Drops the running bar: no attempt, no letter. True if there was one. */
     const drop = (): boolean => {
       if (!get().pendingPop) return false;
-      cancelEnd?.();
-      cancelEnd = null;
       set({ pendingPop: null });
+      // No pop after all: the board slows to a stop (ADR-67). A release pops at once and pushes it again.
+      if (get().status !== 'playing') get().slowRoll();
       return true;
     };
 
-    /**
-     * Releases bar `id`: by the second press, at the clock's time, or by the
-     * bar's own end. A call for a bar that is no longer the running one (a
-     * press and the end in the same tick, an end after the game was quit)
-     * does nothing.
-     */
-    const release = (id: number, timedOut: boolean) => {
+    /** Releases the running bar by the second press: where its marker is on this lap, by the clock (ADR-78). */
+    const release = () => {
       const pending = get().pendingPop;
-      if (!pending || pending.id !== id) return;
-      const releaseMs = timedOut ? BAR.sweepMs : Math.min(BAR.sweepMs, Math.max(0, now() - pending.startedAt));
+      if (!pending) return;
+      const releaseMs = barLap(now() - pending.startedAt);
       drop();
-      get().popTimed({ intended: pending.intended, releaseMs, level: pending.level, timedOut });
+      get().popTimed({ intended: pending.intended, releaseMs, level: pending.level });
     };
 
     return {
@@ -152,8 +140,13 @@ export const createSkateSlice =
 
       pressPop: () => {
         const s = get();
+        // During the instant replay the button is "Skip replay" (ADR-72): the same element, so focus stays.
+        if (s.replay === 'plays') {
+          s.endReplay();
+          return;
+        }
         if (s.pendingPop) {
-          release(s.pendingPop.id, false);
+          release();
           return;
         }
         // The bar is the player's own go in a game, with a trick in play and the board down. Anything else is the plain pop,
@@ -164,8 +157,10 @@ export const createSkateSlice =
           return;
         }
         const id = ++popSeq;
+        // The bar goes round until the second press (ADR-78): nothing is scheduled to end it.
         set({ pendingPop: { id, startedAt: now(), intended: { pop: s.pop, flick: s.flick, scoop: s.scoop }, level: s.skate.level }, lastRelease: null });
-        cancelEnd = schedule(() => release(id, true), BAR.sweepMs);
+        // The bar is the push (ADR-67).
+        s.startRoll();
         // Short while the ticks play; with sound off the bar is silent, so say so and where Exact is.
         s.announce(s.soundOn ? 'Bar running.' : 'Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
       },
@@ -194,6 +189,8 @@ export const createSkateSlice =
           return;
         }
         const cancelled = s.dropPop();
+        // A new game starts with the board stopped (ADR-67); the computer, if it sets first, rolls in below.
+        s.stopRoll();
         if (skateActive(s.skate)) s.log('skate.ended', { winner: null, reason: 'restart', ...score(s.skate) });
         const first = coinFlip(random);
         // The computer picks its call as soon as its set turn begins, so the student sees it before it pops.
@@ -201,8 +198,9 @@ export const createSkateSlice =
         const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
         // A fresh game starts with the board on the pad and no result from before (ADR-46). The speed is kept.
         // A player's first game walks them through their first go (ADR-66).
-        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught });
+        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught, replay: 'none' });
         s.log('skate.started', { level: skate.level, first });
+        if (computerWaiting(get())) get().startRoll();
         s.requestFocus({ kind: 'skate-heading' });
         const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
         s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}${lessonLead()}`);
@@ -212,15 +210,19 @@ export const createSkateSlice =
         const skateAuto = !get().skateAuto;
         savePref(SKATE_AUTO_KEY, skateAuto ? 'on' : 'off');
         set({ skateAuto });
+        // The computer's wait comes and goes with auto, and its roll-in with it (ADR-67).
+        const s = get();
+        if (skateAuto && s.roll === 'still' && computerWaiting(s)) s.startRoll();
+        else if (!skateAuto && s.status !== 'playing' && !s.pendingPop) s.slowRoll();
         get().announce(skateAuto ? 'The computer goes on its own.' : "The computer waits for you: press Computer's go or Space.");
       },
 
       requestLeave: (target) => {
         const s = get();
         if (s.screen === 'skate' && skateActive(s.skate)) {
-          // A dialog opening drops a running bar (ADR-65).
+          // A dialog opening drops a running bar (ADR-65), and a replay (ADR-72).
           s.cancelPop();
-          set({ skateLeave: target });
+          set({ skateLeave: target, replay: 'none' });
           return;
         }
         if (target === 'setup') s.quitSkate();
@@ -266,6 +268,9 @@ export const createSkateSlice =
       quitSkate: () => {
         const s = get();
         if (s.skate.phase === 'off') return;
+        s.stopRoll();
+        s.endLanding();
+        set({ replay: 'none' });
         if (skateActive(s.skate)) {
           const cancelled = s.dropPop();
           // A flight still in the air lands as usual but scores nothing (scoreSkate ignores it once the game is off).
@@ -308,6 +313,9 @@ export const createSkateSlice =
         const game = withComputerCall(step.game, random);
         set({ skate: game, skateMessage: step.message });
         if (by === 'you' && step.made) s.celebrate(result.name, result.grade === 'clean');
+        // Every go of the student's, made or missed, is replayed once the board is at rest (ADR-72, ADR-78),
+        // except the one that ends the game: the result takes over the screen there.
+        if (by === 'you' && s.instantReplay && animates(s) && game.phase !== 'over') set({ replay: 'due' });
         if (step.set) s.log('skate.set', { by, trick: step.set.id });
         if (step.letterTo) {
           s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });

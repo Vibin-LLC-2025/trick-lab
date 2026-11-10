@@ -1,11 +1,18 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
-import { expectTier, open, popAndLand, waitReady, type DebugWindow, type Tier } from './helpers';
+import { expectTier, gameGo, open, popAndLand, waitReady, type DebugWindow, type Tier } from './helpers';
 
 // The soak test (ROADMAP "later" item 9, PLAN-PLAY-POLISH-REACH step 5): five
 // warm-up tricks on High, then 50 tricks in blocks of ten, switching between
 // High and Low before each block after the first, so the blocks run High,
 // Low, High, Low, High. Each switch remounts the Canvas (it is keyed on the
 // tier) and frees the models Low never shows after RELEASE_AFTER_MS (ADR-48).
+//
+// Since step 20 half of every block is a game (PLAN-PLAY-POLISH-REACH): five
+// tricks in the lab, then five goes of a game of SKATE on the game screen,
+// with the roll, the landings' motion, the dust, the skate spot, the
+// computer's own deck and the instant replay, then back to the lab, where
+// the sample is taken. So what a game loads and swaps must be back to the
+// lab's counts each time, too.
 //
 // When a sample is taken: after the warm-up, and at the end of each block,
 // which is after the switch's new root was ready, after RELEASE_AFTER_MS and
@@ -79,19 +86,39 @@ async function switchTo(page: Page, tier: Tier) {
   await expectTier(page, tier);
 }
 
-test('50 tricks switching High and Low keep the memory flat', { tag: '@soak' }, async ({ page }) => {
-  test.setTimeout(600_000);
-  const errors = await open(page, 'high', 'lab');
+/** Five tricks in the lab, then five goes of a game, then the lab again. `from` numbers the goes, so sets land and bail in turn. */
+async function block(page: Page, from: number) {
+  const seen: Record<string, number> = {};
+  for (let i = 0; i < 5; i++) await popAndLand(page);
+  await page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().setScreen('skate'));
+  for (let i = 0; i < 5; i++) {
+    const grade = await gameGo(page, from + i);
+    if (grade) seen[grade] = (seen[grade] ?? 0) + 1;
+  }
+  await page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().setScreen('lab'));
+  await page.keyboard.press('1');
+  return seen;
+}
+
+test('50 tricks, half of them in a game, switching High and Low keep the memory flat', { tag: '@soak' }, async ({ page }) => {
+  // A guard against a hang, not a speed check: a game's go on High without a GPU takes several seconds (the roll-out, the replay).
+  test.setTimeout(1_200_000);
+  const errors = await open(page, 'high', 'lab', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
   await expectTier(page, 'high');
   expect(await page.evaluate(() => typeof (window as unknown as DebugWindow).gc)).toBe('function');
   const cdp = await page.context().newCDPSession(page);
   await page.keyboard.press('1');
-  for (let i = 0; i < 5; i++) await popAndLand(page);
+  // The warm-up visits the game too, so the first sample has seen everything a block shows.
+  const grades: Record<string, number> = {};
+  const tally = (seen: Record<string, number>) => {
+    for (const [k, v] of Object.entries(seen)) grades[k] = (grades[k] ?? 0) + v;
+  };
+  tally(await block(page, 0));
   const samples: Sample[] = [await sample(page, cdp, 'high')];
   const blocks: Tier[] = ['high', 'low', 'high', 'low', 'high'];
   for (const [b, tier] of blocks.entries()) {
     if (b > 0) await switchTo(page, tier);
-    for (let i = 0; i < 10; i++) await popAndLand(page);
+    tally(await block(page, 5 * (b + 1)));
     samples.push(await sample(page, cdp, tier));
   }
   test.info().annotations.push({ type: 'samples', description: JSON.stringify(samples) });
@@ -107,6 +134,9 @@ test('50 tricks switching High and Low keep the memory flat', { tag: '@soak' }, 
     `long run: heap grew ${kb(last.heap - first.heap)} (limit ${kb(HEAP_GROWTH_MAX)}), without compiled code ${kb(last.objects - first.objects)}; ` +
       samples.map((s) => `${s.tier} ${s.geometries} geometries ${s.textures} textures`).join(', '),
   );
+  // The games really had landings and bails in them.
+  expect(grades.bail ?? 0, JSON.stringify(grades)).toBeGreaterThan(0);
+  expect((grades.clean ?? 0) + (grades.sketchy ?? 0), JSON.stringify(grades)).toBeGreaterThan(0);
   expect([first.tier, last.tier]).toEqual(['high', 'high']);
   expect(last.heap - first.heap, JSON.stringify(samples)).toBeLessThan(HEAP_GROWTH_MAX);
   expect(errors).toEqual([]);

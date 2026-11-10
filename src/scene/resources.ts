@@ -17,12 +17,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildDeck } from '../asset/deck';
 import { PLANE_BAYS } from '../asset/groundSpec';
+import { SPOT_FOOTPRINTS } from '../asset/spotSpec';
 import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
 import { FOOTPRINT } from '../asset/shoeSpec';
 import { TRUCK, WHEEL } from '../asset/spec';
 import { hexToRgb } from '../asset/textures';
 import { LEG } from '../sim/legs';
 import { ART } from './artDirection';
+import { DUST_PUFFS, PUFF_VERTICES } from './dust';
 
 const B = ART.board;
 
@@ -398,22 +400,50 @@ function legSegment(profile: ProfilePoint[], bone: number, cast: boolean) {
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
   g.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
   g.setAttribute('aCast', new THREE.BufferAttribute(new Float32Array(count).fill(cast ? 1 : 0), 1));
+  // The cloth's UVs in metres (ADR-70): `around` tiles round the leg, one tile per `tile` metres along it.
+  const uv = g.attributes.uv!;
+  const pos = g.attributes.position!;
+  for (let v = 0; v < count; v++) uv.setXY(v, uv.getX(v) * LG.cloth.around, pos.getY(v) / LG.cloth.tile);
   return g;
 }
 
-/** The shank, knee (y 0) to ankle (y LEG.shank): trouser to the hem, then sock into the shoe. */
+/** Where the shank's cuff starts (its fold, the top) and ends (`drop` below the ankle joint), y from the knee (ADR-70). */
+export const cuffSpan = () => ({ top: LEG.shank + LG.cuff.drop - LG.cuff.height, end: LEG.shank + LG.cuff.drop });
+
+/**
+ * The shank, knee (y 0) to ankle (y LEG.shank): trouser bunching in soft
+ * rolls above a turned-up cuff that ends below the ankle joint, over the
+ * shoe collar; then a step in to the ankle's cap, a dark sock, inside the shoe
+ * (step 15, ADR-70; the sock showed 3 cm above the collar before).
+ */
 function shankProfile(): ProfilePoint[] {
   const S = LG.shank;
+  const C = LG.cuff;
+  const B = LG.bunch;
   const L = LEG.shank;
-  const hem = L - LG.hemAbove;
+  const { top, end } = cuffSpan();
+  const t = LG.trouser;
+  // The rolls: a half sine bump each, over bunch.height above the fold, four points a roll.
+  const rolls: ProfilePoint[] = [];
+  const from = top - B.height;
+  for (let i = 0; i < B.count * 4; i++) {
+    const k = (i + 0.5) / (B.count * 4);
+    rolls.push({ r: S.hem + B.depth * Math.abs(Math.sin(k * B.count * Math.PI)), y: from + k * B.height, color: t, alpha: 1 });
+  }
   return [
-    ...cap(S.knee, 0, -1, LG.trouser, 1),
-    { r: S.calf, y: S.calfAt * L, color: LG.trouser, alpha: 1 },
-    { r: S.hem, y: hem, color: LG.trouser, alpha: 1 },
-    // The hem: a step in to the sock at the same height.
-    { r: S.sock, y: hem, color: LG.sock, alpha: 1 },
-    { r: S.ankle, y: L, color: LG.sock, alpha: 1 },
-    ...cap(S.ankle, L, 1, LG.sock, 1).slice(1),
+    ...cap(S.knee, 0, -1, t, 1),
+    { r: S.calf, y: S.calfAt * L, color: t, alpha: 1 },
+    { r: S.hem, y: from, color: t, alpha: 1 },
+    ...rolls,
+    { r: S.hem, y: top, color: LG.fold, alpha: 1 },
+    // The fold: a step out to the cuff at the same height, its rounded top, the cuff down to its lower edge.
+    { r: C.radius - C.edge, y: top, color: LG.fold, alpha: 1 },
+    { r: C.radius, y: top + C.edge, color: t, alpha: 1 },
+    { r: C.radius, y: end - C.edge, color: t, alpha: 1 },
+    { r: C.radius - C.edge, y: end, color: LG.fold, alpha: 1 },
+    // The cuff's edge: a step in to the ankle's cap at the same height, then the rest of the cap, inside the shoe.
+    { r: Math.sqrt(Math.max(0, S.ankle ** 2 - (end - L) ** 2)), y: end, color: LG.sock, alpha: 1 },
+    ...cap(S.ankle, L, 1, LG.sock, 1).filter((p) => p.y > end + 1e-6),
   ];
 }
 
@@ -440,6 +470,78 @@ function mergedLegs(parts: THREE.BufferGeometry[]) {
   return merged;
 }
 
+/**
+ * The skate spot's soft shadows (step 14, ADR-69): one rectangle per piece
+ * (spotSpec.ts SPOT_FOOTPRINTS), its footprint stretched along the key
+ * light's ground direction by the piece's height, at ART.spot.shadow.opacity
+ * inside and fading to 0 over `soft` round it (a ring of eight vertices).
+ * Vertex colour with alpha; one draw call for every piece. In the spot's own
+ * frame: it rolls with the spot.
+ */
+function spotShadow() {
+  const SH = ART.spot.shadow;
+  const L = ART.lights.directional;
+  const dy = L.position[1] - L.target[1];
+  // Where a point h up lands on the ground, per metre of h: away from the light.
+  const sx = -(L.position[0] - L.target[0]) / dy;
+  const sz = -(L.position[2] - L.target[2]) / dy;
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  for (const f of SPOT_FOOTPRINTS) {
+    const x0 = Math.min(f.x[0], f.x[0] + sx * f.height), x1 = Math.max(f.x[1], f.x[1] + sx * f.height);
+    const z0 = Math.min(f.z[0], f.z[0] + sz * f.height), z1 = Math.max(f.z[1], f.z[1] + sz * f.height);
+    const base = pos.length / 3;
+    const rect = (d: number) => [
+      [x0 - d, z0 - d],
+      [x1 + d, z0 - d],
+      [x1 + d, z1 + d],
+      [x0 - d, z1 + d],
+    ];
+    for (const [x, z] of [...rect(0), ...rect(SH.soft)]) pos.push(x!, SH.lift, z!);
+    for (let i = 0; i < 4; i++) col.push(0, 0, 0, SH.opacity);
+    for (let i = 0; i < 4; i++) col.push(0, 0, 0, 0);
+    // The core, then the ring: counter-clockwise seen from above (+Y), so they face up.
+    idx.push(base, base + 3, base + 2, base, base + 2, base + 1);
+    for (let i = 0; i < 4; i++) {
+      const a = base + i, b = base + ((i + 1) % 4), oa = a + 4, ob = b + 4;
+      idx.push(a, b, ob, a, ob, oa);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 4));
+  g.setIndex(idx);
+  return g;
+}
+
+/**
+ * The dust (step 19, ADR-74, scene/dust.ts): every puff a fan of triangles,
+ * a centre and a rim, in one geometry and one draw call. FlightDriver writes
+ * the positions and each vertex colour's alpha while dust is in the air (the
+ * two arrays are made here once and never replaced); the colour stays white,
+ * so the material's own colour shows.
+ */
+function dustPuffs() {
+  const n = DUST_PUFFS * PUFF_VERTICES;
+  const col = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) col.set([1, 1, 1, 0], i * 4);
+  const idx: number[] = [];
+  for (let p = 0; p < DUST_PUFFS; p++) {
+    const c = p * PUFF_VERTICES;
+    for (let j = 0; j < PUFF_VERTICES - 1; j++) idx.push(c, c + 1 + j, c + 1 + ((j + 1) % (PUFF_VERTICES - 1)));
+  }
+  const g = new THREE.BufferGeometry();
+  const position = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
+  const color = new THREE.BufferAttribute(col, 4);
+  position.setUsage(THREE.DynamicDrawUsage);
+  color.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('position', position);
+  g.setAttribute('color', color);
+  g.setIndex(idx);
+  return g;
+}
+
 export const geo = {
   shoeSole,
   shoeUpper,
@@ -459,6 +561,8 @@ export const geo = {
   boardHardware: primitiveHardware(),
   ground: groundPlane(),
   shadow: shadowFootprint(),
+  spotShadow: spotShadow(),
+  dust: dustPuffs(),
 };
 
 const std = (color: string, roughness: number, metalness = 0) =>
@@ -534,7 +638,8 @@ export function ditherThreshold(x: number, y: number) {
 
 /** The legs on WebGLRenderer: a standard material whose alpha test is the dither, so it stays opaque (depth written, no sorting). */
 function legsMaterial() {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness });
+  const s = LG.cloth.strength;
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness, normalMap: tex.cloth, normalScale: new THREE.Vector2(s, s) });
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader
       .replace('void main() {', `${DITHER_GLSL}\nvoid main() {`)
@@ -555,8 +660,37 @@ function legsDepthMaterial() {
   return m;
 }
 
+/**
+ * The trousers' cloth (step 15, ADR-70): a twill normal map, `ribs`
+ * diagonal ribs across one tile, seamless (whole ribs both ways), mipmapped.
+ * Tangent-space normals as bytes; linear, not colour.
+ */
+export function twillNormal(): THREE.DataTexture {
+  const { size: n, ribs } = LG.cloth;
+  const data = new Uint8Array(n * n * 4);
+  // Height 0.5 sin(k (x + y)) per texel, its slope sharpened a little at the crests so it reads as woven.
+  const k = (2 * Math.PI * ribs) / n;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const slope = 0.5 * k * Math.cos(k * (x + y)) * (0.6 + 0.4 * Math.abs(Math.sin(k * (x + y))));
+      const len = Math.hypot(slope, slope, 1);
+      const byte = (c: number) => Math.round((c / len) * 127.5 + 127.5);
+      data.set([byte(-slope), byte(-slope), byte(1), 255], (y * n + x) * 4);
+    }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+}
+
 /** Textures the materials below hold, freed with them. */
-const tex = { toon: toonGradient(), joints: jointTexture() };
+const tex = { toon: toonGradient(), joints: jointTexture(), cloth: twillNormal() };
+/** The trousers' cloth, for the legs' TSL twin (nodeRenderer.ts). */
+export const legsCloth = tex.cloth;
 
 export const mat = {
   /** The primitive board on the fallback (Medium, High while a GLB streams or if it fails): one standard material, per-vertex colour. */
@@ -569,8 +703,8 @@ export const mat = {
   ground: std(G.color, G.roughness),
   shoeSole: std(FT.sole.color, FT.sole.roughness),
   shoeUpper: std(FT.upper.color, FT.upper.roughness),
-  // The legs (ADR-37, ADR-60): white times the vertex colours (trouser and
-  // sock), opaque, with the vertex alpha (the thighs' fade toward the hips)
+  // The legs (ADR-37, ADR-60, ADR-70): white times the vertex colours (trouser,
+  // its cuff's fold and the ankle), the twill normal map, opaque, with the vertex alpha (the thighs' fade toward the hips)
   // drawn as a screen-door dither, so solid and fading parts are one draw.
   // Never swapped; its TSL twin is nodeRenderer.ts legsNodeMaterial.
   legs: legsMaterial(),
@@ -580,6 +714,14 @@ export const mat = {
   footPath: footPathMaterial(),
   // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.
   shadow: shadowMaterial(),
+  // The skate spot's soft shadows (ADR-69): the vertex colour's alpha, fogged
+  // like the ground they lie on, no depth writes so they never hide it.
+  spotShadow: new THREE.MeshBasicMaterial({ color: ART.spot.shadow.color, vertexColors: true, transparent: true, depthWrite: false }),
+  // The dust (ADR-74): the vertex colour's alpha, facing the camera whichever
+  // way it turns (both sides, one pass), fogged and tone mapped like the
+  // ground it rises from, no depth writes. Its twin on the WebGPURenderer
+  // (nodeRenderer.ts dustNodeMaterial) also keeps it out of the occlusion.
+  dust: new THREE.MeshBasicMaterial({ color: ART.dust.color, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }),
   // The sky dome (skyDome.ts, ADR-52): vertex colours, both faces (the
   // winding is not worth tracking for a backdrop), no fog (it is the
   // backdrop the fog fades into), no depth writes and drawn first, so
@@ -608,10 +750,10 @@ export const mat = {
 };
 
 /** The materials written as shaders: a GLSL one in `mat` (a ShaderMaterial, or the legs' patched standard material), a TSL twin for the WebGPURenderer. */
-export type ShaderKey = 'footPath' | 'shadow' | 'legs';
+export type ShaderKey = 'footPath' | 'shadow' | 'legs' | 'dust';
 
 /** The TSL twins (ADR-50), registered by nodeRenderer.ts when a WebGPURenderer starts; null until then. */
-const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null };
+const nodeMat: Record<ShaderKey, THREE.Material | null> = { footPath: null, shadow: null, legs: null, dust: null };
 
 /** The renderer the registered TSL twins belong to. */
 let nodeOwner: object | null = null;

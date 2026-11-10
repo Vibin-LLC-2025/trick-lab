@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTrickStore } from '.';
+import { createTrickStore, GAME_PACE, playRate } from '.';
+import { DEFAULT_SLOW } from './speed';
 import { buildExport, exportFilename } from './export';
 
 /** Isolated store with a clock that advances 10 ms per read. */
@@ -262,6 +263,21 @@ describe('playback controls', () => {
     expect(types(store)).toEqual(['trick.popped']);
   });
 
+  it("in a game the speed is the game's pace, and slow motion says the speed seen (ADR-78)", () => {
+    const store = makeStore();
+    expect(playRate(store.getState())).toBe(1);
+    store.getState().setScreen('skate');
+    expect(playRate(store.getState())).toBe(GAME_PACE);
+    store.getState().toggleSlowMotion();
+    expect(playRate(store.getState())).toBeCloseTo(GAME_PACE * DEFAULT_SLOW, 9);
+    expect(said(store)).toBe('Slow motion on, 0.1 times speed.');
+    store.getState().toggleSlowMotion();
+    expect(said(store)).toBe('Slow motion off, game speed.');
+    // The lab keeps its own: back there, normal is 1x.
+    store.getState().setScreen('lab');
+    expect(playRate(store.getState())).toBe(1);
+  });
+
   it('stepRate moves one stop, announces it, and stops at the ends', () => {
     const store = makeStore();
     store.getState().stepRate(-1);
@@ -411,23 +427,52 @@ describe('quality and feet (ui slice)', () => {
     localStorage.clear();
   });
 
-  it('hides the legs by default; showing them persists and announces it, without logging (ADR-37, ADR-48)', () => {
+  it('shows the legs by default on High and Medium, hides them on Low; switching persists and announces it, without logging (ADR-37, ADR-70)', () => {
     localStorage.clear();
+    for (const [quality, shown] of [['high', true], ['medium', true], ['low', false]] as const) {
+      localStorage.setItem('trick-lab.quality', quality);
+      expect(makeStore().getState().legsVisible, quality).toBe(shown);
+    }
+    localStorage.setItem('trick-lab.quality', 'high');
     const store = makeStore();
-    expect(store.getState().legsVisible).toBe(false);
-    store.getState().toggleLegs();
-    expect(store.getState().legsVisible).toBe(true);
-    expect(localStorage.getItem('trick-lab.legs')).toBe('on');
-    expect(said(store)).toBe('Legs shown.');
     store.getState().toggleLegs();
     expect(store.getState().legsVisible).toBe(false);
     expect(localStorage.getItem('trick-lab.legs')).toBe('off');
     expect(said(store)).toBe('Legs hidden.');
+    store.getState().toggleLegs();
+    expect(store.getState().legsVisible).toBe(true);
+    expect(localStorage.getItem('trick-lab.legs')).toBe('on');
+    expect(said(store)).toBe('Legs shown.');
     expect(store.getState().events).toEqual([]);
-    localStorage.setItem('trick-lab.legs', 'on');
+    // A saved choice wins on every level.
+    localStorage.setItem('trick-lab.quality', 'low');
     expect(makeStore().getState().legsVisible).toBe(true);
-    localStorage.setItem('trick-lab.legs', 'nonsense');
+    localStorage.setItem('trick-lab.legs', 'off');
+    localStorage.setItem('trick-lab.quality', 'high');
     expect(makeStore().getState().legsVisible).toBe(false);
+    // Anything else is no choice.
+    localStorage.setItem('trick-lab.legs', 'nonsense');
+    expect(makeStore().getState().legsVisible).toBe(true);
+    localStorage.clear();
+  });
+
+  it('moves legs nobody chose with the quality level, by hand or by the step-down, and leaves a chosen setting alone (ADR-70)', () => {
+    localStorage.clear();
+    localStorage.setItem('trick-lab.quality', 'medium');
+    const store = makeStore();
+    expect(store.getState().legsVisible).toBe(true);
+    store.getState().setQuality('low');
+    expect(store.getState().legsVisible).toBe(false);
+    store.getState().setQuality('high');
+    expect(store.getState().legsVisible).toBe(true);
+    // Chosen: it stays whatever the level.
+    store.getState().toggleLegs();
+    store.getState().setQuality('medium');
+    expect(store.getState().legsVisible).toBe(false);
+    store.getState().toggleLegs();
+    store.getState().setQuality('low');
+    expect(store.getState().legsVisible).toBe(true);
+    expect(store.getState().events).toEqual([]);
     localStorage.clear();
   });
 
