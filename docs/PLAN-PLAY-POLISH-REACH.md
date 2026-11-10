@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74), 20 (the smoothness pass, ADR-75) and 21 (phones and touch, ADR-76) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 22 is next. The phone checklist is in "Checklists for the owner". One target is not met on High (step 20): about one late frame in a whole game.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74), 20 (the smoothness pass, ADR-75), 21 (phones and touch, ADR-76) and 22 (Firefox and Safari, ADR-77) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 23 is next. The phone and Safari checklists are in "Checklists for the owner". One target is not met on High (step 20): about one late frame in a whole game.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -80,7 +80,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | bf51c25 | 18: sound (ADR-73): CC0 recordings from Kenney's Impact Sounds for the pop, a new catch, the landing and the bail (11 MP3s, 32 KB, two or three takes each at a random pitch), a synthesized rolling sound that ticks on the concrete's joints, a synthesized scuff, better synthesized fallbacks, and a sound check under ?debug. Nothing sound-related downloads while sound is off; the main page went from 106.0 to 104.9 KB. The Sound switch stays in the top bar, not a second one beside Start game. The owner's list of changes is asked |
 | 57adb49 | 19: dust (ADR-74): small puffs at the wheels when a game's landing touches down, left behind as the board rolls on, and a trail behind a bailed board while it slides; Medium and High, with the Motion cues switch, never under reduced motion. One draw while it is in the air; the expected worst case did not move (High 36, Medium 21, Low 12) |
 | 09e176d | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
-| (step 21) | 21: phones and touch (ADR-76): no sideways scroll and working dialogs at 360, 390, 768 and 1024 px wide already; controls are now 44 px tall where the pointer is a finger; five new browser checks; the phone checklist |
+| 56b0691 | 21: phones and touch (ADR-76): no sideways scroll and working dialogs at 360, 390, 768 and 1024 px wide already; controls are now 44 px tall where the pointer is a finger; five new browser checks; the phone checklist |
+| (step 22) | 22: Firefox and Safari (ADR-77): a pass by hand in Firefox 156 and WebKit 26.6. Firefox passes everything. WebKit's Windows build plays on every level but has no audio and loses the picture after a canvas resize; real Safari is the owner's check. No code changed |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -478,10 +479,11 @@ Small, late, and the first step to drop (the owner, 2026-11-09: phones don't mat
 - **Real phones:** the owner, from a short checklist.
 - **As it went (2026-11-10):** the layout already held at all four sizes. The one fix: controls are 44 px tall where the pointer is a finger (they were 24 to 36). `browser/touch.spec.ts` keeps it. The checklist is under "Checklists for the owner".
 
-### 22. Firefox and Safari
+### 22. Firefox and Safari. Done (ADR-77), with Safari left to the owner's check
 - **Firefox and WebKit installed for playwright-cli** (the owner's yes, 2026-11-09), for testing on this machine only.
 - **A quick pass in each:** the 3D view starts, the textures load, sound starts, the controls work, the layout holds.
 - **Fixes**, and a "Browsers" table in PERF-BUDGET.md.
+- **As it went (2026-11-10):** Firefox passes everything, sound included. WebKit's Windows test build starts and plays on every level, but has no audio at all, and stops showing the picture after the canvas changes size although the app still draws it. That looks like the test build, not the app, and cannot be settled without real Safari: five questions for the owner are under "Checklists for the owner". No code changed.
 
 ### 23. Measure everything, and the last pass
 - **Before (a0a2c86) and after**, from step 1's script, into PERF-BUDGET.md: every quality level, both themes, the game and the lab.
@@ -505,6 +507,16 @@ Open the live site on a phone, in the phone's own browser. Each line is a yes or
 9. Turn the phone sideways: the board and the controls are both still usable.
 10. Turn Sound on and pop: you hear it (on an iPhone, with the ring switch not on silent).
 11. The game does not stutter. If it does, open the practice lab, then View, and say which Quality it is on.
+
+### In Safari, on a Mac or an iPhone (step 22)
+
+The test build of Safari's engine on this Windows machine could not answer these. Each is a yes or a no.
+
+1. The welcome screen shows the board.
+2. Open the practice lab, then "Game of SKATE" from its top bar: the board is still shown on the game screen (not an empty, plain-coloured stage).
+3. Make the window narrower and wider (or turn the phone): the board is still shown.
+4. Turn Sound on and pop a trick: you hear the pop, the catch and the landing.
+5. Play one whole go in the game: the board rolls, pops, lands, and the replay plays.
 
 ## If time runs short
 

@@ -1034,3 +1034,13 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 - **Nothing else moved.** In a game on a phone the student still scrolls down to Pop with the stage pinned above (ADR-46); the cards over the stage are a wide screen's (ADR-66).
 
 **Tests.** `browser/touch.spec.ts`: at the four sizes with touch on, every screen, a game and the leave dialog have no sideways scroll and no control under 40 px either way, the dialog is inside the window, and a tap on Pop starts a trick. Real phones are the owner's, from the checklist in the plan.
+
+## ADR-77: Firefox and Safari: a pass by hand, nothing changed (2026-11-10)
+
+**Context.** Step 22 of PLAN-PLAY-POLISH-REACH. Firefox and WebKit were installed for the global `playwright-cli` on this machine (the owner's yes, 2026-11-09). The pinned `@playwright/test` and the browser checks stay Chromium only (ADR-61).
+
+**Decision.**
+- **A pass by hand, not new automatic checks.** The results are the "Browsers" table in PERF-BUDGET.md.
+- **Firefox passes everything**, on the WebGPURenderer's WebGL2 fallback (its WebGPU is blocked on this machine), MP3 recordings included.
+- **WebKit starts and plays on every level, with two things this build cannot answer:** it has no Web Audio, so the sound is unchecked, and after the canvas changes size it stops showing the picture the app still draws. Neither is treated as the app's fault without real Safari, and no workaround was written against a test build's behaviour. Both are on the owner's checklist.
+- **No code changed.**

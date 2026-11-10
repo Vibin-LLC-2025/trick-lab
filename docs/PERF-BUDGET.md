@@ -677,3 +677,23 @@ What it says:
   - Later goes of the same visit have neither.
 - **The long-run test now plays games.** Half of every block of ten is five goes of a game on the game screen (the roll, the landings' motion, the dust, the skate spot, the computer's deck, replays), then back to the lab for the sample. The counts stayed flat: 23 geometries and 28 textures on High at every sample, 8 and 2 on Low; the heap grew 1,963 KB (limit 4,096), 271 KB without compiled code. It takes about 6 minutes here (it was about 3).
 - **Not done here:** a game on a laptop with built-in graphics on Medium. That is the owner's, from the checklist at the end of the plan.
+
+### Step 22: Browsers (Firefox and Safari, ADR-77)
+
+A quick pass by hand, 2026-11-10, on step 21's build served like GitHub Pages, through `playwright-cli` with its own Firefox 156.0 and WebKit 26.6 (the engine Safari uses, in Playwright's build for Windows), installed on this machine for the pass. 1280 x 800, each quality level: the lab (load, preset 1, Space, the landing), the Sound switch, then the game (Start game, one go, everything at rest).
+
+| | Chromium (the browser checks) | Firefox 156 | WebKit 26.6 (Playwright's Windows build) |
+| --- | --- | --- | --- |
+| The 3D view starts, High / Medium / Low | yes / yes / yes | yes / yes / yes | yes / yes / yes |
+| Renderer on High and Medium | WebGPU (WebGL2 in the checks, which hide it) | WebGPU's WebGL2 fallback: this Firefox has `navigator.gpu` but blocks it ("disabled by blocklist") | WebGPU's WebGL2 fallback: no `navigator.gpu` |
+| Textures load (KTX2), models on screen | yes | yes: 25 textures on High, 18 on Medium, every model | yes: the same counts |
+| Draw calls, lab at rest, High / Medium / Low | 33 / 18 / 10 | 33 / 18 / 10 | 33 / 18 / 10 |
+| The keyboard pops and the trick lands | yes | yes | yes |
+| A go in the game, to rest (roll, landing, replay) | yes | yes | yes |
+| Sound: the recordings (MP3) decode | yes | yes: all 11 | not checkable: this build has no Web Audio at all (`AudioContext` is undefined). The app stays silent, with no error |
+| The layout holds, no sideways scroll | yes | yes | yes |
+| Console errors on a clean load | none | none | none |
+
+- **Firefox: nothing to fix.** It looks like Chromium's picture on every level. Errors seen in one run ("Couldn't load texture blob") came from the pass's own script leaving a page while it was still loading; a clean load has none.
+- **WebKit: one thing that could not be settled here.** On a first load every level draws correctly. After the canvas changes size (going from the lab to the game inside the page, or resizing the window), this build shows the stage's background colour where the picture should be. The app is still drawing: reading the canvas's own pixels straight after a draw gives the full picture, the canvas is visible and on top, the context is not lost, and nothing is logged. More frames, hiding and showing the canvas, and resizing again do not bring it back. That points at this Windows build's compositor, not at the app (every WebGL app resizes its canvas), but it is not proof for Safari on a Mac or an iPhone. **Real Safari is the owner's check**, with sound, from the list in the plan.
+- **No code changed in this step.**
