@@ -804,3 +804,34 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **What was checked in a browser** (2026-11-09, the production build, High, Medium and Low, 1440 x 900, and the layout also at 1280 x 720 and 1024 x 700): a whole game on Hard from Start game to "The computer wins" by keyboard alone (Tab, the arrow keys, Enter) and another by mouse alone, on every level, with the computer going on its own, no console errors, and focus on the result at the end; and the first game's walk-through by keyboard alone (the call from the picker, the Flick slider by 19 presses of the right arrow, the bar by Enter and Enter) to a clean kickflip.
 
 **Left out.** The cards do not move out of the board's way: the camera frames the board for the whole stage, and at the sizes checked the board and its highest pop stay clear of them. A stage shorter than about 600 px would crowd; the turn card scrolls inside itself there. Phones are step 21. The README's picture of the game is retaken here; the others wait for the last pass.
+
+## ADR-67: The board rolls in the game: the world slides, the board stays (2026-11-10)
+
+**Context.** Step 12 of `docs/PLAN-PLAY-POLISH-REACH.md`. The board popped on the spot on an empty pad: no speed, no place. The owner chose "roll in, roll away, nothing to clear" (decision 14), and no rough look first (decision 26): decide, build it in full, list the numbers for the owner's one list of changes.
+
+**Decision.**
+- **The board stays where it is and the world moves.** The flight model, the feet, the camera, the lights and the shadows are untouched: a board in the air moves with the ground, so a trick is the same trick rolling or still.
+- **What moves is texture, not geometry.** The ground's three maps (colour, normal, roughness) slide along +X by their own repeat per metre rolled, and Low's slab-joint texture the same way; each offset is kept to the fraction of one texture width, and with repeat wrapping a whole width looks the same, so the wrap cannot show (tested: every ground map is in the same place 9.6 m later, the six bays where all three tiles line up; and in the browser, pixel for pixel). The plane itself never moves, so its edge stays where the fog hides it.
+- **The wheels turn by a print, not by a mesh each.** The plan's "two axle pairs, one more draw call" was written before the wheels were read: their texture is bands around the lathe, the same all the way round, so a spinning wheel would look exactly like a still one. Instead the wheels get a print on their outer face (in the colour of `assets/source/wheel-print.svg`, DESIGN.md 7.5's "outer face flat"): a long arc and a short one, not evenly spaced, so a fast turn cannot read as a slow or backward one. The lathe's u runs once round each wheel, so one slide of the map, one turn per circumference rolled, turns all four; the heel side's u is mirrored in `buildWheel` so all four turn forward. The wheel map is 64 texels round on Medium too (was 16) and repeats in u. **No draw call is added on any tier** (the plan expected one each); the GLBs grew by 0.4 KB.
+- **Low rolls too** (the ground's joints slide), and its wheels, plain colour all round, show no turn. Low gets no new feature (ADR-62).
+- **When it rolls.** Only in a game, on the game screen, while the flight animates (ADR-6). The store owns whether (`roll`: still, push, slow; `src/store/roll.ts`); FlightDriver owns how fast (`src/scene/roll.ts`) and says when a slowing board has stopped (`rollRested`), as it says when a flight lands.
+  - It **pushes off at the start of a go**: the player's timing bar (the push takes 0.7 s, so the board is at speed by the band at 0.8 s), an Exact pop (the push runs under the flight), and the computer's wait: the computer stops, pushes off and pops inside its 2.2 s (ADR-46).
+  - It **slows to a stop after the landing** (1.3 s), and after a bar dropped with no pop. Frames stop once it has stopped (rule 4).
+  - It is **held**, at its speed, while the flight is paused or a dialog is open, and goes on after.
+  - It is **cut short**, stopped at once, by leaving the game screen, quitting, a new game, Reset, reduced motion turning on, or the 3D view failing. Away from the game screen the ground is back on the spot, a bay centred under the board.
+  - The roll keeps the **playback speed**, so slow motion slows the ground with the trick.
+- **Where the player waits, the board waits.** The plan said "from the start of a turn". On the player's turn that would roll, and run the graphics card, for as long as they think about the sliders; the go starts at the bar instead, which is the push.
+- **The scene description says it:** "Rolling along the concrete, nose first." while pushing or cruising, "Rolling to a stop." while slowing.
+
+**The numbers, for the owner's list** (`ART.roll` in `src/scene/artDirection.ts`, one place; WHEEL_PRINT in `src/asset/spec.ts` for the print, then `npm run assets`):
+
+| What | Chosen | Why |
+| --- | --- | --- |
+| Cruise | 2.4 m/s | An easy flat-ground roll, about a jog. The 1.6 m joints pass about one and a half a second |
+| Push to the cruise | 0.7 s | Inside the bar's 0.8 s to its band, so a timed pop leaves at speed |
+| Slow to a stop | 1.3 s, steady | With the push it fits inside the computer's 2.2 s wait; a real board coasts far longer, but the next go would wait for it |
+| Wheel print | two arcs on the outer face, 100 and 25 degrees, 0.18 inset | Visible at the game's distance, not evenly spaced (no wagon-wheel effect) |
+
+**Rules changed.** CLAUDE.md rule 4 (frames run while the board rolls in a game, `rollMoves`) and rule 5 (FlightDriver also runs the roll and writes the textures' offsets).
+
+**Left out.** The landing's own motions (step 13), the spot that slides past (step 14), the rolling sound (step 18). A push animation for the legs: the rider's legs are posed by the trick model, and a push is a step off the board, which the model has no pose for.

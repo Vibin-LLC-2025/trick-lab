@@ -2,7 +2,8 @@
 
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
-- **Paused at the halfway point (2026-11-09), and everything that was waiting on the owner is answered (2026-11-10, decisions 23 to 26).** Steps 1 to 11 are live on `main` (91dfb4c). Step 12 is next, in a new conversation. Before it starts: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
+- Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
+- **Step 12 (rolling) is done (ADR-67).** Step 13 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -51,7 +52,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 is live (2026-11-10, decision 23):** pull request 1 ran the three CI jobs for the first time, all three passed on 91dfb4c, `main` was fast-forwarded to it and the site was published. This branch is one commit ahead of `main` (this note). Later steps stay on this branch, not pushed, until the next merge point.
+Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 is live (2026-11-10, decision 23):** pull request 1 ran the three CI jobs for the first time, all three passed on 91dfb4c, `main` was fast-forwarded to it and the site was published. Later steps stay on this branch, not pushed, until the next merge point (after step 16).
 
 | Commit | Step |
 | --- | --- |
@@ -70,6 +71,7 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
 | beea48d | The halfway pause, and notes for the stretch from step 12 |
 | 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
+| (step 12) | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -160,10 +162,10 @@ What the steps are expected to add (every switch on):
 | Step | High | Medium | Low |
 | --- | --- | --- | --- |
 | Today | 34 | 19 | 12 |
-| 12: wheels as two axle pairs, so they can spin | +1 | +1 | +1 |
+| 12: rolling, as built: texture offsets only (planned +1 each for the wheels) | 0 | 0 | 0 |
 | 14: the spot (on High it also casts a shadow) | +2 | +1 | 0 |
 | 19: dust | +1 | +1 | 0 |
-| **Expected** | **38** | **22** | **13** |
+| **Expected** | **37** | **21** | **12** |
 
 ## Rules this plan changes, and the ones it keeps
 
@@ -311,7 +313,13 @@ As built: a lab landing counts as much as a game landing; a game that is quit is
 
 ## Phase C: the world and the rider
 
-### 12. Rolling
+### 12. Rolling. Done (ADR-67)
+As built, where it differs from the list below:
+- **No draw call was added.** The wheels' texture was bands, the same all the way round, so two spinning axle pairs would have looked exactly like still ones. The wheels got a print on their outer face instead, and the print turns by sliding the wheel map, one turn per circumference; the ground's textures slide the same way. Nothing moves but texture offsets.
+- **The go starts at the bar, not at the turn.** On the player's turn the board waits while they set the sliders, and the timing bar is the push. The computer stops, pushes off and pops inside its 2.2 s wait. An Exact pop pushes off with the pop.
+- **The numbers chosen** (`ART.roll`): a 2.4 m/s cruise, 0.7 s to reach it, 1.3 s to stop after the landing, steadily. The print: a long and a short arc (`WHEEL_PRINT`). All on the owner's list at the end.
+- **Checked in a browser** on High, Medium and Low: the ground is pixel for pixel the same 9.6 m apart (only the wheels' pixels differ, the print having turned), the board pushes, cruises and stops, no frame is drawn in the two seconds after it stops, and no console errors.
+
 - **The board stays where it is and the world moves.** The ground slides under the board and wraps so it never ends, the wheels spin, and the scenery (step 14) slides past. The camera, the shadows and the fog stay as they are.
   - This is why the flight model does not change: a board in the air keeps moving with the ground, so the pop, the spin and the catch are the same as today.
 - **The wheels become two axle pairs** in the board models, so each pair can spin: one more draw call.

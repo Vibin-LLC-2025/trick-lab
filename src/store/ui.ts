@@ -197,6 +197,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // A trick in the air lands now, as under reduced motion (ADR-6), so no
       // screen inherits a flight it has no controls to finish.
       if (inFlight(get())) get().land();
+      // The game's roll ends with its screen (ADR-67): the lab stays on the spot.
+      get().stopRoll();
       set({ screen, shortcutsOpen: false, skateLeave: null });
       get().requestFocus({ kind: 'screen-heading' });
     },
@@ -229,6 +231,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // Live change (ADR-6): a flight playing or paused stops animating and
       // resolves now, through the same path as a landing, once.
       if (reducedMotion && inFlight(get())) get().land(REDUCED_MOTION_LEAD);
+      // Under reduced motion the board pops on the spot (ADR-67).
+      if (reducedMotion) get().stopRoll();
     },
     resetView: () => {
       set((s) => ({ viewResetNonce: s.viewResetNonce + 1 }));
@@ -291,6 +295,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setSceneUnavailable: () => {
       if (get().sceneUnavailable) return;
       set({ sceneUnavailable: true });
+      // No view is left to bring a rolling board to a stop (ADR-67).
+      get().stopRoll();
       // One announcement: the failure, then the result if a trick was in the air.
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);

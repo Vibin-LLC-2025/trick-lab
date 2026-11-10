@@ -350,6 +350,8 @@ export function describeScene(s: {
   stance?: Stance;
   /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
   flightBy?: 'you' | 'computer';
+  /** Rolling in the game (ADR-67); still when left out. */
+  roll?: 'still' | 'push' | 'slow';
 }): string {
   const board =
     s.status === 'playing'
@@ -360,7 +362,10 @@ export function describeScene(s: {
           ? s.progress >= 1
             ? 'Skateboard back on the pad at its landing pose.'
             : `Skateboard frozen at ${Math.round(s.progress * 100)} percent of the flight.`
-          : 'Skateboard resting flat on a concrete pad, grip side up.';
+          : s.roll === 'push' || s.roll === 'slow'
+            ? 'Skateboard flat on the concrete, grip side up.'
+            : 'Skateboard resting flat on a concrete pad, grip side up.';
+  const rolling = s.roll === 'push' ? ' Rolling along the concrete, nose first.' : s.roll === 'slow' ? ' Rolling to a stop.' : '';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
   const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
@@ -373,5 +378,5 @@ export function describeScene(s: {
         ? "Waiting for the computer's trick to land."
         : 'Waiting for this trick to land.'
       : 'No trick popped yet.';
-  return `${board}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
+  return `${board}${rolling}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

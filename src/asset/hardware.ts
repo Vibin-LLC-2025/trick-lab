@@ -426,6 +426,13 @@ export function buildWheel(x: number, zSide: 1 | -1, det: HardwareDetail = MEDIU
   // rotateX(+90 deg) maps +Y to +Z; rotateX(-90 deg) maps +Y to -Z. Both are rotations, so winding holds.
   g.rotateX((zSide * Math.PI) / 2);
   g.translate(x, WHEEL.centerY, zSide * WHEEL.centerZ);
+  // The two quarter turns run the lathe's u round opposite ways on the two
+  // sides, so the heel side's u is mirrored: then one slide of the map turns
+  // all four wheels forward together (ADR-67).
+  if (zSide === -1) {
+    const uv = g.getAttribute('uv');
+    for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
+  }
   return g;
 }
 

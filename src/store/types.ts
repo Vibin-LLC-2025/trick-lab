@@ -3,6 +3,7 @@ import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 import type { Records } from './records';
+import type { RollState } from './roll';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
 export type { Stance };
@@ -119,6 +120,16 @@ export interface PlaybackSlice {
    * if given, opens the one announcement that also carries the result.
    */
   land: (lead?: string) => void;
+  /** Rolling (step 12, ADR-67, store/roll.ts): still, speeding up or cruising, or slowing to a stop. Not logged. */
+  roll: RollState;
+  /** Internal: a go starts in a game (a bar, a pop, the computer's wait), so the board pushes off. Does nothing where rollAllowed is false. */
+  startRoll: () => void;
+  /** Internal: a landing, or a bar dropped with no pop: the board slows to a stop. */
+  slowRoll: () => void;
+  /** Internal: cut short (a screen change, quit, a new game, reset, reduced motion, the 3D view failing): stopped at once. */
+  stopRoll: () => void;
+  /** Called by FlightDriver when a slowing board has stopped. If the computer is waiting for its go, it pushes off again. */
+  rollRested: () => void;
 }
 
 /** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */

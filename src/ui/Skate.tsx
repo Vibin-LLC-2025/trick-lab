@@ -19,7 +19,8 @@ import {
   type SkatePlayer,
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
-import { useTrickStore, type PopMode, type TrickState } from '../store';
+// The computer's wait (ADR-46) is the store's, shared by the timer and the countdown bar, so the two always start together.
+import { computerWaiting, useTrickStore, type PopMode, type TrickState } from '../store';
 import { Inputs } from './Inputs';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
@@ -30,20 +31,6 @@ import { Toggle } from './Toggle';
  * equal --skate-turn-delay in tokens.css, which times the countdown bar (tested).
  */
 export const COMPUTER_DELAY_MS = 2200;
-
-/**
- * Whether the computer's wait is running (ADR-46): it is up on the game
- * screen, nothing is in the air, auto is on and no dialog is open. Shared by
- * the timer and the countdown bar, so the two always start together.
- */
-const computerWaiting = (s: TrickState) =>
-  s.screen === 'skate' &&
-  computerTurn(s.skate) &&
-  s.skateAuto &&
-  s.status !== 'playing' &&
-  s.status !== 'paused' &&
-  !s.shortcutsOpen &&
-  s.skateLeave === null;
 
 /** The turn a wait belongs to: a new turn, a landing or a second try starts a new wait. */
 const turnKey = (s: TrickState) => `${s.skate.phase}|${s.flightId}|${s.skate.secondTry}`;

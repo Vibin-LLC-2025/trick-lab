@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { previewAnimates, useTrickStore, type Theme } from '../store';
+import { previewAnimates, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -17,6 +17,7 @@ import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
 import { SceneCamera } from './SceneCamera';
 import { disposeSharedResources, mat } from './resources';
+import { rollMotion } from './roll';
 import { skyDomeGeometry } from './skyDome';
 
 // The tier's models start downloading as soon as the 3D code has arrived,
@@ -91,8 +92,9 @@ function Lights({ shadows, theme }: { shadows: boolean; theme: Theme }) {
 const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 /**
- * `?debug` in the URL exposes the R3F state as `window.__trickLab` and
- * PerfProbe's numbers as `window.__trickLabPerf`, for measuring from a
+ * `?debug` in the URL exposes the R3F state as `window.__trickLab`,
+ * PerfProbe's numbers as `window.__trickLabPerf` and the roll's motion as
+ * `window.__trickLabRoll` (ADR-67), for measuring from a
  * browser script (docs/PERF-BUDGET.md, scripts/measure); without it nothing
  * is attached.
  */
@@ -103,9 +105,10 @@ function onCreated(state: RootState) {
   // Fog by distance (ADR-55): the WebGPURenderer's node, before the first frame compiles.
   applyRangeFog(state.scene, isNodeRenderer(state.gl));
   if (DEBUG) {
-    const w = window as unknown as { __trickLab?: RootState; __trickLabPerf?: typeof perfStats };
+    const w = window as unknown as { __trickLab?: RootState; __trickLabPerf?: typeof perfStats; __trickLabRoll?: typeof rollMotion };
     w.__trickLab = state;
     w.__trickLabPerf = perfStats;
+    w.__trickLabRoll = rollMotion;
   }
 }
 
@@ -280,8 +283,9 @@ function rendererFactory(Q: Tier) {
 /**
  * The 3D view. Decorative for assistive tech: aria-hidden, every action has a
  * DOM control, and #scene-description carries the board state as text.
- * frameloop is "always" only while a trick is playing or the welcome screen's
- * preview plays (ADR-45), "demand" otherwise.
+ * frameloop is "always" only while a trick is playing, the welcome screen's
+ * preview plays (ADR-45) or the board rolls in the game (ADR-67), "demand"
+ * otherwise.
  *
  * The Canvas is keyed on the tier in use (ADR-16): antialias and
  * powerPreference are WebGL context options, so a tier change remounts it.
@@ -289,7 +293,8 @@ function rendererFactory(Q: Tier) {
  * each Canvas (SharedResources) and re-uploaded on first use.
  */
 export default function TrickScene() {
-  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s));
+  // A rolling board in the game moves the ground, so it runs frames too (ADR-67).
+  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s) || rollMoves(s));
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);

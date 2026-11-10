@@ -5,6 +5,7 @@ import { describeInputs, describeResult } from '../sim/format';
 import { awaitingCall, SKATE_LEVELS, skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
+import { computerWaiting, rollAllowed } from './roll';
 import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
 import type { PlaybackSlice, TimedPop, TrickEvent, TrickState } from './types';
 
@@ -17,6 +18,7 @@ export const initialPlayback = () => ({
   flightBy: 'you' as const,
   result: null,
   scrubFrom: null,
+  roll: 'still' as const,
 });
 
 /**
@@ -55,6 +57,8 @@ export const createPlaybackSlice =
       release = null;
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
+      // A rolling board rolls on and slows to a stop (ADR-67).
+      s.slowRoll();
       // The landing's sound, at the moment it lands (ADR-58); a letter and the game's end follow in scoreSkate.
       s.cue(result.landed ? 'land' : 'bail');
       s.log('trick.resolved', {
@@ -153,6 +157,8 @@ export const createPlaybackSlice =
       else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null, ...how });
       else s.log('trick.popped', { by, ...inputs, preset: s.activePreset, ...how });
       s.cue('pop');
+      // In a game the board rolls through the go (ADR-67); already rolling after a bar or the computer's wait.
+      s.startRoll();
       if (mine) {
         // The bar's start was announced; what the release did waits for the result (ADR-65).
         const band = SKATE_LEVELS[mine.level].band;
@@ -250,5 +256,22 @@ export const createPlaybackSlice =
       },
 
       land: (lead) => resolve(lead ? [lead] : []),
+
+      startRoll: () => {
+        const s = get();
+        if (s.roll !== 'push' && rollAllowed(s)) set({ roll: 'push' });
+      },
+      slowRoll: () => {
+        if (get().roll === 'push') set({ roll: 'slow' });
+      },
+      stopRoll: () => {
+        if (get().roll !== 'still') set({ roll: 'still' });
+      },
+      rollRested: () => {
+        if (get().roll !== 'slow') return;
+        set({ roll: 'still' });
+        // The computer rolls in before it pops: its wait outlasts the slow-down (ART.roll).
+        if (computerWaiting(get())) get().startRoll();
+      },
     };
   };

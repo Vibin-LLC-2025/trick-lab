@@ -16,6 +16,7 @@ import {
   TEXTURES_HIGH,
   WHEEL_BANDS,
   WHEEL_HIGH_BAND_KINDS,
+  WHEEL_PRINT,
   type WheelBandKind,
 } from './spec';
 
@@ -254,6 +255,25 @@ export function wheelBandColor(k: number): string {
   return B.urethane;
 }
 
+/**
+ * The wheel print (ADR-67) over rows `from` to `to` (the outer face's band):
+ * the texel columns whose centre falls in one of WHEEL_PRINT's arcs of u,
+ * inside the band's inset.
+ */
+export function printWheel(p: Pixels, from: number, to: number) {
+  const inset = Math.round((to - from) * WHEEL_PRINT.inset);
+  const [r, g, b] = hexToRgb(WHEEL_PRINT.color);
+  for (let y = from + inset; y < to - inset; y++)
+    for (let x = 0; x < p.width; x++) {
+      const u = (x + 0.5) / p.width;
+      if (!WHEEL_PRINT.arcs.some(([a, z]) => u >= a && u < z)) continue;
+      const i = (y * p.width + x) * 3;
+      p.rgb[i] = r;
+      p.rgb[i + 1] = g;
+      p.rgb[i + 2] = b;
+    }
+}
+
 /** Wheel bands (7.5): one band per lathe segment, because lathe v is point index / 15. */
 export function wheelPixels(segments = 15): Pixels {
   const { width, height } = TEXTURES.wheel;
@@ -267,6 +287,7 @@ export function wheelPixels(segments = 15): Pixels {
       fillRows(p, from, from + WHEEL_BANDS.raceRows, WHEEL_BANDS.race);
       fillRows(p, to - WHEEL_BANDS.raceRows, to, WHEEL_BANDS.race);
     }
+    if (k === WHEEL_PRINT.segment.medium) printWheel(p, from, to);
   }
   return p;
 }
@@ -283,6 +304,8 @@ export function wheelPixelsHigh(): Pixels {
   const p: Pixels = { width, height, rgb: new Uint8Array(width * height * 3) };
   const n = WHEEL_HIGH_BAND_KINDS.length;
   WHEEL_HIGH_BAND_KINDS.forEach((kind, k) => fillRows(p, bandStart(k, n, height), bandStart(k + 1, n, height), bandHex(kind)));
+  const k = WHEEL_PRINT.segment.high;
+  printWheel(p, bandStart(k, n, height), bandStart(k + 1, n, height));
   return p;
 }
 

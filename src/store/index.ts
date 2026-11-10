@@ -13,6 +13,7 @@ export { animates } from './playback';
 export { effectiveQuality } from './quality';
 export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
+export { computerWaiting, rollAllowed, rollMoves, type RollState } from './roll';
 
 export type { Random, Schedule } from './skate';
 export { TAUGHT_KEY } from './skate';

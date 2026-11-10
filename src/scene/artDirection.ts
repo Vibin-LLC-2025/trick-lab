@@ -4,7 +4,7 @@
 // Units are metres. The pad top surface is y = 0; the board's long axis is X.
 
 import { BAY, CONCRETE, PLANE, ROUGHNESS } from '../asset/groundSpec';
-import { OUTLINE, REST_Y } from '../asset/spec';
+import { OUTLINE, REST_Y, WHEEL } from '../asset/spec';
 import { FOOT } from '../sim/feet';
 import { NeutralToneMapping, type ToneMapping } from 'three';
 import type { Quality, Theme } from '../store';
@@ -697,4 +697,19 @@ export const ART = {
     /** Fade out over this fraction of the airtime once a trick is in the air. */
     fadeBy: 0.12,
   },
+  /**
+   * Rolling in the game (step 12, ADR-67). The board stays where it is and
+   * the ground's textures and the wheels' print slide (scene/roll.ts), nose
+   * first (+X). The owner's list of changes at the end of the plan reads
+   * these; nothing else needs to change with them.
+   * - `cruise`: m/s, an easy flat-ground roll (a jog is about 2.5). The
+   *   ground's 1.6 m joints pass about one and a half a second.
+   * - `pushS`: seconds from stopped to the cruise, a steady push. Shorter
+   *   than the timing bar's 0.8 s to its band, so a timed pop is at speed.
+   * - `slowS`: seconds from the cruise to a stop after a landing. With
+   *   `pushS` it fits inside the computer's 2.2 s wait (COMPUTER_DELAY_MS),
+   *   so the computer stops, pushes off and is at speed when it pops.
+   * - `wheelRadius`: the wheel the print turns on (spec.ts WHEEL.radius).
+   */
+  roll: { cruise: 2.4, pushS: 0.7, slowS: 1.3, wheelRadius: WHEEL.radius },
 } as const;

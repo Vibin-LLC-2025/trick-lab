@@ -7,6 +7,7 @@ import { ART } from './artDirection';
 import { preloadModel, useModel } from './gltf';
 import { noteShown } from './modelCache';
 import { boardUrlFor, SHOES_URL } from './modelUrls';
+import { slideTexture, wheelPerMetre } from './roll';
 
 /**
  * Sets anisotropic filtering on every texture of a cached GLB's materials,
@@ -47,6 +48,9 @@ export function BoardModel({ url, castShadow }: { url: string; castShadow: boole
     applyAnisotropy(materials, anisotropy);
     invalidate();
   }, [invalidate, materials, anisotropy]);
+  // The wheels' print turns with the roll (ADR-67): a lathe's u runs once around each wheel.
+  const wheelMap = ((nodes.Wheels as Mesh | undefined)?.material as MeshStandardMaterial | undefined)?.map ?? null;
+  useEffect(() => (wheelMap ? slideTexture(wheelMap, wheelPerMetre()) : undefined), [wheelMap]);
   return (
     <group dispose={null}>
       {PARTS.map(({ node }) => {

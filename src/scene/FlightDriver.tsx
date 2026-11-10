@@ -4,18 +4,19 @@ import { Matrix4, MathUtils, Vector3, type Bone, type Group, type InstancedBuffe
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
-import { previewAnimates, useTrickStore } from '../store';
+import { previewAnimates, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
 import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
-import { newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
+import { MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
+import { haltRoll, resetRoll, rollMotion, stepRoll, writeSlides } from './roll';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
@@ -123,6 +124,14 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   // A pop or a resume starts a new run of the clock even when no paused
   // frame came in between, so the next frame advances by 0, not by the wait.
   useEffect(() => useTrickStore.subscribe((s, prev) => noteStoreChange(clock.current, s, prev)), []);
+  // The roll's frames start again after a gap (a dialog, a pause): the first one advances by 0 (ADR-67).
+  useEffect(
+    () =>
+      useTrickStore.subscribe((s, prev) => {
+        if (rollMoves(s) && !rollMoves(prev)) rollMotion.running = false;
+      }),
+    [],
+  );
 
   useFrame((_state, delta) => {
     const s = useTrickStore.getState();
@@ -145,6 +154,20 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       tickFlightClock(c, head, s, delta);
       progress = c.progress;
     }
+    // Rolling (ADR-67): the world moves, the board stays. Only on the game
+    // screen; elsewhere the ground is back on the spot. The roll keeps the
+    // playback speed, so a slow-motion trick passes over slow ground.
+    const r = rollMotion;
+    if (s.screen !== 'skate') {
+      if (r.distance !== 0 || r.speed !== 0) resetRoll(r);
+    } else if (s.roll === 'still') {
+      if (r.speed !== 0) haltRoll(r);
+    } else if (rollMoves(s)) {
+      const dt = r.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+      r.running = true;
+      if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
+    }
+    writeSlides(r.distance);
     // The preview's flight carries its own inputs; elsewhere the store state is the inputs object. No allocation either way.
     const inputs = s.screen === 'home' && flight ? flight.inputs : s;
 

@@ -25,6 +25,7 @@ import {
 } from '../sim/skate';
 import { inFlight } from './playback';
 import { readPref, savePref } from './prefs';
+import { computerWaiting } from './roll';
 import type { Clock } from './assessment';
 import type { PopMode, SkateSlice, TrickState } from './types';
 
@@ -98,6 +99,8 @@ export const createSkateSlice =
       cancelEnd?.();
       cancelEnd = null;
       set({ pendingPop: null });
+      // No pop after all: the board slows to a stop (ADR-67). A release pops at once and pushes it again.
+      if (get().status !== 'playing') get().slowRoll();
       return true;
     };
 
@@ -166,6 +169,8 @@ export const createSkateSlice =
         const id = ++popSeq;
         set({ pendingPop: { id, startedAt: now(), intended: { pop: s.pop, flick: s.flick, scoop: s.scoop }, level: s.skate.level }, lastRelease: null });
         cancelEnd = schedule(() => release(id, true), BAR.sweepMs);
+        // The bar is the push: the board is at its cruise by the band (ADR-67).
+        s.startRoll();
         // Short while the ticks play; with sound off the bar is silent, so say so and where Exact is.
         s.announce(s.soundOn ? 'Bar running.' : 'Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
       },
@@ -194,6 +199,8 @@ export const createSkateSlice =
           return;
         }
         const cancelled = s.dropPop();
+        // A new game starts with the board stopped (ADR-67); the computer, if it sets first, rolls in below.
+        s.stopRoll();
         if (skateActive(s.skate)) s.log('skate.ended', { winner: null, reason: 'restart', ...score(s.skate) });
         const first = coinFlip(random);
         // The computer picks its call as soon as its set turn begins, so the student sees it before it pops.
@@ -203,6 +210,7 @@ export const createSkateSlice =
         // A player's first game walks them through their first go (ADR-66).
         set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught });
         s.log('skate.started', { level: skate.level, first });
+        if (computerWaiting(get())) get().startRoll();
         s.requestFocus({ kind: 'skate-heading' });
         const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
         s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}${lessonLead()}`);
@@ -212,6 +220,10 @@ export const createSkateSlice =
         const skateAuto = !get().skateAuto;
         savePref(SKATE_AUTO_KEY, skateAuto ? 'on' : 'off');
         set({ skateAuto });
+        // The computer's wait comes and goes with auto, and its roll-in with it (ADR-67).
+        const s = get();
+        if (skateAuto && s.roll === 'still' && computerWaiting(s)) s.startRoll();
+        else if (!skateAuto && s.status !== 'playing' && !s.pendingPop) s.slowRoll();
         get().announce(skateAuto ? 'The computer goes on its own.' : "The computer waits for you: press Computer's go or Space.");
       },
 
@@ -266,6 +278,7 @@ export const createSkateSlice =
       quitSkate: () => {
         const s = get();
         if (s.skate.phase === 'off') return;
+        s.stopRoll();
         if (skateActive(s.skate)) {
           const cancelled = s.dropPop();
           // A flight still in the air lands as usual but scores nothing (scoreSkate ignores it once the game is off).
