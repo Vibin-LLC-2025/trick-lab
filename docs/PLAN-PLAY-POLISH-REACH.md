@@ -63,7 +63,7 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 46 commits a
 | 2dcf12f | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
 | fa866c2 | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
 | e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. Waiting for the owner's pick |
-| this commit | 11, out of order: records and the trick list (ADR-64) |
+| 2dc5543 | 11, out of order: records and the trick list (ADR-64) |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
