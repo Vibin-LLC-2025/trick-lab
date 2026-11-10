@@ -69,7 +69,7 @@ export const createPlaybackSlice =
       if (result.grade === 'bail') s.stopRoll();
       else s.slowRoll();
       // The landing's sound, at the moment it lands (ADR-58); a letter and the game's end follow in scoreSkate.
-      s.cue(result.landed ? 'land' : 'bail');
+      s.cue(result.landed ? (result.grade === 'sketchy' ? 'sketchy' : 'land') : 'bail');
       s.log('trick.resolved', {
         by,
         trick: result.id,

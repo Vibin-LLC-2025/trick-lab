@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71) and 17 (the game's camera and instant replay, ADR-72) are done.** The merge point after step 16 is asked; step 18 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72) and 18 (sound, ADR-73) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked; step 19 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -76,7 +76,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 21bac64 | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
 | 8762405 | 15: the legs on by default on High and Medium (ADR-70), in trousers with a cuff over the shoe, a little bunching and a twill cloth; the hip fade a third shorter. The loading pictures show the legs, encoded at WebP 0.6 to stay in budget. No draw call added to the worst case |
 | 1c6bb20 | 16: decks (ADR-71): Trick Lab, Dusk, Bolt or Ripple, chosen on the welcome screen; the computer rides Circuit, with teal soles and laces. KTX2 textures per board level, downloaded only when shown, each with a budget. No draw call added |
-| (step 17) | 17: the game's camera and instant replay (ADR-72): Filmer, Side and Above, lower than the lab's; after a made set or copy the flight again in slow motion from a low, wide camera, with a fisheye bend on High and Medium; Skip replay on Pop and Escape. The legs never hide the board (checked in six poses, both stances, High and Medium). No draw call added |
+| 22f13d2 | 17: the game's camera and instant replay (ADR-72): Filmer, Side and Above, lower than the lab's; after a made set or copy the flight again in slow motion from a low, wide camera, with a fisheye bend on High and Medium; Skip replay on Pop and Escape. The legs never hide the board (checked in six poses, both stances, High and Medium). No draw call added |
+| (step 18) | 18: sound (ADR-73): CC0 recordings from Kenney's Impact Sounds for the pop, a new catch, the landing and the bail (11 MP3s, 32 KB, two or three takes each at a random pitch), a synthesized rolling sound that ticks on the concrete's joints, a synthesized scuff, better synthesized fallbacks, and a sound check under ?debug. Nothing sound-related downloads while sound is off; the main page went from 106.0 to 104.9 KB. The Sound switch stays in the top bar, not a second one beside Start game. The owner's list of changes is asked |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -430,7 +431,7 @@ Today there are six short sounds, each made in the browser from a few beeps and 
   - Trimmed and levelled to match each other, kept in `public/sounds/`, with a `CREDITS.md` beside them: each file's source page, its licence, and the date it was fetched.
   - Slow motion lowers and stretches them by the rule the synthesized sounds use today (`slowMotion`).
 - **If no good free recording exists for a sound, or a file fails to load,** a synthesized version plays. Today's pop, landing and bail are improved for that: a knock made of a few ringing tones, in place of one sliding beep.
-- **Off by default** (the owner's answer, 2026-11-09). The Sound switch sits beside "Start game", so it is one press away.
+- **Off by default** (the owner's answer, 2026-11-09). The Sound switch sits beside "Start game", so it is one press away. **Changed in step 18 (ADR-73):** it was already one press away in the game screen's top bar, and a second switch would give screen readers two buttons named "Sound", so there is still one, on every screen.
 - **Nothing is downloaded until sound is turned on.** Each file has a size limit, and the whole set stays under about 150 KB. The files are served from this site, never a CDN.
 - **One file format that every target browser plays,** checked in step 22.
 - **Cues still come from store actions only.** The rolling sound follows the store's "rolling" state. It is not called every frame.

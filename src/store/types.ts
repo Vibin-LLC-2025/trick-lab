@@ -38,7 +38,7 @@ export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
  * a SKATE letter earned (either player's), and a game won or lost. The
  * player (src/audio) plays it only while sound is on.
  */
-export type SoundKind = 'pop' | 'land' | 'bail' | 'letter' | 'win' | 'lose';
+export type SoundKind = 'pop' | 'land' | 'sketchy' | 'bail' | 'letter' | 'win' | 'lose';
 /** One of SPEEDS in store/speed.ts. */
 export type PlaybackRate = number;
 export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' };

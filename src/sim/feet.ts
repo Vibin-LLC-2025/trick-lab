@@ -25,7 +25,7 @@
 // (-X), toes still at the toe side (-Z); everything toward the heels still
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
-import { computeFlight, heightAt, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
+import { CATCH, computeFlight, heightAt, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
 import { isLanded, sketchAmount } from './landing';
 
 /**
@@ -251,13 +251,8 @@ function sketchHeight(table: Float64Array, s: number): number {
   return table[i]! + (table[i + 1]! - table[i]!) * (f - i);
 }
 
-/**
- * When each foot is back on the board (ADR-36, 2026-11-05), fractions of the
- * airtime: the front foot first, 0.03 before the catch ends (the sources put
- * the front foot down first in a 360 flip and a shove-it), the back foot as
- * the board stops turning. Starting values, to refit from reference data.
- */
-export const CATCH = { front: PHASE.catch.end - 0.03, back: PHASE.catch.end } as const;
+/** When each foot is back on the board (ADR-36): defined in flight.ts beside PHASE (ADR-73). */
+export { CATCH };
 
 /**
  * Motion numbers. Windows are fractions of the airtime; distances metres.

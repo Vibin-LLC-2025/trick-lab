@@ -1,13 +1,17 @@
-// ADR-58 (2026-11-09): the synthesized sounds and their player. Web Audio
+// ADR-58 (2026-11-09) and ADR-73 (step 18): the sounds and their player. Web Audio
 // does not exist in jsdom, so the player runs against a small fake context
 // that records what it is asked to build and when.
 import { describe, expect, it, vi } from 'vitest';
 import type { SoundKind } from '../store';
 import { createSoundPlayer } from './player';
 import { BAR } from '../sim/bar';
-import { BAR_SOUND, FOLLOWS_SPEED, slowMotion, SOUNDS, STAGGER } from './sounds';
+import { BAR_SOUND, FOLLOWS_SPEED, slowMotion, SOUNDS, STAGGER, type SoundName } from './sounds';
 
-const KINDS: SoundKind[] = ['pop', 'land', 'bail', 'letter', 'win', 'lose'];
+const KINDS: SoundName[] = ['pop', 'catch', 'land', 'sketchy', 'bail', 'letter', 'win', 'lose'];
+// Every cue the store can give has a sound.
+const CUES: Record<SoundKind, true> = { pop: true, land: true, sketchy: true, bail: true, letter: true, win: true, lose: true };
+/** The recordings never arrive: the synthesized sounds play, as before step 18. */
+const synthOnly = { fetchBytes: () => new Promise<ArrayBuffer>(() => {}) };
 
 describe('the sounds', () => {
   it.each(KINDS)('%s is a few short voices, audible and never clipping', (kind) => {
@@ -33,15 +37,30 @@ describe('the sounds', () => {
     expect(slowMotion(0.25).pitch).toBeCloseTo(0.25 ** 0.35, 9);
     expect(slowMotion(0.25).stretch).toBeCloseTo(1 / 0.25 ** 0.35, 9);
     expect(slowMotion(0.05)).toEqual({ pitch: 0.5, stretch: 2 });
-    expect(KINDS.filter((k) => FOLLOWS_SPEED[k])).toEqual(['pop', 'land', 'bail']);
+    expect(KINDS.filter((k) => FOLLOWS_SPEED[k])).toEqual(['pop', 'catch', 'land', 'sketchy', 'bail']);
+    expect(Object.keys(CUES).every((k) => KINDS.includes(k as SoundName))).toBe(true);
   });
 });
 
-/** A fake AudioContext: records sources started (with their type, frequency and start time) and filters. */
+/** A decoded recording: `lead` samples of silence, then sound. */
+const fakeBuffer = (name: string, lead = 0) => ({
+  name,
+  sampleRate: 1000,
+  length: 300,
+  getChannelData: () => Float32Array.from({ length: 300 }, (_, i) => (i < lead ? 0 : 0.5)),
+});
+
+/** A fake AudioContext: records sources started (with their type, frequency, start time, offset, buffer and rate) and filters. */
 function fakeContext(state: AudioContextState = 'running') {
-  const started: { type: string; freq: number; at: number }[] = [];
+  const started: { type: string; freq: number; at: number; offset?: number; buffer: unknown; rate: number }[] = [];
   const param = () => {
-    const p = { value: 0, setValueAtTime: vi.fn((v: number) => ((p.value = v), p)), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() };
+    const p = {
+      value: 0,
+      setValueAtTime: vi.fn((v: number) => ((p.value = v), p)),
+      linearRampToValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
+      cancelScheduledValues: vi.fn(),
+    };
     return p;
   };
   const node = () => ({ connect: vi.fn(), disconnect: vi.fn() });
@@ -50,10 +69,11 @@ function fakeContext(state: AudioContextState = 'running') {
       ...node(),
       type,
       frequency: param(),
+      playbackRate: param(),
       buffer: null as unknown,
       loop: false,
       onended: null as null | (() => void),
-      start: vi.fn((at: number) => started.push({ type: s.type, freq: s.frequency.value, at })),
+      start: vi.fn((at: number, offset?: number) => started.push({ type: s.type, freq: s.frequency.value, at, offset, buffer: s.buffer, rate: s.playbackRate.value })),
       stop: vi.fn(),
     };
     return s;
@@ -70,6 +90,7 @@ function fakeContext(state: AudioContextState = 'running') {
     createBufferSource: vi.fn(() => source('noise')),
     createBiquadFilter: vi.fn(() => ({ ...node(), type: 'lowpass', frequency: param(), Q: param() })),
     createBuffer: vi.fn((_c: number, n: number) => ({ getChannelData: () => new Float32Array(n) })),
+    decodeAudioData: vi.fn((bytes: ArrayBuffer) => Promise.resolve(fakeBuffer(new TextDecoder().decode(bytes), 20))),
   };
   return { ctx, started };
 }
@@ -86,7 +107,7 @@ describe('the player', () => {
 
   it("plays a sound's voices at once, and staggers one asked for straight after so each is heard", () => {
     const { ctx, started } = fakeContext();
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     player.play('land', 1);
     expect(started).toHaveLength(SOUNDS.land.length);
     const first = Math.min(...started.map((s) => s.at));
@@ -98,7 +119,7 @@ describe('the player', () => {
 
   it("lowers the board's sounds in slow motion, and leaves the game's alone", () => {
     const { ctx, started } = fakeContext();
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     player.play('pop', 0.25);
     const tone = SOUNDS.pop.find((v) => v.kind === 'tone')!;
     expect(started.find((s) => s.type === 'sine')!.freq).toBeCloseTo((tone.kind === 'tone' ? tone.from : 0) * slowMotion(0.25).pitch, 6);
@@ -123,7 +144,7 @@ describe('the player', () => {
       s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
       return s;
     });
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     player.play('land', 1);
     player.play('letter', 1);
     player.play('lose', 1);
@@ -154,7 +175,7 @@ describe('the player', () => {
 
   it('schedules the bar from one start time on the audio clock, even with other sounds queued, so the click is on the band', () => {
     const { ctx, started } = fakeContext();
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     // A landing, a letter and a jingle were just asked for: the queue is staggered well past now.
     player.play('land', 1);
     player.play('letter', 1);
@@ -189,7 +210,7 @@ describe('the player', () => {
       s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
       return s;
     });
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     const barVoices = 1 + BAR_SOUND.ticks.length + BAR_SOUND.click.length;
     player.play('land', 1);
     player.bar();
@@ -209,7 +230,7 @@ describe('the player', () => {
 
   it('resumes a suspended context (the browser holds audio until a gesture), and closes it when done', () => {
     const { ctx } = fakeContext('suspended');
-    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
     player.unlock();
     expect(ctx.resume).toHaveBeenCalled();
     player.dispose();

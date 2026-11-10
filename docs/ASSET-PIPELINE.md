@@ -204,3 +204,11 @@ Four more deck bottoms, each a KTX2 texture per board level in `public/models/de
 | Circuit (the computer's) | 17.1 KB | 37.6 KB |
 
 `assets:check` reads each file's KTX2 header: the size of its board's deck bottom, the full mip chain (11 and 12 levels), sRGB, and `DECK_BUDGET` (40 KB and 96 KB). `budget.test.ts` rebuilds each and compares it byte for byte with the committed file.
+
+## Sounds (2026-11-10, ADR-73)
+
+- **Sources:** CC0 recordings from Kenney's Impact Sounds (1.0), in `assets/source/sounds/kenney-impact-sounds/` with the pack's `License.txt`. Only the files a take uses are kept.
+- **Recipe:** `src/audio/soundSpec.ts`: per sound, two or three takes; per take, its layers (a source file, where it starts, its level), its length, its fade and the peak it is levelled to.
+- **Build:** `npm run sounds` (`scripts/build-sounds.ts`, needs ffmpeg): mix the layers, cut leading silence, high-pass at 60 Hz, cut and fade, level to the peak (measured with volumedetect, then applied), encode mono MP3 at 64 kbit/s with no tags, one thread. Repeatable byte for byte. Writes `public/sounds/<kind>-<n>.mp3` and `public/sounds/CREDITS.md`.
+- **Check:** `npm run assets:check` reads every file: an MP3, at most 12 KB, all of them at most 150 KB, and each listed in CREDITS.md.
+- **Swap a sound:** copy the new CC0 file into the sources folder, point the take at it in `soundSpec.ts`, run `npm run sounds`, and commit the sources, the MP3s and CREDITS.md together. A source from somewhere else needs its own entry in CREDITS.md (`SOUND_SOURCE`).

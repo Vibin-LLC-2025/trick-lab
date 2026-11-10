@@ -27,6 +27,9 @@ import { ViewPanel } from './ViewPanel';
 
 // Code-split three.js so the accessible DOM UI paints before the 3D chunk loads.
 const TrickScene = lazy(() => import('../scene/TrickScene'));
+// The sound check (ADR-73): only under ?debug, in its own chunk with the sound player.
+const SoundCheck = lazy(() => import('./SoundCheck'));
+const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 /** Text entry: every shortcut stays out of the way. */
 function isTyping(el: Element | null) {
@@ -243,6 +246,11 @@ export function App() {
             <FootMotion />
             <Objectives />
             <EventLog />
+            {DEBUG && (
+              <Suspense fallback={null}>
+                <SoundCheck />
+              </Suspense>
+            )}
           </aside>
         )}
       </div>

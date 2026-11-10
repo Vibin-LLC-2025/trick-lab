@@ -120,6 +120,16 @@ export const PHASE = {
   catch: { start: 0.64, end: 0.76 },
 } as const;
 
+/**
+ * When each foot is back on the board (ADR-36, 2026-11-05), fractions of the
+ * airtime: the front foot first, 0.03 before the catch ends (the sources put
+ * the front foot down first in a 360 flip and a shove-it), the back foot as
+ * the board stops turning. Starting values, to refit from reference data.
+ * Here beside PHASE (feet.ts re-exports it) so the store can time the catch's
+ * sound (ADR-73) without the feet model in the first page download.
+ */
+export const CATCH = { front: PHASE.catch.end - 0.03, back: PHASE.catch.end } as const;
+
 /** A window of progress, fractions of the airtime. */
 export interface Window {
   readonly start: number;
