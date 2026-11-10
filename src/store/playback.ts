@@ -71,6 +71,8 @@ export const createPlaybackSlice =
         }
         out.push(`${completed.length} of ${OBJECTIVES.length} objectives done.`);
       }
+      // The player's own landing goes on their records (ADR-64), in the lab and in a game alike.
+      if (by === 'you') s.noteLanding(result);
       // A landing in the lab is the student's to celebrate; in a game, only a set or copy that counts (scoreSkate).
       if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name, result.grade === 'clean');
       out.push(...s.scoreSkate(result, by));

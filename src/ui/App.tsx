@@ -8,6 +8,7 @@ import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
 import { FootMotion } from './FootMotion';
 import { Home } from './Home';
+import { ClearRecordsDialog } from './Tricks';
 import { Inputs } from './Inputs';
 import { Objectives } from './Objectives';
 import { PerfBadge } from './PerfBadge';
@@ -68,7 +69,7 @@ function useGlobalShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       const s = useTrickStore.getState();
       // A modal dialog owns the keyboard while it is open.
-      if (s.shortcutsOpen || s.skateLeave) return;
+      if (s.shortcutsOpen || s.skateLeave || s.recordsClearAsked) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
       if (!SCREEN_KEYS[s.screen].has(e.key)) return;
       // The game's Pop and Slow motion are on screen only while a game is in play (ADR-46).
@@ -236,6 +237,7 @@ export function App() {
       <Announcer />
       <ShortcutsDialog />
       <LeaveDialog />
+      <ClearRecordsDialog />
     </>
   );
 }

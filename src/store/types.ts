@@ -2,6 +2,7 @@ import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
+import type { Records } from './records';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
 export type { Stance };
@@ -305,4 +306,26 @@ export interface SkateSlice {
   endSkateOnReset: () => void;
 }
 
-export type TrickState = InputsSlice & PlaybackSlice & AssessmentSlice & UiSlice & SkateSlice;
+/**
+ * The player's records, kept on this device between visits (ADR-64): the
+ * tricks landed and their best grade, games won and lost per level, and the
+ * run of wins. Saved under trick-lab.records. Never logged, never exported,
+ * not cleared by Reset.
+ */
+export interface RecordsSlice {
+  records: Records;
+  /** "Clear records" was pressed and is waiting for the player to confirm it. Not logged. */
+  recordsClearAsked: boolean;
+  /** Internal, the landing's resolution: the player landed this trick (a bail or a trick with no name changes nothing). */
+  noteLanding: (result: TrickResult) => void;
+  /** Internal, the game's scoring: a game against this level ended, won or lost. */
+  noteGame: (level: SkateLevel, won: boolean) => void;
+  /** Asks before clearing; with nothing to clear it says so instead. */
+  requestClearRecords: () => void;
+  /** The player confirmed: every record is cleared, saved and announced. */
+  confirmClearRecords: () => void;
+  /** The player kept the records. */
+  cancelClearRecords: () => void;
+}
+
+export type TrickState = InputsSlice & PlaybackSlice & AssessmentSlice & UiSlice & SkateSlice & RecordsSlice;

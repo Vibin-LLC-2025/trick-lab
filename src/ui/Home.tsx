@@ -1,4 +1,5 @@
 import { useTrickStore } from '../store';
+import { TrickList } from './Tricks';
 import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
 /**
@@ -50,6 +51,7 @@ export function Home() {
           </span>
         </button>
       </div>
+      <TrickList />
       <div className="home__utilities">
         <p className="home__hint">Works with a keyboard and a screen reader.</p>
         <ShortcutsButton label="Keyboard shortcuts" />

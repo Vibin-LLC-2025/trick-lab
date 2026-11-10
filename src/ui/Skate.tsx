@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { outcomeCard } from '../sim/format';
 import {
   CLEAN_ONLY_NOTE,
@@ -20,6 +20,7 @@ import type { TrickId } from '../sim/tricks';
 import { useTrickStore, type TrickState } from '../store';
 import { Inputs } from './Inputs';
 import { barPress, CONTROLS_MODE, FlickHint, TimingBar } from './RoughControls';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
 
 /**
@@ -327,6 +328,8 @@ const RULES = [
 function Setup() {
   const level = useTrickStore((s) => s.skate.level);
   const record = useTrickStore((s) => s.skateRecord);
+  const games = useTrickStore((s) => s.records.games[s.skate.level]);
+  const streak = useTrickStore((s) => s.records.streak);
   const setLevel = useTrickStore((s) => s.setSkateLevel);
   const start = useTrickStore((s) => s.startSkate);
   const played = record.you + record.computer;
@@ -363,6 +366,12 @@ function Setup() {
       {played > 0 && (
         <p className="panel__note">
           This session: you won {record.you} of {played}.
+        </p>
+      )}
+      {/* The record on this device, for the level picked (ADR-64). */}
+      {games.won + games.lost > 0 && (
+        <p className="panel__note">
+          Against {SKATE_LEVELS[level].label}, all time: won {games.won}, lost {games.lost}.{streak > 1 ? ` You are on a run of ${streak} wins.` : ''}
         </p>
       )}
     </section>
@@ -439,45 +448,22 @@ export function TurnChip() {
   );
 }
 
-/** Asks before a game in play is left (ADR-46). Native modal dialog: focus is trapped, Esc keeps playing, focus returns to the opener. */
+/** Asks before a game in play is left (ADR-46). Esc keeps playing, and focus returns to the opener. */
 export function LeaveDialog() {
   const target = useTrickStore((s) => s.skateLeave);
   const confirm = useTrickStore((s) => s.confirmLeave);
   const cancel = useTrickStore((s) => s.cancelLeave);
-  const ref = useRef<HTMLDialogElement>(null);
-  const open = target !== null;
-
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    // jsdom lacks showModal/close; fall back to the open attribute.
-    if (open && !d.open) {
-      if (typeof d.showModal === 'function') d.showModal();
-      else d.setAttribute('open', '');
-    } else if (!open && d.open) {
-      if (typeof d.close === 'function') d.close();
-      else d.removeAttribute('open');
-    }
-  }, [open]);
-
   const quitting = target === 'setup';
   return (
-    <dialog ref={ref} className="confirm" aria-labelledby="leave-title" aria-describedby="leave-text" onClose={cancel}>
-      <h2 id="leave-title" className="confirm__title">
-        {quitting ? 'Quit this game?' : 'Leave this game?'}
-      </h2>
-      <p id="leave-text" className="confirm__text">
-        The game ends here and both players&apos; letters are cleared.
-      </p>
-      <div className="confirm__actions">
-        {/* Keep playing first, so showModal focuses it: the safe choice is the default. */}
-        <button type="button" className="btn btn--primary" onClick={cancel}>
-          Keep playing
-        </button>
-        <button type="button" className="btn btn--danger" onClick={confirm}>
-          {quitting ? 'Quit game' : 'Leave game'}
-        </button>
-      </div>
-    </dialog>
+    <ConfirmDialog
+      id="leave"
+      open={target !== null}
+      title={quitting ? 'Quit this game?' : 'Leave this game?'}
+      text="The game ends here and both players' letters are cleared."
+      keep="Keep playing"
+      go={quitting ? 'Quit game' : 'Leave game'}
+      onKeep={cancel}
+      onGo={confirm}
+    />
   );
 }

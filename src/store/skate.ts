@@ -182,6 +182,8 @@ export const createSkateSlice =
         const winner = game.winner;
         s.log('skate.ended', { winner, reason: 'spelled', ...score(game) });
         s.cue(winner === 'you' ? 'win' : 'lose');
+        // The game goes on the player's records, by level (ADR-64).
+        s.noteGame(game.level, winner === 'you');
         // A leave still asked for has nothing left to end: the dialog closes, and the result takes focus (ADR-46).
         set({ skateRecord: { ...s.skateRecord, [winner]: s.skateRecord[winner] + 1 }, skateLeave: null });
         // The turn controls give way to the result, so focus goes to its heading rather than to the page (ADR-46).

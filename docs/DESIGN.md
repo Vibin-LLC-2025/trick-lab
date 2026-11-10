@@ -706,6 +706,18 @@ Over the game and the lab: a 44 px `--color-surface` strip with the column borde
 - **Game:** the top bar over the stage and one game column (`.app__play`, `--col-play` 360 px, the same surface as the side columns); its content is section 11.
 - **Below 960 px:** everything stacks: the top bar, the stage, then the columns.
 
+### 12.4 The trick list (`.tricks`, 2026-11-09, ADR-64)
+
+Under the two choices on the welcome screen, above the utilities, behind a hairline: what the player has landed on this device.
+
+- **Head.** `.tricks__head`: the h2 `.tricks__title` "Your tricks" (12 px bold muted, as a panel title) and `.tricks__count` "3 of 16 landed, 1 clean" (12 px muted, tabular numbers) at the two ends of one line.
+- **Grid.** `.tricks__grid`: a list in two columns (one below 420 px), 2 px between rows. Each `.tricks__item` is a short row: `.tricks__name` (13 px, one line, an ellipsis if it must) and `.tricks__state` (12 px) at its right end.
+- **State is a word on every row:** "Not yet", "Landed" (the best landing so far was sketchy) or "Clean". The rest only backs the word up: not yet is muted with a 3 px `--color-line` bar on the left; `.tricks__item--landed` has `--color-text`, a dashed 3 px `--color-ok` bar and its state bold in `--color-ok`; `.tricks__item--clean` the same with a solid bar and the `--color-ok-bg` tint (`--color-ok` on it: 5.26 light, 7.85 dark; text on it 13.89 and 11.62). A landed row's state has the day of the first landing as its title and, for a screen reader, in hidden text.
+- **Foot.** `.tricks__foot`: "Kept on this device." (`.tricks__count`) and Clear records (`.btn--ghost.btn--sm`). With nothing to clear the button is `aria-disabled` and says so when pressed. Otherwise it opens the `.confirm` dialog of section 11: "Clear your records?", Keep records first (the default), then Clear records (`.btn--danger`).
+- **In the game.** The setup card adds one `.panel__note` once a game has been finished against the level picked: "Against Normal, all time: won 4, lost 1. You are on a run of 2 wins."
+
+Measured 2026-11-09 in Chromium: at 1440 x 900 the text column's content is 882 px in its 884 px card, so nothing scrolls; at 1280 x 720 it is 809 px in 704, and the card scrolls by itself (it already could, for long text); at 390 px wide the list is one column, 460 px tall, in the page's own scroll, with no sideways scroll. A long name ("Frontside pop shove-it") ends in an ellipsis at 440 px; the whole name is its title.
+
 ## 13. The lab, tidied (2026-11-08, ADR-47)
 
 Up front: Setup, Inputs, Playback (Pop, Pause, Reset) on the left and the Outcome card on the right. The rest are sections that open, all closed at first and remembered.

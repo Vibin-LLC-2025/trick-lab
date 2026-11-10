@@ -718,3 +718,20 @@ Every difference is 4 points or less. Easy and Normal are untouched (a kickflip 
 **Left out.** The first version of the plan also put the session's start time in the export; that belonged to keeping a session across a reload, which is parked. The scuffed landing sound for a sketchy landing comes with the recordings in step 18.
 
 **Consequence.** For the student on Hard the game is now about precision, not only about knowing the numbers: a set at flick 2.0 where 1.9 is clean no longer counts. In Exact a clean setup always exists, so nothing is out of reach.
+
+## ADR-64: Records and a trick list, kept on the device (2026-11-09)
+
+**Context.** Step 11 of `docs/PLAN-PLAY-POLISH-REACH.md`, built before steps 9 and 10 because it does not depend on the owner's pick of controls. Nothing was remembered between visits but preferences: a player who had landed a 360 flip, or beaten the computer on Hard, saw the same welcome screen as a first visitor.
+
+**Decision.**
+- **What is kept** (`src/store/records.ts`, a sixth slice): for each named trick, the day it was first landed and its best grade (clean or sketchy, ADR-63); games won and lost against each level; the current run of wins, at any level. Saved as versioned JSON under `trick-lab.records` (`v: 1`), written at once on every change.
+- **Who writes it.** Store actions only (rule 1): the landing's resolution notes the player's own landing, in the lab and in a game alike, and the game's scoring notes a finished game by its level. The computer's tricks, a bail, a trick with no name and a game that was quit are not records. Records are never logged, never exported and not cleared by Reset, and the event log never carries a calendar date.
+- **Reading is forgiving.** A missing, broken or foreign value is dropped piece by piece (`parseRecords`), so one bad field never loses the rest and nothing saved can stop the app. Another version reads as no records.
+- **Today's date is a parameter** of the store (`createTrickStore(now, random, today)`), the device's own local date, so tests are exact.
+- **The trick list** on the welcome screen (`TrickList`, DESIGN.md 12.4): the 15 settable tricks and the ollie, each "Not yet", "Landed" or "Clean" in words, with the count and the day of the first landing.
+- **"Clear records" asks first**, in the same native dialog as leaving a game (now one shared `ConfirmDialog`): Keep records is the default, and clearing is announced. With nothing to clear the button says so.
+- **The game's setup** says the record against the level picked once there is one.
+
+**Left out.** No announcement of a first landing: the landing's own announcement is already long, and the list shows it. No date beyond the first landing, no count of attempts, and nothing leaves the device.
+
+**Consequence.** A lab landing counts as much as a game landing, so in Exact (the sliders) the list can be filled by looking the numbers up. That is deliberate for now: the list records what the player has done, and step 9's controls are what make doing it a skill.

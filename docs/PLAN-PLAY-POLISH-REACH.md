@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 7 are committed. Step 8's two rough controls are committed and waiting for the owner's pick; step 9 does not start without it.
+- Steps 1 to 7 and step 11 are committed. Step 8's two rough controls are committed and waiting for the owner's pick; steps 9 and 10 do not start without it. Step 11 was taken out of order while waiting, since it does not depend on the pick.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 44 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 46 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -62,7 +62,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 44 commits a
 | e6ab283 | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
 | 2dcf12f | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
 | fa866c2 | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
-| this commit | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. Waiting for the owner's pick |
+| e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. Waiting for the owner's pick |
+| this commit | 11, out of order: records and the trick list (ADR-64) |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -256,7 +257,9 @@ Today the game uses the lab's side panel. The design side draws the new screen i
 - **Kept:** every control has a name, a visible focus style and an announcement where state changes. Focus moves only as convention 10 says.
 - **Done when** a whole game can be played by keyboard alone and by mouse alone, with no console errors, on every quality level.
 
-### 11. Records and the trick list
+### 11. Records and the trick list. Done, out of order (ADR-64)
+As built: a lab landing counts as much as a game landing; a game that is quit is not a record; today's date is a parameter of the store; nothing is announced for a first landing (the list shows it). The one dialog that asks before something is lost is now shared with leaving a game.
+
 - **Records**, saved on the device (`trick-lab.records`, versioned): for each named trick, the first date it was landed and its best grade; games won and lost against each level; the current winning streak.
 - **A trick list on the welcome screen:** the 15 settable tricks plus the ollie, as a grid. Landed and clean are marked in text, not only colour.
 - **"Clear records"** asks first.

@@ -529,6 +529,110 @@ a {
   color: var(--color-muted);
 }
 
+/* ---------- Trick list (welcome screen, ADR-64, DESIGN.md 12.4) ----------
+   Markup: <section class="tricks"><div class="tricks__head"><h2 class="tricks__title">Your tricks</h2>
+     <p class="tricks__count">3 of 16 landed, 1 clean</p></div>
+     <ul class="tricks__grid"><li class="tricks__item tricks__item--clean"><span class="tricks__name">Kickflip</span>
+       <span class="tricks__state">Clean</span></li>...</ul>
+     <div class="tricks__foot"><p class="tricks__count">Kept on this device.</p><button class="btn btn--ghost btn--sm">Clear records</button></div></section>
+   Two columns of short rows under a hairline. The state is a word on every
+   row ("Clean", "Landed", "Not yet"); the bar and the weight only back it up:
+   none for not yet, a dashed green bar for landed, a solid one and a tint
+   for clean. */
+
+.tricks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.tricks__head,
+.tricks__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+
+.tricks__title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+}
+
+.tricks__count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.tricks__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tricks__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 3px var(--space-2);
+  border-left: 3px solid var(--color-line);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+  color: var(--color-muted);
+}
+
+.tricks__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tricks__state {
+  flex: none;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.tricks__item--landed,
+.tricks__item--clean {
+  color: var(--color-text);
+}
+
+.tricks__item--landed {
+  border-left: 3px dashed var(--color-ok);
+}
+
+.tricks__item--clean {
+  border-left-color: var(--color-ok);
+  background: var(--color-ok-bg);
+}
+
+.tricks__item--landed .tricks__state,
+.tricks__item--clean .tricks__state {
+  font-weight: var(--weight-bold);
+  color: var(--color-ok);
+}
+
+@media (max-width: 420px) {
+  .tricks__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Pause or play the welcome screen's preview (WCAG 2.2.2): over the stage's
    bottom-left corner, on the surface so it reads against the concrete. */
 /* .btn comes later in this file and sets a transparent background, so these
