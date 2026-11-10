@@ -1,9 +1,11 @@
 // The game of SKATE (ADR-43, real-game rules ADR-44), pure: the rules, the
 // computer's calls and its attempts. No React, no three, no store. The
-// computer does not roll a die for land or bail: it aims at the inputs that
-// land its trick, misses the aim by a random amount that depends on the
-// level, and the real flight and recognition decide what happened, exactly as
-// they do for the student. Randomness always comes in as a parameter.
+// computer does not roll a die for land or bail: it sets the inputs that
+// land its trick, releases the timing bar a random amount early or late
+// (ADR-65: the same bar the player pops on), and the real flight and
+// recognition decide what happened, exactly as they do for the player.
+// Randomness always comes in as a parameter.
+import { BAR, clampRelease, timedAttempt, type Band } from './bar';
 import { airtimeFor, type TrickInputs } from './flight';
 import { CLEAN_ROLL, CLEAN_YAW, INPUT_LIMITS, NAMED_TRICKS, PRESETS, snapInput, type TrickId, type TrickResult } from './tricks';
 
@@ -52,35 +54,50 @@ export interface SkateGame {
 }
 
 /**
- * Per level: how far the computer misses its aim, what it may call, and
- * whether only a clean landing counts (ADR-63).
- * `spread` scales the miss: the standard deviation on a rate is spread times
- * (0.25 + the rate), so a bigger flick or scoop is harder to get right and
- * an axis the trick does not use stays nearly still. Normal lands a kickflip
- * about 3 times in 4 and a 360 flip about half the time (skate.test.ts).
- * Hard counts only clean landings, for both players, so its spread is the one
- * that keeps the computer making its tricks about as often as it landed them
- * before the rule (0.035 then: a kickflip 97 times in 100, a double tre 64;
- * 0.012 now: 97 and 66, ADR-63's table).
+ * How well the computer times the bar (ADR-65). Its release is the band's
+ * centre plus a normal draw whose standard deviation, in ms, is
+ * baseMs * (1 + perFlip * flips + perShove * shove turns): a trick that
+ * turns more is harder to time. The three numbers per level were fitted so
+ * the computer makes each trick about as often as it did with its old miss
+ * on each rate (ADR-65's table).
  */
-export const SKATE_LEVELS: Record<SkateLevel, { label: string; spread: number; calls: readonly TrickId[]; cleanOnly: boolean; hint: string }> = {
+export interface ComputerTiming {
+  baseMs: number;
+  perFlip: number;
+  perShove: number;
+}
+
+/**
+ * Per level: the timing bar's band (ADR-65), how well the computer times it,
+ * what it may call, and whether only a clean landing counts (ADR-63).
+ * The band is narrower and a miss costs more as the level goes up. Normal
+ * makes a kickflip about 4 times in 5 and a 360 flip about half the time
+ * (skate.test.ts). Hard counts only clean landings, for both players.
+ */
+export const SKATE_LEVELS: Record<
+  SkateLevel,
+  { label: string; band: Band; timing: ComputerTiming; calls: readonly TrickId[]; cleanOnly: boolean; hint: string }
+> = {
   easy: {
     label: 'Easy',
-    spread: 0.1,
+    band: { halfMs: 140, k: 0.5 },
+    timing: { baseMs: 103, perFlip: 2.4, perShove: 3 },
     calls: ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it'],
     cleanOnly: false,
     hint: 'The computer misses often and sticks to simple flips and shove-its.',
   },
   normal: {
     label: 'Normal',
-    spread: 0.06,
+    band: { halfMs: 100, k: 0.6 },
+    timing: { baseMs: 55, perFlip: 1.5, perShove: 1.8 },
     calls: PRESETS.map((p) => p.id),
     cleanOnly: false,
     hint: 'The computer goes for the seven classic tricks, up to the 360 flip.',
   },
   hard: {
     label: 'Hard',
-    spread: 0.012,
+    band: { halfMs: 60, k: 0.7 },
+    timing: { baseMs: 21, perFlip: 0.9, perShove: 0.95 },
     calls: NAMED_TRICKS.filter((t) => t.id !== 'ollie').map((t) => t.id),
     cleanOnly: true,
     hint: 'The computer rarely misses and goes for every trick, doubles included. Only a clean landing counts, for both of you.',
@@ -165,7 +182,7 @@ export const awaitingCall = (g: SkateGame) => g.phase === 'you-set' && g.call ==
 /** "S K A", or "no letters". */
 export const lettersText = (n: number) => (n === 0 ? 'no letters' : SKATE_WORD.slice(0, n).split('').join(' '));
 
-/** The highest rate the computer aims at, so its miss still fits under the slider's limit of 3. */
+/** The highest rate the computer aims at, so a late release still fits under the slider's limit of 3. */
 const AIM_MAX_RATE = 2.6;
 
 /**
@@ -212,7 +229,7 @@ export function cleanSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): Trick
   return best;
 }
 
-/** A standard normal draw (Box-Muller), clamped to 3 deviations so one wild draw cannot turn a call into another trick. */
+/** A standard normal draw (Box-Muller), clamped to 3 deviations so one wild draw cannot decide a game. */
 function normal(rand: () => number): number {
   const u = 1 - rand();
   const v = rand();
@@ -220,21 +237,32 @@ function normal(rand: () => number): number {
   return Math.max(-3, Math.min(3, z));
 }
 
-const clampRate = (key: 'flick' | 'scoop', x: number) => {
-  const { min, max } = INPUT_LIMITS[key];
-  return Number(Math.min(max, Math.max(min, x)).toFixed(2)) + 0;
-};
+/** The spread of the computer's release for a call on a level, ms (ComputerTiming). */
+export function timingSpread(call: Pick<SkateCall, 'flips' | 'halfShoves'>, level: SkateLevel): number {
+  const { baseMs, perFlip, perShove } = SKATE_LEVELS[level].timing;
+  return baseMs * (1 + perFlip * Math.abs(call.flips) + perShove * (Math.abs(call.halfShoves) / 2));
+}
+
+/** The computer's try at a call: what it set, when it released the bar, and the inputs that made. */
+export interface ComputerTry {
+  /** What it was going for: the aim, exactly. */
+  intended: TrickInputs;
+  /** When it released, ms into the sweep. */
+  releaseMs: number;
+  inputs: TrickInputs;
+}
 
 /**
- * The computer's try at a call: the aim, with the flick and the scoop each
- * missed by a normal draw (two draws each, flick first). Pop is on target:
- * the computer always pops the same.
+ * The computer's try at a call (ADR-65): it sets the aim exactly, then
+ * releases the bar at the band's centre plus a normal draw (one draw, two
+ * numbers from `rand`). The same mapping as the player's release makes the
+ * attempt of it, so it only ever misses by timing: early under-rotates, late
+ * over-rotates, and an axis the trick does not use stays still.
  */
-export function computerAttempt(call: SkateCall, level: SkateLevel, rand: () => number): TrickInputs {
-  const aim = aimFor(call);
-  const { spread } = SKATE_LEVELS[level];
-  const miss = (rate: number) => rate + normal(rand) * spread * (0.25 + Math.abs(rate));
-  return { pop: aim.pop, flick: clampRate('flick', miss(aim.flick)), scoop: clampRate('scoop', miss(aim.scoop)) };
+export function computerAttempt(call: SkateCall, level: SkateLevel, rand: () => number): ComputerTry {
+  const intended = aimFor(call);
+  const releaseMs = Math.round(clampRelease(BAR.centreMs + normal(rand) * timingSpread(call, level)));
+  return { intended, releaseMs, inputs: timedAttempt(intended, releaseMs, SKATE_LEVELS[level].band) };
 }
 
 /**

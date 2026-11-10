@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { BAR, barFeedback, barWhen } from '../sim/bar';
 import { outcomeCard } from '../sim/format';
 import {
   CLEAN_ONLY_NOTE,
@@ -17,9 +18,8 @@ import {
   type SkatePlayer,
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
-import { useTrickStore, type TrickState } from '../store';
+import { useTrickStore, type PopMode, type TrickState } from '../store';
 import { Inputs } from './Inputs';
-import { barPress, CONTROLS_MODE, FlickHint, TimingBar } from './RoughControls';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
 
@@ -192,6 +192,7 @@ function TurnStatus() {
   const auto = useTrickStore((s) => s.skateAuto);
   const waiting = useTrickStore(computerWaiting);
   const turn = useTrickStore(turnKey);
+  const timed = useTrickStore((s) => s.popMode === 'timed');
   const inAir = status === 'playing' || status === 'paused';
 
   if (computerTurn(game)) {
@@ -206,7 +207,13 @@ function TurnStatus() {
       </>
     );
   }
-  if (game.phase === 'you-copy') return <p className="turn__status">Set the sliders the way the guide says, then press Pop.</p>;
+  if (game.phase === 'you-copy') {
+    return (
+      <p className="turn__status">
+        Set the sliders the way the guide says, then press Pop{timed ? ', and Pop again when the marker is in the band' : ''}.
+      </p>
+    );
+  }
   return (
     <p className="turn__status">
       {game.call
@@ -246,37 +253,76 @@ function TurnCard() {
   );
 }
 
-/** The sliders, Pop (or the computer's go) and the game's two switches. */
+const BAR_HELP = 'Pop starts the bar. Press Pop again in the band: early spins less than you set, late spins more.';
+
+/**
+ * The timing bar under Pop (ADR-65, DESIGN.md 11.1): the level's band, and a
+ * marker that sweeps across while the bar runs and rests where the last
+ * release was, the player's or the computer's. The picture is decorative
+ * (aria-hidden): the note under it says the same in words, and the bar's
+ * start and the result are announced by the store. The sweep is a CSS
+ * animation started by the same store change that started the bar, so it
+ * trails the store's clock by a frame at most. The two custom properties
+ * carry the band and the marker's place; all the styling is in app.css.
+ */
+function TimingBar() {
+  const pending = useTrickStore((s) => s.pendingPop);
+  const last = useTrickStore((s) => s.lastRelease);
+  const band = useTrickStore((s) => SKATE_LEVELS[s.skate.level].band);
+  const part = (ms: number) => `${((ms / BAR.sweepMs) * 100).toFixed(2)}%`;
+  const style = {
+    '--band-from': part(BAR.centreMs - band.halfMs),
+    '--band-width': part(band.halfMs * 2),
+    ...(last && !pending ? { '--at': (last.ms / BAR.sweepMs).toFixed(4) } : null),
+  } as CSSProperties;
+  const note = pending
+    ? 'Press Pop again when the marker is in the band.'
+    : !last
+      ? BAR_HELP
+      : last.by === 'you'
+        ? `Your release. ${barFeedback(last.ms, band, last.timedOut)}`
+        : `The computer released ${barWhen(last.ms, band)}.`;
+  return (
+    <>
+      <div className="skate__bar" aria-hidden="true" style={style}>
+        <span className="skate__bar-band" />
+        {/* Keyed on the bar, so each sweep starts from the left. */}
+        {pending ? <span key={pending.id} className="skate__bar-marker skate__bar-marker--run" /> : last && <span className="skate__bar-marker" />}
+      </div>
+      <p className="panel__note">{note}</p>
+    </>
+  );
+}
+
+/** The sliders, Pop (or the computer's go), the timing bar unless the game is Exact, and the game's two switches. */
 function Controls() {
   const status = useTrickStore((s) => s.status);
   const cpu = useTrickStore((s) => computerTurn(s.skate));
-  const popTrick = useTrickStore((s) => s.popTrick);
+  const pressPop = useTrickStore((s) => s.pressPop);
+  const timed = useTrickStore((s) => s.popMode === 'timed');
   const slow = useTrickStore((s) => s.rate < 1);
   const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
   const auto = useTrickStore((s) => s.skateAuto);
   const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
   const label = cpu ? "Computer's go" : 'Pop';
-  // ROUGH (step 8): `?controls=flick` has no sliders and no Pop button on the student's go; `?controls=bar` times the Pop.
-  const flick = CONTROLS_MODE === 'flick';
   return (
     <>
-      {flick ? <FlickHint /> : <Inputs />}
+      <Inputs />
       <section className="panel" aria-label="Pop">
         <div className="skate__controls">
-          {/* aria-disabled, not disabled: the button stays focusable and explains itself. */}
-          {(cpu || !flick) && (
-            <button
-              type="button"
-              className="btn btn--primary skate__pop"
-              aria-label={label}
-              aria-keyshortcuts="Space"
-              aria-disabled={status === 'playing' || undefined}
-              onClick={CONTROLS_MODE === 'bar' ? barPress : popTrick}
-            >
-              {label} <kbd aria-hidden="true">Space</kbd>
-            </button>
-          )}
-          {CONTROLS_MODE === 'bar' && !cpu && <TimingBar />}
+          {/* aria-disabled, not disabled: the button stays focusable and explains itself. One press is one action:
+              with the timing bar the first starts it and the second releases it (the store decides, ADR-65). */}
+          <button
+            type="button"
+            className="btn btn--primary skate__pop"
+            aria-label={label}
+            aria-keyshortcuts="Space"
+            aria-disabled={status === 'playing' || undefined}
+            onClick={pressPop}
+          >
+            {label} <kbd aria-hidden="true">Space</kbd>
+          </button>
+          {timed && <TimingBar />}
           <div className="skate__toggles">
             <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
             <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
@@ -315,6 +361,16 @@ function LastTrick() {
   );
 }
 
+/** How you pop (ADR-65): the choice at the game's start, and what each means. */
+const POP_MODES: readonly { mode: PopMode; label: string; hint: string }[] = [
+  {
+    mode: 'timed',
+    label: 'Timing bar',
+    hint: 'Pop starts a bar, and Pop again in the band releases it. Early spins less than you set, late spins more. With sound on you can time it by ear.',
+  },
+  { mode: 'exact', label: 'Exact', hint: 'No bar: the board does exactly what the sliders say, every time.' },
+];
+
 const RULES = [
   'A coin flip decides who sets first.',
   'The setter calls a trick, then tries to land it.',
@@ -331,6 +387,8 @@ function Setup() {
   const games = useTrickStore((s) => s.records.games[s.skate.level]);
   const streak = useTrickStore((s) => s.records.streak);
   const setLevel = useTrickStore((s) => s.setSkateLevel);
+  const popMode = useTrickStore((s) => s.popMode);
+  const setPopMode = useTrickStore((s) => s.setPopMode);
   const start = useTrickStore((s) => s.startSkate);
   const played = record.you + record.computer;
   return (
@@ -356,6 +414,20 @@ function Setup() {
         </div>
         <p className="segmented__hint" id="skate-level-hint">
           {SKATE_LEVELS[level].hint}
+        </p>
+      </fieldset>
+      <fieldset className="segmented" aria-describedby="skate-pop-hint">
+        <legend className="segmented__legend">How you pop</legend>
+        <div className="segmented__options">
+          {POP_MODES.map((m) => (
+            <label key={m.mode} className="segmented__option">
+              <input className="segmented__input" type="radio" name="skate-pop" value={m.mode} checked={popMode === m.mode} onChange={() => setPopMode(m.mode)} />
+              <span className="segmented__label">{m.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="segmented__hint" id="skate-pop-hint">
+          {POP_MODES.find((m) => m.mode === popMode)!.hint}
         </p>
       </fieldset>
       <div className="skate__actions">
@@ -412,8 +484,9 @@ function GameOver() {
 /**
  * The game screen's column (ADR-46, DESIGN.md 11): between games, how to
  * play and Start; in a game, only what the game needs: both players'
- * letters, the turn card, the sliders and Pop, and the last trick; at the
- * end, who won. The computer's go comes on its own unless switched off.
+ * letters, the turn card, the sliders, Pop and its timing bar (ADR-65), and
+ * the last trick; at the end, who won. The computer's go comes on its own
+ * unless switched off.
  */
 export function Skate() {
   useComputerTurns();

@@ -90,15 +90,15 @@ export interface PlaybackSlice {
   result: TrickResult | null;
   /** Progress when the current scrub gesture started; null when not scrubbing. */
   scrubFrom: number | null;
-  /** Pops with the current inputs. Under reduced motion the trick resolves at once. */
+  /** Pops with the current inputs, exactly. Under reduced motion the trick resolves at once. A timing bar still running is dropped. */
   popTrick: () => void;
   /**
-   * ROUGH (step 8): the student's pop with inputs a game control made (a
-   * flick gesture, a timed release) instead of the sliders' values. Same
-   * rules, log and announcements as popTrick; on the computer's turn it is
-   * the computer's go, and the inputs are ignored. Step 9 replaces it.
+   * Internal, the skate slice's release (ADR-65): the player's pop from a
+   * release of the timing bar. Same rules and log as popTrick, with the
+   * inputs the release made of the setup. Nothing is announced at the pop:
+   * what the release did opens the result's announcement.
    */
-  popAttempt: (inputs: TrickInputs) => void;
+  popTimed: (pop: TimedPop) => void;
   togglePause: () => void;
   /** The speed slider. Snaps to the nearest stop. Not announced (the slider speaks its value). */
   setRate: (rate: number) => void;
@@ -119,6 +119,37 @@ export interface PlaybackSlice {
    * if given, opens the one announcement that also carries the result.
    */
   land: (lead?: string) => void;
+}
+
+/** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */
+export type PopMode = 'timed' | 'exact';
+
+/** A timing bar that is running (ADR-65): the player pressed Pop and has not released yet. */
+export interface PendingPop {
+  /** Goes up by one per bar, so a late or doubled callback does nothing. */
+  id: number;
+  /** The store's clock when the bar started, ms. */
+  startedAt: number;
+  /** The sliders as the bar started: what the player is going for. */
+  intended: TrickInputs;
+  level: SkateLevel;
+}
+
+/** A release of the timing bar, as the skate slice hands it to the pop. */
+export interface TimedPop {
+  intended: TrickInputs;
+  /** When the bar was released, ms into the sweep. */
+  releaseMs: number;
+  level: SkateLevel;
+  /** The bar ran to its end with no second press. */
+  timedOut: boolean;
+}
+
+/** The last release of the bar in this game, the player's or the computer's: where the bar's marker rests. */
+export interface LastRelease {
+  by: SkatePlayer;
+  ms: number;
+  timedOut: boolean;
 }
 
 export interface AssessmentSlice {
@@ -298,12 +329,32 @@ export interface SkateSlice {
   callSkateTrick: (id: TrickId) => void;
   /** Ends a game in play (logged as quit), or closes a finished one, back to the game screen's How to play. */
   quitSkate: () => void;
-  /** Internal, popTrick: on the computer's turn, its inputs and the announcement lead; null on the student's turn. */
-  computerGo: () => { inputs: TrickInputs; lead: string; call: string } | null;
+  /** Internal, popTrick: on the computer's turn, its try (what it set, when it released the bar, the inputs that made) and the announcement lead; null on the student's turn. */
+  computerGo: () => { inputs: TrickInputs; intended: TrickInputs; releaseMs: number; lead: string; call: string } | null;
   /** Internal, the playback slice's resolve: applies the rules to a resolved flight. Logs, and returns the sentences to announce. */
   scoreSkate: (result: TrickResult, by: SkatePlayer) => string[];
   /** Internal, resetSession: ends a game in play, logged as reset. */
   endSkateOnReset: () => void;
+  /** How the player pops in a game (ADR-65). Persisted under trick-lab.pop-mode, default timed. A preference: never logged, not exported, not reset. */
+  popMode: PopMode;
+  /** Picks how you pop; only between games. Persisted and announced. */
+  setPopMode: (mode: PopMode) => void;
+  /** The timing bar that is running, or null (ADR-65). Not persisted, not logged. */
+  pendingPop: PendingPop | null;
+  /** Where the bar was last released in this game, by either player; null before the first and in Exact. Not logged (trick.popped carries the release). */
+  lastRelease: LastRelease | null;
+  /**
+   * Pop on the game screen (the button and Space). On the player's go with
+   * the timing bar: the first press starts the bar (announced), the second
+   * releases it, and with no second press the bar releases itself at its
+   * end. Anywhere else it is popTrick: Exact, the computer's go, or what is
+   * wrong (no call yet, a board in the air).
+   */
+  pressPop: () => void;
+  /** Drops a running bar with no attempt and no letter, and says "Pop cancelled." (a dialog opening, the tab hidden). Nothing if no bar is running. */
+  cancelPop: () => void;
+  /** Internal: drops a running bar without announcing, and returns "Pop cancelled. " for the caller's own announcement, or "" if none was running. */
+  dropPop: () => string;
 }
 
 /**

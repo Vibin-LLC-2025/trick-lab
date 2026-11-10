@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BAR, barScale } from './bar';
 import { computeFlight } from './flight';
 import {
   afterAttempt,
@@ -10,6 +11,7 @@ import {
   cleanSetup,
   coinFlip,
   markUsed,
+  timingSpread,
   computerAttempt,
   guideText,
   lettersText,
@@ -76,22 +78,46 @@ describe('the computer', () => {
     expect(aimFor({ flips: 2, halfShoves: 0 }).pop).toBeGreaterThan(0.35);
   });
 
-  it('lands its call when it does not miss its aim', () => {
+  it('lands its call clean when it releases the bar on the centre (ADR-65)', () => {
     for (const c of skateCalls('hard')) {
-      const r = resolveTrick(computerAttempt(c, 'easy', dead));
-      expect(r.landed && r.id === c.id, c.id).toBe(true);
+      const go = computerAttempt(c, 'easy', dead);
+      expect(go.releaseMs, c.id).toBe(BAR.centreMs);
+      expect(go.inputs, c.id).toEqual(go.intended);
+      const r = resolveTrick(go.inputs);
+      expect(r.landed && r.id === c.id && r.grade === 'clean', c.id).toBe(true);
     }
   });
 
-  it('misses more on easier levels and on harder tricks, and never leaves the sliders', () => {
+  it('misses only by timing: an axis the trick does not use stays still, and a bigger trick is harder to time', () => {
+    const rand = mulberry32(3);
+    for (let i = 0; i < 200; i++) {
+      const go = computerAttempt(kickCall, 'easy', rand);
+      expect(go.inputs.scoop).toBe(0);
+      expect(go.inputs.pop).toBe(go.intended.pop);
+      expect(go.releaseMs).toBeGreaterThanOrEqual(0);
+      expect(go.releaseMs).toBeLessThanOrEqual(BAR.sweepMs);
+    }
+    for (const level of SKATE_LEVEL_ORDER) {
+      const spread = (id: string) => timingSpread(skateCalls('hard').find((c) => c.id === id)!, level);
+      expect(spread('pop-shove-it')).toBeLessThan(spread('kickflip'));
+      expect(spread('kickflip')).toBeLessThan(spread('360-flip'));
+      expect(spread('360-flip')).toBeLessThan(spread('double-tre'));
+    }
+    expect(timingSpread(kickCall, 'hard')).toBeLessThan(timingSpread(kickCall, 'normal'));
+    expect(timingSpread(kickCall, 'normal')).toBeLessThan(timingSpread(kickCall, 'easy'));
+  });
+
+  it('misses more on easier levels and on harder tricks, and never passes what the bar can make of a slider', () => {
     const rate = (id: string, level: (typeof SKATE_LEVEL_ORDER)[number]) => {
       const call = skateCalls('hard').find((c) => c.id === id)!;
       const rand = mulberry32(7);
       let landed = 0;
       for (let i = 0; i < 2000; i++) {
-        const inputs = computerAttempt(call, level, rand);
-        expect(Math.abs(inputs.flick)).toBeLessThanOrEqual(INPUT_LIMITS.flick.max);
-        expect(Math.abs(inputs.scoop)).toBeLessThanOrEqual(INPUT_LIMITS.scoop.max);
+        const { inputs } = computerAttempt(call, level, rand);
+        // The bar scales the rates past the sliders' limits when released late (bar.ts): at most about 4.2 rev/s.
+        const most = INPUT_LIMITS.flick.max * barScale(BAR.sweepMs, SKATE_LEVELS[level].band);
+        expect(Math.abs(inputs.flick)).toBeLessThanOrEqual(most);
+        expect(Math.abs(inputs.scoop)).toBeLessThanOrEqual(most);
         const r = resolveTrick(inputs);
         // Made: landed as called, and clean where the level counts only clean landings (ADR-63).
         if (r.landed && r.id === id && (!SKATE_LEVELS[level].cleanOnly || r.grade === 'clean')) landed += 1;
@@ -101,21 +127,23 @@ describe('the computer', () => {
     const kick = { easy: rate('kickflip', 'easy'), normal: rate('kickflip', 'normal'), hard: rate('kickflip', 'hard') };
     expect(kick.easy).toBeLessThan(kick.normal);
     expect(kick.normal).toBeLessThan(kick.hard);
-    // The level comment in skate.ts: Normal lands a kickflip about 3 in 4, a 360 flip about half the time.
-    expect(kick.normal).toBeGreaterThan(0.65);
-    expect(kick.normal).toBeLessThan(0.88);
+    // The level comment in skate.ts: Normal makes a kickflip about 4 times in 5, a 360 flip about half the time.
+    // (Through the bar, ADR-65's table: 82 and 53 in 100; with the old miss on each rate, 78 and 54.)
+    expect(kick.normal).toBeGreaterThan(0.72);
+    expect(kick.normal).toBeLessThan(0.9);
     const tre = rate('360-flip', 'normal');
     expect(tre).toBeGreaterThan(0.4);
     expect(tre).toBeLessThan(0.65);
     expect(rate('double-tre', 'hard')).toBeLessThan(kick.hard);
-    // Hard under the clean rule (ADR-63's table): about what it landed before the rule.
+    // Hard under the clean rule (ADR-63's table), through the bar (ADR-65's): a kickflip 97 in 100, a double tre 64,
+    // and a 360 flip 82 (86 with the old miss: the bar scales both rates together, the one difference over 5 points here).
     expect(kick.hard).toBeGreaterThan(0.93);
     const doubleTre = rate('double-tre', 'hard');
     expect(doubleTre).toBeGreaterThan(0.55);
     expect(doubleTre).toBeLessThan(0.78);
     const tre3 = rate('360-flip', 'hard');
-    expect(tre3).toBeGreaterThan(0.8);
-    expect(tre3).toBeLessThan(0.93);
+    expect(tre3).toBeGreaterThan(0.74);
+    expect(tre3).toBeLessThan(0.9);
   });
 
   it('every settable trick has a clean setup on the slider grid (ADR-63)', () => {

@@ -16,6 +16,7 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 - **Two ways in.** The app opens on a welcome screen with a live preview of the board doing tricks: play a game of SKATE, or practice in the lab. Each has its own screen, and the browser's back button moves between them.
 - **A calm lab.** The presets, sliders, Pop and the result are up front; speed and timeline, view settings, flight numbers, foot motion, objectives and the event log open when you want them, and stay as you left them.
 - **A game of SKATE.** Play the computer by the real rules: a coin flip for who starts, call your trick before you set it, copy or take a letter, two tries on your last letter, and no trick set twice. The computer goes through the same physics as you, missing its aim more on Easy and less on Hard, and takes its go on its own after a short pause. The game screen shows only the game: whose turn it is and the trick in large type, both players' letters, the sliders and Pop. A trick guide says which way to flick and scoop, never the numbers.
+- **A pop you have to time.** In a game the sliders say what you are going for, and Pop starts a timing bar: release it in the band and the board does exactly that; early spins less, late spins more. The computer times the same bar. With sound on you can do it by ear (tick, tick, pop), and "Exact" is one choice away for anyone who would rather not.
 - **Records that stay.** The welcome screen lists every trick with what you have done with it on this device (not yet, landed, clean), and the game remembers your wins and losses against each level. Nothing leaves the device, and "Clear records" asks first.
 - **Real trick recognition.** 15 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Seven presets, seven objectives, scored as you go.
 - **A rider, not a floating board.** The shoes (and the legs, if you turn them on) follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails.
@@ -61,7 +62,7 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | `npm run assets` | Rebuild the four GLBs in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
-New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-64), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-65), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## How it works
 

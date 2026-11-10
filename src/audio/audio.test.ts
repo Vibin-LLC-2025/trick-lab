@@ -4,7 +4,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SoundKind } from '../store';
 import { createSoundPlayer } from './player';
-import { FOLLOWS_SPEED, slowMotion, SOUNDS, STAGGER } from './sounds';
+import { BAR } from '../sim/bar';
+import { BAR_SOUND, FOLLOWS_SPEED, slowMotion, SOUNDS, STAGGER } from './sounds';
 
 const KINDS: SoundKind[] = ['pop', 'land', 'bail', 'letter', 'win', 'lose'];
 
@@ -136,6 +137,74 @@ describe('the player', () => {
     started.length = 0;
     player.play('pop', 1);
     expect(Math.min(...started.map((s) => s.at))).toBeCloseTo(10.01, 9);
+  });
+
+  it('the timing bar by ear (ADR-65): a tone that rises for the whole sweep, two ticks, and a higher click on the band', () => {
+    const { tone, ticks, click } = BAR_SOUND;
+    expect(tone.dur).toBe(BAR.sweepMs / 1000);
+    expect(tone.to).toBeGreaterThan(tone.from);
+    expect(ticks.map((t) => t.at)).toEqual([0, 0.4]);
+    expect(click.every((v) => v.at === BAR.centreMs / 1000)).toBe(true);
+    // Evenly spaced: tick, tick, pop.
+    expect(click[0]!.at - ticks[1]!.at).toBeCloseTo(ticks[1]!.at - ticks[0]!.at, 9);
+    expect(click[0]!.from).toBeGreaterThan(ticks[0]!.from);
+    // Quiet enough to sit under the pop that follows.
+    for (const v of [tone, ...ticks, ...click]) expect(v.gain).toBeLessThanOrEqual(0.25);
+  });
+
+  it('schedules the bar from one start time on the audio clock, even with other sounds queued, so the click is on the band', () => {
+    const { ctx, started } = fakeContext();
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    // A landing, a letter and a jingle were just asked for: the queue is staggered well past now.
+    player.play('land', 1);
+    player.play('letter', 1);
+    player.play('lose', 1);
+    started.length = 0;
+    player.bar();
+    const start = 10.01;
+    const at = started.map((s) => s.at).sort((a, b) => a - b);
+    expect(started).toHaveLength(1 + BAR_SOUND.ticks.length + BAR_SOUND.click.length);
+    expect(at[0]).toBeCloseTo(start, 9);
+    expect(at.filter((t) => Math.abs(t - start) < 1e-9)).toHaveLength(2);
+    expect(at.filter((t) => Math.abs(t - (start + 0.4)) < 1e-9)).toHaveLength(1);
+    expect(at.filter((t) => Math.abs(t - (start + BAR.centreMs / 1000)) < 1e-9)).toHaveLength(BAR_SOUND.click.length);
+    // The queue is not moved by the bar: the next queued sound still follows the jingle.
+    started.length = 0;
+    player.play('pop', 1);
+    expect(Math.min(...started.map((s) => s.at))).toBeCloseTo(10.01 + 3 * STAGGER, 9);
+  });
+
+  it("cuts the bar's voices on release and nothing else; turning sound off cuts them too", () => {
+    const { ctx } = fakeContext();
+    const stops: unknown[][] = [];
+    const createOscillator = ctx.createOscillator;
+    const createBufferSource = ctx.createBufferSource;
+    ctx.createOscillator = vi.fn(() => {
+      const s = createOscillator();
+      s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
+      return s;
+    });
+    ctx.createBufferSource = vi.fn(() => {
+      const s = createBufferSource();
+      s.stop.mockImplementation((...a: unknown[]) => stops.push(a));
+      return s;
+    });
+    const player = createSoundPlayer(() => ctx as unknown as AudioContext);
+    const barVoices = 1 + BAR_SOUND.ticks.length + BAR_SOUND.click.length;
+    player.play('land', 1);
+    player.bar();
+    const scheduled = SOUNDS.land.length + barVoices;
+    expect(stops).toHaveLength(scheduled);
+    player.stopBar();
+    // Only the bar's voices were stopped now (a stop with no time).
+    expect(stops.slice(scheduled)).toHaveLength(barVoices);
+    expect(stops.slice(scheduled).every((a) => a.length === 0)).toBe(true);
+    // Nothing left to cut.
+    player.stopBar();
+    expect(stops).toHaveLength(scheduled + barVoices);
+    player.bar();
+    player.stop();
+    expect(stops).toHaveLength(scheduled + barVoices + barVoices + SOUNDS.land.length + barVoices);
   });
 
   it('resumes a suspended context (the browser holds audio until a gesture), and closes it when done', () => {

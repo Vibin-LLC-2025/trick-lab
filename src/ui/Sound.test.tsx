@@ -13,10 +13,18 @@ vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-s
 
 function fakePlayer() {
   const played: [string, number][] = [];
-  const player: SoundPlayer & { played: typeof played; unlocks: number; stops: number } = {
+  const player: SoundPlayer & { played: typeof played; unlocks: number; stops: number; bars: number; barStops: number } = {
     played,
     unlocks: 0,
     stops: 0,
+    bars: 0,
+    barStops: 0,
+    bar: () => {
+      player.bars += 1;
+    },
+    stopBar: () => {
+      player.barStops += 1;
+    },
     unlock: () => {
       player.unlocks += 1;
     },
@@ -117,6 +125,32 @@ describe('useSound (ADR-58)', () => {
     expect(player.unlocks).toBe(1);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
     expect(player.unlocks).toBe(1);
+  });
+
+  it('plays the timing bar by ear when one starts with sound on, and cuts it when it is released or dropped (ADR-65)', () => {
+    // 0.25 wins the coin flip for the player.
+    vi.spyOn(Math, 'random').mockReturnValue(0.25);
+    const player = fakePlayer();
+    render(<Listener player={player} />);
+    const s = () => useTrickStore.getState();
+    act(() => {
+      s().startSkate();
+      s().callSkateTrick('kickflip');
+    });
+    // Sound off: the bar runs in silence, and dropping it has nothing to cut but is harmless.
+    act(() => s().pressPop());
+    expect(player.bars).toBe(0);
+    act(() => s().cancelPop());
+    expect(player.barStops).toBe(1);
+
+    act(() => s().toggleSound());
+    act(() => s().pressPop());
+    expect(player.bars).toBe(1);
+    // The release cuts the tone, and the pop is heard.
+    act(() => s().pressPop());
+    expect(player.barStops).toBe(2);
+    expect(player.played.at(-1)).toEqual(['pop', 1]);
+    expect(player.bars).toBe(1);
   });
 
   it('does not play a cue that came before it mounted', () => {

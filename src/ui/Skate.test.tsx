@@ -30,8 +30,9 @@ async function start(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   useTrickStore.setState(useTrickStore.getInitialState(), true);
-  // The game screen; the computer waits for its button unless a test turns auto on.
-  useTrickStore.setState({ screen: 'skate', skateAuto: false });
+  // The game screen; the computer waits for its button unless a test turns auto on. These tests are about the
+  // screen's flow, so Pop is Exact (one press, one trick); the timing bar, the default, has its own in Bar.test.tsx.
+  useTrickStore.setState({ screen: 'skate', skateAuto: false, popMode: 'exact' });
   localStorage.clear();
   // 0.25 wins the coin flip for the student, makes the computer hit its aim (skate.test.ts) and pick the heelflip first on Normal.
   vi.spyOn(Math, 'random').mockReturnValue(0.25);

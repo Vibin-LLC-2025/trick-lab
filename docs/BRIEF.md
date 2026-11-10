@@ -124,10 +124,18 @@ first. The setter calls a trick, then tries it: landed exactly as called, the
 other player must copy it; missed, or a different trick, and the set passes
 with no letter. A missed copy is a letter and S K A T E loses; a copier on
 their last letter gets a second try. The setter keeps setting until a set
-misses. A trick set once cannot be set again in that game. The computer plays
-through the same flight and recognition with a level-dependent miss on its
-aim. A trick guide says in words, never numbers, which way and how far to
-flick and scoop. Presets are off during a game. Rules in `src/sim/skate.ts`.
+misses. A trick set once cannot be set again in that game. A trick guide
+says in words, never numbers, which way and how far to flick and scoop.
+Presets are off during a game. Rules in `src/sim/skate.ts`.
+
+How you pop in a game (2026-11-09, ADR-65): on a timing bar. The sliders say
+what you are going for; Pop starts a bar that sweeps for 1.2 seconds, and Pop
+again releases it. In the level's band the board does exactly what was set;
+early spins less, late spins more. The computer goes through the same bar,
+with a level-dependent spread on its release, and the same flight and
+recognition. "Exact" (Pop does exactly what the sliders say) is one choice
+away at the game's start, for anyone who cannot or will not time a bar. The
+lab is always exact. The mapping is `src/sim/bar.ts`.
 
 Event log: `{ id, t (ms since session start),
 type, payload }`. Types: `input.changed` (which slider, value),
@@ -137,7 +145,9 @@ per drag), `objective.completed`, `session.reset`, and for the game of SKATE
 (2026-11-06, ADR-43) `skate.started` (level, and since ADR-44 the coin
 flip's `first`), `skate.set`, `skate.letter` and `skate.ended`;
 `trick.popped` and `trick.resolved` carry `by` (you or computer), and in a
-game `trick.popped` carries the `call` in play. Since 2026-11-09 (ADR-63)
+game `trick.popped` carries the `call` in play, and since 2026-11-09
+(ADR-65) `how` the pop was made: `exact`, or `timed` with `releaseMs`,
+`offMs`, `setFlick` and `setScoop`. Since 2026-11-09 (ADR-63)
 `trick.resolved` also carries the landing's `grade` (clean, sketchy or
 bail), and the export's schema is `trick-lab.events/2`. Exportable as JSON.
 Reset clears inputs to defaults and board pose, keeps the log.
@@ -276,6 +286,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .confirm, .confirm__title, .confirm__text, .confirm__actions (leave a game dialog, ADR-46)
 .fold, .fold--part, .fold__heading, .fold__heading--sub, .fold__toggle, .fold__body (the lab's sections that open, ADR-47)
 .skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
+.skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar, ADR-65)
 .app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)
 .home, .home__eyebrow, .home__title, .home__lede, .home__choices, .home__utilities, .home__hint, .choice, .choice--primary, .choice__title, .choice__text, .preview-toggle (welcome screen, ADR-45)
 .eventlog, .eventlog__row, .eventlog__t, .eventlog__type

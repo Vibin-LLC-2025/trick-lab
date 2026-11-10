@@ -190,6 +190,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // Leaving the game ends it, logged as quit when it was in play (ADR-45), before
       // any landing below, so a trick in the air can no longer score in it.
       if (s.screen === 'skate' && s.skate.phase !== 'off') s.quitSkate();
+      // A timing bar still running goes with the screen (ADR-65); quitting the game above has already dropped and said it.
+      else s.cancelPop();
       // A scrub gesture still open (its timeline is about to unmount) is committed, so its event is not lost.
       get().commitScrub();
       // A trick in the air lands now, as under reduced motion (ADR-6), so no
@@ -210,7 +212,11 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       set({ labFolds });
     },
     togglePerf: () => set((s) => ({ perfVisible: !s.perfVisible })),
-    setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+    setShortcutsOpen: (open) => {
+      // A dialog opening drops a running timing bar (ADR-65).
+      if (open) get().cancelPop();
+      set({ shortcutsOpen: open });
+    },
     toggleTheme: () => {
       const theme: Theme = get().theme === 'dark' ? 'light' : 'dark';
       applyTheme(theme);

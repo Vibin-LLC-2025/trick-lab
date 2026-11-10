@@ -186,6 +186,13 @@ describe('feet clear the board (ADR-29)', () => {
       { pop: 0.5, flick: -3, scoop: 3 },
       { pop: 0.5, flick: 3, scoop: -3 },
       { pop: 0.15, flick: -1.9, scoop: -0.9 },
+      // The most a late release of the timing bar makes of a slider at its limit (ADR-65, sim/bar.ts): about 4.2 rev/s.
+      { pop: 0.55, flick: 4.2, scoop: 0 },
+      { pop: 0.55, flick: -4.2, scoop: 0 },
+      { pop: 0.5, flick: 4.2, scoop: 4.2 },
+      { pop: 0.5, flick: -4.2, scoop: -4.2 },
+      { pop: 0.5, flick: -4.2, scoop: 4.2 },
+      { pop: 0.5, flick: 4.2, scoop: -4.2 },
     ]) {
       for (const stance of ['goofy', 'regular'] as const) {
         const { hits, belowPad } = check(inputs, stance);

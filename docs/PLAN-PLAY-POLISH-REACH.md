@@ -1,7 +1,7 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 7 and step 11 are committed. Step 8's two rough controls are committed and waiting for the owner's pick; steps 9 and 10 do not start without it. Step 11 was taken out of order while waiting, since it does not depend on the pick.
+- Steps 1 to 9 and step 11 are committed. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and deleted the other. Step 10 is next. Step 11 was taken out of order while waiting for the pick.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +49,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 46 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 47 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -62,8 +62,9 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 46 commits a
 | e6ab283 | 5: browser checks in CI (ADR-61). 16 checks, about 4.5 minutes; the long-run test is its own CI job |
 | 2dcf12f | 6: the new targets (ADR-62). The measurement prints a targets table; every tier passes on today's build |
 | fa866c2 | 7: graded landings (ADR-63): clean, sketchy, bail; Hard counts only clean; the export is `trick-lab.events/2` |
-| e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. Waiting for the owner's pick |
+| e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. The owner picked the bar |
 | 2dc5543 | 11, out of order: records and the trick list (ADR-64) |
+| this commit | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -108,6 +109,7 @@ Answered 2026-11-09 for this revision:
 | 19 | Should the lab roll too | Left to the plan: no. The lab stays on the spot. A still board is easier to study and scrub, and the lab keeps drawing nothing while idle |
 | 20 | Phones | They don't matter enough to move up. Step 21 stays late and small, and is the first step to drop |
 | 21 | Who picks the recordings | The plan picks and builds them in. The owner listens afterwards and lists changes (step 18) |
+| 22 | Which control (the step 8 gate) | Sliders plus a timing bar, after playing both rough versions. "Flick it yourself" is deleted (step 9, ADR-65) |
 
 ## Performance targets (replaces the draw-call ledger)
 
@@ -210,7 +212,7 @@ As built:
 - **The game.** On Hard a set or a copy counts only if clean, for both players, and the guide says so.
 - **Tests** use inputs the sliders can reach, as the first version explains (`cleanSetup`).
 
-### 8. Two rough controls, then the owner picks
+### 8. Two rough controls, then the owner picks. Done: the timing bar (2026-11-09)
 Both are built quickly, behind a URL switch (`?controls=flick` and `?controls=bar`), with no polish, no docs and no ADR. Each has one pure function in `src/sim` that turns what the player did into pop, flick and scoop, with a few tests.
 
 - **A. Flick it yourself.** No sliders and no numbers.
@@ -233,7 +235,16 @@ As built, rough (2026-11-09): `src/sim/controls.ts` (the two pure mappings, test
 - **The bar:** a 1.2 s sweep with the band centred at 0.8 s, 280, 200 and 120 ms wide on Easy, Normal and Hard. Outside the band the rates scale by up to 50, 60 and 70 percent per half sweep.
 - **Known rough edges, on purpose:** in flick mode the shoes and the motion cues do not follow the wind-up, the trick guide still talks about sliders, and neither control announces anything of its own.
 
-### 9. The chosen controls, built properly
+### 9. The chosen controls, built properly. Done (ADR-65)
+As built, where it differs from the list below or adds to it:
+- **A late release may pass the sliders' limits.** As written, the scaled rates were held to the sliders, and a double flip (flick 3.0, the limit) could then never be missed late. The test "every trick bails at the sweep's end" found it. The rates now go up to about 4.2 rev/s, and the feet clearance check covers that.
+- **The sliders are not disabled while the bar runs.** The attempt is the sliders as the bar started, which does the same job without taking focus from a slider.
+- **By ear it is a count:** a tick at the start, a tick at 400 ms and a higher click on the band's centre at 800 ms, over the rising tone.
+- **The computer's before-and-after table is in ADR-65.** Easy and Normal are within 5 points on every trick. On Hard three kinds are not, and are accepted there: double flips 6 more, 360 shove-its 7 more, varials 6 less.
+- **The computer's release is shown on the bar,** with a line of text, but not announced.
+- **Not checked by the plan, and the owner's to judge:** the five checks of step 8 on the finished version, and the bar by ear with the screen covered. The mechanics were checked in a browser by keyboard, mouse and emulated touch on every quality level.
+- **Left for step 10:** the bar sits in the lab-style column under Pop; the game screen as a game moves it.
+
 - **The store owns an attempt in progress**, with an id, so a late or doubled callback does nothing. It reads an injected clock, so tests are exact.
 - **Cancelled with no attempt and no letter**, and announced, on: a screen change, quit, a new game, Reset, a dialog opening, or the tab being hidden.
 - **Feedback names the mistake.** "Too much flick: 18 degrees past. Landed, sketchy."

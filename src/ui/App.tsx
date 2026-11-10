@@ -22,7 +22,6 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { LeaveDialog, Skate, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
 import { TopBar } from './TopBar';
-import { barPress, CONTROLS_MODE, FlickPad, roughOwnsSpace } from './RoughControls';
 import { PreviewToggle } from './Utilities';
 import { ViewPanel } from './ViewPanel';
 
@@ -50,7 +49,8 @@ const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
 /**
  * The keys each screen answers to (ADR-45), each backed by a DOM control on
  * that screen. The theme and the shortcuts dialog work everywhere. The game
- * adds Space (Pop or the computer's go) and s (its Slow motion switch, ADR-46),
+ * adds Space (Pop, which starts and releases the timing bar, ADR-65, or the
+ * computer's go) and s (its Slow motion switch, ADR-46),
  * but not the presets (off in a game), Reset (it would end the game) or the
  * speed steps (the game has no speed slider). The lab has them all, and the
  * perf badge, whose switch is in its View panel. The welcome screen has
@@ -82,10 +82,9 @@ function useGlobalShortcuts() {
       if (preset) s.applyPreset(preset);
       else if (e.key === ' ') {
         if (spaceIsNative(target)) return;
-        // ROUGH (step 8): a rough control owns the student's Space. The bar starts or releases; the flick pad listens itself.
-        if (roughOwnsSpace(s)) {
-          if (CONTROLS_MODE === 'bar') barPress();
-        } else s.popTrick();
+        // The game's Pop is the same action as its button: the timing bar's start and release, or the plain pop (ADR-65).
+        if (s.screen === 'skate') s.pressPop();
+        else s.popTrick();
       } else if (e.key === 's' || e.key === 'S') s.toggleSlowMotion();
       else if (e.key === '[') s.stepRate(-1);
       else if (e.key === ']') s.stepRate(1);
@@ -98,6 +97,17 @@ function useGlobalShortcuts() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+  }, []);
+}
+
+/** A timing bar still running when the tab is hidden is dropped, with no attempt (ADR-65): nobody can time what they cannot see. */
+function usePopCancelOnHide() {
+  useEffect(() => {
+    const onChange = () => {
+      if (document.visibilityState === 'hidden') useTrickStore.getState().cancelPop();
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 }
 
@@ -175,6 +185,7 @@ function SceneDescription() {
  */
 export function App() {
   useGlobalShortcuts();
+  usePopCancelOnHide();
   useFocusRequests();
   useReducedMotionSync();
   useScreenRoute();
@@ -220,8 +231,6 @@ export function App() {
           <PerfBadge />
           {canPause && <PreviewToggle />}
           {screen === 'skate' && <TurnChip />}
-          {/* ROUGH (step 8): the flick pad, over the lower half of the stage. */}
-          {screen === 'skate' && CONTROLS_MODE === 'flick' && <FlickPad />}
           {/* The student's landed trick, over the stage (ADR-57); never on the welcome preview. */}
           {screen !== 'home' && <Celebration />}
         </section>

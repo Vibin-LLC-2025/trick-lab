@@ -735,3 +735,48 @@ Every difference is 4 points or less. Easy and Normal are untouched (a kickflip 
 **Left out.** No announcement of a first landing: the landing's own announcement is already long, and the list shows it. No date beyond the first landing, no count of attempts, and nothing leaves the device.
 
 **Consequence.** A lab landing counts as much as a game landing, so in Exact (the sliders) the list can be filled by looking the numbers up. That is deliberate for now: the list records what the player has done, and step 9's controls are what make doing it a skill.
+
+## ADR-65: You pop on a timing bar, and so does the computer (2026-11-09)
+
+**Context.** Steps 8 and 9 of `docs/PLAN-PLAY-POLISH-REACH.md`. In a game the player's attempt was their slider values, exactly: once you knew a trick's numbers you landed it every time, and only the computer could miss. Two rough controls were built (step 8): "flick it yourself" (hold to crouch, drag to flick and scoop) and "sliders plus a timing bar". The owner played both on 2026-11-09 and picked the timing bar. The other control and every rough leftover are deleted in this step.
+
+**Decision.**
+- **The mapping** (`src/sim/bar.ts`, pure). The sliders say what you are going for. Pop starts a bar that sweeps for 1,200 ms; Pop again releases it. Inside the level's band, centred at 800 ms, the attempt is exactly the setup. Outside it the flick and the scoop are multiplied by `1 + k * miss / 600`, where `miss` is how many ms outside the band the release was, negative when early: early under-rotates, late over-rotates. The pop height never changes. No release by the sweep's end is a release at its end.
+
+  | Level | Band | k | The scale at the sweep's two ends |
+  | --- | --- | --- | --- |
+  | Easy | 660 to 940 ms | 0.5 | 0.45 and 1.22 |
+  | Normal | 700 to 900 ms | 0.6 | 0.30 and 1.30 |
+  | Hard | 740 to 860 ms | 0.7 | 0.14 and 1.40 |
+
+- **The scaled rates are not held to the sliders' limits.** A double flip needs flick 3.0, the slider's limit, so with a clamp a late release could never miss it (found by the test that every trick bails at the sweep's end). The most a release makes of a rate is about 4.2 rev/s. The feet clearance check (ADR-29) now covers 4.2 rev/s on both axes and both signs.
+- **The store owns the bar** (`pendingPop` in the skate slice: an id, the start time, the sliders as the bar started, the level). It reads the store's injected clock and ends through an injected scheduler (`createTrickStore(now, random, today, schedule)`: `setTimeout` in the app, a fake in tests), so every timing test is exact. Each callback carries the bar's id: a press and the end in the same tick, or an end that arrives after the game was quit, does nothing.
+- **One action, `pressPop`**, behind the Pop button and Space on the game screen. On the player's go it starts the bar, then releases it; anywhere else it is the plain pop (the computer's go, Exact, or the message that says what is wrong). One press is one action; key repeat is ignored, as before.
+- **The attempt is the sliders as the bar started.** Moving a slider during the sweep changes nothing. (The first plan disabled the sliders for those 1.2 seconds; a snapshot does the same job without taking focus from a slider.) The call cannot be changed under a running bar.
+- **Cancelled with no attempt and no letter, and said ("Pop cancelled.")**, on a screen change, quitting, a new game, Reset, a dialog opening (shortcuts, leave) and the tab being hidden. Where the action has its own announcement the two are one message ("Pop cancelled. Game of SKATE ended.").
+- **Two announcements per pop: the start and the result.** The start is "Bar running." with sound on, so it does not talk over the ticks; with sound off it says the bar is silent and where Exact is. Nothing is announced at the release. The result opens with what the release did, which names the mistake: "A little late: 4 percent more spin than you set. Kickflip landed, sketchy: 20 degrees past on the flip." If the release was in the band and the landing was not clean, it adds "The timing was right, so it was the sliders."
+- **By ear** (`BAR_SOUND` in `src/audio/sounds.ts`). With sound on the bar is a count: a tick as it starts, a tick at 400 ms and a higher click on the band's centre at 800 ms, over a quiet tone that rises for the whole sweep. They are scheduled on the audio clock from one start time, not through the staggered cue queue, so the click is on the band whatever else is queued (tested). A release or a cancel cuts them.
+- **Exact stays one choice away.** "How you pop" at the game's start: Timing bar (the default) or Exact, which is the old game: Pop does exactly what the sliders say. Remembered under `trick-lab.pop-mode`, announced, never logged, and it cannot change in the middle of a game. The lab never uses the bar.
+- **The record.** `trick.popped` gains `how`: `exact`, or `timed` with `releaseMs`, `offMs` (the release against the band's centre) and `setFlick` and `setScoop` (what was set; `flick` and `scoop` are what the release made of them). The schema stays `trick-lab.events/2`, which step 7 introduced for this plan and which has not shipped.
+- **The bar on screen** (DESIGN.md 11.1): under Pop, the level's band and a marker that sweeps while the bar runs and rests where the last release was, the player's or the computer's, with a line of text that says what it did. The picture is `aria-hidden`; the text and the announcements carry it. Under reduced motion the bar still sweeps, since it is the mechanic.
+- **The computer goes through the same bar** (`computerAttempt`). It sets its aim exactly and releases at the band's centre plus a normal draw whose spread, in ms, is `baseMs * (1 + perFlip * flips + perShove * shove turns)`, three numbers per level in `SKATE_LEVELS`. It replaces the old miss on each rate. Two things change with it: the computer can now only miss by timing, so both rates are off by the same share and an axis the trick does not use stays still (the old miss nudged it); and its release is shown on the bar.
+
+**The computer, before and after.** How often it makes a call, in 100 tries ("made": landed as called, and clean on Hard), 40,000 seeded tries per cell. Before is the miss on each rate (ADR-43, ADR-63); after is the bar. Every trick is listed for every level, because a level whose own calls run out moves on to the next level's (ADR-44) and the computer copies whatever the player sets.
+
+| Trick | Easy before | after | Normal before | after | Hard before | after |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kickflip, heelflip | 54 | 51 | 78 | 82 | 97 | 96 |
+| Double kickflip, double heelflip | 29 | 25 | 46 | 48 | 72 | 78 |
+| Pop shove-it, frontside | 73 | 77 | 93 | 98 | 100 | 100 |
+| 360 shove-it, frontside | 46 | 42 | 69 | 73 | 88 | 95 |
+| Varial flip, varial heelflip, inward heelflip | 39 | 37 | 73 | 68 | 97 | 91 |
+| 360 flip, laser flip, 360 inward heelflip | 24 | 27 | 54 | 53 | 86 | 82 |
+| Double tre | 13 | 17 | 30 | 35 | 66 | 64 |
+
+Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and are accepted: the double flips (6 more) and the 360 shove-its (7 more) are made a little more often, and the varials 6 less. One release time scales both rates together, so three numbers per level cannot match seven kinds of trick that the old model missed on two independent axes; the fit keeps the kickflip, the 360 flip and the double tre, the tricks Hard is known by, within 4.
+
+**What was checked in a browser** (2026-11-09, the production build, High, Medium and Low, both themes): a kickflip set and landed by keyboard alone (Space, Space), by mouse (two clicks on Pop) and by emulated touch at 390 x 844 (two taps); the bar's own end; reduced motion (the bar sweeps for 1.2 s and the release resolves at once); no console errors. The marker as drawn trails the store's clock by 8 to 17 ms, a frame or so, and the sweep draws one 3D frame, not sixty: it is a CSS animation on a page element.
+
+**Not checked here, and the owner's to judge:** the five checks of step 8 on the finished version (a new player lands a kickflip within five tries; a 360 flip about half the time after practice; you can say what you did wrong; keyboard alone; still fun after ten minutes), and the bar by ear with the screen covered. The numbers above (band widths, `k`, the sweep) are the rough version's, which is what the owner played.
+
+**Left out.** No calibration for Bluetooth headphones, which delay sound by a tenth to a third of a second: the click is then heard late and the release lands late by as much. Easy's band is 140 ms either side and a kickflip lands up to 100 ms beyond it, which covers the shorter delays; Exact covers the rest. The store knows only the sound switch, not whether the browser's audio is running, so "sound is on but still locked" is not detected. The computer's release is not announced, only shown.

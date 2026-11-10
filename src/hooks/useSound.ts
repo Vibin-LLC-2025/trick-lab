@@ -13,7 +13,9 @@ import { useTrickStore } from '../store';
  * sounds follow slow motion; the landing's cue comes when the slowed flight
  * lands. With sound saved on, the page's first click or key unlocks the
  * audio too, so a first cue from a timer (the computer's own turn) never has
- * to start it outside a gesture.
+ * to start it outside a gesture. The timing bar (ADR-65) is heard the same
+ * way: when the store starts one its tone and ticks start, inside the press
+ * that started it, and they are cut when it is released or dropped.
  */
 export function useSound(player: SoundPlayer = soundPlayer()) {
   const soundOn = useTrickStore((s) => s.soundOn);
@@ -25,6 +27,10 @@ export function useSound(player: SoundPlayer = soundPlayer()) {
         player.unlock();
         player.play('pop', 1);
       } else if (!s.soundOn && prev.soundOn) player.stop();
+      if (s.pendingPop !== prev.pendingPop) {
+        if (!s.pendingPop) player.stopBar();
+        else if (s.soundOn) player.bar();
+      }
       const cue = s.soundCue;
       if (!cue || cue.nonce === heard) return;
       heard = cue.nonce;

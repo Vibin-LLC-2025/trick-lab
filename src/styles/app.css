@@ -1874,6 +1874,77 @@ a {
   gap: var(--space-1) var(--space-3);
 }
 
+/* The timing bar under Pop (ADR-65, DESIGN.md 11.1). Markup:
+     <div class="skate__bar" aria-hidden="true" style="--band-from: 58.33%; --band-width: 16.67%; --at: 0.71">
+       <span class="skate__bar-band"></span>
+       <span class="skate__bar-marker skate__bar-marker--run"></span>
+     </div>
+     <p class="panel__note">...</p>
+   The component sets only the three custom properties: where the level's
+   band starts, how wide it is, and where the resting marker is (0 to 1).
+   Decorative: the note says it in words. The band is the landed green with
+   solid edges, so it is never colour alone against the track; the marker is
+   the text colour, the strongest contrast there is. */
+.skate__bar {
+  position: relative;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-line-strong);
+  overflow: hidden;
+}
+
+.skate__bar-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--band-from);
+  width: var(--band-width);
+  background: var(--color-ok-bg);
+  box-shadow: inset 2px 0 0 var(--color-ok), inset -2px 0 0 var(--color-ok);
+}
+
+/* As wide as the track, so its own width is the sweep: translateX(100%) is
+   the far end. The line itself is the ::before at its left edge. */
+.skate__bar-marker {
+  position: absolute;
+  inset: 0;
+  transform: translateX(calc(var(--at, 0) * 100%));
+  pointer-events: none;
+}
+
+.skate__bar-marker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 4px;
+  background: var(--color-text);
+}
+
+.skate__bar-marker--run {
+  animation: skate-bar-sweep var(--skate-bar-sweep) linear forwards;
+}
+
+@keyframes skate-bar-sweep {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* The bar is the mechanic, so it still sweeps under reduced motion (ADR-65):
+   this outranks the page-wide rule that stops animations. It is linear and
+   has no pulse to drop. */
+@media (prefers-reduced-motion: reduce) {
+  .skate__bar-marker--run {
+    animation-duration: var(--skate-bar-sweep) !important;
+  }
+}
+
 /* Whose turn, large, over the stage's top-left corner. Decorative
    (aria-hidden): the turn card says the same in the DOM. */
 .turn-chip {

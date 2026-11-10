@@ -29,13 +29,15 @@ export const createAssessmentSlice =
         head.flightId = -1;
         head.progress = 0;
         const inGame = skateActive(get().skate);
+        // A timing bar still running is dropped with no attempt (ADR-65).
+        const cancelled = get().dropPop();
         // A game in play ends, logged before the reset (ADR-43); the computer's level is kept.
         get().endSkateOnReset();
         set({ ...initialInputs(), ...initialPlayback(), completed: [] });
         get().log('session.reset');
         get().requestFocus({ kind: 'setup-heading' });
         get().announce(
-          `Reset. Inputs are back to defaults, the board is on the pad and objectives are cleared.${inGame ? ' The game of SKATE ended.' : ''}`,
+          `${cancelled}Reset. Inputs are back to defaults, the board is on the pad and objectives are cleared.${inGame ? ' The game of SKATE ended.' : ''}`,
         );
       },
     };

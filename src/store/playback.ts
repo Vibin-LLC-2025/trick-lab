@@ -1,11 +1,12 @@
 import type { StateCreator } from 'zustand';
+import { barFeedback, barMiss, barOff, timedAttempt } from '../sim/bar';
 import { computeFlight, type TrickInputs } from '../sim/flight';
 import { describeInputs, describeResult } from '../sim/format';
-import { awaitingCall, skateActive } from '../sim/skate';
-import { INPUT_LIMITS, newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
+import { awaitingCall, SKATE_LEVELS, skateActive } from '../sim/skate';
+import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
 import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
-import type { PlaybackSlice, TrickState } from './types';
+import type { PlaybackSlice, TimedPop, TrickEvent, TrickState } from './types';
 
 export const initialPlayback = () => ({
   status: 'idle' as const,
@@ -37,12 +38,21 @@ const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1) + '.';
 export const createPlaybackSlice =
   (head: Playhead): StateCreator<TrickState, [], [], PlaybackSlice> =>
   (set, get) => {
+    /**
+     * What the player's release of the timing bar did (ADR-65), kept from the
+     * pop to the landing: it opens the result's announcement, so a timed pop
+     * says two things in all, the bar's start and the result.
+     */
+    let release: { flightId: number; text: string; inBand: boolean } | null = null;
+
     /** Resolves the current flight: logs, scores objectives, announces. */
     const resolve = (lead: string[]) => {
       const s = get();
       if (!s.flight || s.result) return;
       const result = recognize(s.flight);
       const by = s.flightBy;
+      const timed = release?.flightId === s.flightId ? release : null;
+      release = null;
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
       // The landing's sound, at the moment it lands (ADR-58); a letter and the game's end follow in scoreSkate.
@@ -60,7 +70,9 @@ export const createPlaybackSlice =
       });
 
       // The computer's tricks (a game of SKATE, ADR-43) are announced as its own and never complete an objective.
-      const out = [...lead, by === 'computer' ? `The computer's trick: ${describeResult(result)}` : describeResult(result)];
+      const out = [...lead, ...(timed ? [timed.text] : []), by === 'computer' ? `The computer's trick: ${describeResult(result)}` : describeResult(result)];
+      // The timing was right and the landing was not clean: the mistake is in the setup, and the result's own words say where.
+      if (timed?.inBand && result.grade !== 'clean') out.push('The timing was right, so it was the sliders.');
       const fresh = by === 'you' ? newlyCompleted(result, s.completed) : [];
       if (fresh.length > 0) {
         const completed = [...s.completed, ...fresh];
@@ -83,14 +95,13 @@ export const createPlaybackSlice =
       s.announce(out.join(' '));
     };
 
-    /** Inside the sliders' limits, to three decimals: a control's attempt is not on the slider grid. */
-    const within = (key: keyof TrickInputs, v: number) => {
-      const { min, max } = INPUT_LIMITS[key];
-      return Number(Math.min(max, Math.max(min, v)).toFixed(3)) + 0;
-    };
+    /** To three decimals: what a release of the bar makes is not on the slider grid (and may pass the sliders' limits, sim/bar.ts). */
+    const tidy = (i: TrickInputs): TrickInputs => ({ pop: round(i.pop, 3), flick: round(i.flick, 3) + 0, scoop: round(i.scoop, 3) + 0 });
 
-    /** One pop: the sliders' values, or `attempt` when a game control made the inputs (ROUGH, step 8). */
-    const pop = (attempt: TrickInputs | null) => {
+    /** One pop: the sliders' values exactly, or what a release of the timing bar (`timed`) made of them (ADR-65). */
+    const pop = (timed: TimedPop | null) => {
+      // An exact pop while a bar runs takes its place.
+      if (!timed) get().dropPop();
       const s = get();
       if (s.status === 'playing') {
         s.announce('The board is still in the air.');
@@ -109,11 +120,17 @@ export const createPlaybackSlice =
       // On the computer's turn in a game of SKATE it pops its own inputs; the sliders stay the student's.
       const go = s.computerGo();
       const by = go ? ('computer' as const) : ('you' as const);
+      const mine = go ? null : timed;
       const inputs = go
-        ? go.inputs
-        : attempt
-          ? { pop: within('pop', attempt.pop), flick: within('flick', attempt.flick), scoop: within('scoop', attempt.scoop) }
+        ? tidy(go.inputs)
+        : mine
+          ? tidy(timedAttempt(mine.intended, mine.releaseMs, SKATE_LEVELS[mine.level].band))
           : { pop: s.pop, flick: s.flick, scoop: s.scoop };
+      // How the pop was made, for the record: exactly as set, or through the bar, with the release and what was set.
+      const bar = go ? { ms: go.releaseMs, set: go.intended } : mine ? { ms: mine.releaseMs, set: mine.intended } : null;
+      const how: TrickEvent['payload'] = bar
+        ? { how: 'timed', releaseMs: Math.round(bar.ms), offMs: Math.round(barOff(bar.ms)), setFlick: round(bar.set.flick, 3), setScoop: round(bar.set.scoop, 3) }
+        : { how: 'exact' };
       const flightId = s.flightId + 1;
       // The new flight owns the playhead from its first frame.
       head.flightId = flightId;
@@ -126,12 +143,21 @@ export const createPlaybackSlice =
         flightBy: by,
         result: null,
         scrubFrom: null,
+        // Where the bar's marker rests: this release, or nothing after an exact pop.
+        lastRelease: go ? { by, ms: go.releaseMs, timedOut: false } : mine ? { by, ms: mine.releaseMs, timedOut: mine.timedOut } : null,
       });
       // In a game the student's pop carries the trick in play too: the one they called, or the one to copy.
-      if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call });
-      else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null });
-      else s.log('trick.popped', { by, ...inputs, preset: s.activePreset });
+      if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call, ...how });
+      else if (skateActive(s.skate)) s.log('trick.popped', { by, ...inputs, preset: s.activePreset, call: s.skate.call?.id ?? null, ...how });
+      else s.log('trick.popped', { by, ...inputs, preset: s.activePreset, ...how });
       s.cue('pop');
+      if (mine) {
+        // The bar's start was announced; what the release did waits for the result (ADR-65).
+        const band = SKATE_LEVELS[mine.level].band;
+        release = { flightId, text: barFeedback(mine.releaseMs, band, mine.timedOut), inBand: barMiss(mine.releaseMs, band) === 0 };
+        if (!animates(s)) resolve([]);
+        return;
+      }
       const lead = go ? go.lead : `Popped with ${describeInputs(inputs)}.`;
       // Reduced motion, or no 3D view: no playback at all. Resolve now and
       // leave the board at its final pose; the timeline steps through the flight.
@@ -144,7 +170,7 @@ export const createPlaybackSlice =
       flightId: 0,
 
       popTrick: () => pop(null),
-      popAttempt: (inputs) => pop(inputs),
+      popTimed: (timed) => pop(timed),
 
       togglePause: () => {
         const s = get();

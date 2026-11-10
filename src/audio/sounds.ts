@@ -5,6 +5,7 @@
 // a burst of filtered noise, each with a fast attack and an exponential
 // decay. player.ts turns them into audio nodes. Times are seconds, pitches
 // hertz, gains 0 to 1 before the master gain.
+import { BAR } from '../sim/bar';
 import type { SoundKind } from '../store';
 
 export type Wave = 'sine' | 'triangle' | 'square' | 'sawtooth';
@@ -79,6 +80,21 @@ export function slowMotion(rate: number): { pitch: number; stretch: number } {
   const pitch = Math.max(0.5, Math.min(1, rate ** 0.35));
   return { pitch, stretch: 1 / pitch };
 }
+
+/**
+ * The timing bar by ear (ADR-65): a quiet tone that rises across the whole
+ * sweep, a tick as the bar starts and one halfway to the band, and a higher
+ * click on the band's centre. The three are evenly spaced (BAR in
+ * sim/bar.ts), so the bar is a count: tick, tick, pop. Times are seconds
+ * from the bar's start; player.ts schedules them on the audio clock from one
+ * start time, never through the staggered queue, so the click is on the band.
+ */
+export const BAR_SOUND = {
+  /** Held for the sweep, not decaying: the player gives it a short fade in and out. */
+  tone: { wave: 'sine' as Wave, from: 196, to: 392, dur: BAR.sweepMs / 1000, gain: 0.1 },
+  ticks: BAR.ticksMs.map((ms) => tone('square', 660, 660, ms / 1000, 0.045, 0.16)),
+  click: [tone('square', 1320, 1320, BAR.centreMs / 1000, 0.07, 0.22), noise('highpass', 3000, 0.7, BAR.centreMs / 1000, 0.03, 0.12)],
+} as const;
 
 /** Seconds between two sounds asked for at once (a landing, a letter, the game's end), so each is heard. */
 export const STAGGER = 0.22;
