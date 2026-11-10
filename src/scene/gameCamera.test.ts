@@ -4,14 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera, Vector3 } from 'three';
 import { computeFlight } from '../sim/flight';
 import { ART } from './artDirection';
-import { fitDistance, framingPoints } from './cameraFit';
+import { fitDistance, framingPoints, orbitMaxDistance } from './cameraFit';
 import { bendUv } from './effects';
 import { replayProgress } from './replayClock';
+import { leavesFreeForReplay, returnsFromReplay } from './cameraPlacement';
 import { fovOf, viewFor } from './SceneCamera';
 
 const C = ART.camera;
 const POINTS = framingPoints(C.fit);
-const GAME = ['film', 'side', 'above', 'replay'] as const;
+const GAME = ['free', 'film', 'side', 'above', 'replay'] as const;
 const [gx, gz] = ART.ground.size;
 
 /** A real camera for a view at its fitted distance on a stage of this aspect. */
@@ -50,20 +51,8 @@ describe("the game's camera (step 17, ADR-72)", () => {
   });
 
   it.each(GAME)('%s keeps the plane edge in full fog wherever it is in the frame, for every stage shape', (view) => {
-    const ray = new Vector3();
-    const hit = new Vector3();
     let nearestEdge = Infinity;
-    for (const aspect of [0.5, 1, 1.6, 2.2, 3.6, 5.5, 10]) {
-      const cam = cameraFor(view, aspect);
-      for (let i = 0; i <= 40; i++)
-        for (let j = 0; j <= 40; j++) {
-          ray.set(i / 20 - 1, j / 20 - 1, 0.5).unproject(cam).sub(cam.position).normalize();
-          if (ray.y >= 0) continue;
-          hit.copy(cam.position).addScaledVector(ray, -cam.position.y / ray.y);
-          if (Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2)) < 0.97) continue;
-          nearestEdge = Math.min(nearestEdge, hit.distanceTo(cam.position));
-        }
-    }
+    for (const aspect of [0.5, 1, 1.6, 2.2, 3.6, 5.5, 10]) nearestEdge = Math.min(nearestEdge, nearestPlaneEdge(cameraFor(view, aspect)));
     expect(nearestEdge).toBeGreaterThan(ART.fog.far);
   });
 
@@ -77,6 +66,72 @@ describe("the game's camera (step 17, ADR-72)", () => {
     expect(viewFor({ ...base, screen: 'home' })).toBe('showcase');
     expect(fovOf('replay')).toBeGreaterThan(C.fov);
     expect(fovOf('film')).toBe(C.fov);
+  });
+});
+
+/** The nearest point of the ground plane's edge anywhere in this camera's frame, by distance from the camera. */
+function nearestPlaneEdge(cam: PerspectiveCamera) {
+  const ray = new Vector3();
+  const hit = new Vector3();
+  let nearest = Infinity;
+  for (let i = 0; i <= 40; i++)
+    for (let j = 0; j <= 40; j++) {
+      ray.set(i / 20 - 1, j / 20 - 1, 0.5).unproject(cam).sub(cam.position).normalize();
+      if (ray.y >= 0) continue;
+      hit.copy(cam.position).addScaledVector(ray, -cam.position.y / ray.y);
+      if (Math.max(Math.abs(hit.x) / (gx / 2), Math.abs(hit.z) / (gz / 2)) < 0.97) continue;
+      nearest = Math.min(nearest, hit.distanceTo(cam.position));
+    }
+  return nearest;
+}
+
+describe("the game's free camera (ADR-81)", () => {
+  const F = C.free;
+  const V = C.views.free;
+  const target = new Vector3(...V.target);
+  /** A camera where the orbit can put it: polar and azimuth as OrbitControls has them (azimuth 0 on +Z, the heel side). */
+  function orbitCamera(polar: number, azimuth: number, distance: number, aspect: number) {
+    const cam = new PerspectiveCamera(C.fov, aspect, C.near, C.far);
+    cam.position.setFromSphericalCoords(distance, polar, azimuth).add(target);
+    cam.lookAt(target);
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+    return cam;
+  }
+  const corners = [F.minPolarAngle, F.maxPolarAngle].flatMap((p) => [-F.azimuth, 0, F.azimuth].map((a) => [p, a] as const));
+
+  it('starts inside its own limits, the default of the game, under its own key', () => {
+    const back = new Vector3(...V.position).sub(target);
+    const polar = Math.acos(back.y / back.length());
+    expect(polar).toBeGreaterThan(F.minPolarAngle);
+    expect(polar).toBeLessThan(F.maxPolarAngle);
+    expect(Math.abs(Math.atan2(back.x, back.z))).toBeLessThan(F.azimuth);
+  });
+
+  it('never turns to the toe side, so the skate spot stays behind the board', () => {
+    expect(F.azimuth).toBeLessThan(Math.PI / 2);
+    for (const [p, a] of corners) expect(orbitCamera(p, a, 1, 1.6).position.z).toBeGreaterThan(0);
+  });
+
+  it.each(corners)('at polar %s and azimuth %s, from as close as it zooms to as far, keeps the plane edge in full fog and the flight before it', (polar, azimuth) => {
+    for (const aspect of [0.5, 1, 1.6, 2.2, 3.6]) {
+      const fit = Math.max(C.minDistance, fitDistance({ from: V.position, target: V.target, fov: C.fov, aspect, points: POINTS, margin: C.fit.margin }));
+      const far = orbitMaxDistance({ fit, target: V.target, points: POINTS, maxDistance: C.maxDistance, zoomOut: C.zoomOut, fogNear: ART.fog.near });
+      for (const d of [C.minDistance, fit, far]) {
+        const cam = orbitCamera(polar, azimuth, d, aspect);
+        expect(nearestPlaneEdge(cam), `aspect ${aspect}, distance ${d.toFixed(2)}`).toBeGreaterThan(ART.fog.far);
+        for (const p of POINTS) expect(new Vector3(...p).distanceTo(cam.position)).toBeLessThan(ART.fog.near);
+      }
+    }
+  });
+
+  it('keeps the student\'s orbit across the replay, unless Reset view was asked for in between', () => {
+    expect(leavesFreeForReplay('free', 'replay')).toBe(true);
+    expect(leavesFreeForReplay('film', 'replay')).toBe(false);
+    expect(returnsFromReplay('replay', 'free', false)).toBe(true);
+    expect(returnsFromReplay('replay', 'free', true)).toBe(false);
+    expect(returnsFromReplay('replay', 'film', false)).toBe(false);
+    expect(returnsFromReplay('showcase', 'free', false)).toBe(false);
   });
 });
 

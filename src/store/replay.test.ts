@@ -182,9 +182,11 @@ describe('the instant replay (step 17, ADR-72)', () => {
 });
 
 describe("the game's camera (ADR-72)", () => {
-  it('is the filmer by default; a choice is saved and announced, never logged', () => {
+  it('is free by default (ADR-81), even where the old key saved the filmer; a choice is saved and announced, never logged', () => {
+    localStorage.setItem('trick-lab.game-camera', 'film');
     const s = makeStore();
-    expect(s.getState().gameView).toBe('film');
+    expect(GAME_VIEW_KEY).toBe('trick-lab.game-view');
+    expect(s.getState().gameView).toBe('free');
     s.getState().setGameView('side');
     expect(s.getState().gameView).toBe('side');
     expect(localStorage.getItem(GAME_VIEW_KEY)).toBe('side');

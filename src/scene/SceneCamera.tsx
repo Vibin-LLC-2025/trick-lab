@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { replayMoves, useTrickStore, type CameraView, type GameView, type TrickState } from '../store';
 import { ART } from './artDirection';
 import { fitDistance, framingPoints, orbitMaxDistance } from './cameraFit';
-import { newResetTracker, placeCamera, setFov, takeReset } from './cameraPlacement';
+import { leavesFreeForReplay, newResetTracker, placeCamera, returnsFromReplay, setFov, takeReset } from './cameraPlacement';
 
 const C = ART.camera;
 const FRAME_POINTS = framingPoints(C.fit);
 
-/** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's three and its replay (ADR-72). */
+/** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's free camera's home (ADR-81), its three fixed angles and its replay (ADR-72). */
 export type ViewKey = CameraView | 'showcase' | GameView | 'replay';
 
 /** A view's field of view: the replay's own, or the camera's. */
@@ -27,6 +27,7 @@ const PRESETS: Record<ViewKey, ReturnType<typeof preset>> = {
   rider: preset('rider'),
   detail: preset('detail'),
   showcase: preset('showcase'),
+  free: preset('free'),
   film: preset('film'),
   side: preset('side'),
   above: preset('above'),
@@ -72,13 +73,25 @@ function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
   // One tracker per mount, starting at the nonce already handled before it
   // and at the rider's view, where the Canvas puts its camera.
   const [resets] = useState(() => newResetTracker(resetNonce));
+  // The free camera's orbit, kept while the instant replay has the camera (ADR-81).
+  const kept = useRef<Vector3 | null>(null);
 
   useEffect(() => {
+    const from = resets.view;
+    const resetAsked = resetNonce !== resets.handled;
     const reset = takeReset(resets, resetNonce, view);
     const P = PRESETS[view];
+    if (leavesFreeForReplay(from, view)) kept.current = camera.position.clone();
+    const back = returnsFromReplay(from, view, resetAsked) && kept.current !== null;
     // The replay's wide lens (ADR-72), the camera's own everywhere else.
     setFov(camera, fovOf(view));
-    placeCamera(camera, controls?.target ?? null, { target: P.target, home: P.home, distance }, reset);
+    if (back) {
+      // Back where the student left it: the orbit's direction, at the fitted distance.
+      camera.position.copy(kept.current!);
+      controls?.target.copy(P.target);
+    }
+    if (view !== 'replay') kept.current = null;
+    placeCamera(camera, controls?.target ?? null, { target: P.target, home: P.home, distance }, reset && !back);
     controls?.update();
     invalidate();
   }, [distance, camera, controls, invalidate, resetNonce, resets, view]);
@@ -94,20 +107,22 @@ function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
  * but stops before the flight would reach the fog (orbitMaxDistance, ADR-55).
  * The orbit target is the chosen preset's (pan is off, so it never moves).
  * On the welcome screen (ADR-45) the camera holds the preview's own preset
- * and the orbit is off. The game (ADR-72) has its fixed angles, chosen by
- * buttons, and the replay's; the orbit is off there too. The lab keeps its
- * free camera.
+ * and the orbit is off. The game's default is its free camera (ADR-81): the
+ * orbit is on, kept to the heel side and between the game's own heights
+ * (`ART.camera.free`); its three fixed angles (ADR-72) and the replay keep
+ * the orbit off. The lab keeps its free camera.
  */
 export function SceneCamera() {
   const home = useTrickStore((s) => s.screen === 'home');
   const lab = useTrickStore((s) => s.screen === 'lab');
   const view = useTrickStore(viewFor);
+  const free = view === 'free';
   const distance = useFitDistance(view);
   return (
     <>
       <OrbitControls
         makeDefault
-        enabled={lab}
+        enabled={lab || free}
         target={PRESETS[view].targetArray}
         enablePan={false}
         enableDamping={false}
@@ -121,9 +136,12 @@ export function SceneCamera() {
           zoomOut: C.zoomOut,
           fogNear: ART.fog.near,
         })}
-        minPolarAngle={C.minPolarAngle}
+        minPolarAngle={free ? C.free.minPolarAngle : C.minPolarAngle}
         // The welcome preview sits lower than a student may orbit, to show the sky (ADR-52); it never orbits.
-        maxPolarAngle={home ? C.showcaseMaxPolarAngle : C.maxPolarAngle}
+        maxPolarAngle={home ? C.showcaseMaxPolarAngle : free ? C.free.maxPolarAngle : C.maxPolarAngle}
+        // The game's free camera stays on the heel side (ADR-81); the lab turns all the way round.
+        minAzimuthAngle={free ? -C.free.azimuth : -Infinity}
+        maxAzimuthAngle={free ? C.free.azimuth : Infinity}
       />
       <FitAndReset distance={distance} view={view} />
     </>

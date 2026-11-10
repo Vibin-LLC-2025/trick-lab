@@ -136,12 +136,18 @@ function Scoreboard() {
   );
 }
 
-/** The game's camera (step 17, ADR-72): three fixed angles as a radio group (arrow keys move and choose). The lab keeps its free camera. */
+/**
+ * The game's camera as a radio group (arrow keys move and choose): Free, the
+ * default (ADR-81), turned by dragging the stage and zoomed by scrolling or
+ * pinching, with Reset view to bring it home; or one of three fixed angles
+ * (step 17, ADR-72), which need no pointer at all.
+ */
 function CameraChoice() {
   const view = useTrickStore((s) => s.gameView);
   const setGameView = useTrickStore((s) => s.setGameView);
+  const resetView = useTrickStore((s) => s.resetView);
   return (
-    <fieldset className="segmented">
+    <fieldset className="segmented" aria-describedby={view === 'free' ? 'game-camera-hint' : undefined}>
       <legend className="segmented__legend">Camera</legend>
       <div className="segmented__options">
         {GAME_VIEWS.map((v) => (
@@ -151,6 +157,14 @@ function CameraChoice() {
           </label>
         ))}
       </div>
+      {view === 'free' && (
+        <div className="segmented__hint skate__camera-free">
+          <span id="game-camera-hint">Drag the view to turn it; scroll or pinch to zoom.</span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={resetView}>
+            Reset view
+          </button>
+        </div>
+      )}
     </fieldset>
   );
 }

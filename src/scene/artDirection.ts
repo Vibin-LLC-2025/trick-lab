@@ -428,11 +428,28 @@ export const ART = {
        * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
        *   (its own field of view, `fov` below), close to the board.
        */
+      /**
+       * `free` (ADR-81, 2026-11-10), the game's default: where the free
+       * camera starts and where "Reset view" brings it back, a little higher
+       * than the filmer's so the board and both shoes read at once. The
+       * student turns it from there, inside `free` below.
+       */
+      free: look(18, 30, 0.32),
       film: look(12, 30, 0.32),
       side: look(7, 0, 0.32),
       above: look(34, -20, 0.28),
       replay: look(4, 40, 0.36),
     },
+    /**
+     * The game's free camera (ADR-81): how far it turns. Round the board
+     * from the heel side (+Z) up to `azimuth` radians either way, so it never
+     * reaches the toe side, where the skate spot would be in front of the
+     * board and the plane's edge out of the fog (ADR-72); from 72 degrees
+     * above the horizon (`minPolarAngle`) down to 9 (`maxPolarAngle`), lower
+     * than the lab's 18 to match the game's low angles. Tested in
+     * gameCamera.test.ts at every corner.
+     */
+    free: { azimuth: (75 * Math.PI) / 180, minPolarAngle: (18 * Math.PI) / 180, maxPolarAngle: (81 * Math.PI) / 180 },
     /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
     fovs: { replay: 60 } as Partial<Record<string, number>>,
   },

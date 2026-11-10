@@ -399,19 +399,27 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     });
   }
 
-  it('chooses one of three angles by keyboard while a game is on, saved and announced', async () => {
+  it('is free by default, with Reset view; the three fixed angles are a keypress away, saved and announced', async () => {
     const user = await setup();
     await start(user);
     const camera = within(game()).getByRole('group', { name: 'Camera' });
-    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['film', 'side', 'above']);
-    const film = within(camera).getByRole('radio', { name: 'Filmer' });
-    expect(film).toBeChecked();
-    film.focus();
-    await user.keyboard('{ArrowRight}');
+    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'film', 'side', 'above']);
+    const free = within(camera).getByRole('radio', { name: 'Free' });
+    expect(free).toBeChecked();
+    // Free says how to turn it, and Reset view brings it home (ADR-81).
+    expect(camera).toHaveAccessibleDescription('Drag the view to turn it; scroll or pinch to zoom.');
+    const nonce = useTrickStore.getState().viewResetNonce;
+    await user.click(within(camera).getByRole('button', { name: 'Reset view' }));
+    expect(useTrickStore.getState().viewResetNonce).toBe(nonce + 1);
+    expect(announcer()).toHaveTextContent('Camera view reset.');
+    free.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
     expect(within(camera).getByRole('radio', { name: 'Side' })).toBeChecked();
     expect(useTrickStore.getState().gameView).toBe('side');
-    expect(localStorage.getItem('trick-lab.game-camera')).toBe('side');
+    expect(localStorage.getItem('trick-lab.game-view')).toBe('side');
     expect(announcer()).toHaveTextContent('Camera: side on, low.');
+    // A fixed angle has nothing to drag or reset.
+    expect(within(camera).queryByRole('button', { name: 'Reset view' })).toBeNull();
     expect(types()).not.toContain('camera.changed');
   });
 

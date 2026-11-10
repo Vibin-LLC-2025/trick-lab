@@ -1413,6 +1413,15 @@ a {
   color: var(--color-muted);
 }
 
+/* The game's free camera (ADR-81, DESIGN.md 11.2): its hint, with Reset view at the end of the line. */
+.skate__camera-free {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+
 .segmented + .segmented {
   margin-top: var(--space-1);
 }
