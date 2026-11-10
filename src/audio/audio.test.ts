@@ -228,6 +228,44 @@ describe('the player', () => {
     expect(stops).toHaveLength(scheduled + barVoices + barVoices + SOUNDS.land.length + barVoices);
   });
 
+  it('goes round with the bar (ADR-78): each lap is a sweep after the last, from the one start time, until it is cut', () => {
+    vi.useFakeTimers();
+    try {
+      const { ctx, started } = fakeContext();
+      const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);
+      const lapVoices = 1 + BAR_SOUND.ticks.length + BAR_SOUND.click.length;
+      const sweep = BAR.sweepMs / 1000;
+      const start = 10.01;
+      const clicks = () => started.filter((s) => s.type === 'tone' && s.freq === BAR_SOUND.click[0]!.from).map((s) => s.at);
+      player.bar();
+      expect(started).toHaveLength(lapVoices);
+      // The audio clock runs on to a moment before the next lap; the timer puts it on the clock then.
+      const step = (seconds: number) => {
+        ctx.currentTime += seconds;
+        vi.advanceTimersByTime(seconds * 1000);
+      };
+      // The first lap starts 10 ms after now, so the second is due a sweep after that.
+      step(sweep - BAR_SOUND.lapLead + 0.011);
+      expect(started).toHaveLength(2 * lapVoices);
+      step(sweep);
+      expect(started).toHaveLength(3 * lapVoices);
+      // Every lap's click is on the band, whole sweeps from the first start: no drift.
+      const expected = [0, 1, 2].map((k) => start + k * sweep + BAR.centreMs / 1000);
+      clicks().forEach((at, i) => expect(at).toBeCloseTo(expected[i]!, 9));
+      // A release cuts the laps to come as well.
+      player.stopBar();
+      step(sweep * 3);
+      expect(started).toHaveLength(3 * lapVoices);
+      // And so does turning sound off.
+      player.bar();
+      player.stop();
+      step(sweep * 3);
+      expect(started).toHaveLength(4 * lapVoices);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resumes a suspended context (the browser holds audio until a gesture), and closes it when done', () => {
     const { ctx } = fakeContext('suspended');
     const player = createSoundPlayer(() => ctx as unknown as AudioContext, synthOnly);

@@ -134,8 +134,12 @@ export function slowMotion(rate: number): { pitch: number; stretch: number } {
  * sim/bar.ts), so the bar is a count: tick, tick, pop. Times are seconds
  * from the bar's start; player.ts schedules them on the audio clock from one
  * start time, never through the staggered queue, so the click is on the band.
+ * The bar goes round until it is released (ADR-78) and the count with it:
+ * each lap is scheduled `lapLead` seconds before it is due.
  */
 export const BAR_SOUND = {
+  /** Seconds ahead of a lap that it is put on the audio clock: well over a busy frame or a late timer, well under a sweep. */
+  lapLead: 0.25,
   /** Held for the sweep, not decaying: the player gives it a short fade in and out. */
   tone: { wave: 'sine' as Wave, from: 196, to: 392, dur: BAR.sweepMs / 1000, gain: 0.1 },
   ticks: BAR.ticksMs.map((ms) => tone('square', 660, 660, ms / 1000, 0.045, 0.16)),

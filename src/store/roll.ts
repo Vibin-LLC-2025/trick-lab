@@ -27,10 +27,10 @@ export type LandingState = 'none' | 'plays' | 'over';
 
 /**
  * Whether the computer's wait is running (ADR-46): it is up on the game
- * screen, nothing is in the air, auto is on and no dialog is open. The game
- * screen's timer and countdown bar read it, and the store pushes the board
- * off once it has stopped while this holds, so the computer rolls in before
- * it pops.
+ * screen, nothing is in the air, the last go has come to rest, auto is on and
+ * no dialog is open. The game screen's timer and countdown bar read it, and
+ * the store pushes the board off once it has stopped while this holds, so the
+ * computer rolls in before it pops.
  */
 export const computerWaiting = (s: TrickState) =>
   s.screen === 'skate' &&
@@ -38,6 +38,10 @@ export const computerWaiting = (s: TrickState) =>
   s.skateAuto &&
   s.status !== 'playing' &&
   s.status !== 'paused' &&
+  // The student's go comes to rest first: its landing has played out and the board has stopped (ADR-78).
+  // The wait used to start at touchdown, so at the game's slower speed the computer would pop mid-landing.
+  s.landing !== 'plays' &&
+  s.roll !== 'slow' &&
   !s.shortcutsOpen &&
   s.skateLeave === null &&
   // The student's instant replay plays first (ADR-72).

@@ -10,7 +10,7 @@
 // all continue from where the board is, never from a stale store value.
 
 import { advance } from '../sim/flight';
-import type { Playhead, TrickState } from '../store';
+import { playRate, type Playhead, type TrickState } from '../store';
 
 /** Store commits of progress while playing: at most 10 per second (ADR-4). */
 export const COMMIT_EVERY = 0.1;
@@ -42,7 +42,7 @@ export interface FlightClock {
 
 export const newFlightClock = (): FlightClock => ({ progress: 0, running: false, flightId: -1, sinceCommit: 0 });
 
-type ClockState = Pick<TrickState, 'status' | 'flight' | 'flightId' | 'progress' | 'rate'>;
+type ClockState = Pick<TrickState, 'status' | 'flight' | 'flightId' | 'progress' | 'rate' | 'screen'>;
 
 /**
  * Store transitions that start a new run: a pop, or a resume. Called from a
@@ -85,7 +85,8 @@ export function stepFlightClock(c: FlightClock, head: Playhead, s: ClockState, d
     c.flightId = s.flightId;
     c.sinceCommit = 0;
   }
-  head.progress = advance(head.progress, dt, s.rate, s.flight.airtime);
+  // At the playback speed, and in a game at the game's pace too (ADR-78).
+  head.progress = advance(head.progress, dt, playRate(s), s.flight.airtime);
   c.progress = head.progress;
   if (c.progress >= 1) return STEP_LAND;
   c.sinceCommit += dt;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createTrickStore } from '../store';
+import { createTrickStore, GAME_PACE } from '../store';
+import { DEFAULT_SLOW } from '../store/speed';
 import { COMMIT_EVERY, MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 
 /**
@@ -215,6 +216,24 @@ describe('flight clock: frame timing (ADR-3)', () => {
       expect(after(30, seconds, rate).p).toBeCloseTo(p60, 9);
       expect(after(15, seconds, rate).p).toBeCloseTo(p60, 9);
     }
+  });
+
+  it("a game's flight plays at the game's pace, slower still in slow motion; the lab's at its speed (ADR-78)", () => {
+    const run = (screen: 'lab' | 'skate', slow: boolean) => {
+      const r = rig();
+      r.s().setScreen(screen);
+      if (slow) r.s().toggleSlowMotion();
+      r.s().applyPreset('kickflip');
+      r.s().popTrick();
+      r.frame(HZ60);
+      return { p: r.frames(30, HZ60), airtime: r.s().flight!.airtime };
+    };
+    const lab = run('lab', false);
+    expect(lab.p).toBeCloseTo(0.5 / lab.airtime, 9);
+    const game = run('skate', false);
+    expect(game.p).toBeCloseTo((0.5 * GAME_PACE) / game.airtime, 9);
+    const slow = run('skate', true);
+    expect(slow.p).toBeCloseTo((0.5 * GAME_PACE * DEFAULT_SLOW) / slow.airtime, 9);
   });
 
   it('the first frame of a pop advances 0, whatever idle time its delta carries', () => {

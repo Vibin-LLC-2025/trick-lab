@@ -5,6 +5,7 @@
 import { CATCH } from '../sim/flight';
 import { liveProgress, type Playhead } from './playhead';
 import { rollMoves } from './roll';
+import { playRate } from './speed';
 import type { TrickState } from './types';
 
 export type RollSound = 'off' | 'push' | 'slow';
@@ -21,7 +22,7 @@ export function rollSound(s: TrickState): RollSound {
 
 /**
  * Seconds from now until the front foot catches the board (CATCH in
- * sim/flight.ts), at the speed in use: while a flight plays, it lands (a bail
+ * sim/flight.ts), at the speed in use (the game's pace too, ADR-78): while a flight plays, it lands (a bail
  * has no catch: the feet step off), and the catch is still ahead. Otherwise
  * null.
  */
@@ -29,5 +30,5 @@ export function catchIn(s: TrickState, head: Playhead): number | null {
   if (s.status !== 'playing' || !s.flight || !s.flight.landed) return null;
   const left = CATCH.front - liveProgress(head, s);
   if (left <= 0) return null;
-  return (left * s.flight.airtime) / s.rate;
+  return (left * s.flight.airtime) / playRate(s);
 }

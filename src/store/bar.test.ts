@@ -10,49 +10,24 @@ const CENTRE = BAR.centreMs;
 const HALF = SKATE_LEVELS.normal.band.halfMs;
 
 /**
- * A store whose clock and scheduler are the test's (ADR-65): time moves only
- * through `advance`, which then runs whatever came due, so the timing bar is
- * exact. The coin flip and the computer are scripted as in skate.test.ts:
- * after the queue, 0.25 makes the computer release on the band's centre.
+ * A store whose clock is the test's (ADR-65): time moves only through
+ * `advance`, so the timing bar is exact. The coin flip and the computer are
+ * scripted as in skate.test.ts: after the queue, 0.25 makes the computer
+ * release on the band's centre.
  */
 function makeStore(queue: number[] = [YOU_FIRST]) {
   let t = 5000;
-  const jobs: { at: number; fn: () => void; live: boolean }[] = [];
   const store = createTrickStore(
     () => t,
     () => queue.shift() ?? 0.25,
     () => '2026-11-09',
-    (fn, ms) => {
-      const job = { at: t + ms, fn, live: true };
-      jobs.push(job);
-      return () => {
-        job.live = false;
-      };
-    },
   );
   // Not a first game: the walk-through (ADR-66) has its own tests in lesson.test.ts.
   store.setState({ skateTaught: true });
-  const runDue = () => {
-    for (const job of jobs) {
-      if (job.live && job.at <= t) {
-        job.live = false;
-        job.fn();
-      }
-    }
-  };
   return Object.assign(store, {
-    /** Moves the clock without running what came due: the instant before a callback fires. */
-    tick: (ms: number) => {
-      t += ms;
-    },
-    runDue,
     advance: (ms: number) => {
       t += ms;
-      runDue();
     },
-    /** Every scheduled callback, cancelled or not, as a late one would arrive. */
-    fireAll: () => jobs.forEach((j) => j.fn()),
-    scheduled: () => jobs.filter((j) => j.live).length,
   });
 }
 type Store = ReturnType<typeof makeStore>;
@@ -81,7 +56,6 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.status).toBe('idle');
     expect(st.flight).toBeNull();
     expect(popped(s)).toHaveLength(0);
-    expect(s.scheduled()).toBe(1);
     // Sound is off by default, so the start says the bar is silent and where Exact is.
     expect(said(s)).toBe('Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
   });
@@ -102,7 +76,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.pendingPop).toBeNull();
     expect(st.status).toBe('playing');
     expect(st.flightBy).toBe('you');
-    expect(st.lastRelease).toEqual({ by: 'you', ms: CENTRE + 40, timedOut: false });
+    expect(st.lastRelease).toEqual({ by: 'you', ms: CENTRE + 40 });
     expect(popped(s)).toHaveLength(1);
     expect(popped(s)[0]!.payload).toEqual({
       by: 'you',
@@ -119,7 +93,6 @@ describe('the timing bar in the store (ADR-65)', () => {
     });
     // Nothing is announced at the pop: the bar's start still stands, and the result says the rest.
     expect(said(s)).toMatch(/^Bar running/);
-    expect(s.scheduled()).toBe(0);
     s.getState().land();
     expect(said(s)).toMatch(/^In the band: exactly what you set\. Kickflip landed clean\. .*You landed your kickflip!/);
     expect(s.getState().skate.phase).toBe('computer-copy');
@@ -169,44 +142,36 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(popped(s)[0]!.payload).toMatchObject({ flick: 1.9, setFlick: 1.9 });
   });
 
-  it('with no second press the bar releases itself at its end, late', () => {
+  it('with no second press the bar goes round and never pops on its own (ADR-78)', () => {
     const s = kickflipUp();
     s.getState().pressPop();
-    s.advance(BAR.sweepMs - 1);
+    // Long past the sweep's end, many laps over: still running, nothing popped, no letter.
+    s.advance(BAR.sweepMs * 10);
     expect(s.getState().pendingPop).not.toBeNull();
-    s.advance(1);
-    expect(s.getState().pendingPop).toBeNull();
-    expect(s.getState().lastRelease).toEqual({ by: 'you', ms: BAR.sweepMs, timedOut: true });
-    expect(popped(s)[0]!.payload).toMatchObject({ how: 'timed', releaseMs: BAR.sweepMs, offMs: BAR.sweepMs - CENTRE });
+    expect(s.getState().status).toBe('idle');
+    expect(popped(s)).toHaveLength(0);
+    expect(s.getState().skate.letters).toEqual({ you: 0, computer: 0 });
+    // A press on the third lap is read where the marker is on that lap: in the band.
+    s.advance(CENTRE + 40);
+    s.getState().pressPop();
+    expect(s.getState().lastRelease).toEqual({ by: 'you', ms: CENTRE + 40 });
+    expect(popped(s)[0]!.payload).toMatchObject({ how: 'timed', releaseMs: CENTRE + 40, offMs: 40, flick: 1.9 });
     s.getState().land();
-    expect(said(s)).toMatch(/^No release, so the bar ran out: 30 percent more spin than you set\. .*not landed: flip over-rotated/);
+    expect(said(s)).toMatch(/^In the band: exactly what you set\. Kickflip landed clean\./);
   });
 
-  it('a late or doubled callback does nothing: a press and the end in the same tick, an end after the game was quit', () => {
-    const s = kickflipUp();
-    s.getState().pressPop();
-    // The clock reaches the bar's end, and the press lands before the scheduled end runs.
-    s.tick(BAR.sweepMs);
-    s.getState().pressPop();
-    s.runDue();
-    s.fireAll();
-    expect(popped(s)).toHaveLength(1);
-    expect(popped(s)[0]!.payload).toMatchObject({ releaseMs: BAR.sweepMs });
-    s.getState().land();
+  it("the sweep's end is the next lap's start: the latest release, then the earliest", () => {
+    const late = kickflipUp();
+    late.getState().pressPop();
+    late.advance(BAR.sweepMs - 1);
+    late.getState().pressPop();
+    expect(popped(late)[0]!.payload).toMatchObject({ releaseMs: BAR.sweepMs - 1, offMs: BAR.sweepMs - 1 - CENTRE });
 
-    // A bar's end that arrives after its game is gone, and after a newer bar has started.
-    const q = kickflipUp();
-    q.getState().pressPop();
-    q.getState().quitSkate();
-    q.fireAll();
-    expect(popped(q)).toHaveLength(0);
-    q.getState().startSkate();
-    q.getState().callSkateTrick('kickflip');
-    q.getState().pressPop();
-    expect(q.getState().pendingPop?.id).toBe(2);
-    q.fireAll();
-    // The old end (bar 1) did nothing; the new bar's own end released it.
-    expect(popped(q)).toHaveLength(1);
+    const early = kickflipUp();
+    early.getState().pressPop();
+    early.advance(BAR.sweepMs);
+    early.getState().pressPop();
+    expect(popped(early)[0]!.payload).toMatchObject({ releaseMs: 0, offMs: -CENTRE });
   });
 
   it.each([
@@ -228,9 +193,8 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(s.getState().pendingPop).toBeNull();
     if (typeof message === 'string') expect(said(s)).toBe(message);
     else expect(said(s)).toMatch(message);
-    // The bar's end never comes, even if its callback were to fire.
+    // Nothing pops later either: the bar had no end of its own to come.
     s.advance(BAR.sweepMs * 2);
-    s.fireAll();
     expect(popped(s)).toHaveLength(0);
     expect(types(s)).not.toContain('skate.letter');
     expect(s.getState().skate.letters).toEqual({ you: 0, computer: 0 });
@@ -270,7 +234,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.pendingPop).toBeNull();
     expect(st.flightBy).toBe('computer');
     // 0.25 after the coin flip: a release dead on the centre, so exactly its aim.
-    expect(st.lastRelease).toEqual({ by: 'computer', ms: CENTRE, timedOut: false });
+    expect(st.lastRelease).toEqual({ by: 'computer', ms: CENTRE });
     const p = popped(s)[0]!.payload;
     expect(p).toMatchObject({ by: 'computer', how: 'timed', releaseMs: CENTRE, offMs: 0, call: 'heelflip' });
     expect(p.flick).toBe(p.setFlick);

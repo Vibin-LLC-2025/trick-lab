@@ -7,6 +7,20 @@
  */
 export const SPEEDS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25, 1.5, 2] as const;
 
+import type { TrickState } from './types';
+
+/**
+ * The game's own speed (ADR-78): on the game screen everything that moves
+ * with the playback speed (the flight, the landing, the roll, their sounds)
+ * runs at this share of it, so a trick at "normal" speed in a game can be
+ * watched: a 0.53 s kickflip takes 1.3 s. Slow motion in the game is slower
+ * still. The lab is the exact experiment and keeps the speed it shows.
+ */
+export const GAME_PACE = 0.4;
+
+/** The speed things move at now: the playback speed, times the game's pace on the game screen. */
+export const playRate = (s: Pick<TrickState, 'rate' | 'screen'>) => (s.screen === 'skate' ? s.rate * GAME_PACE : s.rate);
+
 /** The slow speed `s` switches to until the student picks another one. */
 export const DEFAULT_SLOW = 0.25;
 

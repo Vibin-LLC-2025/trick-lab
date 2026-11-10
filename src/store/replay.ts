@@ -23,8 +23,8 @@ export const INSTANT_REPLAY_KEY = 'trick-lab.instant-replay';
 export const instantReplayFrom = (saved: string | null) => saved !== 'off';
 
 /**
- * The instant replay: none; due (the student's set or copy was made, and
- * the replay waits for the board to come to rest); or playing. Not
+ * The instant replay: none; due (the student had a go, made or missed, and
+ * the replay waits for the board to come to rest, ADR-78); or playing. Not
  * persisted, never logged: scoring, records and the automatic step-down
  * never see it.
  */

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTrickStore } from '.';
+import { createTrickStore, GAME_PACE, playRate } from '.';
+import { DEFAULT_SLOW } from './speed';
 import { buildExport, exportFilename } from './export';
 
 /** Isolated store with a clock that advances 10 ms per read. */
@@ -260,6 +261,21 @@ describe('playback controls', () => {
     expect(store.getState().rate).toBe(1);
     expect(said(store)).toBe('Slow motion off, normal speed.');
     expect(types(store)).toEqual(['trick.popped']);
+  });
+
+  it("in a game the speed is the game's pace, and slow motion says the speed seen (ADR-78)", () => {
+    const store = makeStore();
+    expect(playRate(store.getState())).toBe(1);
+    store.getState().setScreen('skate');
+    expect(playRate(store.getState())).toBe(GAME_PACE);
+    store.getState().toggleSlowMotion();
+    expect(playRate(store.getState())).toBeCloseTo(GAME_PACE * DEFAULT_SLOW, 9);
+    expect(said(store)).toBe('Slow motion on, 0.1 times speed.');
+    store.getState().toggleSlowMotion();
+    expect(said(store)).toBe('Slow motion off, game speed.');
+    // The lab keeps its own: back there, normal is 1x.
+    store.getState().setScreen('lab');
+    expect(playRate(store.getState())).toBe(1);
   });
 
   it('stepRate moves one stop, announces it, and stops at the ends', () => {

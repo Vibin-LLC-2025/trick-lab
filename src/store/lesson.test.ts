@@ -7,31 +7,17 @@ import { resolveTrick } from '../sim/tricks';
 const YOU_FIRST = 0.25;
 const COMPUTER_FIRST = 0.75;
 
-/** A store on a device that has never played (nothing saved), with the test's clock and scheduler, as store/bar.test.ts. */
+/** A store on a device that has never played (nothing saved), with the test's clock, as store/bar.test.ts. */
 function makeStore(queue: number[] = [YOU_FIRST]) {
   let t = 1000;
-  const jobs: { at: number; fn: () => void; live: boolean }[] = [];
   const store = createTrickStore(
     () => t,
     () => queue.shift() ?? 0.25,
     () => '2026-11-09',
-    (fn, ms) => {
-      const job = { at: t + ms, fn, live: true };
-      jobs.push(job);
-      return () => {
-        job.live = false;
-      };
-    },
   );
   return Object.assign(store, {
     advance: (ms: number) => {
       t += ms;
-      for (const job of jobs) {
-        if (job.live && job.at <= t) {
-          job.live = false;
-          job.fn();
-        }
-      }
     },
   });
 }

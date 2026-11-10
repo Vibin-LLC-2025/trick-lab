@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { audioContext } from '../audio/context';
 import type { SoundPlayer } from '../audio/player';
 import { rollMotion } from '../scene/rollState';
-import { useTrickStore } from '../store';
+import { playRate, useTrickStore } from '../store';
 import { catchIn, rollSound } from '../store/sound';
 
 /**
@@ -47,11 +47,12 @@ export function useSound(injected?: SoundPlayer) {
     const store = useTrickStore;
     const roll = (p: SoundPlayer) => {
       const s = store.getState();
-      p.roll(rollSound(s), s.rate, () => rollMotion);
+      // The game's pace slows the sounds like the picture (ADR-78).
+      p.roll(rollSound(s), playRate(s), () => rollMotion);
     };
     const catchUp = (p: SoundPlayer) => {
       const s = store.getState();
-      p.catchIn(catchIn(s, store.playhead), s.rate);
+      p.catchIn(catchIn(s, store.playhead), playRate(s));
     };
     /** Runs `fn` with the player now, or once its chunk has arrived. */
     const withPlayer = (fn: (p: SoundPlayer) => void) => {
@@ -80,13 +81,14 @@ export function useSound(injected?: SoundPlayer) {
           if (!s.pendingPop) p.stopBar();
           else p.bar();
         }
-        if (rollSound(s) !== rollSound(prev) || (s.rate !== prev.rate && rollSound(s) !== 'off')) roll(p);
-        if (s.status !== prev.status || s.flightId !== prev.flightId || s.rate !== prev.rate) catchUp(p);
+        const rateMoved = playRate(s) !== playRate(prev);
+        if (rollSound(s) !== rollSound(prev) || (rateMoved && rollSound(s) !== 'off')) roll(p);
+        if (s.status !== prev.status || s.flightId !== prev.flightId || rateMoved) catchUp(p);
       } else if (p && s.pendingPop !== prev.pendingPop && !s.pendingPop) p.stopBar();
       const cue = s.soundCue;
       if (!cue || cue.nonce === heard) return;
       heard = cue.nonce;
-      if (p && s.soundOn) p.play(cue.kind, s.rate);
+      if (p && s.soundOn) p.play(cue.kind, playRate(s));
     });
   }, []);
 

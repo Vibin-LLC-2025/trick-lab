@@ -130,19 +130,23 @@ describe('the timing bar on the game screen (ADR-65)', () => {
     expect(note()).toHaveTextContent('The computer released in the band.');
   });
 
-  it('the Pop button is the same action, one press each; with no second press the bar releases itself, late', async () => {
+  it('the Pop button is the same action, one press each; with no second press the bar goes round until there is one (ADR-78)', async () => {
     await kickflipUp();
     const pop = within(game()).getByRole('button', { name: 'Pop' });
     fireEvent.click(pop);
     expect(state().pendingPop).not.toBeNull();
-    act(() => void vi.advanceTimersByTime(BAR.sweepMs - 1));
+    // Three sweeps and more: the marker keeps going round, and nothing pops on its own.
+    act(() => void vi.advanceTimersByTime(BAR.sweepMs * 3 + 100));
+    expect(state().pendingPop).not.toBeNull();
     expect(popped()).toHaveLength(0);
-    act(() => void vi.advanceTimersByTime(1));
+    expect(document.querySelector('.skate__bar-marker--run')).not.toBeNull();
+    expect(note()).toHaveTextContent('Press Pop again when the marker is in the band.');
+    // A press on this lap is read where the marker is on it: early, 100 ms in.
+    fireEvent.click(pop);
     expect(state().pendingPop).toBeNull();
-    expect(popped()[0]!.payload).toMatchObject({ how: 'timed', releaseMs: BAR.sweepMs });
-    expect(note()).toHaveTextContent('Your release. No release, so the bar ran out: 30 percent more spin than you set.');
+    expect(popped()[0]!.payload).toMatchObject({ how: 'timed', releaseMs: 100, offMs: 100 - BAR.centreMs });
     landNow();
-    expect(announcer()).toHaveTextContent(/^No release, so the bar ran out: 30 percent more spin than you set\. .*not landed: flip over-rotated/);
+    expect(announcer()).toHaveTextContent(/^Early: 60 percent less spin than you set\. .*not landed/);
     // A missed set: no letter.
     expect(state().skate.letters).toEqual({ you: 0, computer: 0 });
 

@@ -2056,8 +2056,10 @@ a {
   background: var(--color-text);
 }
 
+/* Round and round until the second press (ADR-78): the store's release is the
+   same lap arithmetic (sim/bar.ts barLap). */
 .skate__bar-marker--run {
-  animation: skate-bar-sweep var(--skate-bar-sweep) linear forwards;
+  animation: skate-bar-sweep var(--skate-bar-sweep) linear infinite;
 }
 
 @keyframes skate-bar-sweep {

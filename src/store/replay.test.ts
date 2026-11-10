@@ -5,33 +5,19 @@ import { GAME_VIEW_KEY, INSTANT_REPLAY_KEY } from './replay';
 
 const YOU_FIRST = 0.25;
 
-/** A store with the test's clock and scheduler (as in roll.test.ts), on the game screen. */
+/** A store with the test's clock (as in roll.test.ts), on the game screen. */
 function makeStore() {
   let t = 5000;
-  const jobs: { at: number; fn: () => void; live: boolean }[] = [];
   const store = createTrickStore(
     () => t,
     () => YOU_FIRST,
     () => '2026-11-10',
-    (fn, ms) => {
-      const job = { at: t + ms, fn, live: true };
-      jobs.push(job);
-      return () => {
-        job.live = false;
-      };
-    },
   );
   store.setState({ skateTaught: true });
   store.getState().setScreen('skate');
   return Object.assign(store, {
     advance: (ms: number) => {
       t += ms;
-      for (const job of jobs) {
-        if (job.live && job.at <= t) {
-          job.live = false;
-          job.fn();
-        }
-      }
     },
   });
 }
@@ -92,12 +78,36 @@ describe('the instant replay (step 17, ADR-72)', () => {
     expect(snapshot(s)).toEqual(before);
   });
 
-  it('does not follow a miss, the computer\'s go, or a game with the switch off', () => {
+  it('follows a miss too, so the student sees what went wrong (ADR-78)', () => {
     const missed = makeStore();
     missed.getState().startSkate();
     myGo(missed, 1.0);
     expect(missed.getState().result?.landed).toBe(false);
-    expect(missed.getState().replay).toBe('none');
+    expect(missed.getState().replay).toBe('due');
+    rest(missed);
+    expect(missed.getState().replay).toBe('plays');
+    // The computer waits for it, then rolls in for its set.
+    expect(missed.getState().roll).toBe('still');
+    missed.getState().endReplay();
+    expect(missed.getState().roll).toBe('push');
+  });
+
+  it('does not follow the go that ends the game: the result takes the screen', () => {
+    const s = makeStore();
+    s.getState().startSkate();
+    const g = s.getState().skate;
+    // Copying the computer's kickflip on the last letter, second try.
+    s.setState({ skate: { ...g, phase: 'you-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 }, letters: { you: 4, computer: 0 }, secondTry: true } });
+    s.getState().setInput('flick', 1.0);
+    s.getState().pressPop();
+    s.advance(BAR.centreMs);
+    s.getState().pressPop();
+    s.getState().land();
+    expect(s.getState().skate.phase).toBe('over');
+    expect(s.getState().replay).toBe('none');
+  });
+
+  it("does not follow the computer's go, or a game with the switch off", () => {
 
     const off = makeStore();
     off.getState().toggleInstantReplay();

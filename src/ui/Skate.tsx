@@ -321,12 +321,13 @@ const BAR_HELP = 'Pop starts the bar. Press Pop again in the band: early spins l
 
 /**
  * The timing bar under Pop (ADR-65, DESIGN.md 11.1): the level's band, and a
- * marker that sweeps across while the bar runs and rests where the last
+ * marker that sweeps across while the bar runs, round again from the left
+ * after each sweep until the second press (ADR-78), and rests where the last
  * release was, the player's or the computer's. The picture is decorative
  * (aria-hidden): the note under it says the same in words, and the bar's
  * start and the result are announced by the store. The sweep is a CSS
- * animation started by the same store change that started the bar, so it
- * trails the store's clock by a frame at most. The two custom properties
+ * animation started by the same store change that started the bar and
+ * repeated each sweep, so it trails the store's clock by a frame at most. The two custom properties
  * carry the band and the marker's place; all the styling is in app.css.
  */
 function TimingBar() {
@@ -344,7 +345,7 @@ function TimingBar() {
     : !last
       ? BAR_HELP
       : last.by === 'you'
-        ? `Your release. ${barFeedback(last.ms, band, last.timedOut)}`
+        ? `Your release. ${barFeedback(last.ms, band)}`
         : `The computer released ${barWhen(last.ms, band)}.`;
   return (
     <>

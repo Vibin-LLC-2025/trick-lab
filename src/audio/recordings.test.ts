@@ -9,7 +9,7 @@ import { BAY } from '../asset/groundSpec';
 import { TRUCK } from '../asset/spec';
 import { ART } from '../scene/artDirection';
 import { stepRoll, type RollMotion } from '../scene/roll';
-import { createTrickStore } from '../store';
+import { createTrickStore, GAME_PACE } from '../store';
 import { catchIn, rollSound } from '../store/sound';
 import { CATCH } from '../sim/feet';
 import { createSoundPlayer } from './player';
@@ -292,7 +292,8 @@ describe('what the sound follows in the store (store/sound.ts)', () => {
     expect(rollSound(s())).toBe('off');
     const flight = s().flight!;
     expect(flight.landed).toBe(true);
-    expect(catchIn(s(), store.playhead)).toBeCloseTo((CATCH.front * flight.airtime) / s().rate, 9);
+    // At the game's pace (ADR-78): the catch comes as late as the picture's.
+    expect(catchIn(s(), store.playhead)).toBeCloseTo((CATCH.front * flight.airtime) / (s().rate * GAME_PACE), 9);
     s().land();
     expect(catchIn(s(), store.playhead)).toBeNull();
     expect(rollSound(s())).toBe('slow');

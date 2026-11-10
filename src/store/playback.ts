@@ -7,7 +7,7 @@ import { awaitingCall, SKATE_LEVELS, skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
 import { computerWaiting, rollAllowed } from './roll';
-import { DEFAULT_SLOW, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
+import { DEFAULT_SLOW, GAME_PACE, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
 import type { PlaybackSlice, TimedPop, TrickEvent, TrickState } from './types';
 
 export const initialPlayback = () => ({
@@ -161,7 +161,7 @@ export const createPlaybackSlice =
         result: null,
         scrubFrom: null,
         // Where the bar's marker rests: this release, or nothing after an exact pop.
-        lastRelease: go ? { by, ms: go.releaseMs, timedOut: false } : mine ? { by, ms: mine.releaseMs, timedOut: mine.timedOut } : null,
+        lastRelease: go ? { by, ms: go.releaseMs } : mine ? { by, ms: mine.releaseMs } : null,
       });
       // In a game the student's pop carries the trick in play too: the one they called, or the one to copy.
       if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call, ...how });
@@ -173,7 +173,7 @@ export const createPlaybackSlice =
       if (mine) {
         // The bar's start was announced; what the release did waits for the result (ADR-65).
         const band = SKATE_LEVELS[mine.level].band;
-        release = { flightId, text: barFeedback(mine.releaseMs, band, mine.timedOut), inBand: barMiss(mine.releaseMs, band) === 0 };
+        release = { flightId, text: barFeedback(mine.releaseMs, band), inBand: barMiss(mine.releaseMs, band) === 0 };
         if (!animates(s)) resolve([]);
         return;
       }
@@ -252,6 +252,12 @@ export const createPlaybackSlice =
         const s = get();
         const rate = s.rate < 1 ? 1 : s.slowRate;
         set({ rate });
+        // In a game the speed said is the one seen: the game's pace times this one (ADR-78).
+        if (s.screen === 'skate') {
+          const seen = Math.round(rate * GAME_PACE * 1000) / 1000;
+          s.announce(rate === 1 ? 'Slow motion off, game speed.' : `Slow motion on, ${speedText(seen)}.`);
+          return;
+        }
         s.announce(rate === 1 ? 'Slow motion off, normal speed.' : `Slow motion on, ${speedText(rate)}.`);
       },
 

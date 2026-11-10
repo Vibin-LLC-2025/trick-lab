@@ -24,10 +24,13 @@ export interface SoundPlayer {
   /**
    * The timing bar by ear (ADR-65), from now: the rising tone, the two ticks
    * and the click on the band, all from one start time on the audio clock.
-   * Not staggered behind queued sounds, so the click stays on the band.
+   * Not staggered behind queued sounds, so the click stays on the band. The
+   * bar goes round until it is released (ADR-78), so the count does too: each
+   * lap is put on the audio clock a moment before it is due, at the start
+   * time plus whole sweeps, so the laps never drift from the marker.
    */
   bar(): void;
-  /** Cuts the bar's sound: it was released or dropped. */
+  /** Cuts the bar's sound and its laps to come: it was released or dropped. */
   stopBar(): void;
   /** The catch, `seconds` from now at playback speed `rate`, in place of any already scheduled; null cancels it (a pause, a scrub). */
   catchIn(seconds: number | null, rate: number): void;
@@ -210,6 +213,8 @@ export function createSoundPlayer(make: MakeContext = audioContext, options: Pla
   const arrived = (kind: RecordedKind) => (recordings.get(kind) ?? []).filter((t) => t !== undefined);
   let layers: RollLayers | null = null;
   let renewTimer: ReturnType<typeof setTimeout> | null = null;
+  // Puts the bar's next lap on the audio clock (ADR-78).
+  let lapTimer: ReturnType<typeof setTimeout> | null = null;
   const ticks: Tick[] = [];
 
   const ready = (): AudioContext | null => {
@@ -283,6 +288,13 @@ export function createSoundPlayer(make: MakeContext = audioContext, options: Pla
     const hiss = layer(ROLL_SOUND.hiss, 0);
     const rumble = layer(ROLL_SOUND.rumble, 0.5);
     return { sources: [hiss.src, rumble.src], hiss, rumble };
+  };
+
+  /** The bar's voices cut and its next lap cancelled. */
+  const stopBar = () => {
+    if (lapTimer !== null) clearTimeout(lapTimer);
+    lapTimer = null;
+    cut(barLive);
   };
 
   const stopRoll = () => {
@@ -364,12 +376,20 @@ export function createSoundPlayer(make: MakeContext = audioContext, options: Pla
     bar: () => {
       const c = ready();
       if (!c || !master || !noise) return;
-      cut(barLive);
+      stopBar();
       const start = c.currentTime + 0.01;
-      barTone(c, master, barLive, start);
-      for (const v of [...BAR_SOUND.ticks, ...BAR_SOUND.click]) voice(c, master, noise, barLive, v, start, 1, 1);
+      const lap = (k: number) => {
+        lapTimer = null;
+        // Sound turned off or the context closed since: no more laps.
+        if (ctx !== c || !master || !noise) return;
+        const at = start + k * BAR_SOUND.tone.dur;
+        barTone(c, master, barLive, at);
+        for (const v of [...BAR_SOUND.ticks, ...BAR_SOUND.click]) voice(c, master, noise, barLive, v, at, 1, 1);
+        lapTimer = setTimeout(() => lap(k + 1), Math.max(0, at + BAR_SOUND.tone.dur - BAR_SOUND.lapLead - c.currentTime) * 1000);
+      };
+      lap(0);
     },
-    stopBar: () => cut(barLive),
+    stopBar,
     catchIn: (seconds, rate) => {
       cut(catchLive);
       const c = ctx;
@@ -379,13 +399,14 @@ export function createSoundPlayer(make: MakeContext = audioContext, options: Pla
     roll,
     stop: () => {
       cut(live);
-      cut(barLive);
+      stopBar();
       cut(catchLive);
       stopRoll();
       last = -Infinity;
     },
     dispose: () => {
       stopRoll();
+      stopBar();
       live.clear();
       barLive.clear();
       catchLive.clear();

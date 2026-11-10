@@ -153,7 +153,7 @@ export type PopMode = 'timed' | 'exact';
 
 /** A timing bar that is running (ADR-65): the player pressed Pop and has not released yet. */
 export interface PendingPop {
-  /** Goes up by one per bar, so a late or doubled callback does nothing. */
+  /** Goes up by one per bar: the marker is keyed on it, so each bar's sweep starts from the left. */
   id: number;
   /** The store's clock when the bar started, ms. */
   startedAt: number;
@@ -165,18 +165,15 @@ export interface PendingPop {
 /** A release of the timing bar, as the skate slice hands it to the pop. */
 export interface TimedPop {
   intended: TrickInputs;
-  /** When the bar was released, ms into the sweep. */
+  /** When the bar was released, ms into the sweep (on whichever lap, ADR-78). */
   releaseMs: number;
   level: SkateLevel;
-  /** The bar ran to its end with no second press. */
-  timedOut: boolean;
 }
 
 /** The last release of the bar in this game, the player's or the computer's: where the bar's marker rests. */
 export interface LastRelease {
   by: SkatePlayer;
   ms: number;
-  timedOut: boolean;
 }
 
 export interface AssessmentSlice {

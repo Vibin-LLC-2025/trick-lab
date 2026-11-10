@@ -1,38 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createTrickStore, landingMoves, rollMoves } from '.';
+import { computerWaiting, createTrickStore, landingMoves, rollMoves } from '.';
 import { BAR } from '../sim/bar';
 import { describeScene } from '../sim/format';
 
 const YOU_FIRST = 0.25;
 const COMPUTER_FIRST = 0.75;
 
-/** A store with the test's clock and scheduler (as in bar.test.ts), on the game screen. */
+/** A store with the test's clock (as in bar.test.ts), on the game screen. */
 function makeStore(queue: number[] = [YOU_FIRST]) {
   let t = 5000;
-  const jobs: { at: number; fn: () => void; live: boolean }[] = [];
   const store = createTrickStore(
     () => t,
     () => queue.shift() ?? 0.25,
     () => '2026-11-10',
-    (fn, ms) => {
-      const job = { at: t + ms, fn, live: true };
-      jobs.push(job);
-      return () => {
-        job.live = false;
-      };
-    },
   );
   store.setState({ skateTaught: true });
   store.getState().setScreen('skate');
   return Object.assign(store, {
     advance: (ms: number) => {
       t += ms;
-      for (const job of jobs) {
-        if (job.live && job.at <= t) {
-          job.live = false;
-          job.fn();
-        }
-      }
     },
   });
 }
@@ -229,6 +215,10 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().rollRested();
     expect(roll(s)).toBe('still');
     s.getState().landingDone();
+    // The student's miss is replayed first (ADR-78), and the computer waits for it.
+    expect(s.getState().replay).toBe('plays');
+    expect(roll(s)).toBe('still');
+    s.getState().endReplay();
     // The computer rolls in on a fresh board: the bailed one is gone.
     expect(roll(s)).toBe('push');
     expect(s.getState().landing).toBe('none');
@@ -239,6 +229,7 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().popTrick();
     s.getState().land();
     s.getState().landingDone();
+    s.getState().endReplay();
     expect(roll(s)).toBe('push');
     expect(s.getState().landing).toBe('none');
     s.getState().popTrick();
@@ -291,6 +282,25 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     expect(landingMoves(s.getState())).toBe(false);
   });
 
+  it("the computer's wait starts only once the student's go is at rest: the landing played out and the board stopped (ADR-78)", () => {
+    const s = exactUp(SKETCHY);
+    // No replay here, so the wait is all there is between the two goes.
+    s.getState().toggleInstantReplay();
+    s.getState().popTrick();
+    s.getState().land();
+    expect(s.getState().skate.phase).toBe('computer-copy');
+    expect(s.getState().landing).toBe('plays');
+    expect(computerWaiting(s.getState())).toBe(false);
+    s.getState().landingDone();
+    // Still rolling on after the landing: not yet.
+    expect(roll(s)).toBe('slow');
+    expect(computerWaiting(s.getState())).toBe(false);
+    s.getState().rollRested();
+    // At rest: the wait runs, and the computer rolls in while it does.
+    expect(computerWaiting(s.getState())).toBe(true);
+    expect(roll(s)).toBe('push');
+  });
+
   it('the scene description says what the landing did', () => {
     const s = exactUp(BAIL);
     // The computer waits for its button, so the bailed board stays where it slid.
@@ -299,6 +309,9 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().land();
     expect(describeScene(s.getState())).toMatch(/The board (falls|slides)/);
     s.getState().landingDone();
+    // The miss is replayed first (ADR-78); after it, the bailed board is back where it slid.
+    expect(s.getState().replay).toBe('plays');
+    s.getState().endReplay();
     expect(describeScene(s.getState())).toMatch(/The board (fell|slid)/);
     const k = exactUp(SKETCHY);
     k.getState().popTrick();

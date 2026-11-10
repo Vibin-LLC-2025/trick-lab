@@ -5,7 +5,7 @@ import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
+import { landingMoves, playRate, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
@@ -195,7 +195,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     }
     // Rolling (ADR-67): the world moves, the board stays. Only on the game
     // screen; elsewhere the ground is back on the spot. The roll keeps the
-    // playback speed, so a slow-motion trick passes over slow ground.
+    // playback speed and the game's pace (ADR-78), so a slow-motion trick
+    // passes over slow ground.
     const r = rollMotion;
     // The seconds this frame moved the roll or the landing on: the dust's clock too (ADR-74).
     let moved = 0;
@@ -204,7 +205,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     } else if (s.roll === 'still') {
       if (r.speed !== 0) haltRoll(r);
     } else if (rollMoves(s)) {
-      const dt = r.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+      const dt = r.running ? Math.min(Math.max(0, delta), MAX_STALL) * playRate(s) : 0;
       r.running = true;
       moved = dt;
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
@@ -221,7 +222,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const L = landingClock;
       if (s.landing === 'plays') {
         if (landingMoves(s)) {
-          const dt = L.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+          const dt = L.running ? Math.min(Math.max(0, delta), MAX_STALL) * playRate(s) : 0;
           L.t += dt;
           L.running = true;
           moved = Math.max(moved, dt);
