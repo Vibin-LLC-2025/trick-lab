@@ -128,6 +128,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const riderInner = useRef<Group>(null);
   const settle = useRef<Settle>(newSettle());
   const dustMesh = useRef<Mesh>(null);
+  /** The dust mesh that has been drawn once, empty, so the graphics card has its program before the first landing (step 20). */
+  const dustPrimed = useRef<Mesh | null>(null);
   const dusty = useTrickStore(dustShown);
   const home = useTrickStore((s) => s.screen === 'home');
   const feetVisible = useTrickStore((s) => s.feetVisible);
@@ -264,6 +266,13 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         }
       }
       dm.visible = dust.live;
+      // A newly mounted mesh is drawn once with nothing in it (every puff has no size), on a frame of
+      // its own while the board is at rest, so its program is not built in the middle of the first landing.
+      if (dustPrimed.current !== dm) {
+        dustPrimed.current = dm;
+        dm.visible = true;
+        state.invalidate();
+      }
     }
     // Hidden feet cost nothing: the feet model and its clearance against the
     // board's volume run only while a shoe group is mounted. Turned on

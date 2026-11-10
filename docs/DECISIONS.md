@@ -1009,3 +1009,15 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **Draw calls.** One on High and Medium while a game's landing has dust in the air. The expected worst case (`LEDGER`) did not move: High 36, Medium 21, Low 12. The motion cues' one draw has faded out by the landing, so a landing with dust draws what the board at rest with its cues draws. The plan expected +1; the browser check now measures the game's landing too, and checks that a landing with the Motion cues switch on draws exactly one more than with it off on Medium and High, and the same on Low.
 
 **Tests.** `dust.test.ts` (the geometry and material; puffs at the four wheels for any yaw, drifting out to their own side; more for a sketchy landing and a bail; gone within its life; soft discs facing the camera; falling behind with the roll for either stance; the bail's trail born behind the board as it slides, and over before the slide ends; no reallocation; `dustShown`), `renderers.test.ts` (the dust's twin), `browser/ledger.spec.ts` (above). Looked at in Chromium with a GPU on High, Medium and Low: a clean landing, a sketchy one and a bail, in slow motion; no errors, and no frame drawn once everything had come to rest.
+
+## ADR-75: The smoothness pass: a whole game measured, the dust built early, games in the long-run test (2026-11-10)
+
+**Context.** Step 20 of PLAN-PLAY-POLISH-REACH. Since rolling (ADR-67) frames run for a whole go, so four lab tricks no longer say how the game runs.
+
+**Decision.**
+- **The measurement plays a whole game** (`scripts/measure/measure.js`, `game=on` by default, `gos` caps it at 60): on the game screen with exact pops and the computer waiting for a key, the student's sets land and bail in turn and every copy bails, so the game has clean landings, bails, the computer's goes and replays, and ends. It reports the first go of the visit apart from the rest, with the count of intervals over 20 and 34 ms, and the targets table gets a row per tier for the game after its first go. The targets themselves (ADR-62) are unchanged.
+- **The dust's program is built before the first pop:** FlightDriver draws a newly mounted dust mesh once, empty, on a frame of its own. It was the only program first used in the middle of a landing.
+- **The long-run test plays games** (`browser/soak.spec.ts`): five lab tricks and five goes of a game per block, sampled back in the lab. `gameGo` in `browser/helpers.ts` plays one go. Its timeout went from 10 to 20 minutes, as a guard against a hang: a game's go without a GPU takes several seconds.
+- **What was found and left** (PERF-BUDGET.md, "Step 20"): High misses about one refresh per game, at a moment the page redraws its turn card, and the first trick of a visit has two late frames as the page draws its cards and the landing's sticker for the first time. Neither is the graphics, and neither gate was moved: on this day's 100 Hz display a single missed refresh reads 20 ms, which the "under 20 ms" gate fails.
+
+**Tests.** The long-run test (above). The measurement is run by hand; its numbers are in PERF-BUDGET.md.

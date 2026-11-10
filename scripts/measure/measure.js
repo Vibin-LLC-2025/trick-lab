@@ -20,6 +20,8 @@
 //   spin     7                    the preset popped for the switch combinations' draw calls (7 is the 360 flip)
 //   pops     4                    tricks timed in the lab, after one untimed pop that warms the GPU up
 //   loop     3                    seconds of the welcome preview timed where it loops (Medium, High)
+//   game     on | off             a whole game of SKATE played and timed on the game screen (below)
+//   gos      60                   the most goes that game may take
 //   base     /                    the app's base path (/trick-lab/ for a Pages build)
 //   cpu      1                    CPU slowdown for the loads (4 is a rough Chromebook stand-in; Chromium only)
 //   warm     on | off             one unmeasured load of each tier first (below)
@@ -60,6 +62,18 @@
 //   it, GPU time; each as median, p95 and the longest. Then the landing's
 //   frames, by the store (below). Where the welcome preview loops, the same
 //   times over a few seconds of it.
+//
+// A whole game (PLAN-PLAY-POLISH-REACH step 20): on the game screen, with
+// exact pops and the computer waiting for a key, a game is played to its end
+// (or `gos` goes): the student sets a trick they land, then one they bail,
+// and bails every copy, so the game has clean landings, bails, the computer's
+// own goes and the instant replay, and ends with the student spelling SKATE.
+// Every go is a real Space press. Frames run from the push-off to the board
+// coming to rest, so a game is thousands of frames against a lab trick's
+// sixty. Reported apart: the first go of the visit (what a first pop costs
+// while the graphics card prepares anything new) and the rest of the game,
+// each with the same times as the lab's tricks and the count of frame
+// intervals over 20 ms (a missed refresh at 60 Hz) and over 34 ms (two).
 //
 // Targets (ADR-62, docs/PERF-BUDGET.md "Targets"): the last table checks each
 // tier's tricks against its frame-time targets and its draw-call cap, and
@@ -108,6 +122,8 @@ async (page) => {
   const spin = opts.get('spin') ?? '7';
   const pops = Number(opts.get('pops') ?? 4);
   const loopSeconds = Number(opts.get('loop') ?? 3);
+  const game = (opts.get('game') ?? 'on') === 'on';
+  const gos = Number(opts.get('gos') ?? 60);
   const base = opts.get('base') ?? '/';
   const cpu = Number(opts.get('cpu') ?? 1);
   const warm = (opts.get('warm') ?? 'on') === 'on';
@@ -218,6 +234,12 @@ async (page) => {
     if (l) q.set('m-legs', l);
     if (prefs.trails) q.set('m-foot-trails', prefs.trails);
     if (prefs.cues) q.set('m-motion-cues', prefs.cues);
+    // The game screen: past the first game's walk-through, exact pops, and the computer waits for a key.
+    if (screen === 'skate') {
+      q.set('m-skate-taught', 'yes');
+      q.set('m-pop-mode', 'exact');
+      q.set('m-skate-auto', 'off');
+    }
     const models = f === 'off' ? MODELS[tier].filter((n) => !n.startsWith('Shoe')) : MODELS[tier];
     q.set('m-models', models.join(','));
     return `${origin}${base}?${q.toString().replace(/=(&|$)/g, '$1')}${HASH[screen]}`;
@@ -574,6 +596,77 @@ async (page) => {
     return readTimes(p);
   };
 
+  /** The frame intervals so far that missed a refresh at 60 Hz, and two. */
+  const longFrames = (p) =>
+    p.evaluate(() => ({ over20: window.__times.interval.filter((x) => x > 20).length, over34: window.__times.interval.filter((x) => x > 34).length }));
+
+  /**
+   * A whole game of SKATE on the game screen (header): the first go's times,
+   * then the rest of the game's. Each go: set the student's inputs if it is
+   * theirs, press Space, wait for the flight and for everything to come to
+   * rest (the roll, the landing's motion, the instant replay).
+   */
+  const gameTimes = async (p) => {
+    await instrument(p);
+    await p.evaluate(() => {
+      const st = window.__trickLabStore;
+      st.getState().startSkate();
+      window.__game = { yours: 0, grades: { clean: 0, sketchy: 0, bail: 0 }, replays: 0 };
+      st.subscribe((s, prev) => {
+        if (s.result && !prev.result) window.__game.grades[s.result.grade] += 1;
+        if (s.replay === 'plays' && prev.replay !== 'plays') window.__game.replays += 1;
+      });
+    });
+    await p.waitForTimeout(300);
+    const go = async () => {
+      const before = await p.evaluate(() => {
+        const st = window.__trickLabStore;
+        const g = st.getState().skate;
+        if (g.phase === 'off' || g.phase === 'over') return null;
+        if (g.phase === 'you-set' || g.phase === 'you-copy') {
+          const G = window.__game;
+          // Sets: one landed, one bailed, in turn. Copies: all bailed, so the game ends.
+          const good = g.phase === 'you-set' && G.yours % 2 === 0;
+          if (g.phase === 'you-set') {
+            G.yours += 1;
+            const open = ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it', '360-flip', '360-shove-it', 'double-kickflip', 'double-heelflip'].filter((id) => !g.used.includes(id));
+            st.getState().callSkateTrick(open[0]);
+          }
+          const call = st.getState().skate.call;
+          const k = good ? 1 : 0.5;
+          st.getState().setInput('pop', 0.35);
+          st.getState().setInput('flick', 1.9 * call.flips * k);
+          st.getState().setInput('scoop', 0.9 * call.halfShoves * k);
+        }
+        return st.getState().flightId;
+      });
+      if (before === null) return false;
+      await p.keyboard.press('Space');
+      await p.waitForFunction(
+        (before) => {
+          const s = window.__trickLabStore.getState();
+          return s.flightId !== before && s.status !== 'playing' && s.roll === 'still' && s.landing !== 'plays' && s.replay === 'none';
+        },
+        before,
+        { timeout: 60_000, polling: 'raf' },
+      );
+      await p.waitForTimeout(150);
+      return true;
+    };
+    await clearTimes(p);
+    await go();
+    const first = { ...(await readTimes(p)), ...(await longFrames(p)) };
+    await clearTimes(p);
+    let played = 1;
+    while (played < gos && (await go())) played += 1;
+    const rest = { ...(await readTimes(p)), ...(await longFrames(p)) };
+    const end = await p.evaluate(() => {
+      const s = window.__trickLabStore.getState();
+      return { phase: s.skate.phase, letters: s.skate.letters, grades: window.__game.grades, replays: window.__game.replays };
+    });
+    return { gos: played, first, rest, ...end };
+  };
+
   // The switch combinations: the welcome screen shows feet and legs only; the lab adds trails and cues. Legs need the feet.
   const combos = (screen) => {
     const out = [];
@@ -622,6 +715,7 @@ async (page) => {
         const c = await counts(p);
         if (screen === 'lab') c.trick = await trickTimes(p);
         if (screen === 'home' && c.frameloop === 'always') c.trick = await loopTimes(p);
+        if (screen === 'skate' && game) c.game = await gameTimes(p);
         row.screens[screen] = c;
       }
       if (switches === 'all')
@@ -669,6 +763,22 @@ async (page) => {
       const landing = !l ? '' : l.dropped ? `dropped (${l.dropped})` : `${l.toIdle ?? 'n/a'} / ${l.afterIdle}`;
       md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t ? ms(t.work) : ''} | ${t ? ms(t.interval) : ''} | ${landing} |`);
     }
+  // A whole game (step 20): the first go of the visit, then the rest of the game.
+  if (out.rows.some((r) => r.screens.skate && r.screens.skate.game)) {
+    md.push(
+      '',
+      '| Tier | Part of the game | Frames | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Intervals over 20 ms / over 34 ms |',
+      '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    );
+    const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} / ${x.max} ms` : x ?? '');
+    for (const r of out.rows) {
+      const g = r.screens.skate && r.screens.skate.game;
+      if (!g) continue;
+      const what = `${g.gos} goes (${g.grades.clean} clean, ${g.grades.sketchy} sketchy, ${g.grades.bail} bails, ${g.replays} replays), ${g.phase === 'over' ? 'played to the end' : 'stopped at the limit'}`;
+      for (const [name, t] of [['the first go', g.first], [`the rest: ${what}`, g.rest]])
+        md.push(`| ${r.tier} | ${name} | ${t.interval ? t.interval.n : 0} | ${ms(t.cpu)} | ${ms(t.gpu)} | ${ms(t.work)} | ${ms(t.interval)} | ${t.over20} / ${t.over34} |`);
+    }
+  }
   if (switches === 'all') {
     const names = Object.keys(out.rows[0]?.switches ?? {});
     md.push('', `| Tier | ${names.join(' | ')} | Most |`, `| --- | ${names.map(() => '---').join(' | ')} | --- |`);
@@ -690,25 +800,33 @@ async (page) => {
     if (!T || !t) continue;
     const check = (x, key, limit) => (x && typeof x === 'object' ? { value: x[key], limit, pass: x[key] < limit } : { value: null, limit, pass: null });
     const most = switches === 'all' ? Math.max(...Object.values(r.switches)) : r.screens.lab.calls;
+    // A whole game, where one was played: its frames after the first go (the target's "after the first second").
+    const g = r.screens.skate && r.screens.skate.game ? r.screens.skate.game.rest : null;
     out.targets.push({
       tier: r.tier,
       gpu: check(t.gpu, 'p95', T.gpu),
       work: check(t.work, 'p95', T.work),
       longest: check(t.interval, 'max', T.interval),
       calls: { value: most, limit: T.calls, pass: most < T.calls },
+      game: g ? { gpu: check(g.gpu, 'p95', T.gpu), work: check(g.work, 'p95', T.work), longest: check(g.interval, 'max', T.interval) } : null,
     });
   }
-  out.pass = out.targets.length > 0 && out.targets.every((t) => [t.gpu, t.work, t.longest, t.calls].every((c) => c.pass !== false));
+  const checksOf = (t) => [t.gpu, t.work, t.longest, t.calls, ...(t.game ? [t.game.gpu, t.game.work, t.game.longest] : [])];
+  out.pass = out.targets.length > 0 && out.targets.every((t) => checksOf(t).every((c) => c.pass !== false));
   if (out.targets.length) {
     const cell = (c, unit) => (c.pass === null ? `not measured (under ${c.limit}${unit})` : `${c.value}${unit} of under ${c.limit}${unit}: ${c.pass ? 'pass' : 'FAIL'}`);
     md.push(
       '',
-      `| Tier | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, ${switches === 'all' ? 'every switch on' : 'as loaded'} | Targets |`,
-      '| --- | --- | --- | --- | --- | --- |',
+      `| Tier | Over | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, ${switches === 'all' ? 'every switch on' : 'as loaded'} | Targets |`,
+      '| --- | --- | --- | --- | --- | --- | --- |',
     );
     for (const t of out.targets) {
       const ok = [t.gpu, t.work, t.longest, t.calls].every((c) => c.pass !== false);
-      md.push(`| ${t.tier} | ${cell(t.gpu, ' ms')} | ${cell(t.work, ' ms')} | ${cell(t.longest, ' ms')} | ${cell(t.calls, '')} | ${ok ? 'pass' : 'FAIL'} |`);
+      md.push(`| ${t.tier} | the lab's tricks | ${cell(t.gpu, ' ms')} | ${cell(t.work, ' ms')} | ${cell(t.longest, ' ms')} | ${cell(t.calls, '')} | ${ok ? 'pass' : 'FAIL'} |`);
+      if (t.game) {
+        const okGame = [t.game.gpu, t.game.work, t.game.longest].every((c) => c.pass !== false);
+        md.push(`| ${t.tier} | a whole game, after its first go | ${cell(t.game.gpu, ' ms')} | ${cell(t.game.work, ' ms')} | ${cell(t.game.longest, ' ms')} | | ${okGame ? 'pass' : 'FAIL'} |`);
+      }
     }
   }
   out.markdown = md.join('\n');

@@ -86,6 +86,8 @@ The options are the query of the page the session is on (tiers, networks, screen
 
 **From 2026-11-09 (step 6, ADR-62)** it reports the spread, not only the middle: for the render CPU time, the GPU time, the frame's whole work (`perfStats.workMs`, from R3F's before-effect to the end of the draw) and the interval between frames, the median, the 95th percentile and the longest. A last table checks each tier against the targets above (`targets` and `pass` in the JSON).
 
+**From 2026-11-10 (step 20, ADR-75)** it plays a whole game of SKATE on the game screen (`game=on`, the default; `gos=60` caps it): every go a real Space press, the student's sets landing and bailing in turn and every copy bailing, so the game ends. The first go of the visit and the rest of the game are reported apart, with the count of frame intervals over 20 and 34 ms, and the targets table has a row per tier for the game after its first go.
+
 Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
 
 ## Measured, realistic board pass (2026-11-04)
@@ -628,3 +630,50 @@ The targets table the script prints:
 - **One frame on High took two refreshes** (16.6 ms) in four tricks: inside the target. Nothing took three.
 - **The app's own work is nearly all the render call:** the work is 0.1 ms above the render CPU time, which is FlightDriver's pose.
 - **Loading is unchanged:** the complete scene at 1.07 s on High, 1.02 s on Medium, 0.45 s on Low, cold at full speed.
+
+### Step 20: the smoothness pass (ADR-75)
+
+Rolling means frames run for a whole go, not half a second, so the measurement now plays a whole game of SKATE on each tier (`game=on`, the default; "How to measure" and the script's header say how). Measured 2026-11-10 on step 20's build: Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, dark theme, cold visits at full speed. The browser drew at 100 frames a second on this day, so a frame interval is 10 ms and one missed refresh reads 20 ms (step 6's run was at 120: 8.3 and 16.7 ms).
+
+**Loading** is where it was (the target: the full scene in about 1.0 to 1.2 s at full speed), with the skate spot, the decks and the dust in the build:
+
+| Tier | UI (FCP) | Loading picture | First 3D frame | All models on screen | Picture lifts |
+| --- | --- | --- | --- | --- | --- |
+| high | 0.11 s | 0.07 s | 1.15 s | 1.15 s | 1.22 s |
+| medium | 0.10 s | 0.06 s | 1.08 s | 1.08 s | 1.12 s |
+| low | 0.10 s | 0.07 s | 0.46 s | none | 0.49 s |
+
+**A whole game**, every go a real Space press, played to its end:
+
+| Tier | Part of the game | Frames | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Intervals over 20 ms / over 34 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| high | the first go | 335 | 0.8 / 2.2 / 6.1 ms | 1.18 / 2.23 / 4.39 ms | 1 / 2.3 / 6.3 ms | 10 / 10.1 / 10.2 ms | 0 / 0 |
+| high | the rest: 32 goes (14 clean, 4 sketchy, 14 bails, 4 replays), played to the end | 5566 | 0.7 / 1.7 / 4.6 ms | 0.98 / 1.9 / 2.82 ms | 0.8 / 1.9 / 4.8 ms | 10 / 10.1 / 20.1 ms | 1 / 0 |
+| medium | the first go | 166 | 0.7 / 2.1 / 3.3 ms | 0.79 / 2.56 / 3.87 ms | 0.8 / 2.7 / 4.4 ms | 10 / 10.1 / 10.5 ms | 0 / 0 |
+| medium | the rest: 19 goes (8 clean, 1 sketchy, 10 bails, 2 replays), played to the end | 3261 | 0.6 / 1.5 / 3.8 ms | 0.79 / 0.85 / 2.16 ms | 0.7 / 1.7 / 4.3 ms | 10 / 10.1 / 11.2 ms | 0 / 0 |
+| low | the first go | 337 | 0.2 / 0.6 / 1.3 ms | 0.13 / 0.16 / 2.63 ms | 0.4 / 0.9 / 3.9 ms | 10 / 10.1 / 10.3 ms | 0 / 0 |
+| low | the rest: 14 goes (6 clean, 1 sketchy, 7 bails, 1 replays), played to the end | 2098 | 0.2 / 0.4 / 1.7 ms | 0.14 / 0.15 / 1.88 ms | 0.3 / 0.6 / 2.2 ms | 10 / 10.1 / 10.5 ms | 0 / 0 |
+
+The targets table the script prints (the game's rows are new):
+
+| Tier | Over | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, every switch on | Targets |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | the lab's tricks | 0.66 ms of under 4 ms: pass | 1.5 ms of under 4 ms: pass | 20 ms of under 20 ms: FAIL | 34 of under 60: pass | FAIL |
+| high | a whole game, after its first go | 1.9 ms of under 4 ms: pass | 1.9 ms of under 4 ms: pass | 20.1 ms of under 20 ms: FAIL | | FAIL |
+| medium | the lab's tricks | 0.59 ms of under 3 ms: pass | 2 ms of under 4 ms: pass | 10.2 ms of under 20 ms: pass | 19 of under 40: pass | pass |
+| medium | a whole game, after its first go | 0.85 ms of under 3 ms: pass | 1.7 ms of under 4 ms: pass | 11.2 ms of under 20 ms: pass | | pass |
+| low | the lab's tricks | 0.1 ms of under 2 ms: pass | 1.5 ms of under 4 ms: pass | 10.2 ms of under 20 ms: pass | 12 of under 20: pass | pass |
+| low | a whole game, after its first go | 0.15 ms of under 2 ms: pass | 0.6 ms of under 4 ms: pass | 10.5 ms of under 20 ms: pass | | pass |
+
+What it says:
+
+- **The graphics and the app's own work are well inside the targets through a whole game** on every tier: on High the graphics card's time is 1.9 ms of 4 at the 95th percentile and the app's work 1.9 ms of 4. A game costs the graphics card about 1 ms a frame more than the lab's tricks on High (the skate spot and its shadows).
+- **Medium and Low missed no refresh in a whole game.**
+- **High misses about one refresh in a game, and the "longest frame" target is not met there.** Over four more High runs (12 lab tricks and a whole game each): a game's longest interval was 20.1, 19.9, 30 and 20.1 ms, one frame in 2,900 to 5,600 each time, and the lab's 12 tricks had one frame of 20 ms in each run. The target is no frame longer than 16.7 ms, and a single missed refresh at 100 Hz is 20 ms, so by the letter this fails; on step 6's 120 Hz run the same single missed refresh read 16.6 ms and passed. The gate was not moved.
+  - **It is not the graphics.** The longest GPU time in a game was 2.8 ms and the longest frame of the app's own work 6.1 ms, both inside one 10 ms refresh. A probe that logged every late frame with what the store had just done found the late frame once, 40 ms after the turn changed (the page redrawing its turn card while the board rolled), and in two other whole games (4,076 and 2,610 frames) found none.
+  - **No fix was made for it:** nothing in the scene causes it, and it is one frame in thousands. If it matters, the next thing to try is making the turn card's update cheaper (it is the page's own layout, outside the 3D view).
+- **The first trick of a visit.** In a browser started fresh for each run (five runs), the first go on High had one late frame of 20 to 30 ms just after the first pop and one about 50 ms after the first landing, when the student went first; none when the computer went first. Both come as the page draws its cards and the landing's sticker for the first time, not from the graphics card: every effect the first pop turns on is a number set on a program that already exists (the motion blur, the replay's bend).
+  - **The one program that was new at the first landing is the dust's** (step 19). It is now built before the first pop: the mesh is drawn once, empty, when the game screen opens. The late frame after the landing went from 20 to 30 ms (two of five runs at 30) to 20 ms in each of four runs; the one after the pop is the page's and stayed.
+  - Later goes of the same visit have neither.
+- **The long-run test now plays games.** Half of every block of ten is five goes of a game on the game screen (the roll, the landings' motion, the dust, the skate spot, the computer's deck, replays), then back to the lab for the sample. The counts stayed flat: 23 geometries and 28 textures on High at every sample, 8 and 2 on Low; the heap grew 1,963 KB (limit 4,096), 271 KB without compiled code. It takes about 6 minutes here (it was about 3).
+- **Not done here:** a game on a laptop with built-in graphics on Medium. That is the owner's, from the checklist at the end of the plan.

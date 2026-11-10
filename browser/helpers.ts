@@ -194,3 +194,42 @@ export async function popAndLand(page: Page, windowMs = 0) {
     return { calls: l.calls, toIdle: atIdle - endpoint, afterIdle: perf.frames - atIdle, dropped: false };
   }, windowMs);
 }
+
+/**
+ * One go of a game of SKATE on the game screen (exact pops, the computer
+ * waiting for a key: the prefs the ledger check opens with), by a real Space
+ * press, then everything coming to rest: the roll, the landing's motion and
+ * the instant replay (ADR-67, ADR-68, ADR-72). A game that is over, or not
+ * started, is started first. The student's sets land and bail in turn
+ * (`n` even lands) and their copies always bail, so a run of goes has clean
+ * landings, bails, replays and the computer's own goes. Returns the go's grade.
+ */
+export async function gameGo(page: Page, n: number) {
+  const before = await page.evaluate((n) => {
+    const st = (window as unknown as DebugWindow).__trickLabStore;
+    type Game = { phase: string; used: string[]; call: { flips: number; halfShoves: number } | null };
+    const game = () => st.getState().skate as unknown as Game;
+    if (game().phase === 'off' || game().phase === 'over') st.getState().startSkate();
+    const g = game();
+    if (g.phase === 'you-set' || g.phase === 'you-copy') {
+      const good = g.phase === 'you-set' && n % 2 === 0;
+      if (g.phase === 'you-set') st.getState().callSkateTrick(['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it', '360-flip', '360-shove-it'].filter((id) => !g.used.includes(id))[0]!);
+      const call = game().call!;
+      const k = good ? 1 : 0.5;
+      st.getState().setInput('pop', 0.35);
+      st.getState().setInput('flick', 1.9 * call.flips * k);
+      st.getState().setInput('scoop', 0.9 * call.halfShoves * k);
+    }
+    return (st.getState() as unknown as { flightId: number }).flightId;
+  }, n);
+  await page.keyboard.press('Space');
+  await page.waitForFunction(
+    (before) => {
+      const s = (window as unknown as DebugWindow).__trickLabStore.getState() as unknown as { flightId: number; status: string; roll: string; landing: string; replay: string };
+      return s.flightId !== before && s.status !== 'playing' && s.roll === 'still' && s.landing !== 'plays' && s.replay === 'none';
+    },
+    before,
+    { timeout: 120_000, polling: 'raf' },
+  );
+  return page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().result?.grade ?? null);
+}

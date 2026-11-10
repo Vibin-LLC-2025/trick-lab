@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73) and 19 (dust, ADR-74) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 20 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74) and 20 (the smoothness pass, ADR-75) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 21 is next. One target is not met on High (step 20): about one late frame in a whole game.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -78,7 +78,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 1c6bb20 | 16: decks (ADR-71): Trick Lab, Dusk, Bolt or Ripple, chosen on the welcome screen; the computer rides Circuit, with teal soles and laces. KTX2 textures per board level, downloaded only when shown, each with a budget. No draw call added |
 | 22f13d2 | 17: the game's camera and instant replay (ADR-72): Filmer, Side and Above, lower than the lab's; after a made set or copy the flight again in slow motion from a low, wide camera, with a fisheye bend on High and Medium; Skip replay on Pop and Escape. The legs never hide the board (checked in six poses, both stances, High and Medium). No draw call added |
 | bf51c25 | 18: sound (ADR-73): CC0 recordings from Kenney's Impact Sounds for the pop, a new catch, the landing and the bail (11 MP3s, 32 KB, two or three takes each at a random pitch), a synthesized rolling sound that ticks on the concrete's joints, a synthesized scuff, better synthesized fallbacks, and a sound check under ?debug. Nothing sound-related downloads while sound is off; the main page went from 106.0 to 104.9 KB. The Sound switch stays in the top bar, not a second one beside Start game. The owner's list of changes is asked |
-| (step 19) | 19: dust (ADR-74): small puffs at the wheels when a game's landing touches down, left behind as the board rolls on, and a trail behind a bailed board while it slides; Medium and High, with the Motion cues switch, never under reduced motion. One draw while it is in the air; the expected worst case did not move (High 36, Medium 21, Low 12) |
+| 57adb49 | 19: dust (ADR-74): small puffs at the wheels when a game's landing touches down, left behind as the board rolls on, and a trail behind a bailed board while it slides; Medium and High, with the Motion cues switch, never under reduced motion. One draw while it is in the air; the expected worst case did not move (High 36, Medium 21, Low 12) |
+| (step 20) | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -457,7 +458,7 @@ Today there are six short sounds, each made in the browser from a few beeps and 
 
 ## Phase E: performance and reach
 
-### 20. A smoothness pass
+### 20. A smoothness pass. Done (ADR-75), with one target not met
 Rolling means frames run for a whole turn, not half a second, so this is measured again.
 
 - **A whole game, measured:** the frame-time spread and the longest frame over a full game on each quality level, against the targets.
@@ -466,6 +467,7 @@ Rolling means frames run for a whole turn, not half a second, so this is measure
 - **Loading:** the full scene still appears as fast as today at full speed (about 1.0 to 1.2 s), with the new models.
 - **Fix what fails.** Results go into PERF-BUDGET.md.
 - **If the owner has a laptop with built-in graphics,** one game on it on Medium.
+- **As it went (2026-11-10):** the graphics and the app's work are well inside the targets through a whole game on every level, loading is unchanged, and the long-run test passes with games in it. Medium and Low missed no refresh. **High misses about one refresh per game** (one frame in 3,000 to 5,500, 20 ms on a 100 Hz display, once 30 ms), so "no frame longer than 16.7 ms" is not met there by the letter. It comes from the page redrawing a card, not from the 3D view; nothing was changed for it and the gate was not moved. The first trick of a visit has two late frames of the same kind. The numbers are in PERF-BUDGET.md, "Step 20".
 
 ### 21. Phones and touch
 Small, late, and the first step to drop (the owner, 2026-11-09: phones don't matter enough to move it up).
