@@ -2,7 +2,8 @@
 // into public/, so Vite serves them as static files. Kept out of the lazy
 // BoardModel chunk so Board.tsx can pick a URL without loading the GLTF loader.
 // Which files a tier shows is modelFiles.ts (pure, read by the scripts too).
-import { BOARD_GLB, BOARD_HIGH_GLB, GROUND_GLB, SHOES_GLB, SPOT_GLB } from '../asset/spec';
+import { deckFile, MODEL_DECK, type DeckId } from '../asset/deckSpec';
+import { BOARD_GLB, BOARD_HIGH_GLB, GROUND_GLB, SHOES_GLB, SPOT_GLB, type DetailLevel } from '../asset/spec';
 import type { Quality } from '../store';
 import { boardFileFor, modelFilesFor, modelFilesUnusedBy } from './modelFiles';
 
@@ -14,6 +15,9 @@ export const SHOES_URL = url(SHOES_GLB);
 export const GROUND_URL = url(GROUND_GLB);
 /** The skate spot (ADR-69): the game screen only, on Medium and High, so not in modelsFor (no first visit fetches it). */
 export const SPOT_URL = url(SPOT_GLB);
+
+/** A deck's texture for a board level (ADR-71); null for today's, which is inside the model. */
+export const deckUrl = (deck: DeckId, level: DetailLevel): string | null => (deck === MODEL_DECK ? null : url(deckFile(deck, level)));
 
 /** High gets the high-detail board, Medium the original; Low never asks. */
 export const boardUrlFor = (quality: Exclude<Quality, 'low'>) => url(boardFileFor(quality));

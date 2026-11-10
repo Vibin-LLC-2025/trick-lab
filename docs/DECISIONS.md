@@ -908,3 +908,33 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **Downloads.** The loading pictures (ADR-56) now show the legs, as the High welcome screen does. At WebP quality 0.8 they grew from 27 to 36.5 KB, past their download budget. They are now encoded at 0.6 (`STILL.quality`): 26.4 and 26.5 KB, with no visible difference at the stage's size. No limit was raised.
 
 **Tests.** `store.test.ts`: the default on each level, a saved choice winning, and legs nobody chose following the level by hand and by the step-down. `ui.test.tsx`: the switch starts pressed above Low. `legs.test.ts`: the cuff (sock only below its edge, wider than the trouser above) and the cloth (a seamless map of unit normals, on the material, UVs in metres).
+
+## ADR-71: Decks: the student's choice of four, and the computer's own (2026-11-10)
+
+**Context.** Step 16 of PLAN-PLAY-POLISH-REACH. The owner approved four deck drawings on 2026-11-10 (decision 25): Dusk, Bolt and Ripple for the student, Circuit for the computer. They are in `assets/source/decks/`. With today's graphic, the student chooses between four, and the computer rides its own so you can see whose go it is.
+
+**Decision.**
+- **Each new deck is a KTX2 texture per board level**, in `public/models/decks/` (`deck-<name>-<medium|high>.ktx2`). `npm run assets` builds them (`npm run assets -- decks` alone) from the SVG, at that board GLB's deck-bottom size with the same wear baked over it and the same encoding (`buildDeckTexture` in `scripts/lib/build.ts`, numbers in `src/asset/deckSpec.ts`). So a deck texture stands in for the Graphic material's map. The High board keeps its own wear roughness map and clear coat. Today's deck stays inside the GLBs, with no file of its own.
+- **Budgets.** `assets:check` reads each file's KTX2 header: the GLB's deck-bottom size, the full mip chain, sRGB, and at most 40 KB (Medium) or 96 KB (High) (`DECK_BUDGET`). Built 2026-11-10: 16.5 to 25.5 KB on Medium, 37.5 to 57.5 KB on High. `budget.test.ts` checks that each committed file is byte for byte a fresh build.
+- **Downloaded only when shown.** No first visit downloads a deck (today's is the default), so the download budget is unchanged. The choice itself is in the first page download: its names live in `deckSpec.ts`, which imports only types from the board spec (the sizes are in `deckTexture.ts`, for the scripts), and the page's main chunk is 105.5 of its 106 KB. A returning student with a saved deck downloads one file for the tier. The computer's Circuit downloads the first time its go comes round.
+- **The swap** (`scene/deckSwap.ts`, one registry made in `gltf.ts` with the models' own KTX2 loader):
+  - per board model, it keeps the GLB's own map and every deck texture loaded for it;
+  - each request has a number, so a slow download that finishes after a later choice is never applied;
+  - a failed download leaves the material as it was and is tried again on the next ask;
+  - before a model is freed (a move down a tier), its own map goes back on and every deck texture is freed once, one still downloading included.
+  - A swapped texture is matched to the map it replaces (orientation, colour space, wrapping, filtering, anisotropy, UV channel). It reaches the WebGPURenderer's materials without a rebuild (checked on High).
+- **Which deck shows** (`shownDeck`, `boardRider` in `store/deck.ts`):
+  - in a game, the rider of the go in view, while its flight plays and its landing shows, so a landing never changes deck under the board; between goes, whoever is up;
+  - everywhere else, the student's.
+  - The computer's go shows Circuit, and its shoes' soles and laces take Circuit's teal (`ART.computer.shoe`, `scene/riderLook.ts`) on High's shoe model and Medium's simple shoes.
+- **The choice.** A "Deck" radio group on the welcome screen (`.segmented`, under the two ways in): Trick Lab, Dusk, Bolt, Ripple. Saved under `trick-lab.deck` and announced ("Dusk deck."). Never logged, not reset, not exported. Its hint names the computer's deck, and on Low says the decks show on High and Medium.
+- **A failed download keeps the current deck and says so.** The store puts the choice back to the deck the board kept (today's, if the failing deck was the saved one) and announces "The Ripple deck could not be downloaded. Keeping the Trick Lab deck." A failed Circuit only writes a console warning: the computer's board keeps the student's deck.
+- **Low is frozen** (ADR-62): its board has no graphic, so no deck changes it, and the computer's shoes keep Low's colours.
+
+**Draw calls.** None: a texture swap.
+
+**Tests.**
+- `deckSwap.test.ts`: rapid changes (a late download is never applied), a failed download and its retry, back to today's without a download, a model freed with a download still running (every texture freed exactly once, its own map back on), and a model loaded again after a tier change.
+- `deck.test.ts`: the choice, its saving, the failure path, and whose board is on screen through a game.
+- `Screens.test.tsx`: the radio group by keyboard.
+- `browser/decks.spec.ts`: on High and Medium, a deck reaches the board's material and comes off again; a blocked download leaves the board, puts the choice back and says so.

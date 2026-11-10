@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
-import type { Mesh } from 'three';
-import { SHOE_PARTS } from '../asset/shoeSpec';
-import { useTrickStore } from '../store';
+import type { Mesh, MeshStandardMaterial } from 'three';
+import { SHOE_MATERIALS, SHOE_PARTS } from '../asset/shoeSpec';
+import { boardRider, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { applyAnisotropy } from './BoardModel';
 import { useModel } from './gltf';
 import { noteShown } from './modelCache';
 import { SHOES_URL } from './modelUrls';
+import { dressShoe } from './riderLook';
 
 /**
  * One shoe from shoes.glb (a right shoe: sole, upper, laces, three draw
@@ -24,6 +25,15 @@ export function ShoesModel({ castShadow }: { castShadow: boolean }) {
     applyAnisotropy(materials, anisotropy);
     invalidate();
   }, [invalidate, materials, anisotropy]);
+  // The computer's shoes on its go (ADR-71): soles and laces in its colour.
+  const computer = useTrickStore((s) => boardRider(s) === 'computer');
+  useEffect(() => {
+    for (const name of [SHOE_MATERIALS.sole.name, SHOE_MATERIALS.laces.name]) {
+      const m = materials[name] as MeshStandardMaterial | undefined;
+      if (m) dressShoe(m, computer);
+    }
+    invalidate();
+  }, [invalidate, materials, computer]);
   return (
     <group dispose={null}>
       {SHOE_PARTS.map(({ node }) => {

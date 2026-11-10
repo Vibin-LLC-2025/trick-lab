@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69) and 15 (the legs on by default, ADR-70) are done.** Step 16 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70) and 16 (decks, ADR-71) are done.** The merge point after step 16 is asked; step 17 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -74,7 +74,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | e72b079 | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
 | 2fb9f74 | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
 | 21bac64 | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
-| (step 15) | 15: the legs on by default on High and Medium (ADR-70), in trousers with a cuff over the shoe, a little bunching and a twill cloth; the hip fade a third shorter. The loading pictures show the legs, encoded at WebP 0.6 to stay in budget. No draw call added to the worst case |
+| 8762405 | 15: the legs on by default on High and Medium (ADR-70), in trousers with a cuff over the shoe, a little bunching and a twill cloth; the hip fade a third shorter. The loading pictures show the legs, encoded at WebP 0.6 to stay in budget. No draw call added to the worst case |
+| (step 16) | 16: decks (ADR-71): Trick Lab, Dusk, Bolt or Ripple, chosen on the welcome screen; the computer rides Circuit, with teal soles and laces. KTX2 textures per board level, downloaded only when shown, each with a budget. No draw call added |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -384,7 +385,15 @@ As built, where it differs from the list below or adds to it:
 - **Never hides the board** from the game's camera: checked in the six poses, both stances.
 - **An ADR** that answers ADR-48's reasons for shoes only.
 
-### 16. Decks: yours and the computer's
+### 16. Decks: yours and the computer's. Done (ADR-71)
+As built, where it differs from the list below or adds to it:
+- **The computer's shoe colour** is Circuit's teal on the soles and laces (High's shoe model, Medium's simple shoes).
+- **Whose board shows**: the rider of the go in view while its flight and landing show, otherwise whoever is up next, so a landing never changes deck under the board.
+- **On Low** nothing changes: its board has no graphic and Low is frozen (ADR-62). The choice's hint says the decks show on High and Medium.
+- **A failed download** of the student's deck puts the choice back and says so; a failed Circuit only warns in the console, and the computer's board keeps the student's deck.
+- **Budgets**: 40 KB per Medium file and 96 KB per High file (the largest built is 25.5 and 57.5 KB). No first visit downloads a deck, so the download budget is unchanged.
+- **Checked in a browser** on High, Medium and Low: each deck from below, the computer's go with Circuit and teal shoes, the choice by keyboard at 1400 and 390 px wide. A new browser check swaps a deck on High and Medium and blocks a download.
+
 - **Four deck graphics:** today's, plus three new ones drawn here as SVGs. The owner approves them before they are built in, so the drawings are started early and shown as soon as they exist.
   - **Approved as drawn, 2026-11-10 (decision 25):** Dusk, Bolt and Ripple for the player, Circuit for the computer. The four SVGs are in `assets/source/decks/`. Nothing reads them yet; this step builds them in.
   - That makes five graphics with today's: the player chooses between today's, Dusk, Bolt and Ripple, and Circuit is the computer's own.

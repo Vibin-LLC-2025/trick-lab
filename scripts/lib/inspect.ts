@@ -4,9 +4,9 @@
 import { readFileSync } from 'node:fs';
 import { ImageUtils, NodeIO, Primitive, TextureInfo, getBounds, type Node } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { read as readKtx2 } from 'ktx-parse';
+import { KHR_DF_TRANSFER_SRGB, read as readKtx2 } from 'ktx-parse';
 import { MeshoptDecoder } from 'meshoptimizer';
-import type { AssetStats, TextureStat } from './budget';
+import type { AssetStats, DeckTextureStat, TextureStat } from './budget';
 
 const F = TextureInfo.MinFilter;
 const MIPMAP_FILTERS = new Set<number>([
@@ -87,4 +87,16 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
     nodeNames,
     bounds: { min: [b.min[0], b.min[1], b.min[2]], max: [b.max[0], b.max[1], b.max[2]] },
   };
+}
+
+/** A deck texture's KTX2 header (step 16, ADR-71); a file that is not KTX2 reads as no size. */
+export function inspectDeckTexture(path: string): DeckTextureStat {
+  const bytes = readFileSync(path);
+  try {
+    const k = readKtx2(new Uint8Array(bytes));
+    const srgb = k.dataFormatDescriptor[0]?.transferFunction === KHR_DF_TRANSFER_SRGB;
+    return { bytes: bytes.byteLength, width: k.pixelWidth, height: k.pixelHeight, levels: k.levels.length, srgb };
+  } catch {
+    return { bytes: bytes.byteLength, width: null, height: null, levels: 0, srgb: false };
+  }
 }

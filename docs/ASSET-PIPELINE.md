@@ -191,3 +191,16 @@ A fifth asset, `public/models/spot.glb`: a kerb, a flat rail, a ledge and a wall
 | `scripts/lib/budget.ts` | the spot's rows: within the span, on the ground, behind the board | `npm run assets:check` |
 
 `assets:check` for `spot.glb` (2026-11-10): 59.2 KB of 300 KB, 1 of 1 draw call, 120 of 15,000 triangles, 2 of 3 textures (colour 18.4 KB and normal 35.5 KB KTX2, 512 px), within the span (+- 5.6 m), on the ground, behind the board.
+
+## Deck graphics (2026-11-10, ADR-71)
+
+Four more deck bottoms, each a KTX2 texture per board level in `public/models/decks/`, built by `npm run assets` (`npm run assets -- decks` alone) from the drawings in `assets/source/decks/`. Each is rasterized with resvg at that board's deck-bottom size, gets the same wear baked over it as the GLB's own, and is encoded the same way (colour, ETC1S, full mip chain). The runtime swaps it in for the Graphic material's map (`src/scene/deckSwap.ts`); today's graphic stays inside the GLBs.
+
+| File | Medium (1024 x 256) | High (2048 x 512) |
+| --- | --- | --- |
+| Dusk | 19.2 KB | 41.7 KB |
+| Bolt | 16.5 KB | 37.5 KB |
+| Ripple | 25.5 KB | 57.5 KB |
+| Circuit (the computer's) | 17.1 KB | 37.6 KB |
+
+`assets:check` reads each file's KTX2 header: the size of its board's deck bottom, the full mip chain (11 and 12 levels), sRGB, and `DECK_BUDGET` (40 KB and 96 KB). `budget.test.ts` rebuilds each and compares it byte for byte with the committed file.

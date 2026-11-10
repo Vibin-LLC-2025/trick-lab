@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand';
+import { MODEL_DECK } from '../asset/deckSpec';
 import { isStance } from '../sim/feet';
+import { DECK_KEY, deckAnnouncement, deckFailedAnnouncement, deckFrom } from './deck';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
 import { capQuality, detectQuality, effectiveQuality, isQuality } from './quality';
@@ -186,6 +188,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     celebration: null,
     soundOn: readSoundOn(),
     soundCue: null,
+    deck: deckFrom(read(DECK_KEY)),
+    deckBefore: deckFrom(read(DECK_KEY)),
     feetVisible: readFeetVisible(),
     legsVisible: readLegsVisible(quality.quality),
     footPathsVisible: readFootPathsVisible(),
@@ -343,6 +347,21 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       if (!get().stageReady) set({ stageReady: true });
     },
     celebrate: (trick, clean) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick, clean } }),
+    setDeck: (deck) => {
+      const before = get().deck;
+      if (before === deck) return;
+      save(DECK_KEY, deck);
+      set({ deck, deckBefore: before });
+      get().announce(deckAnnouncement(deck));
+    },
+    deckFailed: (deck) => {
+      const s = get();
+      if (s.deck !== deck) return;
+      const kept = s.deckBefore !== deck ? s.deckBefore : MODEL_DECK;
+      save(DECK_KEY, kept);
+      set({ deck: kept, deckBefore: kept });
+      s.announce(deckFailedAnnouncement(deck, kept));
+    },
     toggleSound: () => {
       const soundOn = !get().soundOn;
       save(SOUND_KEY, soundOn ? 'on' : 'off');

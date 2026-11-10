@@ -3,10 +3,12 @@
 // feed it hand-made stats. The asset key picks the limits (BUDGETS), the
 // expected nodes and the size checks: the two boards share the deck's outline
 // and rest height, the shoe has its own footprint, the ground its plane.
+import { DECK_BUDGET } from '../../src/asset/deckSpec';
+import { deckTexture } from '../../src/asset/deckTexture';
 import { BAY, GROUND_PARTS } from '../../src/asset/groundSpec';
 import { SHOE, SHOE_PARTS } from '../../src/asset/shoeSpec';
 import { SPOT, SPOT_PARTS } from '../../src/asset/spotSpec';
-import { BUDGETS, OUTLINE, PARTS, REST_Y, type AssetKey } from '../../src/asset/spec';
+import { BUDGETS, OUTLINE, PARTS, REST_Y, type AssetKey, type DetailLevel } from '../../src/asset/spec';
 
 export interface TextureStat {
   name: string;
@@ -177,4 +179,32 @@ export function formatTable(rows: BudgetRow[]): string {
   const widths = head.map((h, i) => Math.max(h.length, ...body.map((b) => b[i]!.length)));
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join('  ').trimEnd();
   return [line(head), widths.map((w) => '-'.repeat(w)).join('  '), ...body.map(line)].join('\n');
+}
+
+/** What the deck check reads from a deck texture (step 16, ADR-71): its KTX2 header. */
+export interface DeckTextureStat {
+  bytes: number;
+  /** Null when the file is not a KTX2 container. */
+  width: number | null;
+  height: number | null;
+  levels: number;
+  /** The colour transfer function is sRGB, as the GLB's own deck bottom. */
+  srgb: boolean;
+}
+
+/**
+ * A deck texture's rows: KTX2, the size of its board level's deck bottom (so
+ * it stands in for that map), the full mip chain, sRGB, and its byte budget.
+ */
+export function evaluateDeckTexture(s: DeckTextureStat, level: DetailLevel): BudgetRow[] {
+  const T = deckTexture(level);
+  const kb = (n: number) => `${(n / 1024).toFixed(1)} KB`;
+  const full = fullMipLevels(T);
+  return [
+    { check: 'KTX2', value: s.width === null ? 'no' : 'yes', limit: 'yes', ok: s.width !== null },
+    { check: 'Size', value: `${s.width ?? '?'} x ${s.height ?? '?'}`, limit: `${T.width} x ${T.height}`, ok: s.width === T.width && s.height === T.height },
+    { check: 'Mip levels', value: String(s.levels), limit: String(full), ok: s.levels === full },
+    { check: 'sRGB', value: s.srgb ? 'yes' : 'no', limit: 'yes', ok: s.srgb },
+    { check: 'File size', value: kb(s.bytes), limit: `<= ${kb(DECK_BUDGET[level].bytes)}`, ok: s.bytes <= DECK_BUDGET[level].bytes },
+  ];
 }

@@ -736,5 +736,12 @@ export const ART = {
    * slope), `opacity` at its core, fading to nothing over `soft` metres
    * round it, `lift` above the ground so it never fights it.
    */
+  /**
+   * The computer in a game of SKATE (step 16, ADR-71): it rides its own deck
+   * (COMPUTER_DECK, Circuit, in deckSpec.ts), and its shoes' soles and laces
+   * take Circuit's teal, `shoe`, so whose go it is shows on the board and the
+   * feet. High's shoe model and Medium's primitive; Low stays as it is.
+   */
+  computer: { shoe: '#5fd0c5' },
   spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },
 } as const;

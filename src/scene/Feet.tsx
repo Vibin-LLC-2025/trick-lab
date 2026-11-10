@@ -1,8 +1,10 @@
-import { Suspense, lazy, type Ref } from 'react';
+import { Suspense, lazy, useEffect, type Ref } from 'react';
+import { useThree } from '@react-three/fiber';
 import type { Group } from 'three';
-import { useTrickStore } from '../store';
+import { boardRider, useTrickStore } from '../store';
 import { AssetBoundary } from './Board';
 import { geo, mat } from './resources';
+import { dressShoe } from './riderLook';
 import { sceneTier, shoesFromModel } from './sceneTier';
 
 const ShoesModel = lazy(() => import('./ShoesModel').then((m) => ({ default: m.ShoesModel })));
@@ -14,6 +16,14 @@ const ShoesModel = lazy(() => import('./ShoesModel').then((m) => ({ default: m.S
  */
 export function ShoePrimitive() {
   const low = useTrickStore(sceneTier) === 'low';
+  // The computer's sole on its go (ADR-71), above Low (frozen, ADR-62). A shared material: both shoes take it at once.
+  const computer = useTrickStore((s) => boardRider(s) === 'computer');
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (low) return;
+    dressShoe(mat.shoeSole, computer);
+    invalidate();
+  }, [low, computer, invalidate]);
   return (
     <group>
       <mesh geometry={geo.shoeSole} material={low ? mat.toonSole : mat.shoeSole} />

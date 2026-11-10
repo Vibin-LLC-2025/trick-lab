@@ -2,6 +2,7 @@ import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
+import type { DeckId, PlayerDeck } from '../asset/deckSpec';
 import type { Records } from './records';
 import type { LandingState, RollState } from './roll';
 
@@ -248,6 +249,14 @@ export interface UiSlice {
    * not logged, not exported.
    */
   soundCue: { nonce: number; kind: SoundKind } | null;
+  /**
+   * The student's deck graphic (step 16, ADR-71): today's or one of the three
+   * the owner approved. Persisted under trick-lab.deck, default today's. Not
+   * logged, not reset, not exported. The computer rides its own (shownDeck).
+   */
+  deck: PlayerDeck;
+  /** The deck chosen before the last change: what a failed download goes back to. Not persisted. */
+  deckBefore: PlayerDeck;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
   /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs; without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
@@ -310,6 +319,14 @@ export interface UiSlice {
   celebrate: (trick: string, clean: boolean) => void;
   /** Turns sound on or off, persisted and announced (ADR-58). */
   toggleSound: () => void;
+  /** Chooses the student's deck: persisted and announced, never logged (ADR-71). */
+  setDeck: (deck: PlayerDeck) => void;
+  /**
+   * The scene could not download a deck's texture (ADR-71). If it is the
+   * student's choice, the choice goes back to the deck the board kept
+   * (today's, if that was the one failing) and says so. Never logged.
+   */
+  deckFailed: (deck: DeckId) => void;
   /** Internal: asks for a sound. Called from store actions only. */
   cue: (kind: SoundKind) => void;
   announce: (message: string) => void;

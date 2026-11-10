@@ -31,6 +31,8 @@ interface R3F {
   internal: { frames: number };
   invalidate: () => void;
   gl: { isWebGPURenderer?: boolean; backend?: { isWebGPUBackend?: boolean }; info: { memory: { geometries: number; textures: number } } };
+  /** The scene graph, for what a mesh's material holds (the decks, ADR-71). */
+  scene: { traverse: (fn: (o: { name: string; material?: unknown }) => void) => void };
 }
 interface Store {
   status: string;
@@ -47,6 +49,9 @@ interface Store {
   roll: 'still' | 'push' | 'slow';
   landing: 'none' | 'plays' | 'over';
   result: { grade: 'clean' | 'sketchy' | 'bail' } | null;
+  /** The student's deck (ADR-71). */
+  deck: string;
+  setDeck: (deck: string) => void;
 }
 export type DebugWindow = Window & Debug & { gc?: () => void };
 
