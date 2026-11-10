@@ -799,7 +799,7 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 - *"Your first turn walks you through one kickflip."* The coin flip stays, so the first go may be a copy of the computer's trick. The walk-through is for whatever trick that first go is, and asks for a kickflip only when the player is up to set and has not called yet. Forcing a kickflip would have meant changing the coin flip or the computer's first call for one game.
 - *"The computer goes on its own by default, after a short beat."* It already did (ADR-46: 2.2 seconds, long enough to read the last result). Nothing changed.
 
-**The budgets.** No draw call is added: the cards are page elements. The stylesheet is 7.5 KB of its 8.0 KB compressed and the main script 103.0 of 106.0 KB (`bundle:check`), so the next step that adds interface will need room made.
+**The budgets.** No draw call is added: the cards are page elements. The stylesheet is 7.4 KB of its 8.0 KB compressed and the main script 103.0 of 106.0 KB (`bundle:check`), so the next step that adds interface will need room made.
 
 **What was checked in a browser** (2026-11-09, the production build, High, Medium and Low, 1440 x 900, and the layout also at 1280 x 720 and 1024 x 700): a whole game on Hard from Start game to "The computer wins" by keyboard alone (Tab, the arrow keys, Enter) and another by mouse alone, on every level, with the computer going on its own, no console errors, and focus on the result at the end; and the first game's walk-through by keyboard alone (the call from the picker, the Flick slider by 19 presses of the right arrow, the bar by Enter and Enter) to a clean kickflip.
 

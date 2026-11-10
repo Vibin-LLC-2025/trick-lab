@@ -1,7 +1,8 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
 **Status, 2026-11-09: revised, in progress.**
-- Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick. Step 12 is next.
+- Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
+- **Paused at the halfway point (2026-11-09).** Step 12 does not start until the owner says so. Before it does: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -49,7 +50,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 48 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 49 commits ahead of `main`.
 
 | Commit | Step |
 | --- | --- |
@@ -65,7 +66,16 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 48 commits a
 | e19c135 | 8, rough: both game controls behind `?controls=flick` and `?controls=bar`. The owner picked the bar |
 | 2dc5543 | 11, out of order: records and the trick list (ADR-64) |
 | ef7e8ea | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
-| this commit | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
+| f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
+
+Waiting on the owner, as of the pause (2026-11-09):
+
+| What | Asked | Answer |
+| --- | --- | --- |
+| Merge `look-feel-perf`, with the leak fix, to `main` (the merge point after step 6) | 2026-11-09, once | None yet |
+| Put the game live (the merge point after step 11) | 2026-11-09, at the pause | None yet |
+| The five checks of step 8 on the finished timing bar, and the bar by ear with sound on | 2026-11-09, with step 9 | None yet |
+| The deck drawings for step 16, shown early as first drafts: Dusk, Bolt and Ripple for the player, Circuit for the computer | 2026-11-09 | None yet. Step 16 does not build them in without a yes |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -265,7 +275,7 @@ As built, where it differs from the list below:
 - **The first game walks you through your first go, whatever its trick.** The coin flip stays, so that go may be a copy of the computer's trick; it is a kickflip when you are up to set and have not called yet. Three prompts on the bar, two in Exact. It gives the slider values, the one place the game does.
 - **"The computer goes on its own by default" was already so** (ADR-46). Nothing changed.
 - **A narrow screen keeps the stacked layout** until step 21.
-- **Room is short for more interface:** the stylesheet is 7.5 of 8.0 KB and the main script 103.0 of 106.0 KB.
+- **Room is short for more interface:** the stylesheet is 7.4 of 8.0 KB and the main script 103.0 of 106.0 KB.
 
 Today the game uses the lab's side panel. The design side draws the new screen in DESIGN.md first, then it is built.
 
