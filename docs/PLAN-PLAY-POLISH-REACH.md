@@ -2,7 +2,7 @@
 
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
-- **Paused at the halfway point (2026-11-09), and everything that was waiting on the owner is answered (2026-11-10, decisions 23 to 26).** Step 12 is next, in a new conversation. Before it starts: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
+- **Paused at the halfway point (2026-11-09), and everything that was waiting on the owner is answered (2026-11-10, decisions 23 to 26).** Steps 1 to 11 are live on `main` (91dfb4c). Step 12 is next, in a new conversation. Before it starts: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -51,7 +51,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 51 commits ahead of `main`. The owner said to put everything so far live (2026-11-10, decision 23): the branch goes up as a pull request so the three CI jobs run for the first time, and `main` takes it once they pass. Later steps stay on this branch until the next merge point.
+Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 is live (2026-11-10, decision 23):** pull request 1 ran the three CI jobs for the first time, all three passed on 91dfb4c, `main` was fast-forwarded to it and the site was published. This branch is one commit ahead of `main` (this note). Later steps stay on this branch, not pushed, until the next merge point.
 
 | Commit | Step |
 | --- | --- |
@@ -70,7 +70,7 @@ Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 51 comm
 | f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
 | beea48d | The halfway pause, and notes for the stretch from step 12 |
 | 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
-| this commit | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
+| 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
 
