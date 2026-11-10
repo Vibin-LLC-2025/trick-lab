@@ -5,7 +5,7 @@ import { WHEEL } from '../asset/spec';
 import { COMPUTER_DELAY_MS } from '../ui/Skate';
 import { BAR } from '../sim/bar';
 import { ART } from './artDirection';
-import { groundPerMetre, PUSH_ACCEL, SLOW_DECEL, slideCount, slideTexture, stepRoll, wheelPerMetre, writeSlides, type RollMotion } from './roll';
+import { groundPerMetre, PUSH_ACCEL, SLOW_DECEL, sceneryX, slideCount, slideTexture, stepRoll, wheelPerMetre, writeSlides, type RollMotion } from './roll';
 
 const R = ART.roll;
 const motion = (speed = 0): RollMotion => ({ speed, distance: 0, running: true });
@@ -123,5 +123,37 @@ describe('sliding textures (ADR-67)', () => {
     expect(t.offset.x).toBeGreaterThanOrEqual(0);
     expect(t.offset.x).toBeLessThan(1);
     stop();
+  });
+});
+
+describe('the skate spot rolling past (ADR-69)', () => {
+  const L = ART.spot.loop;
+
+  it('starts where it was built and moves against the nose, a metre per metre rolled', () => {
+    expect(sceneryX(0, 1, L)).toBeCloseTo(0, 12);
+    expect(sceneryX(3, 1, L)).toBeCloseTo(-3, 12);
+    expect(sceneryX(3, -1, L)).toBeCloseTo(3, 12);
+  });
+
+  it('stays within half a loop of the board and comes back round it, however far it rolls', () => {
+    for (const d of [0, 10, 24.9, 25.1, 49.99, 50, 137.5, 1e6 + 0.3])
+      for (const nose of [1, -1] as const) {
+        const x = sceneryX(d, nose, L);
+        expect(Math.abs(x)).toBeLessThanOrEqual(L / 2 + 1e-9);
+        // A loop further on, the same place.
+        expect(sceneryX(d + L, nose, L)).toBeCloseTo(x, 6);
+      }
+  });
+
+  it('jumps only at half a loop, where it is far past the fog', () => {
+    let prev = sceneryX(0, 1, L);
+    for (let d = 0.01; d < 2 * L; d += 0.01) {
+      const x = sceneryX(d, 1, L);
+      if (Math.abs(x - prev) > 0.1) {
+        expect(Math.abs(prev)).toBeGreaterThan(L / 2 - 0.1);
+        expect(Math.abs(x)).toBeGreaterThan(L / 2 - 0.1);
+      }
+      prev = x;
+    }
   });
 });

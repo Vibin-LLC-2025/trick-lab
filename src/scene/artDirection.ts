@@ -5,6 +5,7 @@
 
 import { BAY, CONCRETE, PLANE, ROUGHNESS } from '../asset/groundSpec';
 import { OUTLINE, REST_Y, WHEEL } from '../asset/spec';
+import { SPOT } from '../asset/spotSpec';
 import { FOOT } from '../sim/feet';
 import { NeutralToneMapping, type ToneMapping } from 'three';
 import type { Quality, Theme } from '../store';
@@ -712,4 +713,13 @@ export const ART = {
    * - `wheelRadius`: the wheel the print turns on (spec.ts WHEEL.radius).
    */
   roll: { cruise: 2.4, pushS: 0.7, slowS: 1.3, wheelRadius: WHEEL.radius },
+  /**
+   * The skate spot (step 14, ADR-69): spot.glb, on Medium and High, on the
+   * game screen. `loop`: it wraps over this many metres as the ground rolls
+   * (spotSpec.ts says why 50). `shadow`: the soft shadow under each piece,
+   * cast along the key light (a piece h tall throws it h times the light's
+   * slope), `opacity` at its core, fading to nothing over `soft` metres
+   * round it, `lift` above the ground so it never fights it.
+   */
+  spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },
 } as const;

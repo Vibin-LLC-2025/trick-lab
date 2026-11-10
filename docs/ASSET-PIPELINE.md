@@ -6,7 +6,7 @@ Written 2026-11-04, realistic board pass. The board is a **procedural, scripted 
 
 | Command | What it does |
 | --- | --- |
-| `npm run assets` | Builds the four GLBs in `public/models/` (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes. The KTX2 transcoder is three's own, emitted by Vite into the build (ADR-49), so nothing is copied |
+| `npm run assets` | Builds the five GLBs in `public/models/` (the spot since 2026-11-10) (about 13 s since the textures are KTX2, ADR-49), prints triangles per part, dropped triangles and texture sizes. The KTX2 transcoder is three's own, emitted by Vite into the build (ADR-49), so nothing is copied |
 | `npm run assets:check` | Reads the committed GLB and prints the budget table; exits 1 on any miss. Last step of `npm run verify` |
 
 The GLB is committed, so a fresh clone runs without building it. A test (`scripts/lib/budget.test.ts`) fails if the committed file's triangle count no longer matches the geometry source, which means "run `npm run assets`". Another test builds the GLB twice in memory and requires identical bytes.
@@ -177,3 +177,17 @@ npx tsx scripts/still/write.ts stills.json
 ```
 
 `capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.8. `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
+
+## The skate spot (2026-11-10, ADR-69)
+
+A fifth asset, `public/models/spot.glb`: a kerb, a flat rail, a ledge and a wall in one mesh, behind the board. `npm run assets -- spot` builds it alone.
+
+| File | What it holds | Tests |
+| --- | --- | --- |
+| `src/asset/spotSpec.ts` | `SPOT` (every piece's size, place and colour, the span and the loop), `SPOT_FOOTPRINTS` (what the soft shadows cover), `SPOT_TEXTURES`, `SPOT_PARTS`, `SPOT_MATERIAL` | `spot.test.ts` |
+| `src/asset/spot.ts` | `buildSpot()`: boxes and the kerb's chamfered profile, each face with its vertex colour (the paint, divided by the colour map's mean so it shows true) and world-scaled UVs | `spot.test.ts` (budget, span, behind the board, every face wound outward) |
+| `src/asset/spotTextures.ts` | one seamless metre of concrete: a near-white colour map and a normal map from the same tiling value noise | `spot.test.ts` (power of two, mean, seamless) |
+| `scripts/lib/build.ts` | `spotSpec()`: one material, colour and normal maps with the repeat transform | `budget.test.ts` (the committed file equals a fresh build) |
+| `scripts/lib/budget.ts` | the spot's rows: within the span, on the ground, behind the board | `npm run assets:check` |
+
+`assets:check` for `spot.glb` (2026-11-10): 59.2 KB of 300 KB, 1 of 1 draw call, 120 of 15,000 triangles, 2 of 3 textures (colour 18.4 KB and normal 35.5 KB KTX2, 512 px), within the span (+- 5.6 m), on the ground, behind the board.

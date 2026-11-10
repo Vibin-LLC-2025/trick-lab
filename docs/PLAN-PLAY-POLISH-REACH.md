@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67) and 13 (landings with weight, ADR-68) are done.** Step 14 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68) and 14 (the skate spot, ADR-69) are done.** Step 15 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -72,7 +72,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | beea48d | The halfway pause, and notes for the stretch from step 12 |
 | 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
 | e72b079 | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
-| (step 13) | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
+| 2fb9f74 | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
+| (step 14) | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -164,9 +165,9 @@ What the steps are expected to add (every switch on):
 | --- | --- | --- | --- |
 | Today | 34 | 19 | 12 |
 | 12: rolling, as built: texture offsets only (planned +1 each for the wheels) | 0 | 0 | 0 |
-| 14: the spot (on High it also casts a shadow) | +2 | +1 | 0 |
+| 14: the spot, as built: the model and one soft shadow mesh on both tiers (planned +2 / +1) | +2 | +2 | 0 |
 | 19: dust | +1 | +1 | 0 |
-| **Expected** | **37** | **21** | **12** |
+| **Expected** | **37** | **22** | **12** |
 
 ## Rules this plan changes, and the ones it keeps
 
@@ -354,7 +355,15 @@ This joins the first version's "settle" with rolling away.
 - **A simple frame rule** (this replaces the first version's frame-by-frame gate): once everything has come to rest, frames stop within one second and stay stopped. The check: no frames drawn between one and three seconds after rest.
 - **No rough look** (the owner, 2026-11-10, decision 26). The three motions and their timing are decided here and built in full; the timings are art numbers, so a change from the owner's list at the end is cheap.
 
-### 14. A skate spot
+### 14. A skate spot. Done (ADR-69)
+As built, where it differs from the list below or adds to it:
+- **Soft shadows instead of a real one on High.** One decal mesh under the pieces, on Medium and High alike: one draw call, no shadow-map cost. Medium is +2 calls, not +1.
+- **On the game screen only.** The lab stays a clean experiment and the welcome screen is unchanged. The model is its own lazy download when the game screen first shows, so no first visit downloads it.
+- **Behind the board, always.** Every piece is at z below -1.05 m and every camera looks from +Z, so the spot can never cover the board or the feet. Step 17 must keep its cameras on that side and check the six poses then; today's cameras were checked.
+- **The loop is 50 m**, the pieces within 5.6 m of its centre: at the wrap the nearest piece is 19.4 m away, past the fog (tested).
+- **Not culled**, so the draw count is the same in view or rolled away, and the browser check now measures the game screen, at rest and in a 360 flip, for every switch combination.
+- **Checked in a browser** on High, Medium and Low, from the game camera and from a low camera at rest and rolled 6 m on: no console errors, Low draws no spot.
+
 - **A kerb, a ledge, a flat rail and a wall**, as their own model (`spot.glb`), generated like the others, with its own budget.
 - **It slides past with the ground** and comes round again, far enough apart that it does not look like a loop. The fog hides where it appears.
 - **High and Medium.** On High it casts shadows. Low has none.

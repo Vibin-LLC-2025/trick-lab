@@ -22,6 +22,9 @@ import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURE
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
+import { buildSpot } from '../../src/asset/spot';
+import { SPOT_MATERIAL, SPOT_PARTS, SPOT_TEXTURES } from '../../src/asset/spotSpec';
+import { spotColor, spotNormal } from '../../src/asset/spotTextures';
 import { solePixels, upperPixels, upperTint } from '../../src/asset/shoeTextures';
 import {
   GRAPHIC_CLEARCOAT,
@@ -432,6 +435,41 @@ export const buildBoardGlb = (level: DetailLevel = 'medium') => buildGlb(boardSp
 /** The right shoe GLB (public/models/shoes.glb). */
 export const buildShoesGlb = () => buildGlb(shoeSpec());
 
+/**
+ * The skate spot (step 14, ADR-69): one mesh of every piece, painted by its
+ * vertex colour over a near-white concrete map and its normal map, each one
+ * tile repeated over the group by a texture transform.
+ */
+function spotSpec(): AssetSpec {
+  const T = SPOT_TEXTURES;
+  const repeat: [number, number] = [T.uvSpan / T.tile, T.uvSpan / T.tile];
+  const color = spotColor();
+  return {
+    rootName: 'Spot',
+    extras: { units: 'metres', source: 'procedural, scripts/build-board.ts', design: 'src/asset/spotSpec.ts' },
+    textures: [
+      { key: 'color', file: T.color.file, pixels: grey(color.width, color.height, color.grey), wrap: 'repeat', repeat },
+      { key: 'normal', file: T.normal.file, pixels: rgb(spotNormal()), wrap: 'repeat', repeat },
+    ],
+    materials: [
+      {
+        key: SPOT_PARTS[0].material,
+        name: SPOT_MATERIAL.name,
+        baseColor: [1, 1, 1, 1],
+        roughness: SPOT_MATERIAL.roughness,
+        metalness: SPOT_MATERIAL.metalness,
+        map: 'color',
+        normalMap: { key: 'normal', scale: 1 },
+      },
+    ],
+    parts: SPOT_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: buildSpot() })),
+    droppedTriangles: 0,
+  };
+}
+
+/** The skate spot GLB (public/models/spot.glb). */
+export const buildSpotGlb = () => buildGlb(spotSpec());
+
 /** The concrete ground GLB (public/models/ground.glb). */
 export const buildGroundGlb = () => buildGlb(groundSpec());
 
@@ -440,5 +478,6 @@ export function buildAsset(key: AssetKey): Promise<{ glb: Uint8Array; report: Bu
   if (key === 'board') return buildBoardGlb('medium');
   if (key === 'boardHigh') return buildBoardGlb('high');
   if (key === 'ground') return buildGroundGlb();
+  if (key === 'spot') return buildSpotGlb();
   return buildShoesGlb();
 }

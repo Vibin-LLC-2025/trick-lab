@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildDeck } from '../asset/deck';
 import { PLANE_BAYS } from '../asset/groundSpec';
+import { SPOT_FOOTPRINTS } from '../asset/spotSpec';
 import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
 import { FOOTPRINT } from '../asset/shoeSpec';
 import { TRUCK, WHEEL } from '../asset/spec';
@@ -440,6 +441,51 @@ function mergedLegs(parts: THREE.BufferGeometry[]) {
   return merged;
 }
 
+/**
+ * The skate spot's soft shadows (step 14, ADR-69): one rectangle per piece
+ * (spotSpec.ts SPOT_FOOTPRINTS), its footprint stretched along the key
+ * light's ground direction by the piece's height, at ART.spot.shadow.opacity
+ * inside and fading to 0 over `soft` round it (a ring of eight vertices).
+ * Vertex colour with alpha; one draw call for every piece. In the spot's own
+ * frame: it rolls with the spot.
+ */
+function spotShadow() {
+  const SH = ART.spot.shadow;
+  const L = ART.lights.directional;
+  const dy = L.position[1] - L.target[1];
+  // Where a point h up lands on the ground, per metre of h: away from the light.
+  const sx = -(L.position[0] - L.target[0]) / dy;
+  const sz = -(L.position[2] - L.target[2]) / dy;
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  for (const f of SPOT_FOOTPRINTS) {
+    const x0 = Math.min(f.x[0], f.x[0] + sx * f.height), x1 = Math.max(f.x[1], f.x[1] + sx * f.height);
+    const z0 = Math.min(f.z[0], f.z[0] + sz * f.height), z1 = Math.max(f.z[1], f.z[1] + sz * f.height);
+    const base = pos.length / 3;
+    const rect = (d: number) => [
+      [x0 - d, z0 - d],
+      [x1 + d, z0 - d],
+      [x1 + d, z1 + d],
+      [x0 - d, z1 + d],
+    ];
+    for (const [x, z] of [...rect(0), ...rect(SH.soft)]) pos.push(x!, SH.lift, z!);
+    for (let i = 0; i < 4; i++) col.push(0, 0, 0, SH.opacity);
+    for (let i = 0; i < 4; i++) col.push(0, 0, 0, 0);
+    // The core, then the ring: counter-clockwise seen from above (+Y), so they face up.
+    idx.push(base, base + 3, base + 2, base, base + 2, base + 1);
+    for (let i = 0; i < 4; i++) {
+      const a = base + i, b = base + ((i + 1) % 4), oa = a + 4, ob = b + 4;
+      idx.push(a, b, ob, a, ob, oa);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 4));
+  g.setIndex(idx);
+  return g;
+}
+
 export const geo = {
   shoeSole,
   shoeUpper,
@@ -459,6 +505,7 @@ export const geo = {
   boardHardware: primitiveHardware(),
   ground: groundPlane(),
   shadow: shadowFootprint(),
+  spotShadow: spotShadow(),
 };
 
 const std = (color: string, roughness: number, metalness = 0) =>
@@ -580,6 +627,9 @@ export const mat = {
   footPath: footPathMaterial(),
   // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.
   shadow: shadowMaterial(),
+  // The skate spot's soft shadows (ADR-69): the vertex colour's alpha, fogged
+  // like the ground they lie on, no depth writes so they never hide it.
+  spotShadow: new THREE.MeshBasicMaterial({ color: ART.spot.shadow.color, vertexColors: true, transparent: true, depthWrite: false }),
   // The sky dome (skyDome.ts, ADR-52): vertex colours, both faces (the
   // winding is not worth tracking for a backdrop), no fog (it is the
   // backdrop the fog fades into), no depth writes and drawn first, so

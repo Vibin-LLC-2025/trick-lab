@@ -18,7 +18,7 @@ export const HASH: Record<Screen, string> = { home: '', lab: '#/lab', skate: '#/
  * only with a step that adds or removes a draw, in that step's commit.
  */
 export const GATE: Record<Tier, number> = { high: 60, medium: 40, low: 20 };
-export const LEDGER: Record<Tier, number> = { high: 34, medium: 19, low: 12 };
+export const LEDGER: Record<Tier, number> = { high: 36, medium: 21, low: 12 };
 
 /** The R3F root, PerfProbe's numbers and the store, as the checks read them. */
 interface Debug {

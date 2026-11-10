@@ -18,7 +18,7 @@ import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
-import { haltRoll, resetRoll, rollMotion, stepRoll, writeSlides } from './roll';
+import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
@@ -179,6 +179,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
     }
     writeSlides(r.distance, noseOf(s.stance));
+    // The skate spot rolls past with the ground, wrapped over its loop (ADR-69).
+    if (rollScenery.spot) rollScenery.spot.position.x = sceneryX(r.distance, noseOf(s.stance), ART.spot.loop);
     // The landing's motion (ADR-68): a game's sketchy landing rocks and
     // swerves with the rider on, a bail falls and slides from under the feet.
     // At the playback speed, like the roll; once over (or cut short) its end pose.

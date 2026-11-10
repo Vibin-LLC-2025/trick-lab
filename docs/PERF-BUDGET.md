@@ -16,7 +16,7 @@ The design target is good hardware. High is what the game is designed for, Mediu
 | New features | all | all but real shadows, motion blur and glow | none, except rolling |
 
 - **Read by the measurement** (`scripts/measure/measure.js`, "How to measure" below): the 95th percentile of the graphics time and of the app's work over the lab's timed tricks, and the longest interval between frames (gate: under 20 ms, which is 16.7 ms plus timer jitter). Its last table says pass or fail per tier.
-- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 34, Medium 19, Low 12 today).
+- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 36, Medium 21, Low 12 since step 14's skate spot, ADR-69, measured on the game screen too).
 - **Downloads keep their budget** (`npm run bundle:check`).
 - **Medium's target is a stand-in:** it is measured on the reference machine with Medium chosen, not on built-in graphics.
 

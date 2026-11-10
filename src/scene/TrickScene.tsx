@@ -8,6 +8,7 @@ import { FlightDriver } from './FlightDriver';
 import { allShown, noteRenderer, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted } from './modelCache';
 import { modelsFor, modelsUnusedBy } from './modelUrls';
 import { Pad } from './Pad';
+import { Spot } from './Spot';
 import { PerfProbe } from './PerfProbe';
 import { frame, perfStats } from './perfStats';
 import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
@@ -242,6 +243,7 @@ function Stage({ shadows }: { shadows: boolean }) {
       {/* The pad and board stay hidden until their shaders are compiled with the environment. */}
       <SceneEnvironment onReveal={onReveal}>
         <Pad shadows={shadows} />
+        <Spot receiveShadow={shadows} />
         <FlightDriver shadows={shadows} />
       </SceneEnvironment>
       <StageReady revealed={revealed} />

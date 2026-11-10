@@ -5,6 +5,7 @@
 // and rest height, the shoe has its own footprint, the ground its plane.
 import { BAY, GROUND_PARTS } from '../../src/asset/groundSpec';
 import { SHOE, SHOE_PARTS } from '../../src/asset/shoeSpec';
+import { SPOT, SPOT_PARTS } from '../../src/asset/spotSpec';
 import { BUDGETS, OUTLINE, PARTS, REST_Y, type AssetKey } from '../../src/asset/spec';
 
 export interface TextureStat {
@@ -75,6 +76,15 @@ function sizeRows(s: AssetStats, key: AssetKey): BudgetRow[] {
       { check: 'Centred on the origin', value: mm(off), limit: '0.0 mm +- 1 mm', ok: off <= 0.001 },
     ];
   }
+  if (key === 'spot') {
+    // Within its span of x (so the group wraps out of sight, ADR-69), on the ground, and behind the board (all of it at -Z).
+    const half = Math.max(Math.abs(s.bounds.min[0]), Math.abs(s.bounds.max[0]));
+    return [
+      { check: 'Within the span (x)', value: `+- ${half.toFixed(3)} m`, limit: `<= ${SPOT.span} m`, ok: half <= SPOT.span + 1e-3 },
+      { check: 'On the ground (min y)', value: mm(s.bounds.min[1]), limit: '0.0 mm +- 0.5 mm', ok: Math.abs(s.bounds.min[1]) <= 0.0005 },
+      { check: 'Behind the board (max z)', value: mm(s.bounds.max[2]), limit: '< -0.8 m', ok: s.bounds.max[2] < -0.8 },
+    ];
+  }
   if (key === 'shoes') {
     return [
       { check: 'Length (x)', value: mm(length), limit: `${mm(SHOE.length)} +- 3 mm`, ok: Math.abs(length - SHOE.length) <= 0.003 },
@@ -100,7 +110,7 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
   const texBytes = s.textures.reduce((n, t) => n + t.bytes, 0);
   const gpu = s.textures.reduce((n, t) => n + gpuBytes(t), 0);
   const maxSide = Math.max(0, ...s.textures.map((t) => Math.max(t.width, t.height)));
-  const expectedNodes: readonly string[] = (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : PARTS).map((p) => p.node);
+  const expectedNodes: readonly string[] = (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : key === 'spot' ? SPOT_PARTS : PARTS).map((p) => p.node);
   const missing = expectedNodes.filter((n) => !s.nodeNames.includes(n));
   const rows: BudgetRow[] = [
     { check: 'GLB file size', value: kb(s.fileBytes), limit: `<= ${kb(BUDGET.fileBytes)}`, ok: s.fileBytes <= BUDGET.fileBytes },

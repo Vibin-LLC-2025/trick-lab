@@ -8,7 +8,7 @@
 //
 // No React. FlightDriver is the only caller per frame, and nothing here
 // allocates once the textures are registered.
-import type { Texture } from 'three';
+import type { Group, Texture } from 'three';
 import { ART } from './artDirection';
 
 const R = ART.roll;
@@ -125,3 +125,17 @@ export const groundPerMetre = (repeat: number, width: number) => repeat / width;
 
 /** Texture widths per metre for a wheel's lathe map (u once around): one per circumference. */
 export const wheelPerMetre = (radius: number = R.wheelRadius) => 1 / (2 * Math.PI * radius);
+
+/**
+ * Scenery that rolls past with the ground (the skate spot, step 14, ADR-69):
+ * a group FlightDriver moves along X, wrapped over `loop` metres centred on
+ * the board, so it leaves the view on one side and comes back on the other
+ * where the fog hides both ends. Set by the component that draws it.
+ */
+export const rollScenery: { spot: Group | null } = { spot: null };
+
+/** Where scenery sits for `distance` rolled with the nose along `nose`: -distance the way the nose points, wrapped into [-loop / 2, loop / 2). */
+export function sceneryX(distance: number, nose: 1 | -1, loop: number): number {
+  const x = -nose * distance + loop / 2;
+  return x - Math.floor(x / loop) * loop - loop / 2;
+}
