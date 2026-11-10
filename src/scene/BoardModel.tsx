@@ -50,7 +50,7 @@ export function BoardModel({ url, castShadow }: { url: string; castShadow: boole
   }, [invalidate, materials, anisotropy]);
   // The wheels' print turns with the roll (ADR-67): a lathe's u runs once around each wheel.
   const wheelMap = ((nodes.Wheels as Mesh | undefined)?.material as MeshStandardMaterial | undefined)?.map ?? null;
-  useEffect(() => (wheelMap ? slideTexture(wheelMap, wheelPerMetre()) : undefined), [wheelMap]);
+  useEffect(() => (wheelMap ? slideTexture(wheelMap, wheelPerMetre(), false) : undefined), [wheelMap]);
   return (
     <group dispose={null}>
       {PARTS.map(({ node }) => {

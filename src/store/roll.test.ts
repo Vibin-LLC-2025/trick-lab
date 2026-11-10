@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createTrickStore, rollMoves } from '.';
+import { createTrickStore, landingMoves, rollMoves } from '.';
 import { BAR } from '../sim/bar';
 import { describeScene } from '../sim/format';
 
@@ -178,5 +178,127 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     s.getState().rollRested();
     expect(describeScene(s.getState())).toContain('resting flat on a concrete pad');
     expect(describeScene(s.getState())).not.toContain('Rolling');
+  });
+});
+
+/** A game in Exact with the player up, a kickflip called, and the flick set so the pop lands as `grade`. */
+function exactUp(flick: number) {
+  const s = makeStore();
+  s.getState().setPopMode('exact');
+  s.getState().startSkate();
+  s.getState().callSkateTrick('kickflip');
+  s.getState().setInput('flick', flick);
+  return s;
+}
+const CLEAN = 1.9;
+const SKETCHY = 2.0;
+const BAIL = 1.1;
+
+describe('landings with weight in the store (step 13, ADR-68)', () => {
+  it('a clean landing has no motion of its own; a sketchy one plays, with the board rolling on', () => {
+    const clean = exactUp(CLEAN);
+    clean.getState().popTrick();
+    clean.getState().land();
+    expect(clean.getState().result!.grade).toBe('clean');
+    expect(clean.getState().landing).toBe('over');
+    expect(roll(clean)).toBe('slow');
+
+    const sketchy = exactUp(SKETCHY);
+    sketchy.getState().popTrick();
+    sketchy.getState().land();
+    expect(sketchy.getState().result!.grade).toBe('sketchy');
+    expect(sketchy.getState().landing).toBe('plays');
+    expect(roll(sketchy)).toBe('slow');
+    sketchy.getState().landingDone();
+    expect(sketchy.getState().landing).toBe('over');
+  });
+
+  it('a bail stops the rider at once and plays the board falling and sliding; the computer rolls in once it is over', () => {
+    const s = exactUp(BAIL);
+    s.getState().popTrick();
+    s.getState().land();
+    expect(s.getState().result!.grade).toBe('bail');
+    expect(s.getState().landing).toBe('plays');
+    expect(roll(s)).toBe('still');
+    // A miss on the set: the computer sets next, and waits for the landing before it rolls in.
+    expect(s.getState().skate.phase).toBe('computer-set');
+    s.getState().rollRested();
+    expect(roll(s)).toBe('still');
+    s.getState().landingDone();
+    // The computer rolls in on a fresh board: the bailed one is gone.
+    expect(roll(s)).toBe('push');
+    expect(s.getState().landing).toBe('none');
+  });
+
+  it('the next go clears the landing: a pop, or the board rolling in', () => {
+    const s = exactUp(BAIL);
+    s.getState().popTrick();
+    s.getState().land();
+    s.getState().landingDone();
+    expect(roll(s)).toBe('push');
+    expect(s.getState().landing).toBe('none');
+    s.getState().popTrick();
+    expect(s.getState().landing).toBe('none');
+  });
+
+  it('is cut short to its end pose by a change of quality, reduced motion, a lost 3D view or a quit, and gone with the screen', () => {
+    const cuts: ((s: Store) => void)[] = [
+      (s) => s.getState().setQuality('low'),
+      (s) => s.getState().setReducedMotion(true),
+      (s) => s.getState().setSceneUnavailable(),
+      (s) => s.getState().quitSkate(),
+    ];
+    for (const cut of cuts) {
+      const s = exactUp(BAIL);
+      s.getState().popTrick();
+      s.getState().land();
+      expect(s.getState().landing).toBe('plays');
+      cut(s);
+      expect(s.getState().landing).toBe('over');
+    }
+    const s = exactUp(BAIL);
+    s.getState().popTrick();
+    s.getState().land();
+    s.getState().setScreen('lab');
+    expect(s.getState().landing).toBe('none');
+  });
+
+  it('shows the end pose at once where nothing may move, and never in the lab', () => {
+    const s = exactUp(BAIL);
+    s.getState().setReducedMotion(true);
+    s.getState().popTrick();
+    expect(s.getState().result!.grade).toBe('bail');
+    expect(s.getState().landing).toBe('over');
+
+    const lab = makeStore();
+    lab.getState().setScreen('lab');
+    lab.getState().setInput('flick', BAIL);
+    lab.getState().popTrick();
+    lab.getState().land();
+    expect(lab.getState().landing).toBe('none');
+  });
+
+  it('holds while paused or behind a dialog, like the roll', () => {
+    const s = exactUp(SKETCHY);
+    s.getState().popTrick();
+    s.getState().land();
+    expect(landingMoves(s.getState())).toBe(true);
+    s.getState().setShortcutsOpen(true);
+    expect(landingMoves(s.getState())).toBe(false);
+  });
+
+  it('the scene description says what the landing did', () => {
+    const s = exactUp(BAIL);
+    // The computer waits for its button, so the bailed board stays where it slid.
+    s.getState().toggleSkateAuto();
+    s.getState().popTrick();
+    s.getState().land();
+    expect(describeScene(s.getState())).toMatch(/The board (falls|slides)/);
+    s.getState().landingDone();
+    expect(describeScene(s.getState())).toMatch(/The board (fell|slid)/);
+    const k = exactUp(SKETCHY);
+    k.getState().popTrick();
+    k.getState().land();
+    expect(describeScene(k.getState())).toContain('the feet ride it out');
   });
 });

@@ -39,6 +39,14 @@ interface Store {
   sceneUnavailable: boolean;
   setQuality: (q: Tier) => void;
   setScreen: (s: Screen) => void;
+  /** The game (a game's landing, ADR-68). */
+  skate: { first: 'you' | 'computer' | null; phase: string };
+  startSkate: () => void;
+  callSkateTrick: (id: string) => void;
+  setInput: (key: 'pop' | 'flick' | 'scoop', value: number) => void;
+  roll: 'still' | 'push' | 'slow';
+  landing: 'none' | 'plays' | 'over';
+  result: { grade: 'clean' | 'sketchy' | 'bail' } | null;
 }
 export type DebugWindow = Window & Debug & { gc?: () => void };
 

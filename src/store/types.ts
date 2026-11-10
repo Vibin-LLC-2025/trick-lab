@@ -3,7 +3,7 @@ import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 import type { Records } from './records';
-import type { RollState } from './roll';
+import type { LandingState, RollState } from './roll';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
 export type { Stance };
@@ -130,6 +130,12 @@ export interface PlaybackSlice {
   stopRoll: () => void;
   /** Called by FlightDriver when a slowing board has stopped. If the computer is waiting for its go, it pushes off again. */
   rollRested: () => void;
+  /** The landing's own motion in a game (step 13, ADR-68, sim/settle.ts): none, playing, or over (its end pose). Not logged. */
+  landing: LandingState;
+  /** Called by FlightDriver when the landing's motion has played out. If the computer is waiting for its go, it rolls in. */
+  landingDone: () => void;
+  /** Internal: cut short (a change of quality level, reduced motion, the 3D view failing, a quit): the end pose at once. */
+  endLanding: () => void;
 }
 
 /** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { previewAnimates, rollMoves, useTrickStore, type Theme } from '../store';
+import { landingMoves, previewAnimates, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -284,7 +284,8 @@ function rendererFactory(Q: Tier) {
  * The 3D view. Decorative for assistive tech: aria-hidden, every action has a
  * DOM control, and #scene-description carries the board state as text.
  * frameloop is "always" only while a trick is playing, the welcome screen's
- * preview plays (ADR-45) or the board rolls in the game (ADR-67), "demand"
+ * preview plays (ADR-45), the board rolls in the game (ADR-67) or a game's
+ * landing plays out (ADR-68), "demand"
  * otherwise.
  *
  * The Canvas is keyed on the tier in use (ADR-16): antialias and
@@ -294,7 +295,8 @@ function rendererFactory(Q: Tier) {
  */
 export default function TrickScene() {
   // A rolling board in the game moves the ground, so it runs frames too (ADR-67).
-  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s) || rollMoves(s));
+  // So does a game's landing while it plays out (ADR-68).
+  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s) || rollMoves(s) || landingMoves(s));
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);

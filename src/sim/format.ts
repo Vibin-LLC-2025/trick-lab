@@ -16,6 +16,7 @@ import {
 } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
 import { describeLegs } from './legs';
+import { restSide, type RestSide } from './settle';
 import {
   directionWord,
   FLIP_WORDS,
@@ -335,6 +336,20 @@ function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done
   return landed && s.progress >= CATCH.back ? 'Feet on the board, riding it down.' : 'Feet in the air above the board.';
 }
 
+const FELL: Record<RestSide, string> = {
+  wheels: 'slides away from the feet on its wheels',
+  rail: 'falls onto its side and slides away from the feet',
+  grip: 'falls upside down and slides away from the feet',
+};
+
+/** The landing's motion in a game (ADR-68), as it plays or once it has: one sentence, empty for a clean landing. */
+function describeSettle(flight: Flight, grade: 'clean' | 'sketchy' | 'bail', playing: boolean): string {
+  if (grade === 'sketchy') return playing ? ' The board rocks onto its back wheels and swerves; the feet ride it out.' : ' The board rocked and swerved; the feet rode it out.';
+  if (grade !== 'bail') return '';
+  const fell = FELL[restSide(flight)];
+  return playing ? ` The board ${fell}.` : ` The board ${fell.replace('falls', 'fell').replace('slides', 'slid')}.`;
+}
+
 export function describeScene(s: {
   status: 'idle' | 'playing' | 'paused' | 'done';
   progress: number;
@@ -352,6 +367,8 @@ export function describeScene(s: {
   flightBy?: 'you' | 'computer';
   /** Rolling in the game (ADR-67); still when left out. */
   roll?: 'still' | 'push' | 'slow';
+  /** The landing's own motion in a game (ADR-68); none when left out. */
+  landing?: 'none' | 'plays' | 'over';
 }): string {
   const board =
     s.status === 'playing'
@@ -378,5 +395,6 @@ export function describeScene(s: {
         ? "Waiting for the computer's trick to land."
         : 'Waiting for this trick to land.'
       : 'No trick popped yet.';
-  return `${board}${rolling}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
+  const settled = s.landing && s.landing !== 'none' && s.flight && s.result ? describeSettle(s.flight, s.result.grade, s.landing === 'plays') : '';
+  return `${board}${rolling}${settled}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

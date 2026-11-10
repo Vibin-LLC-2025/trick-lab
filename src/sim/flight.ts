@@ -3,6 +3,7 @@
 // free at a constant rate, and stops in the catch, where a landed board is
 // pressed onto its whole turn. No React, no three. Units: metres, seconds,
 // degrees.
+import { contactRise } from './boardSection';
 import { isLanded, turns } from './landing';
 
 export const G = 9.81;
@@ -277,6 +278,12 @@ export function contactLift(pitch: number, roll: number): number {
  *   is exactly the rest height.
  * - Until LEVEL_BY the contact lift is also a floor, so a rolled or pitched
  *   board never dips into the pad.
+ * - A board that does not land comes down on whatever it lands on (ADR-68):
+ *   on the way down its lowest point never goes below the pad (contactRise),
+ *   and a board that would rest lower than it does wheels down (upside down,
+ *   on its kicks) sinks to that height as it falls, so a bail ends resting
+ *   on a rail or the kicks, neither through the pad nor above it. A landed
+ *   board is level and square by then, so this never touches it.
  * `roll` is the board's roll at p (rollAt, ADR-36), which writePose has
  * already worked out.
  */
@@ -284,7 +291,12 @@ function boardHeightAt(flight: Flight, p: number, pitch: number, roll: number): 
   const pivot = contactLift(pitch, roll);
   if (p <= POP_RISE_BY) return pivot;
   const h = heightAt(flight.peak, p);
-  if (p >= 0.5) return h;
+  if (p >= 0.5) {
+    if (flight.landed) return h;
+    const rest = contactRise(roll);
+    const sink = rest < 0 ? rest * (1 - h / flight.peak) : 0;
+    return Math.max(h + sink, rest);
+  }
   const atStrike = contactLift(POP_PITCH, rollAt(flight, POP_RISE_BY));
   const fromStrike = heightAt(flight.peak, POP_RISE_BY);
   const k = Math.max(0, flight.peak - atStrike) / (flight.peak - fromStrike);

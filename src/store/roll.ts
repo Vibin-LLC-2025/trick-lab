@@ -18,6 +18,14 @@ import type { TrickState } from './types';
 export type RollState = 'still' | 'push' | 'slow';
 
 /**
+ * The landing's own motion in a game (step 13, ADR-68): 'plays' from the
+ * landing until FlightDriver says it has played out, 'over' after (the end
+ * pose: a bailed board lies where it slid), 'none' when there is none (the
+ * lab, a new go). A clean landing has none of its own: it is 'over' at once.
+ */
+export type LandingState = 'none' | 'plays' | 'over';
+
+/**
  * Whether the computer's wait is running (ADR-46): it is up on the game
  * screen, nothing is in the air, auto is on and no dialog is open. The game
  * screen's timer and countdown bar read it, and the store pushes the board
@@ -44,3 +52,7 @@ export const rollAllowed = (s: Pick<TrickState, 'screen' | 'skate' | 'reducedMot
  */
 export const rollMoves = (s: Pick<TrickState, 'roll' | 'screen' | 'status' | 'shortcutsOpen' | 'skateLeave'>) =>
   s.roll !== 'still' && s.screen === 'skate' && s.status !== 'paused' && !s.shortcutsOpen && s.skateLeave === null;
+
+/** Whether the landing's motion moves this frame (rule 4), held like the roll by a pause or a dialog. */
+export const landingMoves = (s: Pick<TrickState, 'landing' | 'screen' | 'status' | 'shortcutsOpen' | 'skateLeave'>) =>
+  s.landing === 'plays' && s.screen === 'skate' && s.status !== 'paused' && !s.shortcutsOpen && s.skateLeave === null;

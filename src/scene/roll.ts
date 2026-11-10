@@ -68,6 +68,8 @@ interface Slide {
   texture: Texture;
   base: number;
   perMetre: number;
+  /** The ground slides along the world's X, the way the nose points; the wheels turn in the board's own frame (ADR-68). */
+  ground: boolean;
 }
 
 /** Room for every texture that slides: the ground's three maps or Low's joints, and one wheel map. */
@@ -81,14 +83,16 @@ const bases = new WeakMap<Texture, number>();
 /**
  * Registers a texture to slide, `perMetre` of its width per metre rolled
  * (for the ground: its repeat over the plane's width; for the wheels: one
- * turn per circumference). Returns what unregisters it and puts its offset
- * back. A texture registered twice keeps its first entry.
+ * turn per circumference). `ground`: it lies on the ground, which slides the
+ * way the nose points (+X goofy, -X regular); otherwise it turns with the
+ * board, the same way for either stance. Returns what unregisters it and
+ * puts its offset back. A texture registered twice keeps its first entry.
  */
-export function slideTexture(texture: Texture, perMetre: number): () => void {
+export function slideTexture(texture: Texture, perMetre: number, ground = true): () => void {
   for (let i = 0; i < count; i++) if (slides[i]!.texture === texture) return () => {};
   if (count === MAX_SLIDES) throw new Error('trick-lab: too many sliding textures (scene/roll.ts MAX_SLIDES)');
   if (!bases.has(texture)) bases.set(texture, texture.offset.x);
-  const entry: Slide = { texture, base: bases.get(texture)!, perMetre };
+  const entry: Slide = { texture, base: bases.get(texture)!, perMetre, ground };
   slides[count++] = entry;
   return () => {
     const i = slides.indexOf(entry);
@@ -102,11 +106,14 @@ export function slideTexture(texture: Texture, perMetre: number): () => void {
 /** The fractional part, in [0, 1). */
 const frac = (x: number) => x - Math.floor(x);
 
-/** Writes every registered texture's offset for `distance` metres rolled. No allocation. */
-export function writeSlides(distance: number) {
+/**
+ * Writes every registered texture's offset for `distance` metres rolled,
+ * with the nose along `nose` (+1 world +X, goofy; -1, regular). No allocation.
+ */
+export function writeSlides(distance: number, nose: 1 | -1 = 1) {
   for (let i = 0; i < count; i++) {
     const s = slides[i]!;
-    s.texture.offset.x = s.base + frac(distance * s.perMetre);
+    s.texture.offset.x = s.base + frac((s.ground ? nose : 1) * distance * s.perMetre);
   }
 }
 

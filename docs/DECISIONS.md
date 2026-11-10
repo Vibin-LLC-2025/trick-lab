@@ -835,3 +835,36 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **Rules changed.** CLAUDE.md rule 4 (frames run while the board rolls in a game, `rollMoves`) and rule 5 (FlightDriver also runs the roll and writes the textures' offsets).
 
 **Left out.** The landing's own motions (step 13), the spot that slides past (step 14), the rolling sound (step 18). A push animation for the legs: the rider's legs are posed by the trick model, and a push is a step off the board, which the model has no pose for.
+
+## ADR-68: Landings with weight: the board rolls on, rocks, or falls and slides (2026-11-10)
+
+**Context.** Step 13 of `docs/PLAN-PLAY-POLISH-REACH.md`. Frames stopped the moment the board touched down, so a landing had no weight, and a bail looked like a landing with the feet beside the board; the bailed board itself ended at the rest height with whatever roll it had, partly through the pad. The owner asked for no rough look (decision 26): decide, build in full, list the numbers.
+
+**Decision.**
+- **One pose for everyone** (`src/sim/settle.ts`, pure): `writeSettle(flight, seconds since touchdown)` gives the landing's motion; the board, its shadow, the shoes, the legs and the foot trails and the scene's text all read it.
+  - **Clean:** nothing of its own. The board rolls on straight and slows to a stop (ADR-67); the feet stay exactly as pinned.
+  - **Sketchy:** the board rocks once onto its back wheels (5 degrees nose up, pivoting on the rear axle, so the back wheels stay on the pad) over 0.5 s, and swerves (up to 7 degrees and back over 1 s, ending 5 cm to one side, the kickflip side's way for a kickflip and the other way for a heelflip). The rider rides it: the board and the rider are each in a pair of groups that make the same rigid move.
+  - **Bail:** the rider stops at once (the roll stops: the camera stays with the rider), and the board falls over onto the side it is nearest (wheels down, a rail, or upside down on its kicks; a 90 degree fall takes 0.4 s, from rest, so the angle goes with the square of the time) and slides away, 0.6 m along the nose and 15 cm away from the feet, slowing steadily to a stop over 1.1 s. The feet stay where they stepped down, cleared against the moving board every frame as the flight's clearance does (ADR-29): a board that lay under a shoe slides out and the shoe comes down to the pad, one that slides under a shoe lifts it.
+- **The board falls over its own edge.** `src/sim/boardSection.ts` holds the board seen end on: the convex hull of both built boards, pasted as 51 points (src/sim may not import src/asset), and a test rebuilds it from the boards and fails on a 0.1 mm drift. `contactRise(roll)` is how high the deck centre sits on the pad at a roll. A falling board's height follows it, so its lowest point stays on the pad, tested within 1 mm against every vertex of the built board through every landing.
+- **A bail in the air comes down on the pad too** (`flight.ts`, for flights that do not land only): from the peak its lowest point never goes below the pad, and a board that rests lower than wheels down (upside down) sinks to that height as it falls. A bail used to end at the rest height with any roll, through the pad on a rail or floating 4 cm upside down. The feet's own step down to the pad is unchanged: the floor's extra height comes off them as the bail goes on. `feet.pinned.test.ts` is unchanged; one flight test changed on purpose and says so.
+- **The store owns whether** (`landing`: none, plays, over, in `src/store/roll.ts`); FlightDriver owns the clock, at the playback speed, and says when it has played out (`landingDone`), as it does for a landing and for the roll. Only in a game, on the game screen (the lab stays the exact experiment: its timeline ends at the touchdown).
+  - **Cut short** to its end pose at once by a change of quality level (the owner's or the automatic step-down), reduced motion turning on, the 3D view failing, or quitting; gone with a screen change or the next go (a pop, or the board rolling in for one). The store does this, since the 3D view may be gone.
+  - **Under reduced motion** (ADR-6) the end pose shows at once: a bailed board lies where it slid, with nothing moving.
+  - **The computer** rolls in once the board has stopped and the landing is over; the longest landing (1.1 s) and the push (0.7 s) fit inside its 2.2 s wait (tested).
+- **The frame rule** (the plan's, replacing the first version's frame-by-frame gate): once everything has come to rest, frames stop and stay stopped. A new browser check plays a sketchy landing and a bail on every level and counts no frame between one and three seconds after rest.
+- **The scene's text** says what the landing did: "The board rocks onto its back wheels and swerves; the feet ride it out", "The board falls onto its side and slides away from the feet" (or upside down, or on its wheels), then the same in the past once over.
+- **Fixed here: rolling for a regular rider.** ADR-67 slid the ground the goofy way for both stances, so a regular rider rolled tail first. The ground now slides the way the nose points; the wheels' print turns in the board's own frame, the same for both.
+
+**The numbers, for the owner's list** (`SETTLE` in `src/sim/settle.ts`):
+
+| What | Chosen |
+| --- | --- |
+| Sketchy rock | 5 degrees nose up, onto the back wheels, 0.5 s |
+| Sketchy swerve | up to 7 degrees and back, 1.0 s, ending 5 cm to the side |
+| Bail fall | 0.4 s for a quarter turn, from rest |
+| Bail slide | 0.6 m forward, 15 cm away from the feet, 1.1 s to a stop |
+| Clean | no motion of its own: the roll's 1.3 s slow-down |
+
+**Draw calls.** None added: the moves are four groups.
+
+**Left out.** A landing's sound (step 18) and dust (step 19). The legs bend for a sketchy landing only as the feet move (the legs model follows the shoes); a stumble of the rider's own after a bail would need a pose the model does not have.

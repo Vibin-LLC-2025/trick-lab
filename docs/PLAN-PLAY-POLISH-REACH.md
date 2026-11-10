@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Step 12 (rolling) is done (ADR-67).** Step 13 is next.
+- **Steps 12 (rolling, ADR-67) and 13 (landings with weight, ADR-68) are done.** Step 14 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -71,7 +71,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
 | beea48d | The halfway pause, and notes for the stretch from step 12 |
 | 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
-| (step 12) | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
+| e72b079 | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
+| (step 13) | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -333,7 +334,15 @@ As built, where it differs from the list below:
   - the scene's text description says the board is rolling;
   - a steady roll stays inside the targets.
 
-### 13. Landings with weight
+### 13. Landings with weight. Done (ADR-68)
+As built, where it differs from the list below or adds to it:
+- **In a game only.** The lab stays the exact experiment: its timeline ends at the touchdown.
+- **In a bail the rider stops and the board slides on**: the roll stops at once (the camera stays with the rider), and the board slides 0.6 m along the nose and 15 cm away from the feet. The feet stay where they stepped down and are cleared against the moving board every frame, so one it slid out from under comes down to the pad.
+- **The board falls over its own edge**: the board seen end on (`boardSection.ts`, the hull of the built boards) gives its height at every roll. A bail in the air now also comes down on the pad: it used to end through it.
+- **Found and fixed:** step 12 rolled a regular rider tail first.
+- **The numbers chosen** (`SETTLE` in `src/sim/settle.ts`): sketchy rock 5 degrees over 0.5 s, swerve 7 degrees and back over 1 s ending 5 cm to the side; bail fall 0.4 s a quarter turn, slide 1.1 s.
+- **Checked in a browser** on High, Medium and Low, both stances: a sketchy landing, a bail onto a rail, one upside down and one wheels down (the shove off), each to rest, no console errors. A new browser check counts no frame between one and three seconds after rest, on every level.
+
 This joins the first version's "settle" with rolling away.
 
 - **Clean:** the board rolls on straight and slows to a stop.

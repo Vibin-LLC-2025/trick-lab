@@ -279,6 +279,7 @@ export const createSkateSlice =
         const s = get();
         if (s.skate.phase === 'off') return;
         s.stopRoll();
+        s.endLanding();
         if (skateActive(s.skate)) {
           const cancelled = s.dropPop();
           // A flight still in the air lands as usual but scores nothing (scoreSkate ignores it once the game is off).

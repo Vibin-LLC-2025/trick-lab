@@ -197,9 +197,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // A trick in the air lands now, as under reduced motion (ADR-6), so no
       // screen inherits a flight it has no controls to finish.
       if (inFlight(get())) get().land();
-      // The game's roll ends with its screen (ADR-67): the lab stays on the spot.
+      // The game's roll ends with its screen (ADR-67): the lab stays on the spot, and shows no landing of its own (ADR-68).
       get().stopRoll();
-      set({ screen, shortcutsOpen: false, skateLeave: null });
+      set({ screen, shortcutsOpen: false, skateLeave: null, landing: 'none' });
       get().requestFocus({ kind: 'screen-heading' });
     },
     togglePreview: () => {
@@ -231,8 +231,11 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // Live change (ADR-6): a flight playing or paused stops animating and
       // resolves now, through the same path as a landing, once.
       if (reducedMotion && inFlight(get())) get().land(REDUCED_MOTION_LEAD);
-      // Under reduced motion the board pops on the spot (ADR-67).
-      if (reducedMotion) get().stopRoll();
+      // Under reduced motion the board pops on the spot (ADR-67), and a landing shows its end at once (ADR-68).
+      if (reducedMotion) {
+        get().stopRoll();
+        get().endLanding();
+      }
     },
     resetView: () => {
       set((s) => ({ viewResetNonce: s.viewResetNonce + 1 }));
@@ -247,6 +250,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setQuality: (quality) => {
       if (get().quality === quality && !get().qualityAuto) return;
       save(QUALITY_KEY, quality);
+      // The 3D view is rebuilt: a landing in play goes to its end (ADR-68).
+      get().endLanding();
       set({ quality, qualityAuto: false });
       get().announce(QUALITY_ANNOUNCEMENT[quality]);
     },
@@ -295,8 +300,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setSceneUnavailable: () => {
       if (get().sceneUnavailable) return;
       set({ sceneUnavailable: true });
-      // No view is left to bring a rolling board to a stop (ADR-67).
+      // No view is left to bring a rolling board to a stop (ADR-67), or to play a landing out (ADR-68).
       get().stopRoll();
+      get().endLanding();
       // One announcement: the failure, then the result if a trick was in the air.
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
@@ -317,6 +323,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
         return null;
       }
       save(QUALITY_STEP_KEY, lower);
+      // The 3D view is rebuilt on the lower level: the landing just begun goes to its end (ADR-68).
+      get().endLanding();
       set({ quality: lower, paces: [], paceJudged: false });
       return STEP_DOWN_ANNOUNCEMENT[lower as Exclude<Quality, 'high'>];
     },

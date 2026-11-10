@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectTier, open, popAndLand, TIERS } from './helpers';
+import { expectTier, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
 // The frames a landing draws (CLAUDE.md rule 4, PERF-BUDGET.md): read from the
 // store, not the frameloop. From the frame that drew the landing to the point
@@ -17,6 +17,47 @@ for (const tier of TIERS)
       expect(l.dropped).toBe(false);
       expect(l.toIdle).toBeLessThanOrEqual(1);
       expect(l.afterIdle).toBe(0);
+    }
+    expect(errors).toEqual([]);
+  });
+
+// A game's landing (step 13, ADR-68): the board rolls on, rocks or falls and
+// slides, then everything comes to rest, and from one second after rest no
+// frame is drawn for the next two (the plan's frame rule).
+for (const tier of TIERS)
+  test(`a game's landing comes to rest and stops drawing on ${tier}`, async ({ page }) => {
+    const errors = await open(page, tier, 'skate', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
+    await expectTier(page, tier);
+    for (const flick of [2.0, 1.1]) {
+      await page.evaluate((flick) => {
+        const st = (window as unknown as DebugWindow).__trickLabStore;
+        // A fresh game each time, with the player up first.
+        st.getState().startSkate();
+        for (let i = 0; i < 50 && st.getState().skate.first !== 'you'; i++) st.getState().startSkate();
+        st.getState().callSkateTrick('kickflip');
+        st.getState().setInput('flick', flick);
+      }, flick);
+      await page.keyboard.press('Space');
+      const grade = await page.evaluate(async () => {
+        const w = window as unknown as DebugWindow;
+        const raf = () => new Promise((r) => requestAnimationFrame(r));
+        const t0 = performance.now();
+        const rested = () => {
+          const s = w.__trickLabStore.getState();
+          return s.status === 'done' && s.roll === 'still' && s.landing !== 'plays';
+        };
+        while (!rested()) {
+          if (performance.now() - t0 > 15_000) throw new Error('the landing never came to rest');
+          await raf();
+        }
+        return w.__trickLabStore.getState().result!.grade;
+      });
+      expect(grade).toBe(flick === 2.0 ? 'sketchy' : 'bail');
+      await page.waitForTimeout(1000);
+      const before = await page.evaluate(() => (window as unknown as DebugWindow).__trickLabPerf.frames);
+      await page.waitForTimeout(2000);
+      const after = await page.evaluate(() => (window as unknown as DebugWindow).__trickLabPerf.frames);
+      expect(after - before, `${tier}, flick ${flick}`).toBe(0);
     }
     expect(errors).toEqual([]);
   });

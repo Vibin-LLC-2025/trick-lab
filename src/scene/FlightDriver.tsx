@@ -4,7 +4,8 @@ import { Matrix4, MathUtils, Vector3, type Bone, type Group, type InstancedBuffe
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
-import { previewAnimates, rollMoves, useTrickStore } from '../store';
+import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
+import { landingMoves, previewAnimates, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { setBoardRotation } from './boardPose';
@@ -16,6 +17,7 @@ import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
+import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
 import { haltRoll, resetRoll, rollMotion, stepRoll, writeSlides } from './roll';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
@@ -113,6 +115,12 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const legsPose = useRef<LegsPose>(newLegsPose());
   const clock = useRef(newFlightClock());
   const show = useRef(newShowcaseClock());
+  // The landing's move (ADR-68): one pair of groups round the board, one round the rider.
+  const boardOuter = useRef<Group>(null);
+  const boardInner = useRef<Group>(null);
+  const riderOuter = useRef<Group>(null);
+  const riderInner = useRef<Group>(null);
+  const settle = useRef<Settle>(newSettle());
   const home = useTrickStore((s) => s.screen === 'home');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
@@ -129,6 +137,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     () =>
       useTrickStore.subscribe((s, prev) => {
         if (rollMoves(s) && !rollMoves(prev)) rollMotion.running = false;
+        // A landing starts its clock at touchdown, and after a gap goes on from where it was (ADR-68).
+        if (s.landing === 'plays' && prev.landing !== 'plays') landingClock.t = 0;
+        if (landingMoves(s) && !landingMoves(prev)) landingClock.running = false;
       }),
     [],
   );
@@ -167,11 +178,35 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       r.running = true;
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
     }
-    writeSlides(r.distance);
+    writeSlides(r.distance, noseOf(s.stance));
+    // The landing's motion (ADR-68): a game's sketchy landing rocks and
+    // swerves with the rider on, a bail falls and slides from under the feet.
+    // At the playback speed, like the roll; once over (or cut short) its end pose.
+    let landed: Settle | null = null;
+    if (s.landing !== 'none' && s.flight && s.result && s.screen === 'skate') {
+      const L = landingClock;
+      if (s.landing === 'plays') {
+        if (landingMoves(s)) {
+          L.t += L.running ? Math.min(Math.max(0, delta), MAX_STALL) * s.rate : 0;
+          L.running = true;
+        }
+        if (L.t >= settleSeconds(s.flight)) s.landingDone();
+      }
+      landed = writeSettle(settle.current, s.flight, s.landing === 'plays' ? L.t : Infinity);
+    }
+    // The bail's own landing, or null: the board falls and slides, the feet stay.
+    const bail = landed !== null && landed.grade === 'bail' ? landed : null;
+    placeMove(boardOuter.current, boardInner.current, landed, s.stance);
+    placeMove(riderOuter.current, riderInner.current, landed && landed.riding ? landed : null, s.stance);
     // The preview's flight carries its own inputs; elsewhere the store state is the inputs object. No allocation either way.
     const inputs = s.screen === 'home' && flight ? flight.inputs : s;
 
     const p = writePose(pose.current, flight, progress);
+    // A bailed board falls over onto its side (ADR-68): its own roll and height.
+    if (bail) {
+      p.roll = bail.roll;
+      p.y = bail.rise;
+    }
     const g = board.current;
     if (g) {
       g.position.y = REST_Y + p.y;
@@ -184,7 +219,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     const feetShown = front.current !== null || back.current !== null;
     if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
-      const f = writeFeetPose(feet.current, inputs, flight, progress, s.stance);
+      // In a bail the board leaves the feet where they stepped down, cleared against it as it slides (ADR-68).
+      const f = bail && flight ? writeBailFeet(feet.current, flight.inputs, flight, bail, s.stance) : writeFeetPose(feet.current, inputs, flight, progress, s.stance);
       const regular = s.stance === 'regular';
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
@@ -214,6 +250,22 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     const sh = shadow.current;
     if (sh && g) {
       const gs = writeGroundShadows(ground.current, p, g.rotation.y, feetShown ? feet.current : null);
+      // The landing's move carries the footprints with what casts them (ADR-68).
+      if (landed) {
+        const bi = boardInner.current;
+        const ri = riderInner.current;
+        const turn = moveTurn(landed, s.stance);
+        if (bi) {
+          bi.updateWorldMatrix(true, false);
+          moveFootprint(gs.board, bi.matrixWorld, turn);
+          moveFootprint(gs.contact, bi.matrixWorld, turn);
+        }
+        if (ri && landed.riding) {
+          ri.updateWorldMatrix(true, false);
+          moveFootprint(gs.front, ri.matrixWorld, turn);
+          moveFootprint(gs.back, ri.matrixWorld, turn);
+        }
+      }
       applyFootprint(sh, 0, gs.board);
       applyFootprint(sh, 1, gs.contact);
       applyFootprint(sh, 2, gs.front);
@@ -233,12 +285,21 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         <instancedMesh ref={shadow} args={[geo.shadow, shaderMat('shadow', nodeRenderer), SHADOW_INSTANCES]} renderOrder={1} frustumCulled={false} />
       )}
       {/* The cues and trails are a plan for the student's inputs, so the welcome screen's preview has neither. */}
-      <Board ref={board} shadows={shadows}>
-        {motionCuesVisible && !home && <MotionCues />}
-      </Board>
-      {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
-      {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
-      {footPathsVisible && !home && <FootPaths />}
+      {/* The landing's move (ADR-68): the identity except while a game's landing plays or holds its end. */}
+      <group ref={boardOuter}>
+        <group ref={boardInner}>
+          <Board ref={board} shadows={shadows}>
+            {motionCuesVisible && !home && <MotionCues />}
+          </Board>
+        </group>
+      </group>
+      <group ref={riderOuter}>
+        <group ref={riderInner}>
+          {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
+          {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
+          {footPathsVisible && !home && <FootPaths />}
+        </group>
+      </group>
     </>
   );
 }
