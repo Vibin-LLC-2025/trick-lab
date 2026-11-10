@@ -938,3 +938,25 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 - `deck.test.ts`: the choice, its saving, the failure path, and whose board is on screen through a game.
 - `Screens.test.tsx`: the radio group by keyboard.
 - `browser/decks.spec.ts`: on High and Medium, a deck reaches the board's material and comes off again; a blocked download leaves the board, puts the choice back and says so.
+
+## ADR-72: The game's camera, and the instant replay (2026-11-10)
+
+**Context.** Step 17 of PLAN-PLAY-POLISH-REACH. The game used the lab's rider view: from above the heels, where at the peak of a 360 flip a shank could cover up to a fifth of the board (ADR-70). A game wants a lower camera, like a friend filming, and a slow replay of a made trick. By the owner's decision 26 there is no rough version: the angles are chosen here and built in full, and every choice is a number in one place.
+
+**Decision.**
+- **Three fixed angles on the game screen**, chosen by a "Camera" radio group in the letters card (`.segmented`, arrow keys): Filmer (the default), Side and Above. Each is `look(elevation, azimuth, targetY)` in `ART.camera.views` (degrees above the ground, degrees round toward the nose, the point looked at): film 12, 30, 0.32 m; side 7, 0, 0.32 m; above 34, -20, 0.28 m. Each backs off until the flight fits the stage, as the lab's views do (ADR-18). The orbit is off in the game; the lab keeps its free camera and its two views. Saved under `trick-lab.game-camera`, announced ("Camera: side on, low."), never logged, not reset, not exported.
+- **Every angle looks from the heel side (+Z)**, so the skate spot stays behind the board (ADR-69), and every one keeps the flight before the fog and the plane's edge in full fog on any stage shape (tested in `gameCamera.test.ts`).
+- **The legs never hide the board.** Checked 2026-11-10 in six poses of a 360 flip (0, 0.15, 0.35, 0.55, 0.75, 1), both stances, on High and Medium, at each angle and in the replay: from Filmer and Side the legs are above the board in every pose; from Above, the steepest, the shanks pass over the board's edges at the peak but the deck stays in view. This closes the check moved here by ADR-70.
+- **The instant replay.** After the student's made set or copy (`scoreSkate`), with the "Instant replay" switch on (the default, `trick-lab.instant-replay`) and motion allowed, the replay is due; once the board has rolled to a stop it plays (`replay`: none, due, plays, in `store/replay.ts`).
+  - It plays the same flight from pop to landing at `ART.replay.rate` (0.3) of its speed, from its own low, wide camera (`look(4, 40, 0.36)`, field of view 60 degrees, `ART.camera.fovs`), with a barrel bend of `ART.replay.bend` (0.28) in the effects' composite (`bendUv` in `effects.ts`, no extra pass or draw).
+  - Its clock is `scene/replayClock.ts`, run by FlightDriver; the store's `progress`, `status`, events, records, sound cues and the automatic step-down (which records frames only while `status` is `playing`) never see it. The landing's own motion is not played again.
+  - Nothing else moves: the computer rolls in only once it has ended (`computerWaiting` waits for `replay === 'none'`).
+  - Pop reads "Skip replay" while it plays (`aria-keyshortcuts` "Space Escape"), so focus never moves; Space and Escape skip it. A pop, leaving the screen, quitting, the shortcuts dialog, reduced motion, a lost 3D view or switching it off ends it. The scene description says it is a slow replay and how to skip it.
+  - The switch is hidden under reduced motion, where no replay plays.
+- **Low.** The angles and the replay are camera and clock, not graphics, so Low has them too (ADR-62 freezes Low's graphics). Low has no effects composite, so its replay has no bend.
+
+**Numbers to change** (all in `src/scene/artDirection.ts`): `ART.camera.views.film`, `.side`, `.above`, `.replay`; `ART.camera.fovs.replay`; `ART.replay.rate` and `.bend`. The default angle is `gameViewFrom` in `store/replay.ts`.
+
+**Draw calls.** None.
+
+**Tests.** `replay.test.ts` (when it is due, plays, is skipped and is cut short; the computer waits), `gameCamera.test.ts` (each angle's side, framing and fog; `viewFor`; `bendUv`; the replay's clock), `Skate.test.tsx` (the camera group and the switch by keyboard, Skip replay and Escape), `roll.test.ts` (the computer rolls in after the replay). `browser/landing.spec.ts`: a made trick in a game now replays before it comes to rest, and from one second after the replay no frame is drawn, on every tier. Its hang guard went from 15 to 40 seconds: without a GPU, High draws a frame in 0.1 to 0.6 s, and the replay adds about 20 frames. Frame times on real hardware are measured in steps 20 and 23.

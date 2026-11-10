@@ -2,16 +2,19 @@ import { useEffect, useState } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
-import { useTrickStore, type CameraView } from '../store';
+import { replayMoves, useTrickStore, type CameraView, type GameView, type TrickState } from '../store';
 import { ART } from './artDirection';
 import { fitDistance, framingPoints, orbitMaxDistance } from './cameraFit';
-import { newResetTracker, placeCamera, takeReset } from './cameraPlacement';
+import { newResetTracker, placeCamera, setFov, takeReset } from './cameraPlacement';
 
 const C = ART.camera;
 const FRAME_POINTS = framingPoints(C.fit);
 
-/** A camera preset: the student's two (ADR-38) and the welcome screen's preview (ADR-45). */
-type ViewKey = CameraView | 'showcase';
+/** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's three and its replay (ADR-72). */
+export type ViewKey = CameraView | 'showcase' | GameView | 'replay';
+
+/** A view's field of view: the replay's own, or the camera's. */
+export const fovOf = (view: ViewKey) => C.fovs[view] ?? C.fov;
 
 const preset = (key: ViewKey) => ({
   target: new Vector3(...C.views[key].target),
@@ -24,7 +27,18 @@ const PRESETS: Record<ViewKey, ReturnType<typeof preset>> = {
   rider: preset('rider'),
   detail: preset('detail'),
   showcase: preset('showcase'),
+  film: preset('film'),
+  side: preset('side'),
+  above: preset('above'),
+  replay: preset('replay'),
 };
+
+/** The view on screen: the preview's at home, the replay's while it plays, the game's chosen angle, the lab's chosen preset. */
+export function viewFor(s: Pick<TrickState, 'screen' | 'cameraView' | 'gameView' | 'replay'>): ViewKey {
+  if (s.screen === 'home') return 'showcase';
+  if (s.screen === 'skate') return replayMoves(s) ? 'replay' : s.gameView;
+  return s.cameraView;
+}
 
 /** Distance at which the board's whole flight fits a stage of this aspect from this preset (ADR-18). */
 function useFitDistance(view: ViewKey) {
@@ -33,7 +47,7 @@ function useFitDistance(view: ViewKey) {
   const d = fitDistance({
     from: V.position,
     target: V.target,
-    fov: C.fov,
+    fov: fovOf(view),
     aspect,
     points: FRAME_POINTS,
     margin: C.fit.margin,
@@ -62,6 +76,8 @@ function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
   useEffect(() => {
     const reset = takeReset(resets, resetNonce, view);
     const P = PRESETS[view];
+    // The replay's wide lens (ADR-72), the camera's own everywhere else.
+    setFov(camera, fovOf(view));
     placeCamera(camera, controls?.target ?? null, { target: P.target, home: P.home, distance }, reset);
     controls?.update();
     invalidate();
@@ -78,18 +94,20 @@ function FitAndReset({ distance, view }: { distance: number; view: ViewKey }) {
  * but stops before the flight would reach the fog (orbitMaxDistance, ADR-55).
  * The orbit target is the chosen preset's (pan is off, so it never moves).
  * On the welcome screen (ADR-45) the camera holds the preview's own preset
- * and the orbit is off; the student's preset comes back with the lab or game.
+ * and the orbit is off. The game (ADR-72) has its fixed angles, chosen by
+ * buttons, and the replay's; the orbit is off there too. The lab keeps its
+ * free camera.
  */
 export function SceneCamera() {
   const home = useTrickStore((s) => s.screen === 'home');
-  const chosen = useTrickStore((s) => s.cameraView);
-  const view: ViewKey = home ? 'showcase' : chosen;
+  const lab = useTrickStore((s) => s.screen === 'lab');
+  const view = useTrickStore(viewFor);
   const distance = useFitDistance(view);
   return (
     <>
       <OrbitControls
         makeDefault
-        enabled={!home}
+        enabled={lab}
         target={PRESETS[view].targetArray}
         enablePan={false}
         enableDamping={false}

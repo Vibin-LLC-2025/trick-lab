@@ -48,6 +48,8 @@ interface Store {
   setInput: (key: 'pop' | 'flick' | 'scoop', value: number) => void;
   roll: 'still' | 'push' | 'slow';
   landing: 'none' | 'plays' | 'over';
+  /** The instant replay (ADR-72). */
+  replay: 'none' | 'due' | 'plays';
   result: { grade: 'clean' | 'sketchy' | 'bail' } | null;
   /** The student's deck (ADR-71). */
   deck: string;

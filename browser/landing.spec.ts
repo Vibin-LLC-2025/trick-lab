@@ -22,7 +22,7 @@ for (const tier of TIERS)
   });
 
 // A game's landing (step 13, ADR-68): the board rolls on, rocks or falls and
-// slides, then everything comes to rest, and from one second after rest no
+// slides, a made trick replays (ADR-72), then everything comes to rest, and from one second after rest no
 // frame is drawn for the next two (the plan's frame rule).
 for (const tier of TIERS)
   test(`a game's landing comes to rest and stops drawing on ${tier}`, async ({ page }) => {
@@ -44,10 +44,13 @@ for (const tier of TIERS)
         const t0 = performance.now();
         const rested = () => {
           const s = w.__trickLabStore.getState();
-          return s.status === 'done' && s.roll === 'still' && s.landing !== 'plays';
+          // A made trick's instant replay (ADR-72) plays once the board stops: rest is after it too.
+          return s.status === 'done' && s.roll === 'still' && s.landing !== 'plays' && s.replay === 'none';
         };
         while (!rested()) {
-          if (performance.now() - t0 > 15_000) throw new Error('the landing never came to rest');
+          // A guard against a hang, not a speed check: without a GPU, High draws a frame in 0.1 to 0.6 s, and the
+          // replay adds about 20 frames after the roll stops (ADR-72). Frame times are measured on real hardware.
+          if (performance.now() - t0 > 40_000) { const s = w.__trickLabStore.getState(); throw new Error(`the landing never came to rest: ${s.status}, ${s.roll}, ${s.landing}, ${s.replay}`); }
           await raf();
         }
         return w.__trickLabStore.getState().result!.grade;

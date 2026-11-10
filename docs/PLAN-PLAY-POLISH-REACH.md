@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70) and 16 (decks, ADR-71) are done.** The merge point after step 16 is asked; step 17 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71) and 17 (the game's camera and instant replay, ADR-72) are done.** The merge point after step 16 is asked; step 18 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -75,7 +75,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 2fb9f74 | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
 | 21bac64 | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
 | 8762405 | 15: the legs on by default on High and Medium (ADR-70), in trousers with a cuff over the shoe, a little bunching and a twill cloth; the hip fade a third shorter. The loading pictures show the legs, encoded at WebP 0.6 to stay in budget. No draw call added to the worst case |
-| (step 16) | 16: decks (ADR-71): Trick Lab, Dusk, Bolt or Ripple, chosen on the welcome screen; the computer rides Circuit, with teal soles and laces. KTX2 textures per board level, downloaded only when shown, each with a budget. No draw call added |
+| 1c6bb20 | 16: decks (ADR-71): Trick Lab, Dusk, Bolt or Ripple, chosen on the welcome screen; the computer rides Circuit, with teal soles and laces. KTX2 textures per board level, downloaded only when shown, each with a budget. No draw call added |
+| (step 17) | 17: the game's camera and instant replay (ADR-72): Filmer, Side and Above, lower than the lab's; after a made set or copy the flight again in slow motion from a low, wide camera, with a fisheye bend on High and Medium; Skip replay on Pop and Escape. The legs never hide the board (checked in six poses, both stances, High and Medium). No draw call added |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.

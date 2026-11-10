@@ -4,6 +4,7 @@ import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 import type { DeckId, PlayerDeck } from '../asset/deckSpec';
 import type { Records } from './records';
+import type { GameView, ReplayState } from './replay';
 import type { LandingState, RollState } from './roll';
 
 /** Goofy (right foot forward, the default) or regular (ADR-25). Defined in the sim so the feet model stays store-free. */
@@ -137,6 +138,14 @@ export interface PlaybackSlice {
   landingDone: () => void;
   /** Internal: cut short (a change of quality level, reduced motion, the 3D view failing, a quit): the end pose at once. */
   endLanding: () => void;
+  /**
+   * The instant replay (step 17, ADR-72, store/replay.ts): due after the
+   * student's made set or copy, playing once the board has come to rest.
+   * Not logged; scoring, records and the step-down never see it.
+   */
+  replay: ReplayState;
+  /** The replay is over (FlightDriver at its end) or skipped (Pop, Space or Escape): the computer's go may come. */
+  endReplay: () => void;
 }
 
 /** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */
@@ -197,6 +206,10 @@ export interface UiSlice {
   viewResetNonce: number;
   /** The camera preset that SceneCamera places and "Reset view" returns to (ADR-38). Persisted under trick-lab.camera-view, default rider. Not logged, not reset, not exported. */
   cameraView: CameraView;
+  /** The game screen's fixed camera (step 17, ADR-72). Persisted under trick-lab.game-camera, default the filmer. Not logged, not reset, not exported. */
+  gameView: GameView;
+  /** The "Instant replay" switch (ADR-72). Persisted under trick-lab.instant-replay, default on. Never plays under reduced motion. Not logged. */
+  instantReplay: boolean;
   /** Persisted under trick-lab.quality. Not logged: the event contract has no UI events. */
   quality: Quality;
   /** True while the tier is the device's auto-pick, false once the student chose one. */
@@ -286,6 +299,10 @@ export interface UiSlice {
   resetView: () => void;
   /** Moves the camera to a preset, persisted and announced; a no-op if unchanged. */
   setCameraView: (view: CameraView) => void;
+  /** Chooses the game's camera: persisted and announced, never logged (ADR-72). */
+  setGameView: (view: GameView) => void;
+  /** The "Instant replay" switch: persisted and announced, never logged. Off ends a replay on screen. */
+  toggleInstantReplay: () => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
   /** Shows or hides the legs, persisted and announced. */

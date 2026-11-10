@@ -20,7 +20,7 @@ import {
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
 // The computer's wait (ADR-46) is the store's, shared by the timer and the countdown bar, so the two always start together.
-import { computerWaiting, useTrickStore, type PopMode, type TrickState } from '../store';
+import { computerWaiting, GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, useTrickStore, type PopMode, type TrickState } from '../store';
 import { Inputs } from './Inputs';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
@@ -103,6 +103,10 @@ function Scoreboard() {
   const toggleSlowMotion = useTrickStore((s) => s.toggleSlowMotion);
   const auto = useTrickStore((s) => s.skateAuto);
   const toggleSkateAuto = useTrickStore((s) => s.toggleSkateAuto);
+  const replay = useTrickStore((s) => s.instantReplay);
+  const toggleInstantReplay = useTrickStore((s) => s.toggleInstantReplay);
+  // No replay plays under reduced motion (ADR-72), so its switch is not offered there.
+  const reduced = useTrickStore((s) => s.reducedMotion);
   const up = turnView(game)?.who ?? null;
   return (
     <section className="panel hud__score" aria-labelledby="skate-letters-heading">
@@ -124,9 +128,30 @@ function Scoreboard() {
         <div className="skate__toggles">
           <Toggle label="Slow motion" pressed={slow} keys="s" onClick={toggleSlowMotion} />
           <Toggle label="Computer goes on its own" pressed={auto} onClick={toggleSkateAuto} />
+          {!reduced && <Toggle label="Instant replay" pressed={replay} onClick={toggleInstantReplay} />}
         </div>
       )}
+      <CameraChoice />
     </section>
+  );
+}
+
+/** The game's camera (step 17, ADR-72): three fixed angles as a radio group (arrow keys move and choose). The lab keeps its free camera. */
+function CameraChoice() {
+  const view = useTrickStore((s) => s.gameView);
+  const setGameView = useTrickStore((s) => s.setGameView);
+  return (
+    <fieldset className="segmented">
+      <legend className="segmented__legend">Camera</legend>
+      <div className="segmented__options">
+        {GAME_VIEWS.map((v) => (
+          <label key={v} className="segmented__option">
+            <input className="segmented__input" type="radio" name="game-camera" value={v} checked={view === v} onChange={() => setGameView(v)} />
+            <span className="segmented__label">{GAME_VIEW_LABEL[v]}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -339,7 +364,9 @@ function Controls() {
   const cpu = useTrickStore((s) => computerTurn(s.skate));
   const pressPop = useTrickStore((s) => s.pressPop);
   const timed = useTrickStore((s) => s.popMode === 'timed');
-  const label = cpu ? "Computer's go" : 'Pop';
+  // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
+  const replaying = useTrickStore(replayMoves);
+  const label = replaying ? 'Skip replay' : cpu ? "Computer's go" : 'Pop';
   return (
     <div className="hud__tray">
       <Inputs />
@@ -351,7 +378,7 @@ function Controls() {
             type="button"
             className="btn btn--primary skate__pop"
             aria-label={label}
-            aria-keyshortcuts="Space"
+            aria-keyshortcuts={replaying ? 'Space Escape' : 'Space'}
             aria-disabled={status === 'playing' || undefined}
             onClick={pressPop}
           >

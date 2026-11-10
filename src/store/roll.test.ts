@@ -69,9 +69,13 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     s.getState().pressPop();
     s.getState().land();
     expect(roll(s)).toBe('slow');
-    // The kickflip landed, so the computer is up to copy it, and it rolls in once the board has stopped.
+    // The kickflip landed, so the computer is up to copy it, and it rolls in once the board has stopped
+    // and the student's instant replay has played (ADR-72).
     expect(s.getState().skate.phase).toBe('computer-copy');
     s.getState().rollRested();
+    expect(s.getState().replay).toBe('plays');
+    expect(roll(s)).toBe('still');
+    s.getState().endReplay();
     expect(roll(s)).toBe('push');
     // With the game screen held by a dialog the computer is not waiting, so a stopped board stays stopped.
     s.getState().slowRoll();

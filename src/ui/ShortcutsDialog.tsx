@@ -4,6 +4,7 @@ import { useTrickStore, type Screen } from '../store';
 const ALL: readonly Screen[] = ['home', 'skate', 'lab'];
 const PLAY: readonly Screen[] = ['skate', 'lab'];
 const LAB: readonly Screen[] = ['lab'];
+const SKATE: readonly Screen[] = ['skate'];
 
 /** Each shortcut and the screens it works on (ADR-45; App's SCREEN_KEYS is the keyboard side of the same list). */
 const SHORTCUTS: [string[], string, readonly Screen[]][] = [
@@ -14,6 +15,7 @@ const SHORTCUTS: [string[], string, readonly Screen[]][] = [
   [['←', '→'], 'Move the focused slider', PLAY],
   [['Page Up', 'Page Down'], 'On the timeline, 10 percent (the arrows move it 1 percent)', LAB],
   [['s'], 'Slow motion on or off (back to the last slow speed)', PLAY],
+  [['Esc'], 'Skip the instant replay', SKATE],
   [['[', ']'], 'One speed step slower or faster, also while the board is in the air', LAB],
   [['r'], 'Reset inputs, board and objectives (the event log is kept)', LAB],
   [['t'], 'Light or dark theme', ALL],

@@ -15,6 +15,7 @@ export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash,
 export { liveProgress, type Playhead } from './playhead';
 export { computerWaiting, landingMoves, rollAllowed, rollMoves, type LandingState, type RollState } from './roll';
 export { boardRider, DECK_KEY, shownDeck } from './deck';
+export { GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, type GameView, type ReplayState } from './replay';
 
 export type { Random, Schedule } from './skate';
 export { TAUGHT_KEY } from './skate';

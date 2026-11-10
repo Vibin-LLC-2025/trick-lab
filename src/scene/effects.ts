@@ -47,6 +47,8 @@ export interface Effects {
   render: () => void;
   /** Motion blur on or off (ADR-51: a trick at normal speed, with the switch on, on High). */
   setMotionBlur: (on: boolean) => void;
+  /** The instant replay's fisheye on or off (ADR-72): ART.replay.bend, or none. */
+  setBend: (on: boolean) => void;
   dispose: () => void;
 }
 
@@ -68,6 +70,21 @@ export const NDC_TO_UV = [0.5, -0.5] as const;
  */
 export function blurTaps(n: number): { at: number; weight: number }[] {
   return Array.from({ length: n }, (_, i) => ({ at: n === 1 ? 0 : i / (n - 1) - 0.5, weight: 1 / n }));
+}
+
+/**
+ * The fisheye (ADR-72): where on the scene picture a screen point samples. A
+ * barrel distortion, r' = r (1 + k r^2) about the centre, in units where the
+ * corner is at r = 1 so the bend is the same on any stage shape, scaled by
+ * 1 / (1 + k) so the corners sample the picture's corners and nothing outside
+ * it. k = 0 is the identity. The same formula as the composite's; tested.
+ */
+export function bendUv(u: number, v: number, k: number, aspect: number): [number, number] {
+  const x = (u - 0.5) * aspect;
+  const y = v - 0.5;
+  const r2 = (x * x + y * y) / (aspect * aspect * 0.25 + 0.25);
+  const s = (1 + k * r2) / (1 + k);
+  return [0.5 + (u - 0.5) * s, 0.5 + y * s];
 }
 
 /** Rec. 709 luminance, for the glow's threshold and the grade. */
@@ -97,27 +114,32 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
   const aoTexture = occlusion?.getTextureNode() ?? null;
 
   const blur = uniform(0);
+  const bend = uniform(0);
   const G = P.grade;
   const composite = Fn(() => {
-    const c = vec4(color.sample(uv())).toVar();
+    // Where this pixel samples the scene: straight through, or bent for the replay (bendUv).
+    const aspect = viewportSize.x.div(viewportSize.y);
+    const centred = uv().sub(0.5);
+    const r2 = dot(centred.mul(vec2(aspect, 1)), centred.mul(vec2(aspect, 1))).div(aspect.mul(aspect).mul(0.25).add(0.25));
+    const at = centred.mul(bend.mul(r2).add(1).div(bend.add(1))).add(0.5).toVar();
+    const c = vec4(color.sample(at)).toVar();
     if (tier.motionBlur) {
       If(blur.greaterThan(0), () => {
         // This frame's motion of the pixel in UV, times the shutter.
-        const v = scenePass.getTextureNode('velocity').sample(uv()).xy.mul(vec2(...NDC_TO_UV)).mul(blur).toVar();
+        const v = scenePass.getTextureNode('velocity').sample(at).xy.mul(vec2(...NDC_TO_UV)).mul(blur).toVar();
         const sum = vec4(0).toVar();
-        for (const t of blurTaps(P.motionBlur.samples)) sum.addAssign(color.sample(uv().add(v.mul(t.at))).mul(t.weight));
+        for (const t of blurTaps(P.motionBlur.samples)) sum.addAssign(color.sample(at.add(v.mul(t.at))).mul(t.weight));
         c.assign(sum);
       });
     }
-    if (aoTexture) c.rgb.mulAssign(mix(float(1), aoTexture.sample(uv()).r, P.ao.strength));
+    if (aoTexture) c.rgb.mulAssign(mix(float(1), aoTexture.sample(at).r, P.ao.strength));
     if (tier.glow) {
       // Two rings of taps round the pixel; only what is brighter than the threshold spreads.
       const glow = vec3(0).toVar();
-      const aspect = viewportSize.x.div(viewportSize.y);
       for (const [ring, r] of P.glow.radius.entries()) {
         for (let i = 0; i < P.glow.taps; i++) {
           const a = ((i + ring * 0.5) / P.glow.taps) * Math.PI * 2;
-          const tap = color.sample(uv().add(vec2(Math.cos(a) * r, Math.sin(a) * r).div(vec2(aspect, 1)))).rgb;
+          const tap = color.sample(at.add(vec2(Math.cos(a) * r, Math.sin(a) * r).div(vec2(aspect, 1)))).rgb;
           glow.addAssign(tap.mul(max(luma(tap).sub(P.glow.threshold), 0)));
         }
       }
@@ -143,6 +165,9 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
     render: () => pipeline.render(),
     setMotionBlur: (on) => {
       blur.value = on ? P.motionBlur.shutter : 0;
+    },
+    setBend: (on) => {
+      bend.value = on ? ART.replay.bend : 0;
     },
     dispose: () => {
       occlusion?.dispose();

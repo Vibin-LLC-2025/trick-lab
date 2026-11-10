@@ -369,9 +369,14 @@ export function describeScene(s: {
   roll?: 'still' | 'push' | 'slow';
   /** The landing's own motion in a game (ADR-68); none when left out. */
   landing?: 'none' | 'plays' | 'over';
+  /** The instant replay (ADR-72); none when left out. */
+  replay?: 'none' | 'due' | 'plays';
 }): string {
-  const board =
-    s.status === 'playing'
+  // The instant replay plays the made trick again before the landing shows (ADR-72).
+  const replay = s.replay === 'plays' ? s.result : null;
+  const board = replay
+    ? `Instant replay of the ${replay.name.toLowerCase()}, in slow motion from a low camera. Press Pop or Escape to skip it.`
+    : s.status === 'playing'
       ? 'Skateboard in the air.'
       : s.status === 'paused'
         ? `Skateboard paused in the air at ${Math.round(s.progress * 100)} percent of the flight.`
@@ -395,6 +400,6 @@ export function describeScene(s: {
         ? "Waiting for the computer's trick to land."
         : 'Waiting for this trick to land.'
       : 'No trick popped yet.';
-  const settled = s.landing && s.landing !== 'none' && s.flight && s.result ? describeSettle(s.flight, s.result.grade, s.landing === 'plays') : '';
+  const settled = !replay && s.landing && s.landing !== 'none' && s.flight && s.result ? describeSettle(s.flight, s.result.grade, s.landing === 'plays') : '';
   return `${board}${rolling}${settled}${feet}${legs} ${STANCE_NOTE[s.stance ?? 'goofy']} ${inputs} ${last}`;
 }

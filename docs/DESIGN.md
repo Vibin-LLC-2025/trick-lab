@@ -717,6 +717,8 @@ Over 960 px wide the game screen is the top bar over one stage, and `main.app__p
 - **A narrow screen (960 px and below):** the stacked layout of section 11 (the stage pinned on top, the panels under it). `.hud__tray` is `display: contents` there, so its two panels flow with the rest.
 - **Order.** The DOM order is the letters, the turn card, the tray, the last trick: Tab goes top right, top left, then the bottom, then back up to the last trick, which has no control.
 
+- **The game's camera and the instant replay (2026-11-10, ADR-72).** In a game the letters card ends with a `.segmented` radio group, legend "Camera": Filmer (the default), Side, Above, saved under `trick-lab.game-camera`. Under the two switches is a third, "Instant replay" (on by default, hidden under reduced motion). While a replay plays, Pop reads "Skip replay" (Space or Escape); no other control changes. The angles' numbers are `ART.camera.views` (film, side, above, replay) and the replay's `ART.replay` (rate 0.3, bend 0.28); the replay's field of view is 60 degrees.
+
 ### 11.3 The first game's walk-through (`.lesson`, 2026-11-09, ADR-66)
 
 In the turn card, in place of the trick guide, on the player's first go of their first game.

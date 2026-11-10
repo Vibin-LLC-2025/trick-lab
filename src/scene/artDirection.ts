@@ -13,6 +13,17 @@ import type { Quality, Theme } from '../store';
 export type Vec3 = readonly [number, number, number];
 
 const v = (x: number, y: number, z: number): Vec3 => [x, y, z];
+/**
+ * A camera preset from its angles (step 17, ADR-72): `elevation` degrees up
+ * from the horizon, `azimuth` degrees round from the heel side (+Z) toward +X,
+ * looking at a point `targetY` up over the board. Only the direction matters
+ * (the fit sets the distance), so the position is 2 m out.
+ */
+const look = (elevation: number, azimuth: number, targetY: number) => {
+  const e = (elevation * Math.PI) / 180;
+  const a = (azimuth * Math.PI) / 180;
+  return { position: v(2 * Math.cos(e) * Math.sin(a), targetY + 2 * Math.sin(e), 2 * Math.cos(e) * Math.cos(a)), target: v(0, targetY, 0) };
+};
 
 /**
  * Scene clear color per theme. Each must equal `--scene-bg` for that theme in
@@ -403,7 +414,27 @@ export const ART = {
         ),
         target: v(0, 0.45, 0),
       },
+      /**
+       * The game's fixed angles (step 17, ADR-72, 2026-11-10), like a friend
+       * filming: lower and closer than the lab's, all on the heel side (+Z),
+       * so the skate spot (ADR-69) stays behind the board and the legs stand
+       * above it on screen. `look(elevation, azimuth, targetY)`: degrees up
+       * from the horizon and round from the heel side toward +X (the goofy
+       * nose; the camera never moves with the stance, ADR-25). The fit sets
+       * the distance, as for the lab's presets.
+       * - `film`, the default: low three-quarter toward the nose, 12 up, 30 round.
+       * - `side`: side on and low, 7 up, the board in profile against the spot.
+       * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
+       * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
+       *   (its own field of view, `fov` below), close to the board.
+       */
+      film: look(12, 30, 0.32),
+      side: look(7, 0, 0.32),
+      above: look(34, -20, 0.28),
+      replay: look(4, 40, 0.36),
     },
+    /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
+    fovs: { replay: 60 } as Partial<Record<string, number>>,
   },
   /**
    * Rotation direction (ADR-10, made goofy by ADR-24 on 2026-11-04). The
@@ -743,5 +774,13 @@ export const ART = {
    * feet. High's shoe model and Medium's primitive; Low stays as it is.
    */
   computer: { shoe: '#5fd0c5' },
+  /**
+   * The instant replay (step 17, ADR-72): after the student's made set or
+   * copy, the flight once more at `rate` of its own speed from the replay
+   * view, with a fisheye `bend` on High and Medium (the effects' composite:
+   * a barrel distortion, 0 for none, scaled so the corners stay inside the
+   * picture).
+   */
+  replay: { rate: 0.3, bend: 0.28 },
   spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },
 } as const;

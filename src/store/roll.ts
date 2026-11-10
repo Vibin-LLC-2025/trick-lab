@@ -39,7 +39,9 @@ export const computerWaiting = (s: TrickState) =>
   s.status !== 'playing' &&
   s.status !== 'paused' &&
   !s.shortcutsOpen &&
-  s.skateLeave === null;
+  s.skateLeave === null &&
+  // The student's instant replay plays first (ADR-72).
+  s.replay === 'none';
 
 /** Whether a go may roll at all: a game in play, on its screen, with the flight animating. */
 export const rollAllowed = (s: Pick<TrickState, 'screen' | 'skate' | 'reducedMotion' | 'sceneUnavailable'>) =>

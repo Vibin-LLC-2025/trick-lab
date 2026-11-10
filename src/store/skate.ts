@@ -23,7 +23,7 @@ import {
   withComputerCall,
   type SkateGame,
 } from '../sim/skate';
-import { inFlight } from './playback';
+import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
 import { computerWaiting } from './roll';
 import type { Clock } from './assessment';
@@ -155,6 +155,11 @@ export const createSkateSlice =
 
       pressPop: () => {
         const s = get();
+        // During the instant replay the button is "Skip replay" (ADR-72): the same element, so focus stays.
+        if (s.replay === 'plays') {
+          s.endReplay();
+          return;
+        }
         if (s.pendingPop) {
           release(s.pendingPop.id, false);
           return;
@@ -208,7 +213,7 @@ export const createSkateSlice =
         const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
         // A fresh game starts with the board on the pad and no result from before (ADR-46). The speed is kept.
         // A player's first game walks them through their first go (ADR-66).
-        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught });
+        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught, replay: 'none' });
         s.log('skate.started', { level: skate.level, first });
         if (computerWaiting(get())) get().startRoll();
         s.requestFocus({ kind: 'skate-heading' });
@@ -230,9 +235,9 @@ export const createSkateSlice =
       requestLeave: (target) => {
         const s = get();
         if (s.screen === 'skate' && skateActive(s.skate)) {
-          // A dialog opening drops a running bar (ADR-65).
+          // A dialog opening drops a running bar (ADR-65), and a replay (ADR-72).
           s.cancelPop();
-          set({ skateLeave: target });
+          set({ skateLeave: target, replay: 'none' });
           return;
         }
         if (target === 'setup') s.quitSkate();
@@ -280,6 +285,7 @@ export const createSkateSlice =
         if (s.skate.phase === 'off') return;
         s.stopRoll();
         s.endLanding();
+        set({ replay: 'none' });
         if (skateActive(s.skate)) {
           const cancelled = s.dropPop();
           // A flight still in the air lands as usual but scores nothing (scoreSkate ignores it once the game is off).
@@ -322,6 +328,8 @@ export const createSkateSlice =
         const game = withComputerCall(step.game, random);
         set({ skate: game, skateMessage: step.message });
         if (by === 'you' && step.made) s.celebrate(result.name, result.grade === 'clean');
+        // A made set or copy of the student's is replayed once the board is at rest (ADR-72).
+        if (by === 'you' && step.made && s.instantReplay && animates(s)) set({ replay: 'due' });
         if (step.set) s.log('skate.set', { by, trick: step.set.id });
         if (step.letterTo) {
           s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });

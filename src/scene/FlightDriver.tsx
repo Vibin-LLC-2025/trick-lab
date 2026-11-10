@@ -5,7 +5,7 @@ import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim
 import { writePose, type Pose } from '../sim/flight';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, previewAnimates, rollMoves, useTrickStore } from '../store';
+import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { setBoardRotation } from './boardPose';
@@ -18,6 +18,7 @@ import { MotionCues } from './MotionCues';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
+import { replayClock, replayProgress } from './replayClock';
 import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
@@ -140,6 +141,11 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         // A landing starts its clock at touchdown, and after a gap goes on from where it was (ADR-68).
         if (s.landing === 'plays' && prev.landing !== 'plays') landingClock.t = 0;
         if (landingMoves(s) && !landingMoves(prev)) landingClock.running = false;
+        // The instant replay starts from the pop (ADR-72).
+        if (replayMoves(s) && !replayMoves(prev)) {
+          replayClock.t = 0;
+          replayClock.running = false;
+        }
       }),
     [],
   );
@@ -165,6 +171,16 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       tickFlightClock(c, head, s, delta);
       progress = c.progress;
     }
+    // The instant replay (ADR-72): the flight once more from its own clock, slowly, then the store hears it is over.
+    let replaying = false;
+    if (replayMoves(s) && flight) {
+      replaying = true;
+      const R = replayClock;
+      R.t += R.running ? Math.min(Math.max(0, delta), MAX_STALL) : 0;
+      R.running = true;
+      progress = replayProgress(R.t, flight);
+      if (progress >= 1) s.endReplay();
+    }
     // Rolling (ADR-67): the world moves, the board stays. Only on the game
     // screen; elsewhere the ground is back on the spot. The roll keeps the
     // playback speed, so a slow-motion trick passes over slow ground.
@@ -185,7 +201,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // swerves with the rider on, a bail falls and slides from under the feet.
     // At the playback speed, like the roll; once over (or cut short) its end pose.
     let landed: Settle | null = null;
-    if (s.landing !== 'none' && s.flight && s.result && s.screen === 'skate') {
+    // A replay shows the flight before its landing: no landing move while it plays.
+    if (s.landing !== 'none' && s.flight && s.result && s.screen === 'skate' && !replaying) {
       const L = landingClock;
       if (s.landing === 'plays') {
         if (landingMoves(s)) {

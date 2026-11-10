@@ -21,6 +21,7 @@ export const initialPlayback = () => ({
   scrubFrom: null,
   roll: 'still' as const,
   landing: 'none' as const,
+  replay: 'none' as const,
 });
 
 /**
@@ -146,8 +147,8 @@ export const createPlaybackSlice =
         ? { how: 'timed', releaseMs: Math.round(bar.ms), offMs: Math.round(barOff(bar.ms)), setFlick: round(bar.set.flick, 3), setScoop: round(bar.set.scoop, 3) }
         : { how: 'exact' };
       const flightId = s.flightId + 1;
-      // A new go ends the last landing (ADR-68).
-      set({ landing: 'none' });
+      // A new go ends the last landing (ADR-68), and a replay still to come (ADR-72).
+      set({ landing: 'none', replay: 'none' });
       // The new flight owns the playhead from its first frame.
       head.flightId = flightId;
       head.progress = 0;
@@ -184,12 +185,20 @@ export const createPlaybackSlice =
     };
 
     /**
-     * The computer rolls in before it pops, once the board has stopped and the
-     * landing has played out: its wait outlasts both (ART.roll, SETTLE).
+     * The go has come to rest: the board has stopped and the landing has
+     * played out. A replay that is due plays now (ADR-72), and the computer
+     * waits for it; otherwise the computer rolls in before it pops, its wait
+     * outlasting both (ART.roll, SETTLE).
      */
     const rollIn = () => {
       const s = get();
-      if (s.roll === 'still' && s.landing !== 'plays' && computerWaiting(s)) s.startRoll();
+      if (s.roll !== 'still' || s.landing === 'plays') return;
+      if (s.replay === 'due') {
+        if (animates(s) && s.screen === 'skate') set({ replay: 'plays' });
+        else set({ replay: 'none' });
+        return;
+      }
+      if (computerWaiting(s)) s.startRoll();
     };
 
     return {
@@ -299,6 +308,13 @@ export const createPlaybackSlice =
       },
       endLanding: () => {
         if (get().landing === 'plays') set({ landing: 'over' });
+      },
+      endReplay: () => {
+        const s = get();
+        if (s.replay === 'none') return;
+        set({ replay: 'none' });
+        // The board is at rest: the computer's go may come now.
+        rollIn();
       },
     };
   };

@@ -56,3 +56,10 @@ export function placeCamera(
   }
   camera.position.sub(target).setLength(distance).add(target);
 }
+
+/** Gives a perspective camera a field of view (the replay's wide lens, ADR-72), and its projection with it; no change, no work. */
+export function setFov(camera: { fov?: number; updateProjectionMatrix?: () => void }, fov: number) {
+  if (camera.fov === undefined || camera.fov === fov) return;
+  camera.fov = fov;
+  camera.updateProjectionMatrix?.();
+}

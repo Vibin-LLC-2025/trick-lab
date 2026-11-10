@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { landingMoves, previewAnimates, rollMoves, useTrickStore, type Theme } from '../store';
+import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -129,6 +129,8 @@ function PostEffects() {
   const get = useThree((s) => s.get);
   const tier = useTrickStore(effectsFor);
   const blurOn = useTrickStore(motionBlurOn);
+  // The instant replay's fisheye (ADR-72): one uniform, set when it starts and ends.
+  const bendOn = useTrickStore(replayMoves);
   const made = useRef<Effects | null>(null);
 
   useEffect(() => {
@@ -141,6 +143,7 @@ function PostEffects() {
         if (cancelled) return;
         effects = m.createEffects(gl as never, scene, camera, tier);
         effects.setMotionBlur(motionBlurOn(useTrickStore.getState()));
+        effects.setBend(replayMoves(useTrickStore.getState()));
         made.current = effects;
         frame.render = effects.render;
         // A startup publication of this root (rootReadiness.ts), as is giving up below.
@@ -165,6 +168,9 @@ function PostEffects() {
   useEffect(() => {
     made.current?.setMotionBlur(blurOn);
   }, [blurOn]);
+  useEffect(() => {
+    made.current?.setBend(bendOn);
+  }, [bendOn]);
   return null;
 }
 
@@ -298,7 +304,7 @@ function rendererFactory(Q: Tier) {
 export default function TrickScene() {
   // A rolling board in the game moves the ground, so it runs frames too (ADR-67).
   // So does a game's landing while it plays out (ADR-68).
-  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s) || rollMoves(s) || landingMoves(s));
+  const playing = useTrickStore((s) => s.status === 'playing' || previewAnimates(s) || rollMoves(s) || landingMoves(s) || replayMoves(s));
   const theme = useTrickStore((s) => s.theme);
   // The tier in use (sceneTier.ts): Low once a board or shoe model failed, whatever was saved.
   const quality = useTrickStore(sceneTier);
