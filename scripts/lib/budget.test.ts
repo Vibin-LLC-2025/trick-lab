@@ -190,5 +190,7 @@ describe('the committed GLBs', () => {
     expect(Buffer.from(a.glb).equals(Buffer.from(b.glb))).toBe(true);
     // Triangle counts miss a change that keeps them (a reversed winding, a moved vertex, a texel); the bytes do not.
     expect(Buffer.from(a.glb).equals(readFileSync(resolve(PUBLIC, ASSET_FILES[key]))), `run npm run assets -- ${key}`).toBe(true);
-  });
+    // Two full builds at once. The High board's 2048 px textures took 31.9 s on a GitHub runner (2026-11-10, the
+    // first CI run), past the 30 s every test gets; it is about 10 s on a desktop. 120 s still catches a hang.
+  }, 120_000);
 });

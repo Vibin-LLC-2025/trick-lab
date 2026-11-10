@@ -51,7 +51,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 50 commits ahead of `main`. The owner said to put everything so far live (2026-11-10, decision 23): the branch goes up as a pull request so the three CI jobs run for the first time, and `main` takes it once they pass. Later steps stay on this branch until the next merge point.
+Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 51 commits ahead of `main`. The owner said to put everything so far live (2026-11-10, decision 23): the branch goes up as a pull request so the three CI jobs run for the first time, and `main` takes it once they pass. Later steps stay on this branch until the next merge point.
 
 | Commit | Step |
 | --- | --- |
@@ -69,7 +69,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 50 comm
 | ef7e8ea | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
 | f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
 | beea48d | The halfway pause, and notes for the stretch from step 12 |
-| this commit | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
+| 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
+| this commit | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
 
