@@ -25,6 +25,7 @@ import {
 } from '../sim/skate';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
+import { noticeUp } from './notice';
 import { computerWaiting } from './roll';
 import type { Clock } from './assessment';
 import type { PopMode, SkateSlice, TrickState } from './types';
@@ -46,6 +47,7 @@ export const initialSkate = (level: SkateGame['level'] = 'normal') => ({
   pendingPop: null,
   lastRelease: null,
   skateLesson: false,
+  skateNotice: null,
 });
 
 const POP_MODE_ANNOUNCEMENT: Record<PopMode, string> = {
@@ -70,6 +72,9 @@ export const createSkateSlice =
   (random: Random, now: Clock): StateCreator<TrickState, [], [], SkateSlice> =>
   (set, get) => {
     let popSeq = 0;
+    /** The notices so far, and the last one focus has gone to (ADR-80), so each takes focus once, as it comes up. */
+    let noticeSeq = 0;
+    let noticeFocused = 0;
     /** The walk-through's prompt last said, so each is said once as it is reached (ADR-66). */
     let lessonAt = 0;
 
@@ -145,6 +150,13 @@ export const createSkateSlice =
           s.endReplay();
           return;
         }
+        // A notice over the stage is read first (ADR-80): this press is its Continue, and pops nothing.
+        // One still to come waits for the board to stop, which takes a moment.
+        if (s.skateNotice) {
+          if (noticeUp(s)) s.continueSkate();
+          else s.announce('One moment: the board is still coming to rest.');
+          return;
+        }
         if (s.pendingPop) {
           release();
           return;
@@ -198,10 +210,25 @@ export const createSkateSlice =
         const flip = first === 'you' ? 'Coin flip: you set first.' : 'Coin flip: the computer sets first.';
         // A fresh game starts with the board on the pad and no result from before (ADR-46). The speed is kept.
         // A player's first game walks them through their first go (ADR-66).
-        set({ skate, skateMessage: flip, status: 'idle', progress: 0, flight: null, result: null, scrubFrom: null, flightBy: 'you', lastRelease: null, skateLesson: !s.skateTaught, replay: 'none' });
+        // The coin flip is a moment of its own (ADR-80): it waits over the stage, and the computer's go waits for it.
+        set({
+          skate,
+          skateMessage: flip,
+          status: 'idle',
+          progress: 0,
+          flight: null,
+          result: null,
+          scrubFrom: null,
+          flightBy: 'you',
+          lastRelease: null,
+          skateLesson: !s.skateTaught,
+          replay: 'none',
+          landing: 'none',
+          skateNotice: { id: ++noticeSeq, kind: 'coin', first },
+        });
         s.log('skate.started', { level: skate.level, first });
-        if (computerWaiting(get())) get().startRoll();
-        s.requestFocus({ kind: 'skate-heading' });
+        noticeFocused = noticeSeq;
+        s.requestFocus({ kind: 'skate-notice' });
         const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
         s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}${lessonLead()}`);
       },
@@ -238,7 +265,10 @@ export const createSkateSlice =
       },
 
       cancelLeave: () => {
-        if (get().skateLeave) set({ skateLeave: null });
+        if (!get().skateLeave) return;
+        set({ skateLeave: null });
+        // A replay the dialog cut short leaves the go at rest: its notice is up now (ADR-80).
+        get().revealNotice();
       },
 
       callSkateTrick: (id) => {
@@ -277,7 +307,7 @@ export const createSkateSlice =
           s.log('skate.ended', { winner: null, reason: 'quit', ...score(s.skate) });
           s.announce(`${cancelled}Game of SKATE ended.`);
         }
-        set({ skate: newSkateGame(s.skate.level), skateMessage: '', lastRelease: null, skateLesson: false });
+        set({ skate: newSkateGame(s.skate.level), skateMessage: '', lastRelease: null, skateLesson: false, skateNotice: null });
         s.requestFocus({ kind: 'skate-heading' });
       },
 
@@ -311,7 +341,10 @@ export const createSkateSlice =
         const step = afterAttempt(s.skate, by, result);
         if (!step.message) return [];
         const game = withComputerCall(step.game, random);
-        set({ skate: game, skateMessage: step.message });
+        // What this go did and whose turn is next waits over the stage once the go is at rest (ADR-80),
+        // except at the game's end, where the result takes over the screen.
+        const notice = game.phase === 'over' ? null : { id: ++noticeSeq, kind: 'go' as const, by, made: step.made, news: step.message, letterTo: step.letterTo };
+        set({ skate: game, skateMessage: step.message, skateNotice: notice });
         if (by === 'you' && step.made) s.celebrate(result.name, result.grade === 'clean');
         // Every go of the student's, made or missed, is replayed once the board is at rest (ADR-72, ADR-78),
         // except the one that ends the game: the result takes over the screen there.
@@ -338,6 +371,24 @@ export const createSkateSlice =
         // What happened, then what to do next (the panel shows the two apart).
         out.push(`${skateInstruction(game)}${lessonLead()}`);
         return out;
+      },
+
+      continueSkate: () => {
+        const s = get();
+        if (!s.skateNotice) return;
+        set({ skateNotice: null });
+        // The go before is over: the stage is cleared for the next one (ADR-80).
+        s.clearStage();
+        s.requestFocus({ kind: 'skate-heading' });
+        // The computer's wait starts now, and it rolls in for its go (ADR-67).
+        if (computerWaiting(get())) get().startRoll();
+      },
+
+      revealNotice: () => {
+        const s = get();
+        if (!noticeUp(s) || s.skateNotice!.id === noticeFocused) return;
+        noticeFocused = s.skateNotice!.id;
+        s.requestFocus({ kind: 'skate-notice' });
       },
 
       endSkateOnReset: () => {

@@ -732,6 +732,20 @@ In the turn card, in place of the trick guide, on the player's first go of their
 - **Skip.** "Skip the walk-through", `.btn--ghost.btn--sm`, under the prompts.
 - **Before the game.** One `.panel__note` under Start game on a device that has not played: "Your first game walks you through your first trick."
 
+### 11.4 The notice over the stage (`.notice`, `.stage-wipe`, 2026-11-10, ADR-80)
+
+At a game's start, and after each go once it has come to rest, a notice covers the stage (and, on a wide screen, the game's cards) until Continue. ADR-79 allows it: it is the thing to read now.
+
+- **Layer.** `section.notice`, absolute over `.app__stage`, `z-index: 2`, a grid that centres its panel with 16 px of padding. Its background is black at 42 percent: decoration only, no text sits on it.
+- **Panel.** `.notice__panel`: up to 420 px wide, scrolling inside itself if the stage is short; `--color-surface`, a 1 px `--color-line-strong` border with a 6 px top edge, `--radius-lg`, `--shadow-lg`, 24 px of padding, centred text. `.notice__panel--made` has a `--color-ok` top edge and news, `.notice__panel--missed` `--color-bad`; the words say it too.
+- **Kicker.** `.notice__kicker`, 12 px bold capitals, muted: "Coin flip", "Your go" or "Computer's go". It names the region.
+- **The coin.** `.notice__coin`, 88 px: two `.notice__face`s back to back (`--back` turned over), each a disc with a 4 px `--color-sticker-edge` edge in the display face at 22 px. You on `--color-brand` with `--color-brand-fg` (5.45), the computer ("CPU") on `--color-brand-fg` with `--color-sticker-edge` (19.06 light, 16.20 dark). It hops and spins five turns in 1.1 s and lands on who sets first; "You set first" or "The computer sets first" fades in as it lands.
+- **News.** `.notice__news`, 18 px semibold. `.notice__letter`: "You get a letter" or "The computer gets a letter", 13 px, over the letters so far as `.skate__letter--got` stickers, the newest stamping in (`.skate__letter--new`).
+- **Next.** `.notice__next`, under a hairline: `.notice__title` (12 px bold capitals, `--color-accent` on the player's turn), `.notice__label` (13 px muted) and `.notice__trick` (the display face, 22 px), as the turn card has them.
+- **Continue.** `.btn--primary.notice__continue`, at least 160 px wide and `--control-h-lg` tall, with an Enter key cap. Focus goes to it as the notice comes up; Space and Enter press it, and Pop and Space anywhere continue too.
+- **Motion.** The layer fades in (`--dur-slow`), the panel drops 16 px into place (420 ms). `data-calm` (reduced motion in the store) and `prefers-reduced-motion` turn every animation off: the coin shows its face, still.
+- **Between turns.** Continue clears the stage, and `.stage-wipe` (the stage's `--scene-bg`, absolute over it, no pointer events) fades from opaque to nothing over `--dur-slow` on the fresh scene. Not shown under reduced motion.
+
 ## 12. Screens and the welcome screen (2026-11-08, ADR-45)
 
 The app opens on a welcome screen instead of every control at once. Three screens share one grid, chosen by `data-screen` on `.app`; the stage keeps its place in the DOM so the 3D view never reloads.

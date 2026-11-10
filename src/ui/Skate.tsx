@@ -20,7 +20,7 @@ import {
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
 // The computer's wait (ADR-46) is the store's, shared by the timer and the countdown bar, so the two always start together.
-import { computerWaiting, GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, useTrickStore, type PopMode, type TrickState } from '../store';
+import { computerWaiting, GAME_VIEW_LABEL, GAME_VIEWS, noticeUp, replayMoves, useTrickStore, type PopMode, type TrickState } from '../store';
 import { Inputs } from './Inputs';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Toggle } from './Toggle';
@@ -580,6 +580,106 @@ export function TurnChip() {
       {view.trick && <span className="turn-chip__trick">{view.trick}</span>}
     </p>
   );
+}
+
+/** "You" or "Computer" on the coin's face. */
+const COIN_FACE: Record<SkatePlayer, string> = { you: 'You', computer: 'CPU' };
+
+/**
+ * The notice that waits over the stage (ADR-80, DESIGN.md 11.4): at a game's
+ * start the coin flip, a coin that spins and lands on who sets first (still
+ * under reduced motion); after each go what it did, the letter it gave, and
+ * whose turn is next and with what trick. It waits for Continue (the button,
+ * Space or Enter): the store says when it is up and moves focus to Continue
+ * as it comes up, and the computer's go waits for it. The go's result was
+ * announced as it landed, so Continue is described by the short title only.
+ * Text sits on the solid panel; only the dimming behind it is see-through.
+ */
+export function Notice() {
+  const notice = useTrickStore((s) => s.skateNotice);
+  const up = useTrickStore(noticeUp);
+  const game = useTrickStore((s) => s.skate);
+  const calm = useTrickStore((s) => s.reducedMotion);
+  const go = useTrickStore((s) => s.continueSkate);
+  if (!notice || !up) return null;
+  const next = turnView(game);
+  const coin = notice.kind === 'coin';
+  const tone = coin ? null : notice.made ? 'made' : 'missed';
+  return (
+    <section
+      key={notice.id}
+      className={`notice${next ? ` notice--${next.who}` : ''}`}
+      aria-labelledby="skate-notice-kicker"
+      data-calm={calm || undefined}
+    >
+      <div className={`notice__panel${tone ? ` notice__panel--${tone}` : ''}`}>
+        {coin ? (
+          <>
+            <p id="skate-notice-kicker" className="notice__kicker">
+              Coin flip
+            </p>
+            <div className="notice__coin" aria-hidden="true">
+              <span className={`notice__face notice__face--${notice.first}`}>{COIN_FACE[notice.first]}</span>
+              <span className={`notice__face notice__face--back notice__face--${notice.first === 'you' ? 'computer' : 'you'}`}>
+                {COIN_FACE[notice.first === 'you' ? 'computer' : 'you']}
+              </span>
+            </div>
+            <p className="notice__news notice__news--coin">{notice.first === 'you' ? 'You set first' : 'The computer sets first'}</p>
+          </>
+        ) : (
+          <>
+            <p id="skate-notice-kicker" className="notice__kicker">
+              {notice.by === 'you' ? 'Your go' : "Computer's go"}
+            </p>
+            <p className="notice__news">{notice.news}</p>
+            {notice.letterTo && (
+              <p className="notice__letter">
+                <span>{notice.letterTo === 'you' ? 'You get a letter' : 'The computer gets a letter'}</span>
+                <span className="notice__letters" aria-hidden="true">
+                  {SKATE_WORD.slice(0, game.letters[notice.letterTo])
+                    .split('')
+                    .map((l, i) => (
+                      <span key={i} className={`skate__letter skate__letter--got${i === game.letters[notice.letterTo!] - 1 ? ' skate__letter--new' : ''}`}>
+                        {l}
+                      </span>
+                    ))}
+                </span>
+                <span className="visually-hidden">{lettersText(game.letters[notice.letterTo])}</span>
+              </p>
+            )}
+          </>
+        )}
+        {next && (
+          <div className="notice__next">
+            <h2 id="skate-notice-title" className="notice__title">
+              {next.title}
+            </h2>
+            <p className="notice__task">
+              <span className="notice__label">{next.label}</span>
+              <span className="notice__trick">{next.trick ?? 'Call a trick'}</span>
+            </p>
+          </div>
+        )}
+        <button id="skate-notice-continue" type="button" className="btn btn--primary notice__continue" aria-describedby="skate-notice-title" onClick={go}>
+          Continue <kbd aria-hidden="true">Enter</kbd>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The fade between turns (ADR-80): when Continue clears the stage for the
+ * next go, the stage's own colour fades off the fresh scene, so the new turn
+ * reads as a new start. Keyed on the store's count of clears, so each one
+ * plays once. Decorative; none under reduced motion, where the board is
+ * simply back on the pad.
+ */
+export function StageWipe() {
+  const clears = useTrickStore((s) => s.stageClears);
+  const calm = useTrickStore((s) => s.reducedMotion);
+  if (clears === 0 || calm) return null;
+  return <span key={clears} className="stage-wipe" aria-hidden="true" />;
 }
 
 /** Asks before a game in play is left (ADR-46). Esc keeps playing, and focus returns to the opener. */

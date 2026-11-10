@@ -39,6 +39,8 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
     expect(within(game()).getByText('Your first game walks you through your first trick.')).toBeInTheDocument();
     within(game()).getByRole('button', { name: 'Start game' }).focus();
     await user.keyboard('{Enter}');
+    // The coin flip waits first (ADR-80); Enter on its Continue, where focus went.
+    await user.keyboard('{Enter}');
 
     expect(within(game()).getByText('First game: your first trick, in 3 steps')).toBeInTheDocument();
     expect(steps()).toHaveLength(3);
@@ -74,6 +76,7 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
   it('can be skipped by its button, and the next game has none', async () => {
     const user = await setup();
     await user.click(within(game()).getByRole('button', { name: 'Start game' }));
+    await user.click(document.getElementById('skate-notice-continue')!);
     await user.click(within(game()).getByRole('button', { name: 'Skip the walk-through' }));
     expect(within(game()).queryByText(/First game: your first trick/)).toBeNull();
     expect(announcer()).toHaveTextContent('Walk-through skipped.');
@@ -89,6 +92,7 @@ describe('the game over the stage (ADR-66)', () => {
     // Between games, how to play sits where the turn card will be.
     expect(screen.getByRole('heading', { level: 2, name: 'How to play' }).closest('section')).toHaveClass('hud__turn');
     await user.click(within(game()).getByRole('button', { name: 'Start game' }));
+    await user.click(document.getElementById('skate-notice-continue')!);
     expect(screen.getByRole('heading', { level: 2, name: 'Your turn' }).closest('section')).toHaveClass('hud__turn');
     const letters = screen.getByRole('region', { name: 'Letters' });
     expect(letters).toHaveClass('hud__score');

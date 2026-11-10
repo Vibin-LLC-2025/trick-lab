@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { computerWaiting, createTrickStore, replayMoves } from '.';
+import { computerWaiting, createTrickStore, noticeUp, replayMoves } from '.';
 import { BAR } from '../sim/bar';
 import { GAME_VIEW_KEY, INSTANT_REPLAY_KEY } from './replay';
 
@@ -42,6 +42,7 @@ function rest(s: Store) {
 function madeSet() {
   const s = makeStore();
   s.getState().startSkate();
+  s.getState().continueSkate();
   myGo(s);
   expect(s.getState().result?.landed).toBe(true);
   return s;
@@ -66,6 +67,10 @@ describe('the instant replay (step 17, ADR-72)', () => {
     expect(s.getState().roll).toBe('still');
     s.getState().endReplay();
     expect(s.getState().replay).toBe('none');
+    // Then the go's notice waits for Continue (ADR-80), and the computer with it.
+    expect(noticeUp(s.getState())).toBe(true);
+    expect(s.getState().roll).toBe('still');
+    s.getState().continueSkate();
     // Now it rolls in for its copy.
     expect(s.getState().roll).toBe('push');
   });
@@ -81,6 +86,7 @@ describe('the instant replay (step 17, ADR-72)', () => {
   it('follows a miss too, so the student sees what went wrong (ADR-78)', () => {
     const missed = makeStore();
     missed.getState().startSkate();
+    missed.getState().continueSkate();
     myGo(missed, 1.0);
     expect(missed.getState().result?.landed).toBe(false);
     expect(missed.getState().replay).toBe('due');
@@ -89,12 +95,15 @@ describe('the instant replay (step 17, ADR-72)', () => {
     // The computer waits for it, then rolls in for its set.
     expect(missed.getState().roll).toBe('still');
     missed.getState().endReplay();
+    expect(missed.getState().roll).toBe('still');
+    missed.getState().continueSkate();
     expect(missed.getState().roll).toBe('push');
   });
 
   it('does not follow the go that ends the game: the result takes the screen', () => {
     const s = makeStore();
     s.getState().startSkate();
+    s.getState().continueSkate();
     const g = s.getState().skate;
     // Copying the computer's kickflip on the last letter, second try.
     s.setState({ skate: { ...g, phase: 'you-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 }, letters: { you: 4, computer: 0 }, secondTry: true } });
@@ -113,6 +122,7 @@ describe('the instant replay (step 17, ADR-72)', () => {
     off.getState().toggleInstantReplay();
     expect(localStorage.getItem(INSTANT_REPLAY_KEY)).toBe('off');
     off.getState().startSkate();
+    off.getState().continueSkate();
     myGo(off);
     expect(off.getState().replay).toBe('none');
 
@@ -120,6 +130,7 @@ describe('the instant replay (step 17, ADR-72)', () => {
     const s = madeSet();
     rest(s);
     s.getState().endReplay();
+    s.getState().continueSkate();
     s.getState().pressPop();
     expect(s.getState().flightBy).toBe('computer');
     s.getState().land();
@@ -163,6 +174,7 @@ describe('the instant replay (step 17, ADR-72)', () => {
     const s = makeStore();
     s.getState().setReducedMotion(true);
     s.getState().startSkate();
+    s.getState().continueSkate();
     myGo(s);
     expect(s.getState().result?.landed).toBe(true);
     expect(s.getState().replay).toBe('none');

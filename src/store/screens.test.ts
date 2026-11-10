@@ -76,6 +76,7 @@ describe('screens (ADR-45)', () => {
     const store = makeStore();
     store.getState().setScreen('skate');
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().setScreen('home');
     expect(store.getState().skate.phase).toBe('off');
     expect(store.getState().events.at(-1)).toMatchObject({ type: 'skate.ended', payload: { reason: 'quit' } });

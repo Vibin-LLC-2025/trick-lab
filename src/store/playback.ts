@@ -22,6 +22,7 @@ export const initialPlayback = () => ({
   roll: 'still' as const,
   landing: 'none' as const,
   replay: 'none' as const,
+  stageClears: 0,
 });
 
 /**
@@ -106,6 +107,8 @@ export const createPlaybackSlice =
       const stepped = pace === null ? null : get().noteTrickPace(pace);
       if (stepped) out.push(stepped);
       s.announce(out.join(' '));
+      // Where nothing moves (reduced motion, no 3D view) the go is at rest already: its notice is up now (ADR-80).
+      get().revealNotice();
     };
 
     /** To three decimals: what a release of the bar makes is not on the slider grid (and may pass the sliders' limits, sim/bar.ts). */
@@ -131,6 +134,8 @@ export const createPlaybackSlice =
         return;
       }
       // On the computer's turn in a game of SKATE it pops its own inputs; the sliders stay the student's.
+      // A notice still up is passed over by a pop made some other way than Continue (ADR-80).
+      if (s.skateNotice) set({ skateNotice: null });
       const go = s.computerGo();
       const by = go ? ('computer' as const) : ('you' as const);
       const mine = go ? null : timed;
@@ -187,18 +192,22 @@ export const createPlaybackSlice =
     /**
      * The go has come to rest: the board has stopped and the landing has
      * played out. A replay that is due plays now (ADR-72), and the computer
-     * waits for it; otherwise the computer rolls in before it pops, its wait
+     * waits for it; then the go's notice comes up and waits for Continue
+     * (ADR-80); otherwise the computer rolls in before it pops, its wait
      * outlasting both (ART.roll, SETTLE).
      */
     const rollIn = () => {
       const s = get();
       if (s.roll !== 'still' || s.landing === 'plays') return;
       if (s.replay === 'due') {
-        if (animates(s) && s.screen === 'skate') set({ replay: 'plays' });
-        else set({ replay: 'none' });
-        return;
+        if (animates(s) && s.screen === 'skate') {
+          set({ replay: 'plays' });
+          return;
+        }
+        set({ replay: 'none' });
       }
-      if (computerWaiting(s)) s.startRoll();
+      get().revealNotice();
+      if (computerWaiting(get())) get().startRoll();
     };
 
     return {
@@ -314,6 +323,14 @@ export const createPlaybackSlice =
       },
       endLanding: () => {
         if (get().landing === 'plays') set({ landing: 'over' });
+      },
+      clearStage: () => {
+        const s = get();
+        // Only a go at rest: never one in the air, nor a replay that still needs its flight.
+        if (s.status === 'playing' || s.status === 'paused' || s.replay !== 'none') return;
+        head.flightId = s.flightId;
+        head.progress = 0;
+        set({ status: 'idle', progress: 0, flight: null, scrubFrom: null, landing: 'none', stageClears: s.stageClears + 1 });
       },
       endReplay: () => {
         const s = get();

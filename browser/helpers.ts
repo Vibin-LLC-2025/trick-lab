@@ -44,6 +44,9 @@ interface Store {
   /** The game (a game's landing, ADR-68). */
   skate: { first: 'you' | 'computer' | null; phase: string };
   startSkate: () => void;
+  /** The notice over the stage (ADR-80): the coin flip, or a go's result, waiting for Continue. */
+  skateNotice: { kind: string } | null;
+  continueSkate: () => void;
   callSkateTrick: (id: string) => void;
   setInput: (key: 'pop' | 'flick' | 'scoop', value: number) => void;
   roll: 'still' | 'push' | 'slow';
@@ -200,7 +203,8 @@ export async function popAndLand(page: Page, windowMs = 0) {
  * waiting for a key: the prefs the ledger check opens with), by a real Space
  * press, then everything coming to rest: the roll, the landing's motion and
  * the instant replay (ADR-67, ADR-68, ADR-72). A game that is over, or not
- * started, is started first. The student's sets land and bail in turn
+ * started, is started first, and the notice waiting from the coin flip or
+ * the last go is continued past (ADR-80). The student's sets land and bail in turn
  * (`n` even lands) and their copies always bail, so a run of goes has clean
  * landings, bails, replays and the computer's own goes. Returns the go's grade.
  */
@@ -210,6 +214,8 @@ export async function gameGo(page: Page, n: number) {
     type Game = { phase: string; used: string[]; call: { flips: number; halfShoves: number } | null };
     const game = () => st.getState().skate as unknown as Game;
     if (game().phase === 'off' || game().phase === 'over') st.getState().startSkate();
+    // Past the coin flip or the last go's notice (ADR-80), as Continue does.
+    if (st.getState().skateNotice) st.getState().continueSkate();
     const g = game();
     if (g.phase === 'you-set' || g.phase === 'you-copy') {
       const good = g.phase === 'you-set' && n % 2 === 0;

@@ -90,6 +90,8 @@ for (const tier of TIERS)
         // A fresh game each time, with the player up first.
         st.getState().startSkate();
         for (let i = 0; i < 50 && st.getState().skate.first !== 'you'; i++) st.getState().startSkate();
+        // Past the coin flip (ADR-80).
+        st.getState().continueSkate();
         st.getState().callSkateTrick('360-flip');
       });
       const { calls } = await popAndLand(page);

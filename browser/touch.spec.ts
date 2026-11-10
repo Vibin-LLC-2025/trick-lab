@@ -44,6 +44,10 @@ for (const size of SIZES)
       }
       // In a game: the cards, the tray and the leave dialog.
       await page.getByRole('button', { name: 'Start game' }).tap();
+      // The coin flip waits over the stage (ADR-80): its Continue is thumb-sized too.
+      const coin = await audit(page);
+      expect(coin.small).toEqual([]);
+      await page.getByRole('button', { name: /^Continue/ }).tap();
       const game = await audit(page);
       expect(game.page).toBeLessThanOrEqual(game.window);
       expect(game.small).toEqual([]);

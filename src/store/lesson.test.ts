@@ -81,6 +81,7 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
     const s = makeStore();
     expect(s.getState().skateTaught).toBe(false);
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(s.getState().skateLesson).toBe(true);
     expect(said(s)).toMatch(
       /Your turn to set: call a trick, then land it\. The computer has to copy it\. First game, so here is your first trick in 3 steps\. Step 1 of 3: Call the kickflip, then set the sliders for the kickflip: Pop 0\.35 m, Flick 1\.9 toward kickflip, Scoop 0\.0\.$/,
@@ -114,6 +115,7 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
     // The next game, and a new store on the same device, are not first games.
     s.getState().quitSkate();
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(s.getState().skateLesson).toBe(false);
     expect(said(s)).not.toMatch(/First game/);
     expect(makeStore().getState().skateTaught).toBe(true);
@@ -122,6 +124,7 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
   it("when the computer sets first, the walk-through opens with the player's first go: the copy", () => {
     const s = makeStore([COMPUTER_FIRST]);
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(s.getState().skateLesson).toBe(true);
     expect(said(s)).not.toMatch(/First game/);
     // The computer lands its heelflip; the copy is the player's first go.
@@ -141,6 +144,7 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
     const s = makeStore();
     s.getState().setPopMode('exact');
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(said(s)).toMatch(/your first trick in 2 steps/);
     s.getState().callSkateTrick('kickflip');
     s.getState().setInput('flick', 1.9);
@@ -153,10 +157,12 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
   it('can be skipped, for good and said; quitting in the middle of it leaves it for the next game', () => {
     const quit = makeStore();
     quit.getState().startSkate();
+    quit.getState().continueSkate();
     quit.getState().quitSkate();
     expect(quit.getState().skateLesson).toBe(false);
     expect(quit.getState().skateTaught).toBe(false);
     quit.getState().startSkate();
+    quit.getState().continueSkate();
     expect(quit.getState().skateLesson).toBe(true);
 
     quit.getState().skipLesson();
@@ -174,6 +180,7 @@ describe("the first game's walk-through in the store (ADR-66)", () => {
   it('a bar that is dropped does not end it: only a pop does', () => {
     const s = makeStore();
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().callSkateTrick('kickflip');
     s.getState().setInput('flick', 1.9);
     s.getState().pressPop();

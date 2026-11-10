@@ -12,7 +12,7 @@ vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-s
 
 const announcer = () => document.getElementById('announcer')!;
 const game = () => screen.getByRole('main', { name: 'Game' });
-const turnHeading = () => screen.getByRole('heading', { level: 2, name: /turn$/ });
+const turnHeading = () => within(game()).getByRole('heading', { level: 2, name: /turn$/ });
 const state = () => useTrickStore.getState();
 const popped = () => state().events.filter((e) => e.type === 'trick.popped');
 /** Stands in for FlightDriver, which is inside the stubbed canvas: the board reached progress 1. */
@@ -33,6 +33,8 @@ async function kickflipUp() {
   await screen.findByTestId('scene-stub');
   vi.useFakeTimers();
   fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
+  // Past the coin flip (ADR-80).
+  fireEvent.click(document.getElementById('skate-notice-continue')!);
   fireEvent.change(within(game()).getByLabelText('Call your trick'), { target: { value: 'kickflip' } });
   act(() => state().setInput('flick', 1.9));
   act(() => turnHeading().focus());
@@ -71,6 +73,8 @@ describe('how you pop, at the game\'s start (ADR-65)', () => {
 
     // An Exact game has no bar, and Pop is one press.
     within(game()).getByRole('button', { name: 'Start game' }).focus();
+    await user.keyboard('{Enter}');
+    // Enter on the coin flip's Continue, where focus went (ADR-80).
     await user.keyboard('{Enter}');
     await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
     expect(bar()).toBeNull();
@@ -124,6 +128,18 @@ describe('the timing bar on the game screen (ADR-65)', () => {
     // Focus never moved.
     expect(document.activeElement).toBe(turnHeading());
 
+    // At rest the go's notice takes focus (ADR-80); Space before then waits for the board, and pops nothing.
+    space();
+    expect(state().flightBy).toBe('you');
+    expect(announcer()).toHaveTextContent('One moment: the board is still coming to rest.');
+    act(() => {
+      state().rollRested();
+      state().endReplay();
+    });
+    expect(document.activeElement).toBe(document.getElementById('skate-notice-continue'));
+    fireEvent.click(document.activeElement!);
+    expect(document.activeElement).toBe(turnHeading());
+
     // The computer goes through the same bar: its release rests on it too.
     space();
     expect(state().flightBy).toBe('computer');
@@ -153,6 +169,7 @@ describe('the timing bar on the game screen (ADR-65)', () => {
     // A second press on the button releases a running bar: early here.
     act(() => state().quitSkate());
     fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
+    fireEvent.click(document.getElementById('skate-notice-continue')!);
     fireEvent.change(within(game()).getByLabelText('Call your trick'), { target: { value: 'kickflip' } });
     const again = within(game()).getByRole('button', { name: 'Pop' });
     fireEvent.click(again);
