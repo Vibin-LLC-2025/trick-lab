@@ -581,6 +581,8 @@ The welcome screen draws at most 32 / 17 / 10 with feet and legs on.
 
 The budgets are step 14's sizes plus about 5 percent: per file (for example `models/board-high.glb` 470 KB, `nodeRenderer` 185 KB) and per visit (High 1,721 KB, Medium 1,216 KB, Low 431 KB, from 1,639, 1,158 and 410). On this step's build the visits are High 1,636 KB (feet on, dark) and 1,468 KB (feet off), Medium 1,154 KB, Low 408 KB. The listed inventory equals the requests step 1's cold run recorded on every tier (16, 14 and 7 files besides the page). `bundleBudget.test.ts` checks the inventory of each tier, and that a file of random bytes (gzip makes it larger) over its budget fails the check by name.
 
+*Loosened 2026-11-10 (ADR-79):* the main script from 106 to 160 KB, its stylesheet from 8 to 16 KB, and the visits to High 1,900, Medium 1,350 and Low 500 KB, so the game's interface can grow. On that day's build, before any new interface, the main script was 104.8 KB and the stylesheet 7.5 KB.
+
 ### Step 4: one transcoder (ADR-49, updated)
 
 The KTX2 loader now fetches the transcoder Vite emits from three's own files instead of a second copy in `public/basis/`. `dist/` went from 4,527,311 to 3,942,373 bytes (584,938 smaller). A build with `--base=/trick-lab/` loads every texture compressed on High and Medium, with one transcoder download of the same size (15,469 and 247,919 bytes transferred); `npm run bundle:check` lists it from the manifest and finds nothing built that no visit downloads.

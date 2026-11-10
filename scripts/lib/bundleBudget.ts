@@ -73,13 +73,14 @@ const KB = 1024;
 /**
  * The most each file may weigh, compressed, in bytes: the sizes in
  * PERF-BUDGET.md's step 14 tables (a0a2c86, 2026-11-09) plus about 5 percent,
- * rounded up to the KB. A file not listed here fails the check: a new file
- * needs a budget of its own.
+ * rounded up to the KB, except the main script and its stylesheet, loosened
+ * on 2026-11-10 (ADR-79) from 106 and 8 KB so the game's interface can grow.
+ * A file not listed here fails the check: a new file needs a budget of its own.
  */
 export const FILE_BUDGETS: Record<string, number> = {
   'index.html (the page)': 2 * KB,
-  'index.html': 106 * KB,
-  'assets/index.css': 8 * KB,
+  'index.html': 160 * KB,
+  'assets/index.css': 16 * KB,
   [FONT]: 16 * KB,
   _artDirection: 202 * KB,
   _shoeSpec: 2 * KB,
@@ -101,9 +102,11 @@ export const FILE_BUDGETS: Record<string, number> = {
 /**
  * The most a first visit may download, per tier, whatever the theme and the
  * feet: step 14's "everything on a first visit" (High 1,639, Medium 1,158,
- * Low 410 KB) plus 5 percent.
+ * Low 410 KB) plus 5 percent, then loosened on 2026-11-10 (ADR-79) from
+ * 1,721, 1,216 and 431 KB to leave room for the game, the graphics and how
+ * the game feels.
  */
-export const VISIT_BUDGETS: Record<Tier, number> = { high: 1721 * KB, medium: 1216 * KB, low: 431 * KB };
+export const VISIT_BUDGETS: Record<Tier, number> = { high: 1900 * KB, medium: 1350 * KB, low: 500 * KB };
 
 /** A build's manifest (dist/.vite/manifest.json): the fields the budget reads. */
 export type Manifest = Record<string, { file: string; imports?: string[]; css?: string[]; assets?: string[] }>;

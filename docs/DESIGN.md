@@ -1,6 +1,6 @@
 # trick-lab design (2026-11-04)
 
-Owner: design agent. Files: `src/styles/tokens.css`, `src/styles/app.css`, this document.
+Owner: design agent. Files: `src/styles/tokens.css`, `src/styles/app.css`, this document. Since ADR-79 (2026-11-10) any change may edit them: a new class or style is written up here in the same commit, takes its colours and sizes from `tokens.css`, and keeps the contrast figures.
 
 ## 1. Rationale
 
