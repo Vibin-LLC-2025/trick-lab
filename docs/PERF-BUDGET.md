@@ -697,3 +697,64 @@ A quick pass by hand, 2026-11-10, on step 21's build served like GitHub Pages, t
 - **Firefox: nothing to fix.** It looks like Chromium's picture on every level. Errors seen in one run ("Couldn't load texture blob") came from the pass's own script leaving a page while it was still loading; a clean load has none.
 - **WebKit: one thing that could not be settled here.** On a first load every level draws correctly. After the canvas changes size (going from the lab to the game inside the page, or resizing the window), this build shows the stage's background colour where the picture should be. The app is still drawing: reading the canvas's own pixels straight after a draw gives the full picture, the canvas is visible and on top, the context is not lost, and nothing is logged. More frames, hiding and showing the canvas, and resizing again do not bring it back. That points at this Windows build's compositor, not at the app (every WebGL app resizes its canvas), but it is not proof for Safari on a Mac or an iPhone. **Real Safari is the owner's check**, with sound, from the list in the plan.
 - **No code changed in this step.**
+
+### Step 23: everything, before and after
+
+The plan's baseline (a0a2c86) and its last build (step 22's), measured the same day with the same script: 2026-11-10, Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, cold visits, both builds served by `serve.ts`, the baseline built in a worktree. The display ran at 100 Hz, so a frame interval is 10 ms and one missed refresh reads 20 ms. The baseline cannot play the measurement's game (it has no store under `?debug`), so the game's rows are the new build's only. Both themes were measured; they agree within run-to-run noise, so one row gives both as dark / light.
+
+**Loading**, the frame where every model is on screen (Low: the first 3D frame):
+
+| Tier | Network | Before | After |
+| --- | --- | --- | --- |
+| high | full speed | 1.05 / 1.39 s | 1.08 / 1.06 s |
+| high | 10 Mbps | 1.82 / 1.80 s | 1.83 / 1.79 s |
+| high | 3 Mbps | 5.24 / 5.22 s | 5.25 / 5.29 s |
+| medium | full speed | 1.03 / 1.05 s | 1.25 / 1.04 s |
+| medium | 10 Mbps | 1.67 / 1.64 s | 1.62 / 1.59 s |
+| medium | 3 Mbps | 4.03 / 3.77 s | 4.10 / 4.09 s |
+| low | full speed | 0.46 / 0.47 s | 0.46 / 0.45 s |
+| low | 10 Mbps | 0.74 / 0.74 s | 0.77 / 0.76 s |
+| low | 3 Mbps | 1.55 / 1.55 s | 1.58 / 1.57 s |
+
+**Bytes of a first visit** (the welcome screen, as sent):
+
+| Tier | JavaScript, before | after | Models, before | after |
+| --- | --- | --- | --- | --- |
+| high | 594.6 KB | 608.1 KB | 754.6 KB | 754.9 KB |
+| medium | 593.8 KB | 607.2 KB | 273.5 KB | 274.0 KB |
+| low | 361.9 KB | 374.2 KB | 0 KB | 0 KB |
+
+**Draw calls and triangles:**
+
+| Tier | Welcome, before | after | Lab, before | after | Game at rest, before | after | Every switch on (lab), before | after | Triangles (lab), before | after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| high | 30 | 32 | 31 | 33 | 31 | 35 | 35 | 34 | 163,961 | 168,441 |
+| medium | 16 | 17 | 17 | 18 | 17 | 20 | 20 | 19 | 18,969 | 21,209 |
+| low | 9 | 9 | 10 | 10 | 10 | 10 | 13 | 12 | 10,487 | 10,487 |
+
+**Frame times in the lab** (four timed kickflips; median / 95th percentile / longest, dark theme):
+
+| Tier | Render CPU, before | after | GPU, before | after | Frame interval, before | after |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | 0.7 / 2 / 3.3 ms | 0.6 / 1.7 / 2.6 ms | 0.66 / 0.72 / 0.79 ms | 1.05 / 1.18 / 1.44 ms | 10 / 10.1 / 19.9 ms | 10 / 10.1 / 29.9 ms |
+| medium | 0.5 / 1.7 / 2.9 ms | 0.5 / 1.7 / 2.8 ms | 0.52 / 0.59 / 0.66 ms | 0.85 / 0.92 / 0.92 ms | 10 / 10.1 / 10.5 ms | 10 / 10.1 / 10.4 ms |
+| low | 0.2 / 0.4 / 2.5 ms | 0.2 / 0.6 / 1.2 ms | 0.1 / 0.11 / 2.59 ms | 0.17 / 0.43 / 2.07 ms | 10 / 10.1 / 10.2 ms | 10 / 10.1 / 10.2 ms |
+
+**A whole game on the new build** (after its first go; dark / light):
+
+| Tier | Goes | Frames | GPU, 95th percentile | The app's work, 95th percentile | Longest frame interval | Intervals over 20 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | 25 / 15 | 4,416 / 2,444 | 1.51 / 1.51 ms of under 4 | 1.5 / 1.7 ms of under 4 | 20 / 20 ms | 0 / 0 |
+| medium | 28 / 14 | 4,894 / 2,100 | 1.18 / 1.18 ms of under 3 | 1.2 / 1.1 ms of under 4 | 10.4 / 10.6 ms | 0 / 0 |
+| low | 11 / 28 | 1,621 / 4,918 | 0.65 / 0.63 ms of under 2 | 0.6 / 0.5 ms of under 4 | 10.3 / 11.2 ms | 0 / 0 |
+
+What the plan cost and bought, in numbers:
+
+- **Loading did not move.** The complete scene is still on screen in about 1.1 s on High and Medium and under half a second on Low at full speed, with 13 KB more JavaScript (the game's controls, records, rolling, landings, the camera, the replay and the dust) and the same models. The skate spot, the decks and the sounds are downloaded only when the game or the Sound switch needs them.
+- **A draw call fewer with every switch on** (the legs became one draw, step 2), **and two to three more in the game** (the skate spot and its shadows; the dust is inside that). All far inside the caps of 60, 40 and 20.
+- **The graphics card does a little more per frame** on High and Medium: 0.4 ms more in the lab (the legs on by default with their cloth, the wheels' print), and about 1.5 ms at the 95th percentile through a game against a target of 4 and 3 ms.
+- **Medium and Low never missed a refresh**, in the lab or through a whole game.
+- **High misses a single refresh now and then, and it did before this plan too.** The baseline's lab run has the same one frame of 19.9 ms on High in both themes; the new build's has 20 to 29.9 ms, and one of 20 ms in a game of thousands of frames. By the letter the "no frame longer than 16.7 ms" target is not met on High on a 100 Hz display, on either build. Step 20 says where it comes from (the page redrawing a card, not the 3D view) and that nothing was changed for it.
+- **Memory stays flat** over the long-run test with games in it (step 20).
+
+Keyboard only, through every screen (2026-11-10, Chromium, by script): on the welcome screen, the game screen before and in a game, and the lab, every visible control is reached by Tab (8, 8, 16 and 70 of them), each with a visible focus ring and in view; Enter on the first choice opens the game with focus on its heading; Start game puts focus on the turn's heading; the leave dialog keeps Tab inside itself, Escape closes it and focus returns to "Quit game"; in the lab the number keys, Space, `r` and `?` work, the shortcuts dialog opens on Close and returns focus where it was; the live region speaks. A screen reader spot check is the owner's, from the list in the plan.

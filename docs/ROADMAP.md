@@ -8,6 +8,8 @@ The ground rule for both lists was: **every new visual feature gets an off switc
 
 ## Where things stand
 
+**Update 2026-11-10.** The play, polish and reach plan (`docs/PLAN-PLAY-POLISH-REACH.md`, ADR-60 to ADR-77) is done: the game has a timing bar, graded landings, records, a board that rolls and lands with weight, a skate spot, the legs by default, a choice of deck, three cameras and an instant replay, recorded sound, dust, thumb-sized controls on touch screens, and a pass in Firefox and Safari's engine. It is measured over a whole game on every quality level (PERF-BUDGET.md, "Step 20" and "Step 23"). Left open by it: one late frame per game on High (the page redrawing a card), and three checks only the owner can make: a real phone, real Safari, a screen reader. Its "Parked" list is the next place to look for work.
+
 **Update 2026-11-09.** The look, feel and performance plan (`docs/PLAN-LOOK-FEEL-PERF.md`, ADR-48 to ADR-59) finished the items marked done below: KTX2 textures, the WebGPU renderer with post-processing on High and Medium, a sky, a designed Low, the loading picture, the skate style, sound, the automatic step-down, and the before-and-after tables (`docs/PERF-BUDGET.md`, step 14). The notes below are from 2026-11-04.
 
 - Drawing a frame is already cheap: about 0.2 ms per frame, 11 draw calls, and no frames at all while idle (see `docs/PERF-BUDGET.md`).
@@ -23,7 +25,7 @@ In order of payoff:
 2. **Turn edge smoothing (antialiasing) back on** for High. It is off for speed, so the board's edges look jagged. It is the most visible quality gap right now. Done: MSAA on High since the quality tiers (ADR-16), and on Low too since ADR-54.
 3. **Show a still image while the 3D loads**, then fade to the live scene, so the first second looks finished. Done 2026-11-09 (ADR-56).
 4. **Use pre-made studio lighting** instead of the built-in procedural room. It gives a better look you choose yourself, and it removes the biggest startup cost left. It changes the look, so record the decision in `docs/DECISIONS.md`. Superseded: the room became a procedural outdoor sky (ADR-31, ADR-52) with nothing downloaded, and Low builds no lighting map at all (ADR-54).
-5. **Polish the motion:** ghost copies of the board along its flight path, a flight-path line, and replay with slow motion and an easing camera.
+5. **Polish the motion:** ghost copies of the board along its flight path, a flight-path line, and replay with slow motion and an easing camera. The replay is done (2026-11-10, ADR-72): slow motion from a fixed low, wide camera. The ghost copies and the flight-path line are not.
 6. **Add more tricks.** Done 2026-11-04 (ADR-30): signed flick and scoop, directional recognition and 15 named tricks; the hardflip was then removed on purpose (ADR-41). The rest of this item is the original note. Today the app counts flips and spins but not their direction. Letting flick and scoop go negative unlocks heelflip, varial heelflip, laser flip, frontside shove-it, hardflip and inward heelflip. That means letting the sliders go negative (`INPUT_LIMITS` in `src/sim/tricks.ts`), teaching the recognizer about direction, and adding the new names and tests in the same file (the flight math in `src/sim/flight.ts` already handles negative rates). Rendering costs nothing extra.
 7. **Add a README GIF** of a 360 flip landing in slow motion. Done 2026-11-09 (`docs/screenshots/360-flip-slow-motion.gif`).
 

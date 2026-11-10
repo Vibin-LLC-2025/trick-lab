@@ -1,9 +1,9 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
-**Status, 2026-11-10: revised, in progress.**
+**Status, 2026-11-10: done.** All 23 steps are committed on `play-polish-reach`. Steps 12 to 23 are not pushed or merged: the owner is asked. What is left is the owner's: the list of changes to the sounds, the list of changes to steps 12, 13 and 17, and the checklists (a real phone, real Safari, a screen reader, a laptop with built-in graphics).
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74), 20 (the smoothness pass, ADR-75), 21 (phones and touch, ADR-76) and 22 (Firefox and Safari, ADR-77) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); step 23 is next. The phone and Safari checklists are in "Checklists for the owner". One target is not met on High (step 20): about one late frame in a whole game.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69), 15 (the legs on by default, ADR-70), 16 (decks, ADR-71), 17 (the game's camera and instant replay, ADR-72), 18 (sound, ADR-73), 19 (dust, ADR-74), 20 (the smoothness pass, ADR-75), 21 (phones and touch, ADR-76), 22 (Firefox and Safari, ADR-77) and 23 (the last measurements and pass) are done.** The merge point after step 16 is asked; the owner's list of changes to the sounds is asked (the owner will listen later, 2026-11-10); nothing is next. Every checklist is in "Checklists for the owner", and the choices of steps 12, 13 and 17 are in the table after it. One target is not met on High (step 20): about one late frame in a whole game.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -81,7 +81,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 57adb49 | 19: dust (ADR-74): small puffs at the wheels when a game's landing touches down, left behind as the board rolls on, and a trail behind a bailed board while it slides; Medium and High, with the Motion cues switch, never under reduced motion. One draw while it is in the air; the expected worst case did not move (High 36, Medium 21, Low 12) |
 | 09e176d | 20: the smoothness pass (ADR-75): the measurement plays a whole game; the dust's program is built before the first pop; the long-run test plays games. Every level is inside the graphics and work targets through a whole game; High misses about one refresh per game (not the 3D view's doing; left, and the gate not moved) |
 | 56b0691 | 21: phones and touch (ADR-76): no sideways scroll and working dialogs at 360, 390, 768 and 1024 px wide already; controls are now 44 px tall where the pointer is a finger; five new browser checks; the phone checklist |
-| (step 22) | 22: Firefox and Safari (ADR-77): a pass by hand in Firefox 156 and WebKit 26.6. Firefox passes everything. WebKit's Windows build plays on every level but has no audio and loses the picture after a canvas resize; real Safari is the owner's check. No code changed |
+| 2c6cb34 | 22: Firefox and Safari (ADR-77): a pass by hand in Firefox 156 and WebKit 26.6. Firefox passes everything. WebKit's Windows build plays on every level but has no audio and loses the picture after a canvas resize; real Safari is the owner's check. No code changed |
+| (step 23) | 23: everything measured before and after, the keyboard pass, the README, the ROADMAP, the owner's checklists and the table of choices |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -485,10 +486,11 @@ Small, late, and the first step to drop (the owner, 2026-11-09: phones don't mat
 - **Fixes**, and a "Browsers" table in PERF-BUDGET.md.
 - **As it went (2026-11-10):** Firefox passes everything, sound included. WebKit's Windows test build starts and plays on every level, but has no audio at all, and stops showing the picture after the canvas changes size although the app still draws it. That looks like the test build, not the app, and cannot be settled without real Safari: five questions for the owner are under "Checklists for the owner". No code changed.
 
-### 23. Measure everything, and the last pass
+### 23. Measure everything, and the last pass. Done
 - **Before (a0a2c86) and after**, from step 1's script, into PERF-BUDGET.md: every quality level, both themes, the game and the lab.
 - **Keyboard only, through every screen.** A screen reader spot check: the owner, from a checklist.
 - **Docs:** the README (features, numbers, screenshots, and a GIF of a turn in the game), the ROADMAP, CLAUDE.md, and this plan's status line.
+- **As it went (2026-11-10):** the baseline and the last build measured the same day, both themes (PERF-BUDGET.md, "Step 23"): loading did not move, the caps hold with room, and High's one late frame was there before the plan too. Keyboard only passes on every screen. The README has the new features, numbers, two new screenshots and a clip of a turn; the ROADMAP says where things stand.
 
 ## Checklists for the owner
 
@@ -517,6 +519,55 @@ The test build of Safari's engine on this Windows machine could not answer these
 3. Make the window narrower and wider (or turn the phone): the board is still shown.
 4. Turn Sound on and pop a trick: you hear the pop, the catch and the landing.
 5. Play one whole go in the game: the board rolls, pops, lands, and the replay plays.
+
+### With a screen reader (step 23)
+
+NVDA or Narrator on Windows, or VoiceOver on a Mac or a phone. Each is a yes or a no.
+
+1. On the welcome screen, the reader says the page's title and the two choices, and never reads the 3D picture as an unnamed graphic.
+2. Choose the game: the reader says "Game of SKATE" (focus lands on the heading).
+3. Start a game: you hear who won the coin flip and whose turn it is.
+4. Call a trick from the list and press Pop twice (the timing bar): you hear that the bar started, then one sentence with how the release went and the result.
+5. The computer's go: you hear what it tried and whether it landed, and any letter given.
+6. The switches (Slow motion, Computer goes on its own, Instant replay, Sound) say their name and whether they are on.
+7. The Camera choice reads as a group of three, with the chosen one marked.
+8. During the instant replay, the Pop button says "Skip replay".
+9. "Quit game" opens a question, the reader stays inside it, and Escape leaves it.
+10. Nothing is announced twice, and nothing talks over the result.
+
+### One game on a laptop with built-in graphics (step 20)
+
+If you have one: open the practice lab, View, set Quality to Medium, play one whole game, and say whether it ever stutters.
+
+## Every choice made in steps 12, 13 and 17, and where to change it
+
+Each is a number or a line in one place (decision 26). Change it, run `npm run verify`, and look.
+
+| What | Now | Where |
+| --- | --- | --- |
+| **Rolling (step 12)** | | `ART.roll` in `src/scene/artDirection.ts` |
+| How fast the board rolls | 2.4 m/s (an easy roll; a jog is about 2.5) | `cruise` |
+| How long the push-off takes to reach that speed | 0.7 s | `pushS` |
+| How long the board takes to roll to a stop after landing | 1.3 s | `slowS` |
+| How long the computer waits before its go (must stay longer than the two above together) | 2.2 s | `COMPUTER_DELAY_MS` in `src/ui/Skate.tsx`, and `--skate-turn-delay` in `src/styles/tokens.css` (a test keeps them equal) |
+| **Landings (step 13)** | | `SETTLE` in `src/sim/settle.ts` |
+| A sketchy landing: how far the nose rocks up, and for how long | 5 degrees, 0.5 s | `sketchy.rockDeg`, `sketchy.rockS` |
+| A sketchy landing: how far it swerves, for how long, and how far to the side it ends | 7 degrees, 1.0 s, 5 cm | `sketchy.swerveDeg`, `sketchy.swerveS`, `sketchy.sideM` |
+| A bail: how long the board takes to fall onto its side | 0.4 s for a quarter turn, never under 0.12 s | `bail.fallS`, `bail.minFallS` |
+| A bail: how far the board slides away, and for how long | 0.6 m forward, 0.15 m to the side, 1.1 s | `bail.forwardM`, `bail.sideM`, `bail.slideS` |
+| **The game's camera (step 17)** | | `ART.camera.views` in `src/scene/artDirection.ts`; each is `look(height in degrees above the ground, degrees round from the side, height it aims at in metres)` |
+| Filmer (the default) | 12 degrees up, 30 round toward the nose, aimed 0.32 m up | `film` |
+| Side | 7 degrees up, square on, aimed 0.32 m up | `side` |
+| Above | 34 degrees up, 20 round the other way, aimed 0.28 m up | `above` |
+| Which camera a new visitor gets | Filmer | `gameViewFrom` in `src/store/replay.ts` |
+| **The instant replay (step 17)** | | |
+| The replay's camera | 4 degrees up, 40 round, aimed 0.36 m up | `ART.camera.views.replay` |
+| The replay's lens | 60 degrees wide (the game's is 36) | `ART.camera.fovs.replay` |
+| How slow the replay plays | 0.3 of full speed | `ART.replay.rate` |
+| How strong the fisheye bend is (0 is none) | 0.28 | `ART.replay.bend` |
+| Whether the replay is on for a new visitor | On | `instantReplayFrom` in `src/store/replay.ts` |
+
+Later steps kept the same habit: the sounds are `src/audio/soundSpec.ts` and `ROLL_SOUND` in `src/audio/sounds.ts`, the dust is `ART.dust`, and the touch sizes are in `src/styles/tokens.css`.
 
 ## If time runs short
 
