@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- trick-lab deck bottom graphic: Dusk (original artwork, 2026-11-09). Nose is at the right (+X).
+     2048 x 512 maps to the deck bottom 0.8065 x 0.2032 m (1 px = 0.394 mm). Only rects,
+     paths and circles: no fonts, no filters, no gradients, so resvg and a browser agree. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512" width="2048" height="512">
+  <rect x="0" y="0" width="2048" height="512" fill="#1b2440"/>
+  <rect x="0" y="150" width="2048" height="70" fill="#27305a"/>
+  <rect x="0" y="220" width="2048" height="80" fill="#3a3566"/>
+  <rect x="0" y="300" width="2048" height="212" fill="#5a3a66"/>
+  <circle cx="1024" cy="318" r="232" fill="#f2a541"/>
+  <circle cx="1024" cy="318" r="168" fill="#e0532c"/>
+  <rect x="760" y="300" width="528" height="10" fill="#5a3a66"/>
+  <rect x="760" y="336" width="528" height="16" fill="#5a3a66"/>
+  <rect x="760" y="378" width="528" height="24" fill="#5a3a66"/>
+  <rect x="760" y="428" width="528" height="34" fill="#5a3a66"/>
+  <path fill="#0f1528" d="M0 512L0 424L120 372L230 418L380 322L520 410L640 366L790 446L930 402L1060 458L1190 396L1330 452L1470 340L1600 420L1720 356L1860 430L1960 384L2048 420L2048 512Z"/>
+  <circle cx="150" cy="80" r="7" fill="#f3eadb"/>
+  <circle cx="330" cy="150" r="5" fill="#f3eadb"/>
+  <circle cx="470" cy="60" r="6" fill="#f3eadb"/>
+  <circle cx="640" cy="120" r="4" fill="#f3eadb"/>
+  <circle cx="1420" cy="70" r="6" fill="#f3eadb"/>
+  <circle cx="1580" cy="150" r="5" fill="#f3eadb"/>
+  <circle cx="1750" cy="90" r="7" fill="#f3eadb"/>
+  <circle cx="1900" cy="170" r="4" fill="#f3eadb"/>
+  <circle cx="1300" cy="130" r="4" fill="#f3eadb"/>
+  <circle cx="220" cy="230" r="4" fill="#f3eadb"/>
+</svg>

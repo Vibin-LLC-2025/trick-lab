@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- trick-lab deck bottom graphic: Ripple (original artwork, 2026-11-09). Nose is at the right (+X).
+     2048 x 512 maps to the deck bottom 0.8065 x 0.2032 m (1 px = 0.394 mm). Only rects,
+     paths and circles: no fonts, no filters, no gradients, so resvg and a browser agree. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512" width="2048" height="512">
+  <rect x="0" y="0" width="2048" height="512" fill="#0f6e6e"/>
+  <rect x="0" y="0" width="2048" height="512" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="620" fill="#f3eadb"/>
+  <circle cx="1500" cy="256" r="590" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="500" fill="#f3eadb"/>
+  <circle cx="1500" cy="256" r="470" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="380" fill="#f3eadb"/>
+  <circle cx="1500" cy="256" r="350" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="260" fill="#f3eadb"/>
+  <circle cx="1500" cy="256" r="232" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="150" fill="#f3eadb"/>
+  <circle cx="1500" cy="256" r="124" fill="#0f6e6e"/>
+  <circle cx="1500" cy="256" r="62" fill="#e0532c"/>
+  <rect x="60" y="0" width="70" height="512" fill="#0a4f52"/>
+  <rect x="174" y="0" width="54" height="512" fill="#0a4f52"/>
+  <rect x="272" y="0" width="40" height="512" fill="#0a4f52"/>
+  <rect x="356" y="0" width="28" height="512" fill="#0a4f52"/>
+  <rect x="428" y="0" width="18" height="512" fill="#0a4f52"/>
+  <rect x="490" y="0" width="10" height="512" fill="#0a4f52"/>
+</svg>

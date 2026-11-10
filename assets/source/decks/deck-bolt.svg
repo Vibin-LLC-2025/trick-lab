@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- trick-lab deck bottom graphic: Bolt (original artwork, 2026-11-09). Nose is at the right (+X).
+     2048 x 512 maps to the deck bottom 0.8065 x 0.2032 m (1 px = 0.394 mm). Only rects,
+     paths and circles: no fonts, no filters, no gradients, so resvg and a browser agree. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512" width="2048" height="512">
+  <rect x="0" y="0" width="2048" height="512" fill="#f3eadb"/>
+  <path fill="#17181a" d="M64 0h64v64h-64zM64 128h64v64h-64zM64 256h64v64h-64zM64 384h64v64h-64zM128 64h64v64h-64zM128 192h64v64h-64zM128 320h64v64h-64zM128 448h64v64h-64zM192 0h64v64h-64zM192 128h64v64h-64zM192 256h64v64h-64zM192 384h64v64h-64zM256 64h64v64h-64zM256 192h64v64h-64zM256 320h64v64h-64zM256 448h64v64h-64zM320 0h64v64h-64zM320 128h64v64h-64zM320 256h64v64h-64zM320 384h64v64h-64zM384 64h64v64h-64zM384 192h64v64h-64zM384 320h64v64h-64zM384 448h64v64h-64zM1600 0h64v64h-64zM1600 128h64v64h-64zM1600 256h64v64h-64zM1600 384h64v64h-64zM1664 64h64v64h-64zM1664 192h64v64h-64zM1664 320h64v64h-64zM1664 448h64v64h-64zM1728 0h64v64h-64zM1728 128h64v64h-64zM1728 256h64v64h-64zM1728 384h64v64h-64zM1792 64h64v64h-64zM1792 192h64v64h-64zM1792 320h64v64h-64zM1792 448h64v64h-64zM1856 0h64v64h-64zM1856 128h64v64h-64zM1856 256h64v64h-64zM1856 384h64v64h-64zM1920 64h64v64h-64zM1920 192h64v64h-64zM1920 320h64v64h-64zM1920 448h64v64h-64z"/>
+  <path fill="#17181a" d="M538 172L1018 118L908 248L1478 218L738 442L858 308L478 340Z"/>
+  <path fill="#e0532c" d="M560 150L1040 96L930 226L1500 196L760 420L880 286L500 318Z"/>
+  <rect x="448" y="24" width="1152" height="12" fill="#17181a"/>
+  <rect x="448" y="476" width="1152" height="12" fill="#17181a"/>
+</svg>

@@ -1,8 +1,8 @@
 # Plan: play, polish and reach (2026-11-09, revised the same day)
 
-**Status, 2026-11-09: revised, in progress.**
+**Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
-- **Paused at the halfway point (2026-11-09).** Step 12 does not start until the owner says so. Before it does: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
+- **Paused at the halfway point (2026-11-09), and everything that was waiting on the owner is answered (2026-11-10, decisions 23 to 26).** Step 12 is next, in a new conversation. Before it starts: reread this plan and the practical notes in `docs/AGENT-WORKFLOW.md`.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -11,6 +11,7 @@ How it runs:
 - Each step is one commit, and `npm run verify` passes at every step.
 - Each decision gets its own ADR (ADR-61 onward). BRIEF.md, DESIGN.md, PERF-BUDGET.md, ASSET-PIPELINE.md and CLAUDE.md are updated wherever a rule changes.
 - Anything that changes how the game plays or feels is tried rough first, then built properly. The owner plays the rough version before the polish goes in.
+  - **Changed for steps 12, 13 and 17 (the owner, 2026-11-10, decision 26):** no rough look and no stop. Each is decided here and built in full, and the owner gives one list of changes at the end.
 - Nothing is pushed or merged without the owner's say. Good moments to merge are marked "Merge point".
 
 ## What changed in this revision
@@ -50,7 +51,7 @@ Old step numbers and where they went:
 
 ## Where it stands
 
-Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 49 commits ahead of `main`.
+Branch `play-polish-reach`, off `look-feel-perf`. With this commit it is 50 commits ahead of `main`. The owner said to put everything so far live (2026-11-10, decision 23): the branch goes up as a pull request so the three CI jobs run for the first time, and `main` takes it once they pass. Later steps stay on this branch until the next merge point.
 
 | Commit | Step |
 | --- | --- |
@@ -67,15 +68,17 @@ Branch `play-polish-reach`, off `look-feel-perf`. Not pushed. It is 49 commits a
 | 2dc5543 | 11, out of order: records and the trick list (ADR-64) |
 | ef7e8ea | 9: the timing bar, built properly (ADR-65); the computer times the same bar; the rough controls are gone |
 | f0c9a3f | 10: the game screen as a game (ADR-66): the stage fills it, the panels are cards over it, the first game teaches |
+| beea48d | The halfway pause, and notes for the stretch from step 12 |
+| this commit | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
 
-Waiting on the owner, as of the pause (2026-11-09):
+What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
 
 | What | Asked | Answer |
 | --- | --- | --- |
-| Merge `look-feel-perf`, with the leak fix, to `main` (the merge point after step 6) | 2026-11-09, once | None yet |
-| Put the game live (the merge point after step 11) | 2026-11-09, at the pause | None yet |
-| The five checks of step 8 on the finished timing bar, and the bar by ear with sound on | 2026-11-09, with step 9 | None yet |
-| The deck drawings for step 16, shown early as first drafts: Dusk, Bolt and Ripple for the player, Circuit for the computer | 2026-11-09 | None yet. Step 16 does not build them in without a yes |
+| Merge `look-feel-perf`, with the leak fix, to `main` (the merge point after step 6) | 2026-11-09, once | Yes, with the game: everything so far goes live (decision 23) |
+| Put the game live (the merge point after step 11) | 2026-11-09, at the pause | Yes (decision 23) |
+| The five checks of step 8 on the finished timing bar, and the bar by ear with sound on | 2026-11-09, with step 9 | Played it, keep it as built (decision 24) |
+| The deck drawings for step 16, shown early as first drafts: Dusk, Bolt and Ripple for the player, Circuit for the computer | 2026-11-09 | All four approved as drawn (decision 25) |
 
 ## What the review found (2026-11-09, at a0a2c86), kept for this aim
 
@@ -121,6 +124,15 @@ Answered 2026-11-09 for this revision:
 | 20 | Phones | They don't matter enough to move up. Step 21 stays late and small, and is the first step to drop |
 | 21 | Who picks the recordings | The plan picks and builds them in. The owner listens afterwards and lists changes (step 18) |
 | 22 | Which control (the step 8 gate) | Sliders plus a timing bar, after playing both rough versions. "Flick it yourself" is deleted (step 9, ADR-65) |
+
+Answered 2026-11-10, at the halfway pause:
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 23 | What goes live now (the merge points after steps 6 and 11) | Everything so far: the look-and-feel work and the new game |
+| 24 | The finished timing bar | Played it, keep it. No changes |
+| 25 | The deck drawings (the step 16 gate) | All four approved as drawn: Dusk, Bolt and Ripple for the player, Circuit for the computer. Step 16 builds them in without asking again |
+| 26 | The rough looks of steps 12, 13 and 17 (the plain roll, the three landing motions, the camera angles) | Skip them. The plan decides and builds the full version straight away. The owner gives one list of changes at the end |
 
 ## Performance targets (replaces the draw-call ledger)
 
@@ -199,7 +211,7 @@ The measurement, Medium back under its cap, the download budget, and one texture
 - **Done when** a run on today's build prints the new table and passes it. It does (PERF-BUDGET.md, "Step 6"): High 1.05 ms of graphics time and 1.4 ms of work, Medium 0.66 and 1.0, Low 0.2 and 0.7, at the 95th percentile.
 - **Two things settled while building it.** The longest-frame gate is under 20 ms (16.7 ms plus timer jitter; the reference browser draws at 120 frames a second). The app's own work is a new number, `perfStats.workMs`: FlightDriver's pose and the draw together.
 
-**Merge point.** The game of SKATE and the look-and-feel work are finished and not live. This is a good moment to merge `look-feel-perf` (with the leak fix) to `main`.
+**Merge point.** The game of SKATE and the look-and-feel work are finished and not live. This is a good moment to merge `look-feel-perf` (with the leak fix) to `main`. Answered 2026-11-10: yes, together with phase B (decision 23).
 
 ## Phase B: the game
 
@@ -294,7 +306,7 @@ As built: a lab landing counts as much as a game landing; a game that is quit is
 - **"Clear records"** asks first.
 - Store actions write the records, never components. They are never logged or exported.
 
-**Merge point.** The game now plays differently. A good moment to put it live and play it for a few days before the art goes in.
+**Merge point.** The game now plays differently. A good moment to put it live and play it for a few days before the art goes in. Answered 2026-11-10: yes, everything so far goes live (decision 23).
 
 ## Phase C: the world and the rider
 
@@ -306,7 +318,7 @@ As built: a lab landing counts as much as a game landing; a game that is quit is
 - **When it does not.** Under reduced motion the board pops on the spot, as today. Frames stop when the game is paused, a dialog is open or the tab is hidden.
 - **The speed and the slow-down** are art numbers in `artDirection.ts`. FlightDriver writes them, with no per-frame allocation.
 - **Low rolls too**, since sliding a texture costs almost nothing.
-- **Rough first:** a plain version (the ground slides, no wheel spin) for the owner to look at before the models are rebuilt.
+- **No rough look** (the owner, 2026-11-10, decision 26; the first plan had a plain version shown first). Built in full straight away. The speed, the slow-down and how the wrap is hidden are decided here, said in the step's report, and go on the owner's one list of changes at the end.
 - **Done when:**
   - the ground never visibly jumps where it wraps (checked in screenshots either side of the wrap);
   - the scene's text description says the board is rolling;
@@ -322,7 +334,7 @@ This joins the first version's "settle" with rolling away.
 - **Contact, tested.** Through the whole landing the board's lowest point is on the ground (within 1 mm), a riding shoe stays on the grip, and a sliding board never passes through a shoe. Both stances, both directions.
 - **It can be cut short.** A new pop, a screen change, a change of quality level, reduced motion turned on, or the 3D view failing all end it at once and show the end pose. The store does this, since the 3D view may be gone.
 - **A simple frame rule** (this replaces the first version's frame-by-frame gate): once everything has come to rest, frames stop within one second and stay stopped. The check: no frames drawn between one and three seconds after rest.
-- **Rough first:** the three motions with no easing, for the owner to judge the timing.
+- **No rough look** (the owner, 2026-11-10, decision 26). The three motions and their timing are decided here and built in full; the timings are art numbers, so a change from the owner's list at the end is cheap.
 
 ### 14. A skate spot
 - **A kerb, a ledge, a flat rail and a wall**, as their own model (`spot.glb`), generated like the others, with its own budget.
@@ -340,6 +352,8 @@ This joins the first version's "settle" with rolling away.
 
 ### 16. Decks: yours and the computer's
 - **Four deck graphics:** today's, plus three new ones drawn here as SVGs. The owner approves them before they are built in, so the drawings are started early and shown as soon as they exist.
+  - **Approved as drawn, 2026-11-10 (decision 25):** Dusk, Bolt and Ripple for the player, Circuit for the computer. The four SVGs are in `assets/source/decks/`. Nothing reads them yet; this step builds them in.
+  - That makes five graphics with today's: the player chooses between today's, Dusk, Bolt and Ripple, and Circuit is the computer's own.
 - **The computer rides its own deck and shoe colour**, so you can see whose turn it is from the board.
 - **A "Deck" choice on the welcome screen**, remembered. A failed download keeps the current deck and says so.
 - **Built as textures downloaded only when chosen**, with a budget each. The first version's notes on loading, late downloads and freeing each texture exactly once still apply.
@@ -355,7 +369,7 @@ This joins the first version's "settle" with rolling away.
   - The Pop button reads "Skip replay" while it plays, so focus never moves. Escape skips too.
   - Nothing else moves during it: the computer's turn waits.
   - An "Instant replay" switch, on by default, off under reduced motion.
-- **Rough first:** the camera angles alone, for the owner to choose.
+- **No rough look** (the owner, 2026-11-10, decision 26). The angles are chosen here and built in full, with the buttons to switch between them; the owner's list of changes at the end can move or drop one.
 
 ### 18. Sound
 Today there are six short sounds, each made in the browser from a few beeps and bursts of hiss (`src/audio/sounds.ts`). That suits a steady hiss like wheels on concrete. It does not suit a sharp knock like wood hitting the ground, which is why the pop and the landing sound thin. So the two kinds are made differently.
