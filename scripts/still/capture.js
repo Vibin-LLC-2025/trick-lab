@@ -10,13 +10,13 @@
 //
 // Options from the query of the page the session is on (all optional):
 //   w, h   1600, 800   the picture's size (src/asset/stillSpec.ts STILL; write.ts checks it)
-//   q      0.8         WebP quality
+//   q      0.6         WebP quality
 //   base   /           the app's base path
 //
 // What it draws: the welcome screen on High at the picture's size, the stage
 // alone filling the window (the rest of the page hidden), under reduced
 // motion, so the preview holds its still pose (SHOWCASE_STILL) instead of
-// looping; feet on, legs off (the defaults). It waits until the lit scene
+// looping; feet and legs on (the defaults on High since ADR-70). It waits until the lit scene
 // shows every High model, lets a few more frames draw, screenshots the
 // canvas, and has the browser encode the WebP (no encoder to install).
 // Nothing here changes the app; the page's storage is set per theme.
@@ -24,7 +24,7 @@ async (page) => {
   const opts = new URL(page.url()).searchParams;
   const width = Number(opts.get('w') ?? 1600);
   const height = Number(opts.get('h') ?? 800);
-  const quality = Number(opts.get('q') ?? 0.8);
+  const quality = Number(opts.get('q') ?? 0.6);
   const base = opts.get('base') ?? '/';
   const origin = new URL(page.url()).origin;
   const MODELS = ['Deck_Grip', 'Shoe_Sole', 'Ground_Concrete'];

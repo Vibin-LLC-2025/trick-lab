@@ -399,22 +399,50 @@ function legSegment(profile: ProfilePoint[], bone: number, cast: boolean) {
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
   g.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
   g.setAttribute('aCast', new THREE.BufferAttribute(new Float32Array(count).fill(cast ? 1 : 0), 1));
+  // The cloth's UVs in metres (ADR-70): `around` tiles round the leg, one tile per `tile` metres along it.
+  const uv = g.attributes.uv!;
+  const pos = g.attributes.position!;
+  for (let v = 0; v < count; v++) uv.setXY(v, uv.getX(v) * LG.cloth.around, pos.getY(v) / LG.cloth.tile);
   return g;
 }
 
-/** The shank, knee (y 0) to ankle (y LEG.shank): trouser to the hem, then sock into the shoe. */
+/** Where the shank's cuff starts (its fold, the top) and ends (`drop` below the ankle joint), y from the knee (ADR-70). */
+export const cuffSpan = () => ({ top: LEG.shank + LG.cuff.drop - LG.cuff.height, end: LEG.shank + LG.cuff.drop });
+
+/**
+ * The shank, knee (y 0) to ankle (y LEG.shank): trouser bunching in soft
+ * rolls above a turned-up cuff that ends below the ankle joint, over the
+ * shoe collar; then a step in to the ankle's cap, a dark sock, inside the shoe
+ * (step 15, ADR-70; the sock showed 3 cm above the collar before).
+ */
 function shankProfile(): ProfilePoint[] {
   const S = LG.shank;
+  const C = LG.cuff;
+  const B = LG.bunch;
   const L = LEG.shank;
-  const hem = L - LG.hemAbove;
+  const { top, end } = cuffSpan();
+  const t = LG.trouser;
+  // The rolls: a half sine bump each, over bunch.height above the fold, four points a roll.
+  const rolls: ProfilePoint[] = [];
+  const from = top - B.height;
+  for (let i = 0; i < B.count * 4; i++) {
+    const k = (i + 0.5) / (B.count * 4);
+    rolls.push({ r: S.hem + B.depth * Math.abs(Math.sin(k * B.count * Math.PI)), y: from + k * B.height, color: t, alpha: 1 });
+  }
   return [
-    ...cap(S.knee, 0, -1, LG.trouser, 1),
-    { r: S.calf, y: S.calfAt * L, color: LG.trouser, alpha: 1 },
-    { r: S.hem, y: hem, color: LG.trouser, alpha: 1 },
-    // The hem: a step in to the sock at the same height.
-    { r: S.sock, y: hem, color: LG.sock, alpha: 1 },
-    { r: S.ankle, y: L, color: LG.sock, alpha: 1 },
-    ...cap(S.ankle, L, 1, LG.sock, 1).slice(1),
+    ...cap(S.knee, 0, -1, t, 1),
+    { r: S.calf, y: S.calfAt * L, color: t, alpha: 1 },
+    { r: S.hem, y: from, color: t, alpha: 1 },
+    ...rolls,
+    { r: S.hem, y: top, color: LG.fold, alpha: 1 },
+    // The fold: a step out to the cuff at the same height, its rounded top, the cuff down to its lower edge.
+    { r: C.radius - C.edge, y: top, color: LG.fold, alpha: 1 },
+    { r: C.radius, y: top + C.edge, color: t, alpha: 1 },
+    { r: C.radius, y: end - C.edge, color: t, alpha: 1 },
+    { r: C.radius - C.edge, y: end, color: LG.fold, alpha: 1 },
+    // The cuff's edge: a step in to the ankle's cap at the same height, then the rest of the cap, inside the shoe.
+    { r: Math.sqrt(Math.max(0, S.ankle ** 2 - (end - L) ** 2)), y: end, color: LG.sock, alpha: 1 },
+    ...cap(S.ankle, L, 1, LG.sock, 1).filter((p) => p.y > end + 1e-6),
   ];
 }
 
@@ -581,7 +609,8 @@ export function ditherThreshold(x: number, y: number) {
 
 /** The legs on WebGLRenderer: a standard material whose alpha test is the dither, so it stays opaque (depth written, no sorting). */
 function legsMaterial() {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness });
+  const s = LG.cloth.strength;
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: LG.roughness, normalMap: tex.cloth, normalScale: new THREE.Vector2(s, s) });
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader
       .replace('void main() {', `${DITHER_GLSL}\nvoid main() {`)
@@ -602,8 +631,37 @@ function legsDepthMaterial() {
   return m;
 }
 
+/**
+ * The trousers' cloth (step 15, ADR-70): a twill normal map, `ribs`
+ * diagonal ribs across one tile, seamless (whole ribs both ways), mipmapped.
+ * Tangent-space normals as bytes; linear, not colour.
+ */
+export function twillNormal(): THREE.DataTexture {
+  const { size: n, ribs } = LG.cloth;
+  const data = new Uint8Array(n * n * 4);
+  // Height 0.5 sin(k (x + y)) per texel, its slope sharpened a little at the crests so it reads as woven.
+  const k = (2 * Math.PI * ribs) / n;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const slope = 0.5 * k * Math.cos(k * (x + y)) * (0.6 + 0.4 * Math.abs(Math.sin(k * (x + y))));
+      const len = Math.hypot(slope, slope, 1);
+      const byte = (c: number) => Math.round((c / len) * 127.5 + 127.5);
+      data.set([byte(-slope), byte(-slope), byte(1), 255], (y * n + x) * 4);
+    }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+}
+
 /** Textures the materials below hold, freed with them. */
-const tex = { toon: toonGradient(), joints: jointTexture() };
+const tex = { toon: toonGradient(), joints: jointTexture(), cloth: twillNormal() };
+/** The trousers' cloth, for the legs' TSL twin (nodeRenderer.ts). */
+export const legsCloth = tex.cloth;
 
 export const mat = {
   /** The primitive board on the fallback (Medium, High while a GLB streams or if it fails): one standard material, per-vertex colour. */
@@ -616,8 +674,8 @@ export const mat = {
   ground: std(G.color, G.roughness),
   shoeSole: std(FT.sole.color, FT.sole.roughness),
   shoeUpper: std(FT.upper.color, FT.upper.roughness),
-  // The legs (ADR-37, ADR-60): white times the vertex colours (trouser and
-  // sock), opaque, with the vertex alpha (the thighs' fade toward the hips)
+  // The legs (ADR-37, ADR-60, ADR-70): white times the vertex colours (trouser,
+  // its cuff's fold and the ankle), the twill normal map, opaque, with the vertex alpha (the thighs' fade toward the hips)
   // drawn as a screen-door dither, so solid and fading parts are one draw.
   // Never swapped; its TSL twin is nodeRenderer.ts legsNodeMaterial.
   legs: legsMaterial(),

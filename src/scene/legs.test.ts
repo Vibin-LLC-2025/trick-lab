@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Bone, Group, MathUtils, Vector3, type BufferAttribute } from 'three';
+import { Bone, Color, Group, MathUtils, RepeatWrapping, Vector3, type BufferAttribute } from 'three';
 import { newFeetPose, writeFeetPose, type FootPose, type Stance } from '../sim/feet';
 import { computeFlight } from '../sim/flight';
 import { LEG, newLegsPose, writeLegsPose, type Segment } from '../sim/legs';
 import { PRESETS } from '../sim/tricks';
 import { ART } from './artDirection';
-import { ditherThreshold, geo, LEG_BONES, mat } from './resources';
+import { cuffSpan, ditherThreshold, geo, LEG_BONES, legsCloth, mat, twillNormal } from './resources';
 
 const REST_Y = ART.board.restY;
 const D2R = MathUtils.DEG2RAD;
@@ -167,19 +167,27 @@ describe('legs in the scene (ADR-37)', () => {
     }
   });
 
-  it('colours the sock below the hem and fades the thighs from clear at the hip to opaque at the knee', () => {
-    const hem = LEG.shank - ART.legs.hemAbove;
+  it('dresses the shank in trouser down to a cuff that ends at the ankle joint, and fades the thighs from clear at the hip to opaque at the knee', () => {
+    // Step 15 (ADR-70): the sock no longer shows; only the ankle inside the shoe is sock coloured.
+    const { top, end } = cuffSpan();
+    expect(end).toBeCloseTo(LEG.shank + ART.legs.cuff.drop, 9);
+    const sock = new Color(ART.legs.sock);
+    const isSock = (i: number) => Math.abs(s.col.getX(i) - sock.r) < 1e-6 && Math.abs(s.col.getY(i) - sock.g) < 1e-6 && Math.abs(s.col.getZ(i) - sock.b) < 1e-6;
+    expect(end - top).toBeCloseTo(ART.legs.cuff.height, 9);
     const s = part(shanks);
     expect(s.col.itemSize).toBe(4);
+    let widest = 0;
     for (const i of s.keep) {
       const y = s.pos.getY(i);
-      const light = s.col.getX(i) > 0.5;
-      // Trouser is dark grey, sock light; exactly at the hem there is one ring of each.
-      if (y < hem - 1e-6) expect(light).toBe(false);
-      if (y > hem + 1e-6) expect(light).toBe(true);
+      // Trouser and fold above the cuff's edge, the sock below it; exactly at the edge there is one ring of each.
+      if (y < end - 1e-6) expect(isSock(i)).toBe(false);
+      if (y > end + 1e-6) expect(isSock(i)).toBe(true);
+      if (y >= top - 1e-6 && y <= end + 1e-6) widest = Math.max(widest, Math.hypot(s.pos.getX(i), s.pos.getZ(i)));
       // The shanks never fade.
       expect(s.col.getW(i)).toBe(1);
     }
+    // The cuff stands out from the trouser above it (it is turned up over it).
+    expect(widest).toBeGreaterThan(ART.legs.shank.hem + ART.legs.bunch.depth);
     const t = part(thighs);
     for (const i of t.keep) {
       const y = t.pos.getY(i);
@@ -187,5 +195,43 @@ describe('legs in the scene (ADR-37)', () => {
       if (y <= ART.legs.fade.from * LEG.thigh + 1e-9) expect(alpha).toBe(0);
       if (y >= LEG.thigh - 1e-9) expect(alpha).toBe(1);
     }
+  });
+});
+
+describe('the trousers cloth (step 15, ADR-70)', () => {
+  const C = ART.legs.cloth;
+
+  it('is a seamless twill normal map: unit normals facing out, whole ribs both ways', () => {
+    const t = twillNormal();
+    const { data, width: n, height } = t.image as { data: Uint8Array; width: number; height: number };
+    expect(n).toBe(C.size);
+    expect(height).toBe(C.size);
+    const at = (x: number, y: number) => [0, 1, 2].map((c) => data[(((y + n) % n) * n + ((x + n) % n)) * 4 + c]! / 127.5 - 1);
+    for (let y = 0; y < n; y += 7)
+      for (let x = 0; x < n; x += 5) {
+        const [nx, ny, nz] = at(x, y);
+        expect(Math.hypot(nx!, ny!, nz!)).toBeCloseTo(1, 1);
+        expect(nz!).toBeGreaterThan(0.5);
+      }
+    // Seamless: across the wrap the slope changes no more than between any two neighbours.
+    const step = (a: number[], b: number[]) => Math.abs(a[0]! - b[0]!);
+    let inner = 0;
+    for (let x = 0; x < n - 1; x++) inner = Math.max(inner, step(at(x, 3), at(x + 1, 3)));
+    expect(step(at(n - 1, 3), at(0, 3))).toBeLessThanOrEqual(inner + 1e-9);
+    expect(t.wrapS).toBe(RepeatWrapping);
+    expect(t.generateMipmaps).toBe(true);
+    t.dispose();
+  });
+
+  it('is on the legs material, with UVs in metres along each segment', () => {
+    expect(mat.legs.normalMap).toBe(legsCloth);
+    expect(mat.legs.normalScale.x).toBe(C.strength);
+    const g = geo.legs;
+    const uv = g.attributes.uv as BufferAttribute;
+    const pos = g.attributes.position as BufferAttribute;
+    for (let v = 0; v < uv.count; v += 13) expect(uv.getY(v)).toBeCloseTo(pos.getY(v) / C.tile, 4); // Float32 UVs
+    let most = 0;
+    for (let v = 0; v < uv.count; v++) most = Math.max(most, uv.getX(v));
+    expect(most).toBeCloseTo(C.around, 6);
   });
 });

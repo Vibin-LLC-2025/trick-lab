@@ -581,15 +581,30 @@ export const ART = {
    * down the thigh from behind the hips, showed the faded tube flaring
    * toward the camera as streaks beside each knee; from 0.35 to 0.85 only
    * the knee end reads there, and the side view keeps the lower thigh.
+   *
+   * Better trousers (step 15, ADR-70, 2026-11-10): the sock is gone under a
+   * turned-up `cuff` `height` tall that ends `drop` below the ankle joint,
+   * so it sits over the shoe collar (about 1.4 cm above the joint) even at
+   * the back of a shank leaning forward (at the joint it left 2 to 3 cm of
+   * ankle showing there), `radius` round, its fold line in the darker
+   * `fold` colour. Above it the trouser bunches in `bunch.count` soft rolls
+   * of `bunch.depth` over `bunch.height`. Inside it a dark `sock` ankle.
+   * The thighs' fade starts at 0.55 of the thigh (0.35 before): the dither's
+   * dotted band is shorter now the legs are on by default.
+   * `cloth`: a twill normal map, `ribs` diagonal ribs per `tile` metres of
+   * cloth, `around` tiles round a leg, at `strength`.
    */
   legs: {
     trouser: '#3b3e44',
-    sock: '#d9d5cb',
+    fold: '#2b2d32',
+    sock: '#2f3035',
     roughness: 0.95,
     thigh: { hip: 0.085, knee: 0.062 },
-    shank: { knee: 0.054, calf: 0.056, calfAt: 0.3, hem: 0.054, sock: 0.036, ankle: 0.034 },
-    hemAbove: 0.045,
-    fade: { from: 0.35, to: 0.85 },
+    shank: { knee: 0.054, calf: 0.056, calfAt: 0.3, hem: 0.057, ankle: 0.034 },
+    cuff: { height: 0.032, drop: 0.025, radius: 0.0605, edge: 0.003 },
+    bunch: { count: 2, height: 0.05, depth: 0.0025 },
+    cloth: { tile: 0.016, ribs: 4, around: 22, size: 64, strength: 0.55 },
+    fade: { from: 0.55, to: 0.88 },
     radialSegments: 16,
     capSegments: 4,
   },

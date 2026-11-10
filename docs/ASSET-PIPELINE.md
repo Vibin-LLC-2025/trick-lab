@@ -176,7 +176,7 @@ playwright-cli -s=still close
 npx tsx scripts/still/write.ts stills.json
 ```
 
-`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.8. `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
+`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.6 (0.8 until 2026-11-10, ADR-70). `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
 
 ## The skate spot (2026-11-10, ADR-69)
 

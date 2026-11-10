@@ -3,7 +3,7 @@
 **Status, 2026-11-10: revised, in progress.**
 - Steps 1 to 11 are committed: phases A and B are done. The owner played both rough controls and picked the timing bar (2026-11-09); step 9 built it properly (ADR-65) and step 10 made the game screen a game (ADR-66). Step 11 was taken out of order while waiting for the pick.
 - Steps 1 to 11 are live on `main` (91dfb4c, 2026-11-10). The second half started on 2026-11-10, step to step without a stop except where this plan has one.
-- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68) and 14 (the skate spot, ADR-69) are done.** Step 15 is next.
+- **Steps 12 (rolling, ADR-67), 13 (landings with weight, ADR-68), 14 (the skate spot, ADR-69) and 15 (the legs on by default, ADR-70) are done.** Step 16 is next.
 - The first version of this plan (commit b80ad3c, 23 steps) was reviewed by a second model (sol, high effort) over eight rounds.
 - This revision has not had that review. It was written after the owner changed the plan's aim (below).
 - Where a step here keeps an idea from the first version, that version's longer notes still apply unless this one says otherwise. Read them with `git show b80ad3c:docs/PLAN-PLAY-POLISH-REACH.md`.
@@ -73,7 +73,8 @@ Branch `play-polish-reach`, off `look-feel-perf`. **Everything through step 11 i
 | 786d5c1 | The owner's answers at the pause (decisions 23 to 26); the four approved deck drawings saved in `assets/source/decks/` |
 | e72b079 | 12: rolling (ADR-67). The ground's textures and a print on the wheels slide; no draw call added. Every switch on: still High 34, Medium 19, Low 12 |
 | 2fb9f74 | 13: landings with weight (ADR-68): clean rolls on, sketchy rocks and swerves with the rider on, a bail falls onto its nearest side and slides away. A bail in the air now comes down on the pad. Rolling for a regular rider fixed (it went tail first). No draw call added |
-| (step 14) | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
+| 21bac64 | 14: the skate spot (ADR-69): a kerb, a flat rail, a ledge and a wall behind the board, rolling past on the game screen, with soft shadows, on Medium and High. Every switch on: High 36, Medium 21, Low 12 (the check now measures the game screen too) |
+| (step 15) | 15: the legs on by default on High and Medium (ADR-70), in trousers with a cuff over the shoe, a little bunching and a twill cloth; the hip fade a third shorter. The loading pictures show the legs, encoded at WebP 0.6 to stay in budget. No draw call added to the worst case |
 | 91dfb4c | The first CI run (pull request 1, 2026-11-10) timed out in one test: building the High board twice took 31.9 s on GitHub's machine against the 30 s every test gets. That test now has 120 s; what it compares is unchanged |
 
 What was waiting on the owner at the pause, all answered on 2026-11-10. Nothing is waiting now.
@@ -371,7 +372,13 @@ As built, where it differs from the list below or adds to it:
 - **Scenery only.** Nothing is cleared or ground on.
 - **Cost:** one draw call, two on High. Proposed budget: 300 KB, 15,000 triangles, 3 textures at 1024 px.
 
-### 15. The rider's legs, on by default
+### 15. The rider's legs, on by default. Done (ADR-70)
+As built, where it differs from the list below or adds to it:
+- **The default follows the level** until the student chooses: on with High and Medium, off on Low, moving with a change of level or the automatic step-down. A saved choice wins.
+- **The cuff ends 2.5 cm below the ankle joint**, over the shoe collar, and the sock is dark: at the joint the back of a forward-leaning shank showed 2 to 3 cm of white ankle.
+- **The "never hides the board" check moves to step 17.** From today's overhead rider camera, at the peak of a 360 flip a shank can cover up to about a fifth of the board (checked in six poses, both stances, High and Medium). Step 17's lower game camera is the fix, and each of its angles and the replay's is checked there. The lab keeps its rider view.
+- **The loading pictures** now show the legs, and are encoded at WebP 0.6 instead of 0.8 to stay inside their download budget (26.5 KB).
+
 - **On by default on High and Medium.** Low stays as it is.
 - **Better trousers:** a cloth surface, a cuff that sits over the shoe, and the fade at the hips checked again now that it is a dither (ADR-60).
 - **Never hides the board** from the game's camera: checked in the six poses, both stances.
@@ -391,6 +398,7 @@ As built, where it differs from the list below or adds to it:
 
 ### 17. The game's camera, and instant replay
 - **A game camera:** lower and closer than the lab's, like a friend filming. Two or three fixed angles to choose from, by buttons. The lab keeps its free camera.
+- **The legs never hide the board** from any of its angles or the replay's (moved here from step 15, ADR-70): checked in six poses of a 360 flip, both stances, High and Medium. The skate spot stays behind the board (ADR-69): every angle looks from the +Z side.
 - **Instant replay.** After your made set or copy, the flight plays once more in slow motion, with a fisheye bend on High and Medium.
   - It has its own start and end, apart from scoring: events, records and the automatic quality step-down do not see it.
   - The Pop button reads "Skip replay" while it plays, so focus never moves. Escape skips too.

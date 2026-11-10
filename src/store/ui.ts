@@ -100,8 +100,16 @@ export function readQuality(): { quality: Quality; qualityAuto: boolean } {
 }
 
 export const readFeetVisible = (): boolean => read(FEET_KEY) !== 'off';
-/** Legs are off until the student switches them on (ADR-37; off by default since ADR-48). */
-export const readLegsVisible = (): boolean => read(LEGS_KEY) === 'on';
+/**
+ * The legs (ADR-37): a saved choice wins. Without one they follow the
+ * quality level: on with High and Medium, off on Low (ADR-70; off everywhere
+ * from ADR-48 until then), and they change with it.
+ */
+export const legsByDefault = (quality: Quality): boolean => quality !== 'low';
+export const readLegsVisible = (quality: Quality): boolean => {
+  const saved = read(LEGS_KEY);
+  return saved === 'on' ? true : saved === 'off' ? false : legsByDefault(quality);
+};
 /** Foot trails are off until the student switches them on. */
 export const readFootPathsVisible = (): boolean => read(PATHS_KEY) === 'on';
 /** Motion cues are on until the student switches them off (ADR-26). */
@@ -155,6 +163,7 @@ export const SCENE_UNAVAILABLE_ANNOUNCEMENT =
 
 export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, get) => {
   let nonce = 0;
+  const quality = readQuality();
   return {
     screen: readScreen(),
     previewPaused: read(PREVIEW_KEY) === 'paused',
@@ -167,7 +176,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     focusRequest: null,
     viewResetNonce: 0,
     cameraView: readCameraView(),
-    ...readQuality(),
+    ...quality,
     paces: [],
     paceJudged: false,
     paceSource: null,
@@ -178,7 +187,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     soundOn: readSoundOn(),
     soundCue: null,
     feetVisible: readFeetVisible(),
-    legsVisible: readLegsVisible(),
+    legsVisible: readLegsVisible(quality.quality),
     footPathsVisible: readFootPathsVisible(),
     stance: readStance(),
     motionCuesVisible: readMotionCuesVisible(),
@@ -252,7 +261,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       save(QUALITY_KEY, quality);
       // The 3D view is rebuilt: a landing in play goes to its end (ADR-68).
       get().endLanding();
-      set({ quality, qualityAuto: false });
+      // Legs nobody chose follow the level (ADR-70).
+      set({ quality, qualityAuto: false, legsVisible: readLegsVisible(quality) });
       get().announce(QUALITY_ANNOUNCEMENT[quality]);
     },
     toggleFeet: () => {
@@ -325,7 +335,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       save(QUALITY_STEP_KEY, lower);
       // The 3D view is rebuilt on the lower level: the landing just begun goes to its end (ADR-68).
       get().endLanding();
-      set({ quality: lower, paces: [], paceJudged: false });
+      set({ quality: lower, paces: [], paceJudged: false, legsVisible: readLegsVisible(lower) });
       return STEP_DOWN_ANNOUNCEMENT[lower as Exclude<Quality, 'high'>];
     },
     setPaceSource: (paceSource) => set({ paceSource }),

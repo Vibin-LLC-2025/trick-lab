@@ -537,13 +537,15 @@ Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no ne
 
 Written by the implementation agent (opus) for the legs, pending the design agent's own pass; `ART.legs` in artDirection.ts is sourced from here. (8.6 is the Stance control, so the legs take the next free number.)
 
-The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Hidden by default since 2026-11-09 (ADR-48: the owner chose shoes only); the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
+The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Shown by default on High and Medium since 2026-11-10, hidden on Low, following the level until the student chooses (ADR-70). Hidden by default from 2026-11-09 (ADR-48: the owner chose shoes only); the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
 
 | Part | Shape | Colour (sRGB) |
 | --- | --- | --- |
-| Thigh | Tapered capsule, hip radius 0.085 to knee 0.062 (slightly baggy trousers); opaque from the knee to 0.85 of its length, clear from 0.35 toward the hip (vertex alpha, drawn as a 4 x 4 screen-door dither since ADR-60) | trouser `#3b3e44` |
-| Shank | Tapered capsule, knee 0.054 (inside the thigh's knee cap), calf 0.056 at 0.3 of its length, hem 0.054 | trouser `#3b3e44` |
-| Sock | From the hem, 4.5 cm above the ankle joint, a step in to 0.036, 0.034 at the ankle, capped inside the shoe (about 3 cm shows above the collar) | sock `#d9d5cb` |
+| Thigh | Tapered capsule, hip radius 0.085 to knee 0.062 (slightly baggy trousers); opaque from the knee to 0.88 of its length, clear from 0.55 toward the hip (vertex alpha, drawn as a 4 x 4 screen-door dither since ADR-60; 0.35 to 0.85 until ADR-70) | trouser `#3b3e44` |
+| Shank | Tapered capsule, knee 0.054 (inside the thigh's knee cap), calf 0.056 at 0.3 of its length, 0.057 above the cuff, with two soft rolls of 2.5 mm over the 5 cm above it (ADR-70) | trouser `#3b3e44` |
+| Cuff (ADR-70) | Turned up, 3.2 cm tall, radius 0.0605 with 3 mm rounded edges, ending 2.5 cm below the ankle joint, over the shoe collar; its fold line and lower edge darker | trouser `#3b3e44`, fold `#2b2d32` |
+| Ankle | Inside the cuff and the shoe: the ankle joint's cap, 0.034 | sock `#2f3035` (was `#d9d5cb` and showed 3 cm above the collar until ADR-70) |
+| Cloth (ADR-70) | Twill normal map made in code, 64 px, 4 diagonal ribs a tile, a tile per 1.6 cm along the leg and 22 round it, strength 0.55 | |
 
 One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are the rider's (`LEG` in src/sim/legs.ts: thigh 0.43, shank 0.42). One draw call for both legs on every tier (two before ADR-60); on High the shanks cast shadows like the shoes and the thighs do not. From the rider's view the thighs point toward the camera and stay behind the knees, so the board and the shoes stay readable at the catch; the low side view shows the crouch, the tuck, the reach for the catch and the bent knees at the landing. `#scene-description` adds one sentence after the feet: "Legs crouched, knees bent, ready to pop.", "Knees tucked up in the air.", "Legs reach down to catch the board." (a bail: "Legs reach down beside the board."), "Knees bent, absorbing the landing.".
 

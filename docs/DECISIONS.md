@@ -888,3 +888,23 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 **Scenery, not content.** While it downloads or if it fails, there is simply no spot (an `AssetBoundary` with no fallback that does not report to the store). Nothing is announced, and the scene's description does not mention it.
 
 **Left out.** Grinding or sliding on the pieces, more pieces, and a second layout. The colours and sizes are numbers in `spotSpec.ts`, the shadow's in `ART.spot.shadow`.
+
+## ADR-70: The rider's legs on by default on High and Medium, in better trousers (2026-11-10)
+
+**Context.** Step 15 of PLAN-PLAY-POLISH-REACH. ADR-48 hid the legs by default for three reasons: the owner chose shoes only, the legs were the weakest visual, and from the overhead rider view they cover the board. ADR-60 then put them in one draw call. The owner's plan now has them on by default on High and Medium, with better trousers.
+
+**Decision.**
+- **The default follows the quality level.** Without a saved choice the legs are on with High and Medium and off on Low (`legsByDefault`, `readLegsVisible(quality)` in `store/ui.ts`). They move with the level when the student changes it or the automatic step-down does (ADR-59). A saved choice (`trick-lab.legs` on or off, written by the Legs switch) wins on every level, as before. Low is frozen (ADR-62), so its default stays off.
+- **Better trousers** (`ART.legs`, `scene/resources.ts`, the same on both renderers):
+  - A turned-up **cuff** 3.2 cm tall, 6.05 cm round, its fold line darker (`fold`). It ends 2.5 cm below the ankle joint (`cuff.drop`), so it sits over the shoe collar. At the joint itself it left 2 to 3 cm of ankle showing at the back of a shank leaning forward. Above it the trouser **bunches** in two soft rolls over 5 cm.
+  - The **sock is gone** from view. The ankle inside the shoe is a dark sock (`#2f3035`), so a glimpse past the cuff reads as shadow, not as a white ball.
+  - A **twill cloth**: a 64 px normal map of diagonal ribs made in code (`twillNormal`, mipmapped, wrapped), with UVs in metres (22 tiles round a leg, a tile per 1.6 cm along it), at strength 0.55. It reads close up and averages away at a distance.
+- **The fade at the hips, checked again.** The dither's dotted band read clearly above each knee from the rider view. The fade now runs from clear at 0.55 of the thigh (from the hip) to opaque at 0.88, instead of 0.35 to 0.85, so the band is a third shorter.
+
+**What was found, and moved.** The plan asks that the legs never hide the board from the game's camera, checked in six poses in both stances. From today's overhead rider camera (the lab's and, until step 17, the game's), at the peak of a 360 flip a shank can cover up to about a fifth of the board, as ADR-48 said. The camera is the fix: step 17's game camera is "lower and closer, like a friend filming", and from there the legs stand above the board on screen. The six-pose check moves to step 17, as a requirement on each of its angles and the replay's. The lab keeps its rider view, where the legs can still cover part of the board at the peak; its Legs switch and its Detail camera remain.
+
+**Draw calls.** None added to the worst case (the ledger has always counted the legs on). By default there is one more call on Medium and two on High (the legs and the shanks' shadow), since they are now shown.
+
+**Downloads.** The loading pictures (ADR-56) now show the legs, as the High welcome screen does. At WebP quality 0.8 they grew from 27 to 36.5 KB, past their download budget. They are now encoded at 0.6 (`STILL.quality`): 26.4 and 26.5 KB, with no visible difference at the stage's size. No limit was raised.
+
+**Tests.** `store.test.ts`: the default on each level, a saved choice winning, and legs nobody chose following the level by hand and by the step-down. `ui.test.tsx`: the switch starts pressed above Low. `legs.test.ts`: the cuff (sock only below its edge, wider than the trouser above) and the cloth (a seamless map of unit normals, on the material, UVs in metres).

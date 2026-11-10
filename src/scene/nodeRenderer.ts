@@ -4,12 +4,12 @@
 // PMREMGenerator cannot run on it, and the range fog (ADR-55). Where the
 // browser has no WebGPU the renderer runs on its own WebGL2 backend, with the
 // same materials.
-import { Color, type Object3D, type Texture } from 'three';
+import { Color, Vector2, type Object3D, type Texture } from 'three';
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu';
 import { abs, attribute, float, Fn, fog, If, length, max, mix, positionView, positionWorld, screenCoordinate, select, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
 import { ART, type QUALITY } from './artDirection';
 import { setNodeFog } from './rangeFog';
-import { setNodeMaterials, uniforms } from './resources';
+import { legsCloth, setNodeMaterials, uniforms } from './resources';
 
 // The effects ride in this chunk (ADR-51).
 export { createEffects, type Effects } from './effects';
@@ -82,7 +82,9 @@ export function legsNodeMaterial() {
   const lo = q.mod(2);
   const hi = q.div(2).floor();
   const b2 = (v: typeof q) => abs(v.x.sub(v.y)).mul(2).add(v.y);
-  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: LG.roughness });
+  const s = LG.cloth.strength;
+  // The twill cloth (ADR-70), the same texture and strength as the GLSL material.
+  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: LG.roughness, normalMap: legsCloth, normalScale: new Vector2(s, s) });
   m.alphaTestNode = b2(lo).mul(4).add(b2(hi)).add(0.5).div(16);
   m.maskShadowNode = attribute('aCast', 'float').greaterThan(0.5);
   m.name = 'legs (TSL)';

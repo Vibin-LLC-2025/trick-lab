@@ -554,20 +554,21 @@ describe('motion blur switch', () => {
 describe('legs', () => {
   const button = () => screen.getByRole('button', { name: 'Show legs' });
 
-  it('is off by default (ADR-48), shows and hides the legs in the description, persisted and announced, never logged', async () => {
+  it('is on by default above Low (ADR-70), hides and shows the legs in the description, persisted and announced, never logged', async () => {
     const user = await setup();
-    expect(button()).toHaveAttribute('aria-pressed', 'false');
-    expect(button()).toHaveTextContent('Legs');
-    expect(description()).not.toHaveTextContent('Legs crouched');
-    await user.click(button());
+    expect(useTrickStore.getState().quality).not.toBe('low');
     expect(button()).toHaveAttribute('aria-pressed', 'true');
-    expect(useTrickStore.getState().legsVisible).toBe(true);
-    expect(localStorage.getItem('trick-lab.legs')).toBe('on');
-    expect(announcer()).toHaveTextContent('Legs shown.');
+    expect(button()).toHaveTextContent('Legs');
     expect(description()).toHaveTextContent('Legs crouched, knees bent, ready to pop.');
     await user.click(button());
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(useTrickStore.getState().legsVisible).toBe(false);
     expect(localStorage.getItem('trick-lab.legs')).toBe('off');
     expect(announcer()).toHaveTextContent('Legs hidden.');
+    expect(description()).not.toHaveTextContent('Legs crouched');
+    await user.click(button());
+    expect(localStorage.getItem('trick-lab.legs')).toBe('on');
+    expect(announcer()).toHaveTextContent('Legs shown.');
     expect(useTrickStore.getState().events).toEqual([]);
   });
 
@@ -577,14 +578,13 @@ describe('legs', () => {
     await user.tab();
     expect(button()).toHaveFocus();
     await user.keyboard(' ');
-    expect(button()).toHaveAttribute('aria-pressed', 'true');
-    expect(announcer()).toHaveTextContent('Legs shown.');
+    expect(button()).toHaveAttribute('aria-pressed', 'false');
+    expect(announcer()).toHaveTextContent('Legs hidden.');
     expect(useTrickStore.getState().status).toBe('idle');
   });
 
   it('has no switch while the feet are hidden, and keeps its setting for when they come back', async () => {
     const user = await setup();
-    await user.click(button());
     await user.click(screen.getByRole('button', { name: 'Show feet' }));
     expect(screen.queryByRole('button', { name: 'Show legs' })).toBeNull();
     expect(description()).not.toHaveTextContent('Legs');
@@ -595,7 +595,6 @@ describe('legs', () => {
 
   it('follows the flight in the description: tucked in the air, absorbing the landing', async () => {
     const user = await setup();
-    await user.click(button());
     await user.click(presetButton('Kickflip'));
     act(() => useTrickStore.getState().popTrick());
     act(() => useTrickStore.getState().scrub(0.4));
