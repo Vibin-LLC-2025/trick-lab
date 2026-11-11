@@ -7,7 +7,7 @@
 import { MathUtils } from 'three';
 import { COMPUTER_DELAY_MS, rollMoves, windUp, type TrickState } from '../store';
 import { ART } from './artDirection';
-import { MAX_STALL } from './flightClock';
+import { frameStep } from './flightClock';
 
 const WIND = ART.windUp;
 /** When in its wait the computer's rider starts to sink, seconds. */
@@ -39,7 +39,7 @@ export function noWindUp(): number {
  */
 export function stepWindUp(s: TrickState, delta: number): number {
   const want = windUp(s);
-  const dt = Math.min(Math.max(0, delta), MAX_STALL);
+  const dt = frameStep(delta);
   wind.wait = want === 'wait' ? wind.wait + dt : 0;
   const target = want === 'ride' || (want === 'wait' && wind.wait < SINK_AT && !s.reducedMotion) ? 0 : 1;
   if (s.flight) wind.w = 1;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTrickStore, GAME_PACE } from '../store';
 import { DEFAULT_SLOW } from '../store/speed';
-import { COMMIT_EVERY, MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
+import { CHECK_STEP, checkStep, COMMIT_EVERY, frameStep, MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 
 /**
  * A real store and FlightDriver's clock without WebGL: the same subscription
@@ -252,5 +252,26 @@ describe('flight clock: frame timing (ADR-3)', () => {
     const p = r.frames(3, HZ60);
     expect(r.frame(2)).toBeCloseTo(p + (MAX_STALL * 0.25) / airtime, 9);
     expect(r.s().status).toBe('playing');
+  });
+});
+
+describe("the browser checks' steady step (ADR-87)", () => {
+  it('is read only with debug, and only a step from above 0 to 1 s', () => {
+    expect(checkStep('?debug&step=0.2')).toBe(0.2);
+    expect(checkStep('?step=0.2')).toBe(0);
+    expect(checkStep('?debug')).toBe(0);
+    for (const bad of ['0', '-0.1', '1.5', 'fast', '']) expect(checkStep(`?debug&step=${bad}`), bad).toBe(0);
+    expect(checkStep('?debug&step=1')).toBe(1);
+  });
+
+  it('is off in a real visit: a frame moves the clocks on by the real delta, capped at MAX_STALL', () => {
+    expect(CHECK_STEP).toBe(0);
+    expect(frameStep(HZ60)).toBe(HZ60);
+    expect(frameStep(2)).toBe(MAX_STALL);
+    expect(frameStep(-1)).toBe(0);
+  });
+
+  it('with a step, every frame moves the clocks on by exactly the step, however long it took', () => {
+    for (const delta of [0, HZ60, 0.1, 0.9, 5]) expect(frameStep(delta, 0.2)).toBe(0.2);
   });
 });
