@@ -10,7 +10,7 @@ import type { TrickState } from './types';
 
 export { GAME_PACE, playRate, SPEEDS, speedIndex, speedLabel, speedText } from './speed';
 export { animates } from './playback';
-export { effectiveQuality } from './quality';
+export { effectiveQuality, riderShown } from './quality';
 export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
 export { noticeUp, type SkateNotice } from './notice';

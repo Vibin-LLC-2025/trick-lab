@@ -69,13 +69,22 @@ function sweep(check: (b: BodyPose, before: BodyPose | null, inputs: TrickInputs
   }
 }
 
-const orthonormal = (f: BoneFrame) => {
-  for (const ax of [f.x, f.y, f.z]) expect(Math.hypot(ax.x, ax.y, ax.z)).toBeCloseTo(1, 9);
-  expect(dot(f.x, f.y)).toBeCloseTo(0, 9);
-  expect(dot(f.y, f.z)).toBeCloseTo(0, 9);
-  // Right-handed: X x Y = Z.
-  expect(f.x.y * f.y.z - f.x.z * f.y.y).toBeCloseTo(f.z.x, 9);
-  expect(f.x.z * f.y.x - f.x.x * f.y.z).toBeCloseTo(f.z.y, 9);
+/**
+ * How far a frame is from orthonormal and right-handed: the largest error of
+ * the axes' lengths, their dot products and X x Y - Z. A number, not
+ * expects, so a sweep of a million frames stays fast; the test asserts it once.
+ */
+const frameError = (f: BoneFrame) => {
+  const { x, y, z } = f;
+  return Math.max(
+    ...[x, y, z].map((ax) => Math.abs(Math.hypot(ax.x, ax.y, ax.z) - 1)),
+    Math.abs(dot(x, y)),
+    Math.abs(dot(y, z)),
+    Math.abs(dot(x, z)),
+    Math.abs(x.y * y.z - x.z * y.y - z.x),
+    Math.abs(x.z * y.x - x.x * y.z - z.y),
+    Math.abs(x.x * y.y - x.y * y.x - z.z),
+  );
 };
 
 /** The quaternion turns +Y onto the frame's Y axis (three's rotation of a vector by a unit quaternion). */
@@ -102,7 +111,7 @@ describe('the rig (ADR-85)', () => {
     for (let i = 0; i < RIDER_BONES.length; i++) {
       const f = b.bones[i]!;
       const m = b.bones[MIRROR_BONE[i]!]!;
-      orthonormal(f);
+      expect(frameError(f)).toBeLessThan(1e-9);
       expect(f.o.x).toBeCloseTo(-m.o.x, 9);
       expect(f.o.y).toBeCloseTo(m.o.y, 9);
       expect(f.y.x).toBeCloseTo(-m.y.x, 9);
@@ -114,14 +123,19 @@ describe('the rig (ADR-85)', () => {
 
 describe('the pose over the whole input range (ADR-85)', () => {
   it('is finite, its frames orthonormal and right-handed, the quaternion the frame', () => {
+    let finite = true;
+    let frame = 0;
+    let quat = 0;
     sweep((b) => {
       for (const f of b.bones) {
-        for (const n of [f.o.x, f.o.y, f.o.z, f.q.x, f.q.y, f.q.z, f.q.w]) expect(Number.isFinite(n)).toBe(true);
-        orthonormal(f);
-        const y = quatY(f);
-        expect(dist(y, f.y)).toBeLessThan(1e-9);
+        finite &&= [f.o.x, f.o.y, f.o.z, f.q.x, f.q.y, f.q.z, f.q.w].every(Number.isFinite);
+        frame = Math.max(frame, frameError(f));
+        quat = Math.max(quat, dist(quatY(f), f.y));
       }
     });
+    expect(finite).toBe(true);
+    expect(frame).toBeLessThan(1e-9);
+    expect(quat).toBeLessThan(1e-9);
   });
 
   it('is continuous: no upper-body joint moves more than 3 cm about the pelvis or turns more than 4 degrees in half a percent of the flight', () => {

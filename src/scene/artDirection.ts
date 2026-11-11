@@ -235,10 +235,27 @@ export const ART = {
      * Below 1 m: the board's spin circle (|z| to 0.42) and the soles, which
      * reach |x| 0.595 at the highest pops. Above: only the knees, |x| to
      * 0.354 and z from -0.388 to -0.075 (the rider faces -Z), up to 1.343 m.
+     * The fit wherever the legs show (the lab, Low).
      */
     casters: [
       { min: v(-0.6, 0, -0.43), max: v(0.6, 1.0, 0.43) },
       { min: v(-0.37, 1.0, -0.4), max: v(0.37, 1.36, 0) },
+    ],
+    /**
+     * The fit wherever the whole rider shows (ADR-85, 2026-11-11, store
+     * riderShown): the board and soles as above, and the body, swept in
+     * cameraFit.test.ts over every preset at three pops and the timing bar's
+     * corners (4.2 rev/s) in both stances, each bone a capsule as thick as the
+     * mesh. Below REST_Y + 0.9 m: |x| to 0.80 (the hands), z from -0.72;
+     * above: |x| to 0.93 (a bail's arms out wide at a 0.6 m pop), z from
+     * -0.77 to 0.40, the beanie up to 2.20 m above the deck. The frustum is
+     * larger than the legs' (1.74 x 3.05 m and 4.28 m deep, a texel of
+     * 1.49 mm where the legs' is 0.87), still one 2048
+     * map: measured in PERF-BUDGET.md.
+     */
+    riderCasters: [
+      { min: v(-0.8, 0, -0.72), max: v(0.8, REST_Y + 0.9, 0.43) },
+      { min: v(-0.94, REST_Y + 0.9, -0.77), max: v(0.94, REST_Y + 2.21, 0.4) },
     ],
     /** Margin around the fitted frustum on each side, metres (covers the PCF kernel). */
     pad: 0.03,
@@ -822,6 +839,24 @@ export const ART = {
    * feet. High's shoe model and Medium's primitive; Low stays as it is.
    */
   computer: { shoe: '#5fd0c5' },
+  /**
+   * The rider (ADR-85, DESIGN.md 8.8): the whole body's colours, one per
+   * region of the mesh (src/asset/riderSpec.ts RIDER_REGIONS, in that order:
+   * hoodie, its ribbed cuffs and hem, the pocket's seam, the drawstrings, the
+   * trousers, the cuff's fold, the sock, the mittens, the skin, the beanie and
+   * its rolled brim, the hair under it), sRGB. Two outfits on one mesh, so whose go it is reads
+   * at a glance from any camera: the player in the deck's burnt orange with
+   * the charcoal twill trousers the legs have worn since ADR-70; the computer
+   * in its deck's teal (Circuit, ADR-71) with sand trousers and a mustard
+   * beanie, and a different skin tone, a different person. `roughness` and
+   * `cloth` (the twill's strength, as ADR-70's) are the material's.
+   */
+  rider: {
+    player: ['#c8562a', '#a8461f', '#7f3315', '#efe9df', '#3b3e44', '#2b2d32', '#2f3035', '#2a2c31', '#c99a7a', '#2d3138', '#24272d', '#3a2a20'],
+    computer: ['#2b8a83', '#226f6a', '#18534f', '#efe9df', '#6b6252', '#524b3f', '#2f3035', '#2a2c31', '#8a5d43', '#d9a63a', '#b88a2a', '#1b1716'],
+    roughness: 0.9,
+    cloth: 0.55,
+  },
   /**
    * The instant replay (step 17, ADR-72): after the student's made set or
    * copy, the flight once more at `rate` of its own speed from the replay

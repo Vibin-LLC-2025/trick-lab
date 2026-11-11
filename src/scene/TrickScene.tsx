@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore, type Theme } from '../store';
+import { landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { GuideArrows } from './GuideArrows';
@@ -26,7 +26,8 @@ import { skyDomeGeometry } from './skyDome';
 // before the model chunk does (ADR-48). Not earlier: a download beside the 3D
 // code delays the first frame by sharing the bandwidth (measured 2026-11-09).
 const start = useTrickStore.getState();
-prefetchModels(modelsFor(start.quality, start.feetVisible));
+// The rider (ADR-85) too while the Rider switch is on, whichever screen is first: the game will want it.
+prefetchModels(modelsFor(start.quality, start.feetVisible, start.legsVisible));
 // Fog by distance on WebGLRenderer (ADR-55), before any program compiles.
 rangeFogOnWebGL();
 
@@ -47,6 +48,8 @@ function InvalidateOnStoreChange() {
  * moves, so this is a constant.
  */
 const SHADOW_CAMERA = shadowFrustum(ART.lights.directional.position, ART.lights.directional.target, ART.shadowMap.casters, ART.shadowMap.pad);
+/** The same fit round the whole rider (ADR-85), while it shows (riderShown): the lab's stays the legs'. */
+const RIDER_SHADOW_CAMERA = shadowFrustum(ART.lights.directional.position, ART.lights.directional.target, ART.shadowMap.riderCasters, ART.shadowMap.pad);
 
 /**
  * The sky dome (ADR-52): one draw call, drawn first (renderOrder), never
@@ -62,8 +65,11 @@ function Sky({ theme }: { theme: Theme }) {
 function Lights({ shadows, theme }: { shadows: boolean; theme: Theme }) {
   const L = ART.lights;
   const S = ART.shadowMap;
-  const F = SHADOW_CAMERA;
+  const rider = useTrickStore(riderShown);
+  const F = rider ? RIDER_SHADOW_CAMERA : SHADOW_CAMERA;
   const [sun, setSun] = useState<DirectionalLight | null>(null);
+  // A new fit takes effect once the shadow camera's projection is rebuilt.
+  useEffect(() => sun?.shadow.camera.updateProjectionMatrix(), [sun, F]);
   return (
     <>
       {/* Sky from above, concrete from below (ADR-31; was an ambient light). */}
@@ -194,7 +200,9 @@ function StageReady({ revealed }: { revealed: boolean }) {
   const ready = useTrickStore((s) => s.stageReady);
   const tier = useTrickStore(sceneTier);
   const feet = useTrickStore((s) => s.feetVisible);
-  const urls = useMemo(() => modelsFor(tier, feet), [tier, feet]);
+  // The rider when it is on screen (ADR-85): the lab never shows it, so it never waits for it.
+  const rider = useTrickStore(riderShown);
+  const urls = useMemo(() => modelsFor(tier, feet, rider), [tier, feet, rider]);
 
   useEffect(() => {
     if (ready || !revealed) return;

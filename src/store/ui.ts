@@ -16,7 +16,7 @@ export const QUALITY_STEP_KEY = 'trick-lab.quality-step';
 /** The pre-tier setting (ADR-15); read once so an earlier "Low" choice survives the upgrade. */
 export const LEGACY_DETAIL_KEY = 'trick-lab.board-detail';
 export const FEET_KEY = 'trick-lab.feet';
-/** The rider's legs (ADR-37). */
+/** The rider (ADR-37 the legs, ADR-85 the whole body): the key keeps its old name so a saved choice stays. */
 export const LEGS_KEY = 'trick-lab.legs';
 /** Foot trails (the identifier still says paths; see types.ts). */
 export const PATHS_KEY = 'trick-lab.foot-trails';
@@ -300,7 +300,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       const legsVisible = !get().legsVisible;
       save(LEGS_KEY, legsVisible ? 'on' : 'off');
       set({ legsVisible });
-      get().announce(legsVisible ? 'Legs shown.' : 'Legs hidden.');
+      get().announce(legsVisible ? 'Rider shown.' : 'Rider hidden.');
     },
 
     toggleFootPaths: () => {
