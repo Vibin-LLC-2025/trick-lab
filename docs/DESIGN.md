@@ -529,6 +529,8 @@ Flat arrows on the grip that show how each shoe will move against the deck for t
 
 Numbers (`ART.motionCues`): ribbon 14 mm wide, arrowhead 42 mm long and 44 mm wide, press outline 9 mm wide, 32 points per arrow, opacity 0.95, unlit and not tone mapped (so the colours match the trails and the Foot motion legend), no depth write, polygon offset toward the camera. One draw call for all of it.
 
+Where: the lab only (and never the welcome screen's preview). Since ADR-84 (2026-11-11) they never show on the game screen, where the landing zones and the forecast (11.6) are the one guide; the switch stays in the lab's View panel.
+
 Fade: full before the pop; with a trick in the air they fade out over the first 12 percent of the airtime and stay hidden through the landing (the deck has turned by then, so an arrow riding it would point the wrong way). Scrubbing back to the start or Reset brings them back. With the goofy rider seen from the heel side the blue arrow is on the right and its flick bends toward the viewer; for regular (8.6) the cues mirror with the feet, blue on the left, still bending toward the viewer, and the scoop still sweeps toward the viewer.
 
 Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no new geometry. A heelflip's front arrow bends away from the camera, off the toe-side corner of the nose; a frontside scoop's arc sweeps toward the toe side, still on the nose side of the back shoe so the shoe does not hide it, by the same length as the backside one (9 cm for the frontside shove-it preset). A kickflip with a frontside scoop (the hardflip until ADR-41) shows the kickflip front arrow with the frontside arc.
@@ -722,7 +724,7 @@ Over 960 px wide the game screen is the top bar over one stage, and `main.app__p
 - **Order.** The DOM order is the letters, the turn card, the tray, the last trick: Tab goes top right, top left, then the bottom, then back up to the last trick, which has no control.
 
 - **Touch (2026-11-10, ADR-76).** Where the main pointer is a finger (`@media (pointer: coarse)`), `--control-h` is 44 px (28 for a mouse), `--control-h-lg` 48 (36), a slider's hit area 44 (24) and its thumb 24 (16); a segmented option is 40 px tall, a preset and the trick picker 44. Nothing else changes with the pointer.
-- **Dust (2026-11-10, ADR-74).** In a game on Medium and High, a landing kicks up small pale puffs at the wheels (`ART.dust`: `#d6d0c4`, at most 0.3 opaque at a puff's centre, soft to nothing at its edge), left behind as the board rolls on, and a bailed board trails a few as it slides. No control of its own: it shows with the Motion cues switch on, and never under reduced motion. Nothing is announced: it is decoration, and the landing's own words say what happened.
+- **Dust (2026-11-10, ADR-74).** In a game on Medium and High, a landing kicks up small pale puffs at the wheels (`ART.dust`: `#d6d0c4`, at most 0.3 opaque at a puff's centre, soft to nothing at its edge), left behind as the board rolls on, and a bailed board trails a few as it slides. No control of its own: it shows with the Motion cues switch on (the lab's View panel; the cues themselves never show in a game since ADR-84), and never under reduced motion. Nothing is announced: it is decoration, and the landing's own words say what happened.
 - **The game's camera and the instant replay (2026-11-10, ADR-72; free camera ADR-81).** In a game the letters card ends with a `.segmented` radio group, legend "Camera": Free (the default since ADR-81), Filmer, Side, Above, saved under `trick-lab.game-view`. With Free chosen, a `.segmented__hint.skate__camera-free` row under the options says "Drag the view to turn it; scroll or pinch to zoom." (the group's description) with a `.btn--ghost.btn--sm` "Reset view" at the end of the line. The free camera starts at `ART.camera.views.free` (18 degrees up, 30 round toward the nose) and turns 75 degrees either way from the heel side, between 9 and 72 degrees above the horizon (`ART.camera.free`). Under the two switches is a third, "Instant replay" (on by default, hidden under reduced motion). While a replay plays, Pop reads "Skip replay" (Space or Escape); no other control changes. The angles' numbers are `ART.camera.views` (film, side, above, replay) and the replay's `ART.replay` (rate 0.3, bend 0.28); the replay's field of view is 60 degrees.
 
 ### 11.3 The first game's walk-through (`.lesson`, 2026-11-09, ADR-66)
@@ -751,20 +753,9 @@ At a game's start, and after each go once it has come to rest, a notice covers t
 - **Short stages** (container queries on the stage). At most 420 px tall: 8 px round the panel, 12 by 16 px inside it, a 56 px coin, 15 px news. At most 300 px (a phone held upright, where the stage is about 190 px): the kicker and the coin go, the panel's padding is 8 by 12 px with a 4 px top edge, and the trick is 18 px; the words still say who sets first. The panel is never taller than the stage (`100cqh` less its padding) and scrolls inside itself if it must. Checked 2026-11-10 at 360 x 780, 390 x 844, 768 x 1024 and 1440 x 900.
 - **Between turns.** Continue clears the stage, and `.stage-wipe` (the stage's `--scene-bg`, absolute over it, no pointer events) fades from opaque to nothing over `--dur-slow` on the fresh scene. Not shown under reduced motion.
 
-### 11.5 The slider guides (`.field__swatch`, 2026-11-10, ADR-82)
+### 11.5 The slider guides (removed 2026-11-11, ADR-84)
 
-On the player's turn in a game, before the pop, three arrows stand round the board in the 3D view and show what each slider will do. Medium and High only (Low gets no new features, ADR-62). They follow the sliders as they move, and go when the board pops; after Continue (11.4) the next turn's come back.
-
-| Slider | Arrow | Colour (token) |
-| --- | --- | --- |
-| Pop | straight up past the tail, from the deck's height at rest to its height at the top of the jump: as long as the pop | `#e69f00` orange (`--guide-pop`) |
-| Flick | an arc round the board's long axis past the nose, from the top, turning the way the grip rolls (to the heel side for a kickflip, the toe side for a heelflip); the faster the flick, the further round | `#cc79a7` reddish purple (`--guide-flick`) |
-| Scoop | an arc on the ground round the board (0.49 m out, just past the nose and tail), from the tail, the way the tail swings (to the heel side for backside, the toe side for frontside) | `#009e73` bluish green (`--guide-scoop`) |
-
-- **Shape.** Tubes 11 mm in radius with a cone head (60 mm long, 28 mm in radius). An arc sweeps 110 degrees per rev/s, at least 24 and at most 330. A flick or scoop under 0.05 rev/s has no arrow. Numbers in `ART.guides`.
-- **Look.** Unlit and not tone mapped, so each matches its swatch exactly; solid, so the board and the rider hide them where they pass behind. The colours are Okabe-Ito, apart from the foot trails' blue and yellow and the motion cues on the grip.
-- **Swatches.** While the arrows show, each slider's label starts with a 14 x 6 px pill of its arrow's colour (`.field__swatch--pop`, `--flick`, `--scoop`), decorative: the name and the value say what the slider is.
-- **Words.** Nothing new is announced: the sliders' value text already says the direction and the rate, and the trick guide what to aim for.
+The three arrows round the board (ADR-82), their colours (`--guide-pop`, `--guide-flick`, `--guide-scoop`) and the swatches before the sliders' names (`.field__swatch*`) are gone. One guide replaces five: the landing zones and the forecast (11.6), with the timing bar over the stage (11.1). The motion cues on the grip (8.7) never show on the game screen.
 
 ### 11.6 The landing zones and the forecast (`.field__zone`, `.field__forecast`, 2026-11-11, ADR-83)
 

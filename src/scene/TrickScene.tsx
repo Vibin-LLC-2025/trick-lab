@@ -4,7 +4,6 @@ import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
 import { landingMoves, previewAnimates, replayMoves, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
-import { GuideArrows } from './GuideArrows';
 import { FlightDriver } from './FlightDriver';
 import { allShown, noteRenderer, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted } from './modelCache';
 import { modelsFor, modelsUnusedBy } from './modelUrls';
@@ -252,8 +251,6 @@ function Stage({ shadows }: { shadows: boolean }) {
         <Pad shadows={shadows} />
         <Spot receiveShadow={shadows} />
         <FlightDriver shadows={shadows} />
-        {/* What the sliders will do, round the board at rest on the player's turn (ADR-82). */}
-        <GuideArrows />
       </SceneEnvironment>
       <StageReady revealed={revealed} />
     </>

@@ -132,6 +132,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const dustPrimed = useRef<Mesh | null>(null);
   const dusty = useTrickStore(dustShown);
   const home = useTrickStore((s) => s.screen === 'home');
+  // The motion cues are the lab's (ADR-26): never on the game screen (ADR-84), nor the welcome screen's preview.
+  const lab = useTrickStore((s) => s.screen === 'lab');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
@@ -351,7 +353,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={boardOuter}>
         <group ref={boardInner}>
           <Board ref={board} shadows={shadows}>
-            {motionCuesVisible && !home && <MotionCues />}
+            {motionCuesVisible && lab && <MotionCues />}
           </Board>
         </group>
       </group>

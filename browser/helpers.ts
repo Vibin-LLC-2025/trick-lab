@@ -16,11 +16,11 @@ export const HASH: Record<Screen, string> = { home: '', lab: '#/lab', skate: '#/
  * on Low, ADR-62) and the expected worst case per tier with every switch on
  * (PLAN-PLAY-POLISH-REACH, "Performance targets"). The expected number moves
  * only with a step that adds or removes a draw, in that step's commit. The
- * slider guides (ADR-82) added one on High and Medium: the player's turn at
- * rest, with the feet, legs, trails and cues, is now the worst case there.
+ * slider guides (ADR-82) added one on High and Medium; ADR-84 removed them
+ * again (measured 2026-11-11), and keeps the motion cues off the game screen.
  */
 export const GATE: Record<Tier, number> = { high: 60, medium: 40, low: 20 };
-export const LEDGER: Record<Tier, number> = { high: 37, medium: 22, low: 12 };
+export const LEDGER: Record<Tier, number> = { high: 36, medium: 21, low: 12 };
 
 /** The R3F root, PerfProbe's numbers and the store, as the checks read them. */
 interface Debug {

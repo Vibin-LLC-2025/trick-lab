@@ -57,10 +57,6 @@
   /* Foot path colours, the same in both themes; must equal ART.footPaths.color (tested). */
   --path-front: #56b4e9;
   --path-back: #f0e442;
-  /* The slider guides' colours (ADR-82), the same in both themes; must equal ART.guides.color (tested). */
-  --guide-pop: #e69f00;
-  --guide-flick: #cc79a7;
-  --guide-scoop: #009e73;
 
   /* Type: the system stack for all text; the display face (Bungee, above)
      for headlines, the SKATE letters and the celebration only (ADR-57).

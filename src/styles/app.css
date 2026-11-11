@@ -932,30 +932,6 @@ a {
   color: var(--color-text);
 }
 
-/* The slider's guide colour (ADR-82, DESIGN.md 11.5): a short bar before the
-   name while the arrows round the board show, so each slider reads as its
-   arrow. Decorative: the name and the value say what the slider is. */
-.field__swatch {
-  display: inline-block;
-  width: 14px;
-  height: 6px;
-  margin-right: var(--space-1);
-  border-radius: var(--radius-pill);
-  vertical-align: middle;
-}
-
-.field__swatch--pop {
-  background: var(--guide-pop);
-}
-
-.field__swatch--flick {
-  background: var(--guide-flick);
-}
-
-.field__swatch--scoop {
-  background: var(--guide-scoop);
-}
-
 .field__value {
   grid-area: value;
   font-family: var(--font-mono);

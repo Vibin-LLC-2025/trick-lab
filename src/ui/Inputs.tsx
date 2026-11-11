@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { displayUnit, displayValue, INPUT_NAMES, valueText } from '../sim/format';
 import { INPUT_LIMITS, type InputKey } from '../sim/tricks';
 import { ZONE_WORDS, type Span, type ZoneKey } from '../sim/zones';
-import { guidesShown, sliderForecast, sliderPlace, sliderZones, useTrickStore } from '../store';
+import { sliderForecast, sliderPlace, sliderZones, useTrickStore } from '../store';
 
 const KEYS: InputKey[] = ['pop', 'flick', 'scoop'];
 
@@ -45,15 +45,12 @@ function Field({ k }: { k: InputKey }) {
   // In a game: where the value sits against the trick's landing zone, and the forecast it is described by (ADR-83).
   const place = useTrickStore((s) => (k === 'pop' ? null : sliderPlace(s, k)));
   const forecast = useTrickStore((s) => sliderForecast(s) !== null);
-  // The slider's arrow round the board is this colour while the guides show (ADR-82).
-  const guide = useTrickStore(guidesShown);
   const { min, max, step } = INPUT_LIMITS[k];
   const id = `input-${k}`;
 
   return (
     <div className="field">
       <label className="field__label" htmlFor={id}>
-        {guide && <span className={`field__swatch field__swatch--${k}`} aria-hidden="true" />}
         {INPUT_NAMES[k]}
         <span className="visually-hidden">, {HELP[k].toLowerCase()}</span>
       </label>

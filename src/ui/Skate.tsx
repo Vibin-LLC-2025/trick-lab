@@ -614,7 +614,7 @@ function GameOver() {
  * 11.2): between games, how to play and Start, where the turn card will be; in a game, only
  * what the game needs, as a heads-up display: the turn card, both players'
  * letters, the last trick, and along the bottom the tray with the sliders,
- * Pop and its timing bar (ADR-65); at the end, who won. On a narrow screen
+ * Pop (the timing bar is over the stage, ADR-83); at the end, who won. On a narrow screen
  * the same panels stack under the stage. The computer's go comes on its own
  * unless switched off.
  */

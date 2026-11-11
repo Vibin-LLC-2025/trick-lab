@@ -736,37 +736,6 @@ export const ART = {
     still: { trick: 0, progress: 0.45 },
   },
   /**
-   * The slider guides (ADR-82, DESIGN.md 11.5): three arrows round the board
-   * at rest, on the player's turn in a game, that show what each slider will
-   * do. Pop: a straight arrow up past the tail, where the back foot pops,
-   * from the deck's height at rest to its height at the top of the jump, so
-   * it is exactly as long as the pop. Flick: an arc round
-   * the board's long axis past the nose, turning the way the grip will roll.
-   * Scoop: an arc on the ground round the board, starting at the tail and
-   * going the way the tail will swing. An arc's sweep grows with the rate,
-   * `perRev` degrees per rev/s, from `min` to `max`. Unlit and not tone
-   * mapped, so they match the swatches by the sliders: Okabe-Ito orange,
-   * reddish purple and bluish green, apart from the foot trails' blue and
-   * yellow; each must equal its `--guide-*` token (tested). Sizes in metres.
-   */
-  guides: {
-    color: { pop: '#e69f00', flick: '#cc79a7', scoop: '#009e73' },
-    /** The shaft's radius, and the head's length and radius. */
-    radius: 0.011,
-    head: { length: 0.06, radius: 0.028 },
-    radialSegments: 10,
-    tubularSegments: 48,
-    /** Pop's arrow: `gap` past the tail, on the board's centre line. */
-    pop: { gap: 0.15 },
-    /** Flick's arc: centred `gap` past the nose, `lift` above the rest height, `radius` round. */
-    flick: { gap: 0.13, lift: 0.11, radius: 0.12 },
-    /** Scoop's arc: on the ground (`y`), `radius` round the board's centre, just outside the nose and tail. */
-    scoop: { radius: 0.49, y: 0.014 },
-    sweep: { perRev: 110, min: 24, max: 330 },
-    /** Below this rate a flick or a scoop has no arrow: there is nothing to turn. */
-    none: 0.05,
-  },
-  /**
    * Motion cues (DESIGN.md 8.7, ADR-26): flat arrows on the grip that show
    * how each shoe will move against the deck for the current inputs. Same
    * colours as the foot trails, so the Foot motion legend matches both.

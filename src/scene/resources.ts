@@ -733,11 +733,6 @@ export const mat = {
   // Pulled toward the camera in depth so they never z-fight the grip; no depth
   // writes, so the shoes and the board still hide them. FlightDriver mutates
   // the opacity to fade them in flight; never swapped.
-  // The slider guides (guideArrowGeometry.ts, ADR-82): solid tubes, a vertex
-  // colour per arrow, unlit and not tone mapped so they match the swatches by
-  // the sliders. Opaque: they hide what is behind them and are hidden by the
-  // board and the rider like any solid thing. Never swapped.
-  guides: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
   motionCues: new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
