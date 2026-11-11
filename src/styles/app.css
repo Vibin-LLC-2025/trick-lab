@@ -281,11 +281,6 @@ a {
     align-self: end;
   }
 
-  /* Room for the landing zone under every track, shown or not, so the card's height never changes with the turn. */
-  .hud__inputs .field__track {
-    padding-bottom: 8px;
-  }
-
   .app[data-screen="skate"] .turn-chip {
     display: none;
   }
@@ -972,19 +967,18 @@ a {
      <input class="field__range" ...></div>
    The component sets only where each stretch starts and ends along the
    slider, 0 to 1; the thumb's centre runs from half a thumb in from each end,
-   so the strip is laid on that run and a stop inside it puts the thumb's
-   centre over it. A strip just under the track, clear of the thumb, so the
-   thumb never hides it: the landing zone is the landed green's tint inside a
-   green outline, the clean part solid green; each at least 6 px wide, so a
-   clean stretch one stop wide still shows. Decorative: the slider's spoken
-   value says "in the landing zone" or "clean". */
+   so the band is laid on that run and a stop inside it puts the thumb's
+   centre over it. A band on the track itself (ADR-86), behind the thumb and
+   taller than it, so the thumb never hides it and sits inside it when the
+   stop lands: the landing zone is the landed green's tint inside a 2 px green
+   outline, the clean part a solid green bar inside that; the zone at least
+   20 px wide and 12 px taller than the thumb, the clean part at least 10 px,
+   so a stretch one stop wide still shows round the thumb. Until ADR-86 it was a 7 px strip under the track
+   that the thumb mostly covered. Decorative: the slider's spoken value says
+   "in the landing zone" or "clean". */
 .field__track {
   grid-area: range;
   position: relative;
-}
-
-.field__track:has(.field__zone) {
-  padding-bottom: 8px;
 }
 
 /* Over the zone. */
@@ -994,19 +988,23 @@ a {
 
 .field__zone {
   --zone-run: calc(100% - var(--range-thumb));
-  --zone-w: max(6px, calc(var(--zone-run) * (var(--zone-to) - var(--zone-from))));
+  --zone-min: 20px;
+  --zone-h: calc(var(--range-thumb) + 12px);
+  --zone-w: max(var(--zone-min), calc(var(--zone-run) * (var(--zone-to) - var(--zone-from))));
   position: absolute;
-  top: calc(var(--range-hit) / 2 + var(--range-thumb) / 2 + 1px);
+  top: calc(var(--range-hit) / 2 - var(--zone-h) / 2);
   left: calc(var(--range-thumb) / 2 + var(--zone-run) * (var(--zone-from) + var(--zone-to)) / 2 - var(--zone-w) / 2);
   width: var(--zone-w);
-  height: 7px;
-  border-radius: 2px;
+  height: var(--zone-h);
+  border-radius: var(--radius-sm);
   background: var(--color-ok-bg);
-  box-shadow: inset 0 0 0 1px var(--color-ok);
+  box-shadow: inset 0 0 0 2px var(--color-ok);
   pointer-events: none;
 }
 
 .field__zone--clean {
+  --zone-min: 10px;
+  --zone-h: var(--range-thumb);
   background: var(--color-ok);
   box-shadow: none;
 }

@@ -46,6 +46,10 @@ interface Store {
   /** The game (a game's landing, ADR-68). */
   skate: { first: 'you' | 'computer' | null; phase: string };
   startSkate: () => void;
+  quitSkate: () => void;
+  /** The game's camera (ADR-72) and the clear part of the stage it frames in (ADR-86). */
+  setGameView: (v: 'free' | 'film' | 'side' | 'above') => void;
+  stageClear: { left: number; top: number; right: number; bottom: number } | null;
   /** The notice over the stage (ADR-80): the coin flip, or a go's result, waiting for Continue. */
   skateNotice: { kind: string } | null;
   continueSkate: () => void;
