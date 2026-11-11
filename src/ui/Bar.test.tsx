@@ -200,6 +200,12 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     // In the air the dimmed button says so (ADR-86), still the same element.
     expect(button('In the air')).toBe(pop);
     expect(pop).toHaveAttribute('aria-disabled', 'true');
+    // Paused in the air it still says so; a press then only says to resume.
+    act(() => state().togglePause());
+    expect(button('In the air')).toBe(pop);
+    fireEvent.click(pop);
+    expect(announcer()).toHaveTextContent('This trick has not landed yet. Press Resume to finish it.');
+    act(() => state().togglePause());
     landNow();
     expect(announcer()).toHaveTextContent(/^Early: 60 percent less spin than you set\. .*not landed/);
     // A missed set: no letter.

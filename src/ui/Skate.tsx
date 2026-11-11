@@ -419,8 +419,8 @@ function Controls() {
   const running = useTrickStore((s) => s.pendingPop !== null);
   // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
   const replaying = useTrickStore(replayMoves);
-  // While a board is in the air the button says so (ADR-86): dimmed, it has nothing to start.
-  const label = replaying ? 'Skip replay' : status === 'playing' ? 'In the air' : cpu ? "Computer's go" : mine ? (running ? 'Pop!' : 'Get ready') : 'Pop';
+  // While a board is in the air the button says so (ADR-86): dimmed while it flies, and paused it only says to resume.
+  const label = replaying ? 'Skip replay' : status === 'playing' || status === 'paused' ? 'In the air' : cpu ? "Computer's go" : mine ? (running ? 'Pop!' : 'Get ready') : 'Pop';
   return (
     // On a wide screen its three parts are cards of the HUD (ADR-86): the sliders bottom left, the bar's strip along the
     // bottom between the cards, Pop bottom right. Each says which side of the stage it covers, so the camera frames clear of it.
