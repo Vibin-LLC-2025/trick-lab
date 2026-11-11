@@ -3,7 +3,7 @@ import { computeFlight } from '../sim/flight';
 import { BOLTS_X, feetPoseAt } from '../sim/feet';
 import { presetById } from '../sim/tricks';
 import { ART } from './artDirection';
-import { buildFootPaths, sampleFootPath } from './footPathGeometry';
+import { buildFootPaths, sampleFootPath, sampleFootPaths } from './footPathGeometry';
 
 const P = ART.footPaths;
 const kickflip = presetById('kickflip').inputs;
@@ -30,6 +30,21 @@ describe('foot paths (DESIGN.md 8.5)', () => {
     expect(front[end]).toBeCloseTo(BOLTS_X, 3);
     const back = sampleFootPath(kickflip, flight, 'back');
     expect(back[back.length - 3]).toBeCloseTo(-BOLTS_X, 3);
+  });
+
+  it('sample both feet in one pass, each point the feet model at its progress', () => {
+    const flight = computeFlight(shove);
+    for (const stance of ['goofy', 'regular'] as const) {
+      const paths = sampleFootPaths(shove, flight, stance, 8);
+      for (let i = 0; i <= 8; i++) {
+        const pose = feetPoseAt(shove, flight, i / 8, stance);
+        for (const foot of ['front', 'back'] as const) {
+          expect(paths[foot][i * 3]).toBe(Math.fround(pose[foot].x));
+          expect(paths[foot][i * 3 + 1]).toBe(Math.fround(pose[foot].y + P.lift));
+          expect(paths[foot][i * 3 + 2]).toBe(Math.fround(pose[foot].z));
+        }
+      }
+    }
   });
 
   it('show the input: a hard flick takes the front foot further off the heel-side edge than a weak one', () => {

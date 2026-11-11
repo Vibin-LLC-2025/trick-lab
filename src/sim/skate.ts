@@ -110,8 +110,6 @@ export const CLEAN_ONLY_NOTE = `Only a clean landing counts on Hard: within ${CL
 
 export const SKATE_LEVEL_ORDER: readonly SkateLevel[] = ['easy', 'normal', 'hard'];
 
-export const isSkateLevel = (v: unknown): v is SkateLevel => v === 'easy' || v === 'normal' || v === 'hard';
-
 const callOf = (id: TrickId): SkateCall => {
   const t = NAMED_TRICKS.find((n) => n.id === id);
   if (!t) throw new Error(`No named trick ${id}`);
@@ -490,14 +488,6 @@ export function trickGuide(t: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickGui
 
 /** The tip under every guide: how pop trades against spin. */
 export const GUIDE_TIP = 'Pop higher and the board stays up longer, so it needs less flick and scoop to turn the same amount.';
-
-/** The guide as one sentence, for announcements: "Kickflip: flick toward kickflip, for one full flip. No scoop." */
-export function guideText(t: SkateCall): string {
-  const g = trickGuide(t);
-  const flick = t.flips === 0 ? 'No flick.' : `Flick ${g.flick.charAt(0).toLowerCase()}${g.flick.slice(1)}`;
-  const scoop = t.halfShoves === 0 ? 'No scoop.' : `Scoop ${g.scoop.charAt(0).toLowerCase()}${g.scoop.slice(1)}`;
-  return `${t.name}: ${flick} ${scoop}`;
-}
 
 /** What to do now, in plain words: the panel's call line and the end of each announcement. */
 export function skateInstruction(g: SkateGame): string {

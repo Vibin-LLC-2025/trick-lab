@@ -158,7 +158,7 @@ Every texture in all four GLBs is now KTX2: Basis Universal ETC1S at quality 255
 | `shoes.glb` | 520.4 KB | **208.9 KB** | shoe-sole 62.3, shoe-upper 56.1 KB | 2.00 MB (was 8.00) |
 | `ground.glb` | 432.7 KB | **143.4 KB** | concrete-color 107.5, concrete-normal 11.1, concrete-roughness 21.4 KB | 3.00 MB (was 12.00) |
 
-The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder: three's own `basis_transcoder.js` and `.wasm`, which `KTX2Loader` names with `new URL(..., import.meta.url)`, so Vite emits them into the build with a content hash (until 2026-11-09 a second copy in `public/basis/`, ADR-49's update). `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
+The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder: three's own `basis_transcoder.js` and `.wasm`, which `KTX2Loader` names with `new URL(..., import.meta.url)`, so Vite emits them into the build with a content hash (until 2026-11-09 a second copy in `public/basis/`, ADR-49's update). `assets:check` adds three rows per file: every texture KTX2 with `KHR_texture_basisu` required, every mip chain complete, and none with zstd supercompression (since 2026-11-11 `vite.config.ts` swaps the zstd decoder that `KTX2Loader` imports for a stub, 17 KB gzipped off the model chunk; a zstd texture would fail to load); the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
 
 ## High finish (2026-11-09, ADR-53)
 

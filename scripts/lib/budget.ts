@@ -20,6 +20,8 @@ export interface TextureStat {
   mimeType: string;
   /** Mip levels stored in the file (1 for a PNG, whose mips the GPU makes). */
   levels: number;
+  /** A KTX2 with zstd supercompression: the app ships no zstd decoder (vite.config.ts). */
+  zstd: boolean;
 }
 
 export interface AssetStats {
@@ -148,6 +150,12 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
       limit: 'all, down to 1 x 1',
       ok: s.textures.every((t) => t.levels === fullMipLevels(t)),
     },
+    {
+      check: 'No zstd (decoder not shipped)',
+      value: `${s.textures.filter((t) => t.zstd).length} of ${s.textures.length}`,
+      limit: 'none',
+      ok: s.textures.every((t) => !t.zstd),
+    },
     { check: 'Texture GPU memory (est.)', value: `${(gpu / 1024 / 1024).toFixed(2)} MB`, limit: 'info, BC7 (KTX2) + mips', ok: true },
     {
       check: 'EXT_meshopt_compression',
@@ -190,6 +198,8 @@ export interface DeckTextureStat {
   levels: number;
   /** The colour transfer function is sRGB, as the GLB's own deck bottom. */
   srgb: boolean;
+  /** zstd supercompression: the app ships no zstd decoder (vite.config.ts). */
+  zstd: boolean;
 }
 
 /**
@@ -205,6 +215,7 @@ export function evaluateDeckTexture(s: DeckTextureStat, level: DetailLevel): Bud
     { check: 'Size', value: `${s.width ?? '?'} x ${s.height ?? '?'}`, limit: `${T.width} x ${T.height}`, ok: s.width === T.width && s.height === T.height },
     { check: 'Mip levels', value: String(s.levels), limit: String(full), ok: s.levels === full },
     { check: 'sRGB', value: s.srgb ? 'yes' : 'no', limit: 'yes', ok: s.srgb },
+    { check: 'No zstd', value: s.zstd ? 'zstd' : 'none', limit: 'none', ok: !s.zstd },
     { check: 'File size', value: kb(s.bytes), limit: `<= ${kb(DECK_BUDGET[level].bytes)}`, ok: s.bytes <= DECK_BUDGET[level].bytes },
   ];
 }

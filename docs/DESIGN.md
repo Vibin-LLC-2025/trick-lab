@@ -606,7 +606,7 @@ Signed rate sliders (2026-11-04, ADR-30): Flick and Scoop run from -3 to 3 rev/s
 
 Added (all in the BRIEF.md contract block): `.panel__head`, `.panel__count`, `.panel__note`, `.btn--sm`, `.view-panel__toggles`, `.telemetry__v--none`.
 Used again: `.toggle` and `.toggle--on` (the View switches), `.view-panel__actions` (the View header actions).
-Removed: `.telemetry__v--good` (no telemetry value is marked good now that the headline says landed) and `.theme-toggle` (never used). `.toggle__state` is still styled and listed in CLAUDE.md, but no component uses it.
+Removed: `.telemetry__v--good` (no telemetry value is marked good now that the headline says landed) and `.theme-toggle` (never used). `.toggle__state`, styled but never used, was removed on 2026-11-11.
 
 Added 2026-11-04 (ADR-30): `.telemetry__dir`, the direction word of a signed total in the results strip, its own line under the number in the field unit's type (12 px sans, normal weight, muted): "365°" over "heelflip", "173°" over "frontside", nothing at 0. The card reads "365 deg heelflip, 173 deg frontside shove, 0.53 s in the air."
 

@@ -9,7 +9,7 @@
 //   eyelet holes, suede nap and wear, the tongue, the collar, the lining,
 //   the insole and the eyelet metal.
 // Same conventions as textures.ts: row 0 is the top of the image (uv v = 0).
-import { TOE_ARC, archPoint, arcToFoot, eyelets, footHalfWidth, openingC, upperFrame, archS } from './shoe';
+import { TOE_ARC, archPoint, eyelets, footHalfWidth, openingC, upperFrame, archS } from './shoe';
 import { SHOE, SHOE_COLORS, SHOE_TEXTURES, SHOE_WEAR, SOLE, SOLE_ATLAS, UPPER, UPPER_ATLAS } from './shoeSpec';
 import { hexToRgb, type GreyPixels, type Pixels } from './textures';
 
@@ -275,5 +275,3 @@ export function solePixels(): Pixels {
   return p;
 }
 
-/** Wall texture u of the lateral forefoot (for tests and the docs): where the foxing scuff sits. */
-export const lateralForefootArc = () => arcToFoot(W.foxing.at[0]);

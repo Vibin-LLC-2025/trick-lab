@@ -1260,20 +1260,6 @@ a {
   transform: translate(10px, -50%);
 }
 
-/* Optional state text after a toggle's label, e.g. a speed. */
-.toggle__state {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-.toggle--on .toggle__state,
-.toggle[aria-pressed="true"] .toggle__state {
-  color: var(--color-accent);
-  font-weight: var(--weight-bold);
-}
-
 /* ---------- Timeline and Speed ----------
    Markup: <div class="timeline">
      <label class="timeline__label" for="timeline">Timeline <span>42% of flight</span></label>

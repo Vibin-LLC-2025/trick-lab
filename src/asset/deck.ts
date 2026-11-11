@@ -91,8 +91,7 @@ export function ringXs(d: number, n: number = O.intervals): number[] {
 /** Points per side (tips included) and per closed ring, for n intervals per region. */
 export const sidePoints = (n: number) => 3 * n + 1;
 export const ringPoints = (n: number) => 2 * sidePoints(n) - 2;
-/** The medium counts (73 and 144). */
-export const SIDE_POINTS = sidePoints(OUTLINE.intervals);
+/** The medium ring's count (144). */
 export const RING_POINTS = ringPoints(OUTLINE.intervals);
 
 export interface DeckVertex {

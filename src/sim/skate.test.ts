@@ -13,7 +13,6 @@ import {
   markUsed,
   timingSpread,
   computerAttempt,
-  guideText,
   lettersText,
   openTricks,
   pickCall,
@@ -468,13 +467,12 @@ describe('the trick guide', () => {
     });
     expect(trickGuide({ flips: 2, halfShoves: 2 }).flick).toBe('Toward kickflip (slider to the right), for two full flips.');
     expect(trickGuide({ flips: 1, halfShoves: 1 }).scoop).toBe('Toward backside (slider to the right), for a half turn (180 degrees).');
-    expect(guideText(kickCall)).toBe('Kickflip: Flick toward kickflip (slider to the right), for one full flip. No scoop.');
   });
 
   it('never gives away a slider value', () => {
     for (const t of SETTABLE_TRICKS) {
       const { flick, scoop } = trickGuide(t);
-      for (const line of [flick, scoop, guideText(t)]) {
+      for (const line of [flick, scoop]) {
         expect(line, t.id).not.toMatch(/rev\/s|\d\.\d|\bm\b/);
         expect(line).not.toMatch(/—/);
       }

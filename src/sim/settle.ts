@@ -173,5 +173,3 @@ export function restSide(flight: Flight): RestSide {
   return quarter === 0 ? 'wheels' : quarter === 2 ? 'grip' : 'rail';
 }
 
-/** The flight's end yaw, for callers that place the board's footprint. */
-export const endYaw = (flight: Flight) => yawAt(flight, 1);

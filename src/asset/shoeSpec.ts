@@ -203,8 +203,6 @@ export const SHOE_TEXTURES = {
   upper: { file: 'shoe-upper.png', width: 1024, height: 1024, wrap: 'clamp' },
 } as const;
 
-export type ShoeTextureKey = keyof typeof SHOE_TEXTURES;
-
 /**
  * Where each surface lands in the two maps, as pixel rows (and columns),
  * inclusive of a few pixels of margin so the mips do not bleed across.

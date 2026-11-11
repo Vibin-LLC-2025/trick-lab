@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { ImageUtils, NodeIO, Primitive, TextureInfo, getBounds, type Node } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { KHR_DF_TRANSFER_SRGB, read as readKtx2 } from 'ktx-parse';
+import { KHR_DF_TRANSFER_SRGB, KHR_SUPERCOMPRESSION_ZSTD, read as readKtx2 } from 'ktx-parse';
 import { MeshoptDecoder } from 'meshoptimizer';
 import type { AssetStats, DeckTextureStat, TextureStat } from './budget';
 
@@ -72,6 +72,7 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
       mipmapped: mipmapped.get(t.getName()) ?? false,
       mimeType,
       levels: ktx2 ? ktx2.levels.length : 1,
+      zstd: ktx2?.supercompressionScheme === KHR_SUPERCOMPRESSION_ZSTD,
     };
   });
 
@@ -95,8 +96,9 @@ export function inspectDeckTexture(path: string): DeckTextureStat {
   try {
     const k = readKtx2(new Uint8Array(bytes));
     const srgb = k.dataFormatDescriptor[0]?.transferFunction === KHR_DF_TRANSFER_SRGB;
-    return { bytes: bytes.byteLength, width: k.pixelWidth, height: k.pixelHeight, levels: k.levels.length, srgb };
+    const zstd = k.supercompressionScheme === KHR_SUPERCOMPRESSION_ZSTD;
+    return { bytes: bytes.byteLength, width: k.pixelWidth, height: k.pixelHeight, levels: k.levels.length, srgb, zstd };
   } catch {
-    return { bytes: bytes.byteLength, width: null, height: null, levels: 0, srgb: false };
+    return { bytes: bytes.byteLength, width: null, height: null, levels: 0, srgb: false, zstd: false };
   }
 }

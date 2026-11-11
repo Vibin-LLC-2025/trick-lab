@@ -212,7 +212,7 @@ export interface UiSlice {
   viewResetNonce: number;
   /** The camera preset that SceneCamera places and "Reset view" returns to (ADR-38). Persisted under trick-lab.camera-view, default rider. Not logged, not reset, not exported. */
   cameraView: CameraView;
-  /** The game screen's fixed camera (step 17, ADR-72). Persisted under trick-lab.game-camera, default the filmer. Not logged, not reset, not exported. */
+  /** The game screen's camera: free (ADR-81) or one of the fixed angles (ADR-72). Persisted under trick-lab.game-view, default free. Not logged, not reset, not exported. */
   gameView: GameView;
   /** The "Instant replay" switch (ADR-72). Persisted under trick-lab.instant-replay, default on. Never plays under reduced motion. Not logged. */
   instantReplay: boolean;

@@ -362,8 +362,6 @@ export const TEXTURES = {
   wheel: { file: 'wheel.png', width: 64, height: 256, wrap: 'repeat' },
 } as const;
 
-export type TextureKey = keyof typeof TEXTURES;
-
 /**
  * High-tier textures (board-high.glb). The grip is RGB with a tangent-space
  * normal map from the same grain height field; the graphic is the SVG at full
@@ -379,8 +377,6 @@ export const TEXTURES_HIGH = {
   ply: { file: 'ply-high.png', width: 32, height: 256, wrap: 'clamp' },
   wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'repeat' },
 } as const;
-
-export type TextureHighKey = keyof typeof TEXTURES_HIGH;
 
 /** Normal map strength for the high grip (glTF normalTexture scale). */
 export const GRIP_NORMAL_SCALE = 0.6;

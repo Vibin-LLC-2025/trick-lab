@@ -8,7 +8,7 @@
 // material (resources.ts, mat.footPath); FootPaths.tsx renders it light the part of the path the foot
 // has already travelled. FlightDriver sets the material's progress uniform
 // each frame; nothing here runs per frame. A geometry is built only when the
-// flight or (before a pop) the inputs change, and its owner disposes it.
+// shown inputs or the stance change, and its owner disposes it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { newFeetPose, writeFeetPose, type FeetPose, type Stance } from '../sim/feet';
@@ -19,27 +19,40 @@ const P = ART.footPaths;
 export type FootName = 'front' | 'back';
 
 /**
- * The tracked point of one foot (the sole's centre, lifted to mid-shoe so the
+ * The tracked point of both feet (the sole's centre, lifted to mid-shoe so the
  * path leaves from inside the shoe) at `samples + 1` evenly spaced progress
- * values. Board rest frame, flat xyz; regular mirrors x (ADR-25).
+ * values, from one run of the feet model per sample. Board rest frame, flat
+ * xyz; regular mirrors x (ADR-25).
  */
-export function sampleFootPath(
+export function sampleFootPaths(
+  inputs: TrickInputs,
+  flight: Flight | null,
+  stance: Stance = 'goofy',
+  samples: number = P.samples,
+): Record<FootName, Float32Array> {
+  const out = { front: new Float32Array((samples + 1) * 3), back: new Float32Array((samples + 1) * 3) };
+  const pose: FeetPose = newFeetPose();
+  for (let i = 0; i <= samples; i++) {
+    writeFeetPose(pose, inputs, flight, i / samples, stance);
+    for (const foot of ['front', 'back'] as const) {
+      const f = pose[foot];
+      const a = out[foot];
+      a[i * 3] = f.x;
+      a[i * 3 + 1] = f.y + P.lift;
+      a[i * 3 + 2] = f.z;
+    }
+  }
+  return out;
+}
+
+/** One foot's path, as `sampleFootPaths` gives it. */
+export const sampleFootPath = (
   inputs: TrickInputs,
   flight: Flight | null,
   foot: FootName,
   stance: Stance = 'goofy',
   samples: number = P.samples,
-): Float32Array {
-  const out = new Float32Array((samples + 1) * 3);
-  const pose: FeetPose = newFeetPose();
-  for (let i = 0; i <= samples; i++) {
-    const f = writeFeetPose(pose, inputs, flight, i / samples, stance)[foot];
-    out[i * 3] = f.x;
-    out[i * 3 + 1] = f.y + P.lift;
-    out[i * 3 + 2] = f.z;
-  }
-  return out;
-}
+): Float32Array => sampleFootPaths(inputs, flight, stance, samples)[foot];
 
 const v = (a: Float32Array, i: number, target: THREE.Vector3) => target.set(a[i * 3]!, a[i * 3 + 1]!, a[i * 3 + 2]!);
 
@@ -61,10 +74,9 @@ function tangents(points: Float32Array): THREE.Vector3[] {
 }
 
 /** A tube through the points, its frames parallel-transported so it never twists. */
-function tube(points: Float32Array, color: THREE.Color): THREE.BufferGeometry {
+function tube(points: Float32Array, T: readonly THREE.Vector3[], color: THREE.Color): THREE.BufferGeometry {
   const n = points.length / 3;
   const R = P.tube.radialSegments;
-  const T = tangents(points);
   const pos = new Float32Array(n * R * 3);
   const col = new Float32Array(n * R * 3);
   const u = new Float32Array(n * R);
@@ -116,9 +128,8 @@ function tube(points: Float32Array, color: THREE.Color): THREE.BufferGeometry {
  * `arrows.every` of the airtime where the foot is actually moving (a foot
  * standing still gets no arrow). Each carries the `aU` of where it sits.
  */
-function arrowheads(points: Float32Array, color: THREE.Color): THREE.BufferGeometry[] {
+function arrowheads(points: Float32Array, T: readonly THREE.Vector3[], color: THREE.Color): THREE.BufferGeometry[] {
   const n = points.length / 3;
-  const T = tangents(points);
   const out: THREE.BufferGeometry[] = [];
   const A = P.arrows;
   const up = new THREE.Vector3(0, 1, 0);
@@ -159,10 +170,12 @@ function arrowheads(points: Float32Array, color: THREE.Color): THREE.BufferGeome
  */
 export function buildFootPaths(inputs: TrickInputs, flight: Flight, stance: Stance = 'goofy'): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
+  const paths = sampleFootPaths(inputs, flight, stance);
   for (const foot of ['front', 'back'] as const) {
     const color = new THREE.Color(P.color[foot]);
-    const points = sampleFootPath(inputs, flight, foot, stance);
-    parts.push(tube(points, color), ...arrowheads(points, color));
+    const points = paths[foot];
+    const T = tangents(points);
+    parts.push(tube(points, T, color), ...arrowheads(points, T, color));
   }
   // Cones come indexed from three; the tubes are indexed too, so the merge is uniform.
   const merged = mergeGeometries(parts)!;

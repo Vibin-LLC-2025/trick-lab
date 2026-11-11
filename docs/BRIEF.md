@@ -276,7 +276,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .presets, .preset, .preset--active, .preset__key (small key hint)
 .inputs, .field, .field__label, .field__value, .field__unit, .field__range
 .playback, .btn, .btn--primary, .btn--ghost, .btn--danger, .btn--sm (small header button)
-.toggle (button with aria-pressed, drawn as a switch), .toggle--on, .toggle__state
+.toggle (button with aria-pressed, drawn as a switch), .toggle--on
 .view-panel__actions (View header buttons), .view-panel__toggles (grid of View switches)
 .segmented, .segmented__legend, .segmented__options, .segmented__option, .segmented__input, .segmented__label, .segmented__hint
 .timeline, .timeline__range, .timeline__label
