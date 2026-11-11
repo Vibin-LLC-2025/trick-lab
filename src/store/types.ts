@@ -1,3 +1,4 @@
+import type { ClearArea } from './stage';
 import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
@@ -248,6 +249,15 @@ export interface UiSlice {
    */
   stageReady: boolean;
   /**
+   * The part of the stage the game's cards and tray leave uncovered (ADR-86),
+   * as fractions of the stage, measured by the page (ui/useStageClear.ts) and
+   * set only by setStageClear on a layout change, never per frame. Null
+   * before the first measurement and wherever nothing covers the stage (the
+   * lab, the welcome screen): the cameras then frame the whole stage. Not
+   * persisted, not logged, not exported, not announced.
+   */
+  stageClear: ClearArea | null;
+  /**
    * The student's last landing worth a cheer (ADR-57): any landed trick in
    * the lab, and in a game a set landed as called or a copy made. `nonce`
    * goes up by one each time, so the stage's celebration plays once per
@@ -338,6 +348,8 @@ export interface UiSlice {
   setSceneUnavailable: () => void;
   /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */
   setStageReady: () => void;
+  /** The page's measurement of the clear part of the stage (ADR-86); a no-op when it has not changed. Never logged. */
+  setStageClear: (area: ClearArea | null) => void;
   /** Internal: marks a landing to celebrate. Called from store actions only (the landing's resolution and the game's scoring). */
   celebrate: (trick: string, clean: boolean) => void;
   /** Turns sound on or off, persisted and announced (ADR-58). */

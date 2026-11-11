@@ -119,7 +119,10 @@ describe('the game over the stage (ADR-66)', () => {
     const tray = document.querySelector('.hud__tray')!;
     expect(within(tray as HTMLElement).getAllByRole('slider')).toHaveLength(3);
     expect(within(tray as HTMLElement).getByRole('button', { name: 'Get ready' })).toBeInTheDocument();
-    // One timing bar, over the stage while it runs (ADR-83), none in the tray.
-    expect(tray.querySelector('.skate__bar')).toBeNull();
+    // The timing bar's slim strip is part of the tray, waiting for the first press (ADR-86); the sliders and Pop say which side of the stage they cover.
+    expect(tray.querySelectorAll('.skate__bar')).toHaveLength(1);
+    expect(tray.querySelector('.timing')).toHaveClass('timing--idle');
+    expect(tray.querySelector('.hud__inputs')).toHaveAttribute('data-covers', 'left');
+    expect(tray.querySelector('.hud__pop')).toHaveAttribute('data-covers', 'right');
   });
 });

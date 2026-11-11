@@ -182,7 +182,7 @@ export const ART = {
    * is never seen. Tested in artDirection.test.ts and sky.test.ts. Colour
    * per theme is the clear colour, nothing else.
    */
-  fog: { color: SCENE_BG, near: 6, far: 15 },
+  fog: { color: SCENE_BG, near: 6.5, far: 15 },
   /**
    * The ground (ground pass, 2026-11-04, ADR-31). The GLB (Medium and High)
    * and the untextured plane (Low, and the fallback while it streams or if
@@ -414,6 +414,53 @@ export const ART = {
      * body passed the fog's start; the welcome view's 0.45 m did too.
      */
     riderLook: 1.0,
+    /**
+     * The game's framing of the rider at rest (ADR-86, 2026-11-11), for Free,
+     * Filmer and Side while the whole rider shows and motion is allowed: the
+     * board on the pad and the rider over it, with the room the body takes
+     * as the pop extends it, measured against the camera's rise (`cameraRise`
+     * in cameraFit.ts: the board's height, eased in and out over the first
+     * and last `riseEase` of the flight). Four boxes, world metres, swept in
+     * gameCamera.test.ts over every preset at 0.15, 0.35 and 0.6 m and the
+     * timing bar's corners, both stances, with the rise taken off:
+     * - `board`: its outline never more than 15 cm below the pad (the tail
+     *   hanging under the deck's centre as the pop pitches it nose up, while
+     *   the eased rise catches up) nor more than 0.35 m over its rest height
+     *   (a flipped board's edge, ahead of the rise), 0.16 m either side.
+     * - `shoes`: 0.37 m over the deck's centre (tucked in the air, ahead of
+     *   the eased rise) plus their height, down to 15 cm under the pad (the
+     *   pop's tail strike),
+     *   0.68 m along the board, 0.63 m toward the toe side and 0.46 m toward
+     *   the heel side (a bail's step).
+     * - `arms`: the hands, 0.88 m out (a bail's) and 1.09 m up, plus the
+     *   mitten; framed only while it costs little (`armsSlack`).
+     * - `head`: the beanie's crown, at most 1.53 m over the deck's centre
+     *   (the pop's extension, ahead of the rise), 0.2 to 0.47 m toward the toe
+     *   side as it gets there, plus 4 cm of headroom.
+     * The board is the frame's bottom, the crown its top, with `margin` of
+     * the clear area kept free at each edge (the clear area is already clear
+     * of the cards). Framing the whole flight (ADR-85) stays for reduced
+     * motion, where the camera does not move. Each view looks at the height
+     * that fills the clear area's height best (`balancedLook` in
+     * cameraFit.ts), so neither the top nor the bottom of the frame is empty.
+     */
+    rest: {
+      boxes: [
+        { min: v(-0.44, -0.16, -0.16), max: v(0.44, REST_Y + 0.36, 0.16) },
+        { min: v(-0.7, -0.15, -0.64), max: v(0.7, REST_Y + 0.5, 0.47) },
+        { min: v(-0.94, REST_Y + 0.4, -0.76), max: v(0.94, REST_Y + 1.14, 0.2) },
+        { min: v(-0.25, REST_Y + 1.0, -0.5), max: v(0.25, REST_Y + 1.53 + 0.04, -0.17) },
+      ],
+      riseEase: 0.2,
+      bailEase: 0.15,
+      margin: 0.02,
+      /**
+       * The arms may push the camera back by at most this much past what the
+       * board, the shoes and the head need; past it a hand flung out (a
+       * sketchy landing, a bail) may go under a card, never the rest.
+       */
+      armsSlack: 1.1,
+    },
     /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
      * persisted (`cameraView` in the ui slice). Only each `position`'s

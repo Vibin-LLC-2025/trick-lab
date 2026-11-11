@@ -216,8 +216,8 @@ a {
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "turn . score"
-      "turn . last"
-      "tray tray tray";
+      "inputs . last"
+      "inputs bar pop";
     gap: var(--space-2);
     padding: var(--space-3);
     overflow: visible;
@@ -226,7 +226,7 @@ a {
     pointer-events: none;
   }
 
-  :is(.hud__turn, .hud__score, .hud__last, .hud__tray > .panel) {
+  :is(.hud__turn, .hud__score, .hud__last, .hud__inputs > .panel, .hud__pop) {
     margin-top: 0;
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-lg);
@@ -234,7 +234,7 @@ a {
     pointer-events: auto;
   }
 
-  :is(.hud__score, .hud__last, .hud__tray > .panel, .turn--setup) {
+  :is(.hud__score, .hud__last, .hud__inputs > .panel, .hud__pop, .turn--setup) {
     background: var(--color-surface);
   }
 
@@ -248,6 +248,7 @@ a {
 
   .hud__score {
     grid-area: score;
+    align-self: start;
   }
 
   .hud__last {
@@ -255,23 +256,34 @@ a {
     align-self: start;
   }
 
+  /* The tray is only a wrapper (ADR-86): its three parts are cards of the
+     grid. The sliders bottom left, under the turn card and as wide; the
+     timing bar's strip along the bottom between the cards; Pop bottom right,
+     under the last trick. The bottom of the stage keeps one slim row. */
   .hud__tray {
-    grid-area: tray;
-    justify-self: center;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px;
-    align-items: end;
-    gap: var(--space-2);
-    width: min(100%, 1040px);
+    display: contents;
   }
 
-  .hud__tray .inputs {
-    flex-direction: row;
-    gap: var(--space-4);
+  .hud__inputs {
+    grid-area: inputs;
+    align-self: end;
+    min-height: 0;
   }
 
-  .hud__tray .field {
-    flex: 1;
+  .hud__tray > .timing {
+    grid-area: bar;
+    align-self: end;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
+  }
+
+  .hud__pop {
+    grid-area: pop;
+    align-self: end;
+  }
+
+  /* Room for the landing zone under every track, shown or not, so the card's height never changes with the turn. */
+  .hud__inputs .field__track {
+    padding-bottom: 8px;
   }
 
   .app[data-screen="skate"] .turn-chip {
@@ -1002,6 +1014,7 @@ a {
 /* The forecast under the game's sliders (ADR-83): one line of plain text, in
    the body colour, so it reads as the thing to check before a pop. */
 .field__forecast {
+  min-height: calc(var(--text-sm) * var(--leading-snug));
   margin-top: var(--space-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
@@ -2131,50 +2144,47 @@ a {
   }
 }
 
-/* The timing bar over the stage (ADR-83, DESIGN.md 11.1). Markup:
-     <div class="timing timing--run|in|off" aria-hidden="true">
+/* The timing bar (ADR-83, ADR-86, DESIGN.md 11.1): a slim strip joined to
+   the top of the tray, the whole game long. Markup:
+     <div class="timing timing--idle|run|in|off" aria-hidden="true">
        <p class="timing__head">[<span class="timing__who">Your release</span>]<span class="timing__verdict">Pop! in the green band</span></p>
        <div class="skate__bar" style="...">...</div></div>
-   Low in the middle of the stage, just above the tray on a wide screen
-   (--hud-tray-h, measured by the tray) and at the stage's foot where the
-   panels stack under it. A solid panel, so its words meet the contrast
-   figures over any picture; under a notice (same layer, earlier in the page).
-   Running: the head says what to do and the panel's top edge is the accent.
-   After a release: who released and the verdict, the top edge green in the
-   band and the text colour off it, so colour is never the only cue. */
+   One row: the words on the left, the bar filling the rest. A solid panel,
+   so its words meet the contrast figures over any picture. Its left edge
+   says the state: the line colour at rest (the band alone, no marker), the
+   accent while the bar runs, after a release green in the band and the text
+   colour off it, so colour is never the only cue (the verdict says it). */
 .timing {
-  position: absolute;
-  left: 50%;
-  bottom: var(--space-3);
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  width: min(calc(100% - 2 * var(--space-4)), 520px);
-  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
   border: 1px solid var(--color-line-strong);
-  border-top: 4px solid var(--color-accent);
+  border-left: 5px solid var(--color-line-strong);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-lg);
-  transform: translateX(-50%);
   pointer-events: none;
 }
 
+.timing--run {
+  border-left-color: var(--color-accent);
+}
+
 .timing--in {
-  border-top-color: var(--color-ok);
+  border-left-color: var(--color-ok);
 }
 
 .timing--off {
-  border-top-color: var(--color-text);
+  border-left-color: var(--color-text);
 }
 
 .timing__head {
   display: flex;
   align-items: baseline;
-  justify-content: center;
   gap: var(--space-2);
-  text-align: center;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .timing__who {
@@ -2184,13 +2194,17 @@ a {
 
 .timing__verdict {
   font-family: var(--font-display);
-  font-size: var(--text-lg);
-  line-height: 1.1;
+  font-size: var(--text-md);
+  line-height: 1.2;
   color: var(--color-text);
 }
 
+.timing--idle .timing__verdict {
+  color: var(--color-muted);
+}
+
 .timing .skate__bar {
-  height: 36px;
+  height: 24px;
 }
 
 .timing .skate__bar-marker::before {
@@ -2199,42 +2213,11 @@ a {
   box-shadow: 0 0 0 2px var(--color-surface);
 }
 
-@media (min-width: 961px) {
-  /* Clear of the cards on either side, and just above the tray. */
-  .app[data-screen="skate"] .timing {
-    bottom: calc(var(--hud-tray-h, 0px) + var(--space-3) + var(--space-3));
-    width: clamp(260px, calc(100% - 2 * 360px), 560px);
-  }
-}
-
-/* A short stage (a phone, where the panels stack under it): the same bar, tighter. */
-@container (max-height: 300px) {
+/* A phone: the words over the bar, each the full width. */
+@media (max-width: 480px) {
   .timing {
-    bottom: var(--space-2);
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
-    padding: var(--space-1) var(--space-2) var(--space-2);
-  }
-
-  .timing .skate__bar {
-    height: 26px;
-  }
-
-  .timing__verdict {
-    font-size: var(--text-md);
-  }
-
-  /* After the release the board is the thing to watch: the bar thins to a
-     strip under the verdict, so the landing shows above it. */
-  .timing:not(.timing--run) {
-    bottom: var(--space-1);
-  }
-
-  .timing:not(.timing--run) .skate__bar {
-    height: 10px;
-  }
-
-  .timing:not(.timing--run) .timing__verdict {
-    font-size: var(--text-sm);
   }
 }
 

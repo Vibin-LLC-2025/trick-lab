@@ -97,23 +97,26 @@ describe('how you pop, at the game\'s start (ADR-65)', () => {
 describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
   it('by keyboard: Space starts the bar, key repeat does nothing, Space again in the band pops exactly what was set', async () => {
     await kickflipUp();
-    // Before the first press: no bar on the stage, and the button says what the press does.
-    expect(timing()).toBeNull();
+    // Before the first press: the bar's slim strip waits in the tray with no marker (ADR-86), and the button says what the press does.
+    expect(timing()).toHaveClass('timing--idle');
+    expect(timing()!.closest('.hud__tray')).not.toBeNull();
+    expect(document.querySelector('.skate__bar-marker')).toBeNull();
+    expect(verdict()).toHaveTextContent('Pop! in the green band');
     expect(button('Get ready')).toHaveAttribute('aria-keyshortcuts', 'Space');
     expect(within(game()).queryByRole('button', { name: 'Pop' })).toBeNull();
     // The turn card's one line says both presses, after the first game.
     expect(within(game()).getByText('Land it and the computer has to copy it: press Get ready, then Pop! in the green band.')).toBeInTheDocument();
-    // One bar: none in the tray.
-    expect(document.querySelector('.hud__tray .skate__bar')).toBeNull();
+    // One bar.
+    expect(document.querySelectorAll('.skate__bar')).toHaveLength(1);
 
     space();
     expect(state().pendingPop).not.toBeNull();
     expect(popped()).toHaveLength(0);
-    // Running: large over the stage, the level's band, a marker going round, and what to do.
+    // Running: the strip along the bottom of the stage, the level's band, a marker going round, and what to do.
     const band = SKATE_LEVELS.normal.band;
     expect(timing()).toHaveAttribute('aria-hidden', 'true');
     expect(timing()).toHaveClass('timing--run');
-    expect(timing()!.closest('.app__stage')).not.toBeNull();
+    expect(timing()).toHaveAttribute('data-covers', 'bottom');
     expect(bar()!.style.getPropertyValue('--band-from')).toBe(`${(((BAR.centreMs - band.halfMs) / BAR.sweepMs) * 100).toFixed(2)}%`);
     expect(bar()!.style.getPropertyValue('--band-width')).toBe(`${(((band.halfMs * 2) / BAR.sweepMs) * 100).toFixed(2)}%`);
     expect(document.querySelector('.skate__bar-marker--run')).not.toBeNull();
@@ -162,7 +165,8 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     expect(timing()).not.toBeNull();
     fireEvent.click(document.activeElement!);
     expect(document.activeElement).toBe(turnHeading());
-    expect(timing()).toBeNull();
+    expect(timing()).toHaveClass('timing--idle');
+    expect(document.querySelector('.skate__bar-marker')).toBeNull();
 
     // The computer goes through the same bar: its release rests on it too, and the button keeps its name.
     expect(button("Computer's go")).toBeInTheDocument();

@@ -5,6 +5,7 @@ import { DECK_KEY, deckAnnouncement, deckFailedAnnouncement, deckFrom } from './
 import { GAME_VIEW_ANNOUNCEMENT, GAME_VIEW_KEY, gameViewFrom, INSTANT_REPLAY_KEY, instantReplayFrom } from './replay';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
+import { sameArea } from './stage';
 import { capQuality, detectQuality, effectiveQuality, isQuality } from './quality';
 import { lowerTier, PACE, ranChoppy } from './pace';
 import type { CameraView, LabFold, Quality, Screen, Stance, Theme, TrickState, UiSlice } from './types';
@@ -188,6 +189,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     boardAssetFailed: false,
     sceneUnavailable: false,
     stageReady: false,
+    stageClear: null,
     celebration: null,
     soundOn: readSoundOn(),
     soundCue: null,
@@ -367,6 +369,9 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
     setPaceSource: (paceSource) => set({ paceSource }),
     setStageReady: () => {
       if (!get().stageReady) set({ stageReady: true });
+    },
+    setStageClear: (area) => {
+      if (!sameArea(get().stageClear, area)) set({ stageClear: area });
     },
     celebrate: (trick, clean) => set({ celebration: { nonce: (get().celebration?.nonce ?? 0) + 1, trick, clean } }),
     setDeck: (deck) => {

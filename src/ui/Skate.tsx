@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { BAR, barWhen } from '../sim/bar';
 import { outcomeCard } from '../sim/format';
 import {
@@ -115,7 +115,7 @@ function Scoreboard() {
   const reduced = useTrickStore((s) => s.reducedMotion);
   const up = turnView(game)?.who ?? null;
   return (
-    <section className="panel hud__score" aria-labelledby="skate-letters-heading">
+    <section className="panel hud__score" aria-labelledby="skate-letters-heading" data-covers="right">
       <div className="panel__head">
         <h2 id="skate-letters-heading" className="panel__title">
           Letters
@@ -327,7 +327,7 @@ function TurnCard() {
   const view = turnView(game);
   if (!view) return null;
   return (
-    <section className={`panel turn turn--${view.who} hud__turn`} aria-labelledby="skate-heading">
+    <section className={`panel turn turn--${view.who} hud__turn`} aria-labelledby="skate-heading" data-covers="left">
       {message && <p className="turn__news">{message}</p>}
       {/* Focus target when a game starts (tabIndex -1: focusable by script, not in tab order; Space still pops from here). */}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
@@ -348,84 +348,68 @@ function TurnCard() {
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /**
- * The timing bar, large over the stage (ADR-65, ADR-83, DESIGN.md 11.1): low
- * in the middle, just above the tray, on a solid panel. While the bar runs,
- * the level's band and a marker that sweeps across, round again from the left
- * after each sweep until the second press (ADR-78). After a release, the
- * player's or the computer's, the marker rests where it was and a verdict in
- * a few words says what it did, until Continue clears the stage. Nothing
- * before the first press, in Exact, or once the stage is clear. The picture is
- * decorative (aria-hidden): the store announces the bar's start and the
- * release's result. The sweep is a CSS animation started by the same store
- * change that started the bar and repeated each sweep, so it trails the
- * store's clock by a frame at most. The custom properties carry the band and
- * the marker's place; all the styling is in app.css.
+ * The timing bar (ADR-65, ADR-83, ADR-86, DESIGN.md 11.1): a slim strip
+ * joined to the top of the tray, so it covers as little of the stage as it
+ * can and never moves the picture: it is there for the whole game, the band
+ * alone and dimmed before the first press and once the stage is clear. While
+ * the bar runs, the level's band and a marker that sweeps across, round again
+ * from the left after each sweep until the second press (ADR-78). After a
+ * release, the player's or the computer's, the marker rests where it was and
+ * a verdict in a few words says what it did, until Continue clears the stage.
+ * None in Exact. The picture is decorative (aria-hidden): the store announces
+ * the bar's start and the release's result. The sweep is a CSS animation
+ * started by the same store change that started the bar and repeated each
+ * sweep, so it trails the store's clock by a frame at most. The custom
+ * properties carry the band and the marker's place; all the styling is in
+ * app.css.
  */
-export function TimingStage() {
+export function TimingStrip() {
   const timed = useTrickStore((s) => s.popMode === 'timed' && skateActive(s.skate));
   const pending = useTrickStore((s) => s.pendingPop);
   const last = useTrickStore((s) => s.lastRelease);
   // The go's release stays up until Continue clears the stage (ADR-80).
   const onStage = useTrickStore((s) => s.flight !== null);
   const band = useTrickStore((s) => SKATE_LEVELS[s.skate.level].band);
-  if (!timed || (!pending && !(last && onStage))) return null;
+  if (!timed) return null;
   const part = (ms: number) => `${((ms / BAR.sweepMs) * 100).toFixed(2)}%`;
+  const shown = !pending && last && onStage ? last : null;
   const style = {
     '--band-from': part(BAR.centreMs - band.halfMs),
     '--band-width': part(band.halfMs * 2),
-    ...(last && !pending ? { '--at': (last.ms / BAR.sweepMs).toFixed(4) } : null),
+    ...(shown ? { '--at': (shown.ms / BAR.sweepMs).toFixed(4) } : null),
   } as CSSProperties;
-  const when = !pending && last ? barWhen(last.ms, band) : null;
-  const tone = when === null ? 'run' : when === 'in the band' ? 'in' : 'off';
+  const when = shown ? barWhen(shown.ms, band) : null;
+  const tone = pending ? 'run' : when === null ? 'idle' : when === 'in the band' ? 'in' : 'off';
   return (
-    <div className={`timing timing--${tone}`} aria-hidden="true">
+    <div className={`timing timing--${tone}`} aria-hidden="true" data-covers="bottom">
       <p className="timing__head">
-        {pending || !last ? (
-          <span className="timing__verdict">Pop! in the green band</span>
-        ) : (
+        {shown ? (
           <>
-            <span className="timing__who">{last.by === 'you' ? 'Your release' : "Computer's release"}</span>
+            <span className="timing__who">{shown.by === 'you' ? 'Your release' : "Computer's release"}</span>
             <span className="timing__verdict">{cap(when ?? '')}</span>
           </>
+        ) : (
+          <span className="timing__verdict">Pop! in the green band</span>
         )}
       </p>
       <div className="skate__bar" style={style}>
         <span className="skate__bar-band" />
-        {/* Keyed on the bar, so each sweep starts from the left. */}
-        {pending ? <span key={pending.id} className="skate__bar-marker skate__bar-marker--run" /> : <span className="skate__bar-marker" />}
+        {/* Keyed on the bar, so each sweep starts from the left. No marker at rest. */}
+        {pending ? <span key={pending.id} className="skate__bar-marker skate__bar-marker--run" /> : shown && <span className="skate__bar-marker" />}
       </div>
     </div>
   );
 }
 
 /**
- * The tray's height, as `--hud-tray-h` on the page (app.css), so the timing
- * bar over the stage sits just above it on a wide screen, whatever the tray
- * holds. Where the panels stack under the stage the tray has no box, and the
- * bar sits at the stage's foot instead.
- */
-function useTrayHeight() {
-  const tray = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = tray.current;
-    const app = el?.closest<HTMLElement>('.app');
-    if (!el || !app || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => app.style.setProperty('--hud-tray-h', `${el.offsetHeight}px`));
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      app.style.removeProperty('--hud-tray-h');
-    };
-  }, []);
-  return tray;
-}
-
-/**
- * The tray along the bottom of the stage (DESIGN.md 11.2): the sliders with
- * their zones and forecast (ADR-83), then Pop, or the computer's go. With the
- * timing bar on the player's go the one button has two names, one per press:
- * "Get ready" starts the bar, "Pop!" releases it (the bar itself is over the
- * stage, TimingStage).
+ * The tray (DESIGN.md 11.2): the timing bar's strip (ADR-86), the sliders
+ * with their zones and forecast (ADR-83), then Pop, or the computer's go. On a
+ * wide screen the sliders sit bottom left under the turn card, the strip
+ * along the bottom between the cards and Pop bottom right, so the bottom of
+ * the stage keeps one slim row (ADR-86); where the panels stack under the
+ * stage they follow one another. With the timing bar on the
+ * player's go the one button has two names, one per press: "Get ready" starts
+ * the bar, "Pop!" releases it.
  */
 function Controls() {
   const status = useTrickStore((s) => s.status);
@@ -435,12 +419,16 @@ function Controls() {
   const running = useTrickStore((s) => s.pendingPop !== null);
   // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
   const replaying = useTrickStore(replayMoves);
-  const tray = useTrayHeight();
   const label = replaying ? 'Skip replay' : cpu ? "Computer's go" : mine ? (running ? 'Pop!' : 'Get ready') : 'Pop';
   return (
-    <div className="hud__tray" ref={tray}>
-      <Inputs />
-      <section className="panel" aria-label="Pop">
+    // On a wide screen its three parts are cards of the HUD (ADR-86): the sliders bottom left, the bar's strip along the
+    // bottom between the cards, Pop bottom right. Each says which side of the stage it covers, so the camera frames clear of it.
+    <div className="hud__tray">
+      <TimingStrip />
+      <div className="hud__inputs" data-covers="left">
+        <Inputs />
+      </div>
+      <section className="panel hud__pop" aria-label="Pop" data-covers="right">
         <div className="skate__controls">
           {/* aria-disabled, not disabled: the button stays focusable and explains itself. One press is one action:
               with the timing bar the first starts it and the second releases it (the store decides, ADR-65), and
@@ -470,7 +458,7 @@ function LastTrick() {
   const who = cpu ? 'Computer' : 'You';
   // No role="status": the single Announcer is the live region, so the result is not read twice.
   return (
-    <section className="panel hud__last" aria-labelledby="skate-last-heading">
+    <section className="panel hud__last" aria-labelledby="skate-last-heading" data-covers="right">
       <h2 id="skate-last-heading" className="panel__title">
         Last trick
       </h2>
@@ -519,7 +507,7 @@ function Setup() {
   const start = useTrickStore((s) => s.startSkate);
   const played = record.you + record.computer;
   return (
-    <section className="panel turn turn--setup hud__turn" aria-labelledby="skate-heading">
+    <section className="panel turn turn--setup hud__turn" aria-labelledby="skate-heading" data-covers="left">
       {/* Focus target after quitting (tabIndex -1). */}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
         How to play
@@ -588,7 +576,7 @@ function GameOver() {
   const won = game.winner === 'you';
   const level = SKATE_LEVELS[game.level].label.toLowerCase();
   return (
-    <section className={`panel turn turn--over turn--${won ? 'won' : 'lost'} hud__turn`} aria-labelledby="skate-heading">
+    <section className={`panel turn turn--over turn--${won ? 'won' : 'lost'} hud__turn`} aria-labelledby="skate-heading" data-covers="left">
       {message && <p className="turn__news">{message}</p>}
       <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
         {won ? 'You win!' : 'The computer wins'}
@@ -644,7 +632,7 @@ export function TurnChip() {
   const view = turnView(game);
   if (!view) return null;
   return (
-    <p className={`turn-chip turn-chip--${view.who}`} aria-hidden="true">
+    <p className={`turn-chip turn-chip--${view.who}`} aria-hidden="true" data-covers="left">
       <span className="turn-chip__who">{view.title}</span>
       {view.trick && <span className="turn-chip__trick">{view.trick}</span>}
     </p>

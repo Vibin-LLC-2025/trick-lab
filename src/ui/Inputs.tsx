@@ -77,10 +77,17 @@ function Field({ k }: { k: InputKey }) {
   );
 }
 
-/** What the sliders make if the pop is timed right (ADR-83): plain text, not a live region, never announced on its own. */
+/**
+ * What the sliders make if the pop is timed right (ADR-83): plain text, not a
+ * live region, never announced on its own. On the game screen its line is
+ * kept, empty, when there is nothing to say (the computer's go), so the tray
+ * is the same height on every turn and the camera never refits between goes
+ * (ADR-86).
+ */
 function Forecast() {
   const text = useTrickStore(sliderForecast);
-  if (!text) return null;
+  const game = useTrickStore((s) => s.screen === 'skate');
+  if (!text) return game ? <p className="field__forecast" aria-hidden="true" /> : null;
   return (
     <p id={FORECAST_ID} className="field__forecast">
       {text}

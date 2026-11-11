@@ -13,6 +13,7 @@ export { animates } from './playback';
 export { effectiveQuality, riderShown } from './quality';
 export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
+export { clearArea, FULL_STAGE, sameArea, type ClearArea, type Cover, type CoverSide, type PageRect } from './stage';
 export { noticeUp, type SkateNotice } from './notice';
 export { assistOn, sliderForecast, sliderPlace, sliderZones } from './forecast';
 export { computerWaiting, landingMoves, rollAllowed, rollMoves, type LandingState, type RollState } from './roll';
