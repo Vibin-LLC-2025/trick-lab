@@ -2489,7 +2489,8 @@ a {
   align-items: center;
   gap: var(--space-3);
   width: min(100%, 420px);
-  max-height: 100%;
+  /* The stage is a size container: the panel never outgrows it, and scrolls inside itself if it must. */
+  max-height: calc(100cqh - 2 * var(--space-4));
   overflow-y: auto;
   padding: var(--space-5) var(--space-5) var(--space-4);
   border: 1px solid var(--color-line-strong);
@@ -2654,6 +2655,62 @@ a {
 @keyframes stage-wipe {
   from { opacity: 1; }
   to { opacity: 0; }
+}
+
+/* A short stage (a phone, where the panels stack under it): the same notice, tighter. */
+@container (max-height: 420px) {
+  .notice {
+    padding: var(--space-2);
+  }
+
+  .notice__panel {
+    max-height: calc(100cqh - 2 * var(--space-2));
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .notice__coin {
+    width: 56px;
+    height: 56px;
+  }
+
+  .notice__face {
+    border-width: 3px;
+    font-size: var(--text-md);
+  }
+
+  .notice__news {
+    font-size: var(--text-md);
+  }
+
+  .notice__next {
+    padding-top: var(--space-2);
+  }
+}
+
+/* A very short stage (a phone held upright, about 190 px): only what matters
+   now, the result, whose turn and Continue; the coin and the kicker go, and
+   the words still say who sets first. */
+@container (max-height: 300px) {
+  .notice__kicker,
+  .notice__coin {
+    display: none;
+  }
+
+  .notice__panel {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border-top-width: 4px;
+  }
+
+  .notice__next {
+    gap: 0;
+    padding-top: var(--space-1);
+  }
+
+  .notice__trick {
+    font-size: var(--text-lg);
+  }
 }
 
 @keyframes notice-in {
