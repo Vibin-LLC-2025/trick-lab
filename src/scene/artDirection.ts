@@ -170,14 +170,19 @@ export const ART = {
    * top of a 0.6 m pop) from the farthest allowed camera is 5.3 m on most
    * stages, and the orbit's zoom-out stops where it would pass 5.5 m (the
    * detail view on the narrowest stage, `orbitMaxDistance`), so the board,
-   * the feet and the trails are never fogged. `far` 15 m: from the
+   * the feet and the trails are never fogged. 6.0 since the whole rider
+   * (ADR-85, 2026-11-11): framing the body at the top of a 0.6 m pop puts
+   * Free and Filmer's farthest point (a hand out wide on the toe side) 5.6
+   * m from the camera on every stage the layout makes, so the rider is
+   * never fogged either; on a narrower stage the fit stops at the fog
+   * (`distanceFor` in SceneCamera.tsx) and the arms may crop. `far` 15 m: from the
    * lowest orbit (maxPolarAngle 1.25 rad, whose frame reaches the horizon)
    * and from the welcome camera, the nearest visible point of the plane's
    * edge is at least 19 m away on any stage from 0.5:1 to 50:1, so the edge
    * is never seen. Tested in artDirection.test.ts and sky.test.ts. Colour
    * per theme is the clear colour, nothing else.
    */
-  fog: { color: SCENE_BG, near: 5.5, far: 15 },
+  fog: { color: SCENE_BG, near: 6, far: 15 },
   /**
    * The ground (ground pass, 2026-11-04, ADR-31). The GLB (Medium and High)
    * and the untextured plane (Low, and the fallback while it streams or if
@@ -388,6 +393,28 @@ export const ART = {
      */
     fit: { margin: 0.06, reach: OUTLINE.noseTip + 0.01, bottom: 0, top: REST_Y + 0.6 + 0.13 },
     /**
+     * The whole rider's outline (ADR-85, 2026-11-11), for the views that film
+     * the rider (`filmsRider`): the head's column up to the beanie at the top
+     * of a 0.6 m pop, the highest the sliders and the timing bar allow (2.08
+     * m above the deck centre at rest, swept over every input in
+     * body.test.ts), plus `headroom`; the arms' band out to the hands at their
+     * widest (0.94 m along the board) and highest (1.68 m). Above and the
+     * replay's low close shot keep the board's own box and may crop the body.
+     */
+    rider: {
+      head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.78, back: 0.2 },
+    },
+    filmsRider: ['free', 'film', 'side', 'showcase'] as readonly string[],
+    /**
+     * Where the views that film the whole rider look (ADR-85): 1.0 m up, the
+     * rider's middle at the top of an average pop, each view's target and
+     * camera lifted together so its direction is unchanged. From the deck's
+     * 0.32 m the fit had to stand so far back to reach the head that the
+     * body passed the fog's start; the welcome view's 0.45 m did too.
+     */
+    riderLook: 1.0,
+    /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
      * persisted (`cameraView` in the ui slice). Only each `position`'s
      * direction from its `target` matters: the ADR-18 fit sets the distance,
@@ -421,7 +448,9 @@ export const ART = {
        * once. The orbit is off on the welcome screen. Sky pass (2026-11-09,
        * ADR-52): 8 degrees above the horizon (was 28) with the target 0.45 m
        * up (was 0.28), so the horizon, the sky and its city sit in the top
-       * quarter of the frame and the street reads as a place.
+       * quarter of the frame and the street reads as a place. With the
+       * whole rider (ADR-85) it looks at `riderLook` instead, the 8 degrees
+       * keeping the horizon where it is.
        */
       showcase: {
         position: v(
@@ -444,6 +473,11 @@ export const ART = {
        * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
        * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
        *   (its own field of view, `fov` below), close to the board.
+       * With the whole rider on screen (ADR-85, 2026-11-11), `free`, `film`
+       * and `side` look at `riderLook`, not the deck at 0.32 m, and fit the
+       * rider's outline (`rider` above): the whole body at the top of a 0.6 m
+       * pop with headroom, the board low in the frame. `above` and `replay`
+       * keep the board's box and may crop the body.
        */
       /**
        * `free` (ADR-81, 2026-11-10), the game's default: where the free
