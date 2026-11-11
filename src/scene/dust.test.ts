@@ -194,8 +194,8 @@ describe('dust (step 19, ADR-74)', () => {
     expect(d.slides).toBe(false);
   });
 
-  it('shows on the game screen on Medium and High, with the Motion cues switch, never under reduced motion', () => {
-    const on = { screen: 'skate', quality: 'high', boardAssetFailed: false, motionCuesVisible: true, reducedMotion: false } as const;
+  it('shows on the game screen on Medium and High, whatever the lab Motion cues switch (ADR-86), never under reduced motion', () => {
+    const on = { screen: 'skate', quality: 'high', boardAssetFailed: false, reducedMotion: false } as const;
     expect(dustShown(on)).toBe(true);
     expect(dustShown({ ...on, quality: 'medium' })).toBe(true);
     expect(dustShown({ ...on, quality: 'low' })).toBe(false);
@@ -203,7 +203,8 @@ describe('dust (step 19, ADR-74)', () => {
     expect(dustShown({ ...on, boardAssetFailed: true })).toBe(false);
     expect(dustShown({ ...on, screen: 'lab' })).toBe(false);
     expect(dustShown({ ...on, screen: 'home' })).toBe(false);
-    expect(dustShown({ ...on, motionCuesVisible: false })).toBe(false);
+    // The switch is the lab's; the game screen has no control for it.
+    expect(dustShown({ ...on, motionCuesVisible: false } as typeof on)).toBe(true);
     expect(dustShown({ ...on, reducedMotion: true })).toBe(false);
   });
 });

@@ -1451,6 +1451,13 @@ a {
   color: var(--color-text);
 }
 
+/* The game's start card (ADR-86): its two groups' legends ("Computer", "How you
+   pop") on one line each and as wide as each other, so both rows of options line up. */
+.turn--setup .segmented__legend {
+  width: 6.6em;
+  white-space: nowrap;
+}
+
 .segmented__options {
   display: flex;
   gap: 2px;

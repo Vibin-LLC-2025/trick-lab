@@ -101,7 +101,7 @@ Left open: timings for High with the shadow pass at DPR 2; the bail ignores the 
 
 Things that cost time in the play, polish and reach plan's threads, kept here so they cost it once.
 
-- **Serving a build.** `npx tsx scripts/measure/serve.ts dist 4173`, in the background with a long timeout. `npm run test:browser` starts it by itself.
+- **Serving a build.** `npx tsx scripts/measure/serve.ts dist 4173`, in the background with a long timeout. `npm run test:browser` starts it by itself. With `BROWSER_PORT` set (for example `BROWSER_PORT=4191 npm run test:browser`) it serves on that port and never reuses a server already there (ADR-86): the safe choice when another checkout may be on 4173.
 - **Stale servers.** A stopped background task can leave its node process alive and still serving the old build, and Playwright reuses whatever answers on port 4173 when run locally. Before trusting a run, list them in PowerShell and stop the stale ones: `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'serve\.ts' }`. Or compare the script hash in the served `index.html` with `dist/index.html`.
 - **The browser checks run the last build**, not the source. Run `npm run verify` (or `npx vite build`) first, or they test yesterday's code.
 - **Git Bash rewrites arguments that start with `/`**: `--base=/trick-lab/` became `/Program Files/Git/trick-lab/`. Prefix such commands with `MSYS_NO_PATHCONV=1`.

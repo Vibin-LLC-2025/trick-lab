@@ -38,11 +38,12 @@ type BlurState = TierState & Pick<TrickState, 'motionBlur' | 'status' | 'rate' |
 export const motionBlurOn = (s: BlurState) =>
   effectsFor(s)?.motionBlur === true && s.motionBlur && s.status === 'playing' && playRate(s) === 1 && !s.reducedMotion;
 
-type DustState = TierState & Pick<TrickState, 'screen' | 'motionCuesVisible' | 'reducedMotion'>;
+type DustState = TierState & Pick<TrickState, 'screen' | 'reducedMotion'>;
 
 /**
  * Dust (step 19, ADR-74): on the game screen, on Medium and High (Low gets no
- * new features, ADR-62). It has no switch of its own: it follows the Motion
- * cues switch, and is off under reduced motion.
+ * new features, ADR-62), and off under reduced motion. No switch: until
+ * ADR-86 it followed the lab's Motion cues switch, which the game screen has
+ * no control for.
  */
-export const dustShown = (s: DustState) => s.screen === 'skate' && effectiveQuality(s) !== 'low' && s.motionCuesVisible && !s.reducedMotion;
+export const dustShown = (s: DustState) => s.screen === 'skate' && effectiveQuality(s) !== 'low' && !s.reducedMotion;

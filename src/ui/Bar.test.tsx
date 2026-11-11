@@ -197,7 +197,9 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     expect(timing()).toHaveClass('timing--off');
     expect(who()).toHaveTextContent('Your release');
     expect(verdict()).toHaveTextContent('Early');
-    expect(button('Get ready')).toBe(pop);
+    // In the air the dimmed button says so (ADR-86), still the same element.
+    expect(button('In the air')).toBe(pop);
+    expect(pop).toHaveAttribute('aria-disabled', 'true');
     landNow();
     expect(announcer()).toHaveTextContent(/^Early: 60 percent less spin than you set\. .*not landed/);
     // A missed set: no letter.

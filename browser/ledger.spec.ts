@@ -117,8 +117,8 @@ for (const tier of TIERS)
     expect(most, JSON.stringify(seen)).toBeLessThanOrEqual(LEDGER[tier]);
     // Every switch on reaches the ledger's number: the count saw the full scene.
     expect(Math.max(seen['lab/feet+legs+trails+cues']!, seen['skate/feet+legs+trails+cues']!)).toBe(LEDGER[tier]);
-    // The dust (ADR-74) follows the Motion cues switch, and the cues never show in a game (ADR-84): so a
-    // landing with the switch on draws exactly one more than with it off on Medium and High, and the same on Low.
-    for (const c of COMBOS.filter((c) => c.cues)) expect(landed[name(c)]! - landed[name({ ...c, cues: false })]!, name(c)).toBe(tier === 'low' ? 0 : 1);
+    // The dust (ADR-74) no longer follows the Motion cues switch (ADR-86), and the cues never show in a game (ADR-84):
+    // a landing draws the same with the switch on and off.
+    for (const c of COMBOS.filter((c) => c.cues)) expect(landed[name(c)]! - landed[name({ ...c, cues: false })]!, name(c)).toBe(0);
     expect(errors).toEqual([]);
   });
