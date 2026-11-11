@@ -270,7 +270,7 @@ a {
     min-height: 0;
   }
 
-  .hud__tray > .timing {
+  .hud__dock > .timing {
     grid-area: bar;
     align-self: end;
     box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
@@ -289,6 +289,63 @@ a {
 /* The tray is only a wrapper where the panels stack. */
 @media (max-width: 960px) {
   .hud__tray {
+    display: contents;
+  }
+
+  /* The dock (ADR-86, DESIGN.md 11.2): the timing bar's strip and Pop,
+     pinned to the bottom of the window on the game screen, so a phone's
+     player never scrolls to pop. The stage is pinned at the top, so the dock
+     never covers the board. The page keeps room for it at its foot, and
+     focus scrolls clear of it. */
+  .app[data-screen="skate"] .hud__dock {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(9.5rem, 38%);
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--color-line-strong);
+    background: var(--color-bg);
+    box-shadow: 0 -2px 10px rgb(0 0 0 / 0.2);
+  }
+
+  .app[data-screen="skate"] .hud__dock > .hud__pop {
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .app[data-screen="skate"] .hud__dock .skate__pop {
+    width: 100%;
+    height: 100%;
+    min-height: var(--control-h-lg);
+  }
+
+  .app[data-screen="skate"] .app__play {
+    padding-bottom: calc(var(--dock-h) + var(--space-3));
+  }
+
+  :root {
+    --dock-h: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  :root:has(.app[data-screen="skate"] .hud__dock) {
+    scroll-padding-bottom: calc(var(--dock-h) + var(--space-4));
+  }
+
+  .app[data-screen="skate"] .app__play * {
+    scroll-margin-bottom: calc(var(--dock-h) + var(--space-4));
+  }
+}
+
+/* On a wide screen the dock is only a wrapper: the strip and Pop are cards of the HUD grid. */
+@media (min-width: 961px) {
+  .hud__dock {
     display: contents;
   }
 }

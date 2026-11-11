@@ -423,28 +423,31 @@ function Controls() {
   return (
     // On a wide screen its three parts are cards of the HUD (ADR-86): the sliders bottom left, the bar's strip along the
     // bottom between the cards, Pop bottom right. Each says which side of the stage it covers, so the camera frames clear of it.
+    // On a narrow screen the strip and Pop are a dock pinned to the bottom of the window, so they never scroll away.
     <div className="hud__tray">
-      <TimingStrip />
       <div className="hud__inputs" data-covers="left">
         <Inputs />
       </div>
-      <section className="panel hud__pop" aria-label="Pop" data-covers="right">
-        <div className="skate__controls">
-          {/* aria-disabled, not disabled: the button stays focusable and explains itself. One press is one action:
-              with the timing bar the first starts it and the second releases it (the store decides, ADR-65), and
-              the name says which (ADR-83). */}
-          <button
-            type="button"
-            className="btn btn--primary skate__pop"
-            aria-label={label}
-            aria-keyshortcuts={replaying ? 'Space Escape' : 'Space'}
-            aria-disabled={status === 'playing' || undefined}
-            onClick={pressPop}
-          >
-            {label} <kbd aria-hidden="true">Space</kbd>
-          </button>
-        </div>
-      </section>
+      <div className="hud__dock">
+        <TimingStrip />
+        <section className="panel hud__pop" aria-label="Pop" data-covers="right">
+          <div className="skate__controls">
+            {/* aria-disabled, not disabled: the button stays focusable and explains itself. One press is one action:
+                with the timing bar the first starts it and the second releases it (the store decides, ADR-65), and
+                the name says which (ADR-83). */}
+            <button
+              type="button"
+              className="btn btn--primary skate__pop"
+              aria-label={label}
+              aria-keyshortcuts={replaying ? 'Space Escape' : 'Space'}
+              aria-disabled={status === 'playing' || undefined}
+              onClick={pressPop}
+            >
+              {label} <kbd aria-hidden="true">Space</kbd>
+            </button>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

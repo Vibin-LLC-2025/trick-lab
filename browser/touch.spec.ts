@@ -51,6 +51,21 @@ for (const size of SIZES)
       const game = await audit(page);
       expect(game.page).toBeLessThanOrEqual(game.window);
       expect(game.small).toEqual([]);
+      // Pop and the timing bar's strip are on screen wherever the page is scrolled (ADR-86): on a narrow screen a dock
+      // pinned to the window's foot, under the pinned stage and never over it; on a wide one cards of the HUD.
+      for (const top of [0, 10_000]) {
+        await page.evaluate((top) => window.scrollTo(0, top), top);
+        const dock = await page.evaluate(() => {
+          const box = (q: string) => document.querySelector(q)!.getBoundingClientRect().toJSON() as DOMRect;
+          return { pop: box('.skate__pop'), strip: box('.timing'), stage: box('.app__stage') };
+        });
+        for (const part of [dock.pop, dock.strip]) {
+          expect(part.top).toBeGreaterThanOrEqual(0);
+          expect(part.bottom).toBeLessThanOrEqual(size.height);
+          if (size.width <= 960) expect(part.top).toBeGreaterThanOrEqual(dock.stage.bottom);
+        }
+        expect(dock.pop.height).toBeGreaterThanOrEqual(44);
+      }
       await page.getByRole('button', { name: 'Quit game' }).tap();
       const dialog = page.getByRole('dialog').or(page.getByRole('alertdialog')).first();
       await expect(dialog).toBeVisible();
