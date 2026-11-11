@@ -15,10 +15,12 @@ export const HASH: Record<Screen, string> = { home: '', lab: '#/lab', skate: '#/
  * The draw-call caps (strict: under 60 on High, under 40 on Medium, under 20
  * on Low, ADR-62) and the expected worst case per tier with every switch on
  * (PLAN-PLAY-POLISH-REACH, "Performance targets"). The expected number moves
- * only with a step that adds or removes a draw, in that step's commit.
+ * only with a step that adds or removes a draw, in that step's commit. The
+ * slider guides (ADR-82) added one on High and Medium: the player's turn at
+ * rest, with the feet, legs, trails and cues, is now the worst case there.
  */
 export const GATE: Record<Tier, number> = { high: 60, medium: 40, low: 20 };
-export const LEDGER: Record<Tier, number> = { high: 36, medium: 21, low: 12 };
+export const LEDGER: Record<Tier, number> = { high: 37, medium: 22, low: 12 };
 
 /** The R3F root, PerfProbe's numbers and the store, as the checks read them. */
 interface Debug {

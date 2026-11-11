@@ -746,6 +746,21 @@ At a game's start, and after each go once it has come to rest, a notice covers t
 - **Motion.** The layer fades in (`--dur-slow`), the panel drops 16 px into place (420 ms). `data-calm` (reduced motion in the store) and `prefers-reduced-motion` turn every animation off: the coin shows its face, still.
 - **Between turns.** Continue clears the stage, and `.stage-wipe` (the stage's `--scene-bg`, absolute over it, no pointer events) fades from opaque to nothing over `--dur-slow` on the fresh scene. Not shown under reduced motion.
 
+### 11.5 The slider guides (`.field__swatch`, 2026-11-10, ADR-82)
+
+On the player's turn in a game, before the pop, three arrows stand round the board in the 3D view and show what each slider will do. Medium and High only (Low gets no new features, ADR-62). They follow the sliders as they move, and go when the board pops; after Continue (11.4) the next turn's come back.
+
+| Slider | Arrow | Colour (token) |
+| --- | --- | --- |
+| Pop | straight up past the tail, from the deck's height at rest to its height at the top of the jump: as long as the pop | `#e69f00` orange (`--guide-pop`) |
+| Flick | an arc round the board's long axis past the nose, from the top, turning the way the grip rolls (to the heel side for a kickflip, the toe side for a heelflip); the faster the flick, the further round | `#cc79a7` reddish purple (`--guide-flick`) |
+| Scoop | an arc on the ground round the board (0.49 m out, just past the nose and tail), from the tail, the way the tail swings (to the heel side for backside, the toe side for frontside) | `#009e73` bluish green (`--guide-scoop`) |
+
+- **Shape.** Tubes 11 mm in radius with a cone head (60 mm long, 28 mm in radius). An arc sweeps 110 degrees per rev/s, at least 24 and at most 330. A flick or scoop under 0.05 rev/s has no arrow. Numbers in `ART.guides`.
+- **Look.** Unlit and not tone mapped, so each matches its swatch exactly; solid, so the board and the rider hide them where they pass behind. The colours are Okabe-Ito, apart from the foot trails' blue and yellow and the motion cues on the grip.
+- **Swatches.** While the arrows show, each slider's label starts with a 14 x 6 px pill of its arrow's colour (`.field__swatch--pop`, `--flick`, `--scoop`), decorative: the name and the value say what the slider is.
+- **Words.** Nothing new is announced: the sliders' value text already says the direction and the rate, and the trick guide what to aim for.
+
 ## 12. Screens and the welcome screen (2026-11-08, ADR-45)
 
 The app opens on a welcome screen instead of every control at once. Three screens share one grid, chosen by `data-screen` on `.app`; the stage keeps its place in the DOM so the 3D view never reloads.

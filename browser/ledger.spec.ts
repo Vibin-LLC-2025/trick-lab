@@ -93,12 +93,17 @@ for (const tier of TIERS)
         // Past the coin flip (ADR-80).
         st.getState().continueSkate();
         st.getState().callSkateTrick('360-flip');
+        // A flick and a scoop, so all three slider guides show before the pop (ADR-82).
+        st.getState().setInput('flick', 1.9);
+        st.getState().setInput('scoop', 1.0);
       });
+      // The player's turn at rest: the slider guides are one more draw on Medium and High (ADR-82).
+      const guided = await drawCalls(page);
       const { calls } = await popAndLand(page);
       // The landing's own frames follow: its dust, where the tier and the switches have it.
       const landing = await landingCalls(page);
       landed[name(c)] = landing;
-      seen[`skate/${name(c)}`] = Math.max(rest, calls, landing);
+      seen[`skate/${name(c)}`] = Math.max(rest, guided, calls, landing);
     }
     // The welcome screen at rest (its preview has no trails or cues).
     await page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().setScreen('home'));
