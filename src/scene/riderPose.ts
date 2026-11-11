@@ -7,6 +7,9 @@ import { ART } from './artDirection';
 
 const REST_Y = ART.board.restY;
 
+/** The rider's mesh in the scene graph (the GLB's node is `Body`). */
+export const RIDER_MESH_NAME = 'Rider_Body';
+
 /**
  * Each bone, in RIDER_BONES order, at its frame: the pose is in the board's
  * rest frame (y up from the deck at rest) and the bones are siblings in the
@@ -42,6 +45,8 @@ export function makeRiderRig(source: SkinnedMesh, material: Material) {
     source.skeleton.boneInverses.map((m) => m.clone()),
   );
   const mesh = new SkinnedMesh(source.geometry, material);
+  // Named so a browser script can tell the rider is in (scripts/still/capture.js).
+  mesh.name = RIDER_MESH_NAME;
   mesh.bind(skeleton, source.bindMatrix.clone());
   // The skinned bounds would be the bind pose's; the rider moves, so never cull it.
   mesh.frustumCulled = false;

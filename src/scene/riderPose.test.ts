@@ -18,7 +18,7 @@ import { computeFlight } from '../sim/flight';
 import { newLegsPose, writeLegsPose } from '../sim/legs';
 import { presetById } from '../sim/tricks';
 import { ART } from './artDirection';
-import { applyBody, makeRiderRig } from './riderPose';
+import { applyBody, makeRiderRig, RIDER_MESH_NAME } from './riderPose';
 
 async function loadRider(): Promise<SkinnedMesh> {
   const file = readFileSync(resolve(__dirname, '../../public', RIDER_GLB));
@@ -48,9 +48,11 @@ const skinned = (mesh: SkinnedMesh, i: number) =>
   mesh.applyBoneTransform(i, new Vector3().fromBufferAttribute(mesh.geometry.getAttribute('position'), i)).applyMatrix4(mesh.matrixWorld);
 
 describe('the rider in the scene (ADR-85)', () => {
-  it('reads the 17 bones from rider.glb in RIDER_BONES order', async () => {
+  it('reads the 17 bones from rider.glb in RIDER_BONES order, and names the mesh the stills capture waits for', async () => {
     const source = await loadRider();
     expect(source.skeleton.bones.map((b) => b.name)).toEqual([...RIDER_BONES]);
+    expect(makeRiderRig(source, new MeshBasicMaterial()).mesh.name).toBe(RIDER_MESH_NAME);
+    expect(readFileSync(resolve(__dirname, '../../scripts/still/capture.js'), 'utf8')).toContain(`'${RIDER_MESH_NAME}'`);
   });
 
   it('in the bind pose leaves every vertex where rider.ts built it, standing on the deck at rest', async () => {
