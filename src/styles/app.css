@@ -2569,6 +2569,16 @@ a {
   text-align: center;
 }
 
+/* In a game on a wide screen the whole rider stands in the middle of the stage
+   (ADR-85), so the stickers land on the ground under the board, above the
+   timing strip, where they cover neither the rider nor the board (ADR-86). */
+@media (min-width: 961px) {
+  .app[data-screen="skate"] .celebration {
+    top: auto;
+    bottom: 9cqh;
+  }
+}
+
 .celebration__shout,
 .celebration__trick {
   font-family: var(--font-display);
