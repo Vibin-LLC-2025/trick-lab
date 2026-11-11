@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectTier, open, popAndLand, TIERS, type DebugWindow } from './helpers';
+import { expectTier, GAME_CHECK_RATE, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
 // The frames a landing draws (CLAUDE.md rule 4, PERF-BUDGET.md): read from the
 // store, not the frameloop. From the frame that drew the landing to the point
@@ -29,8 +29,9 @@ for (const tier of TIERS)
     const errors = await open(page, tier, 'skate', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
     await expectTier(page, tier);
     for (const flick of [2.0, 1.1]) {
-      await page.evaluate((flick) => {
+      await page.evaluate(([flick, rate]) => {
         const st = (window as unknown as DebugWindow).__trickLabStore;
+        st.getState().setRate(rate);
         // A fresh game each time, with the player up first.
         st.getState().startSkate();
         for (let i = 0; i < 50 && st.getState().skate.first !== 'you'; i++) st.getState().startSkate();
@@ -38,7 +39,7 @@ for (const tier of TIERS)
         st.getState().continueSkate();
         st.getState().callSkateTrick('kickflip');
         st.getState().setInput('flick', flick);
-      }, flick);
+      }, [flick, GAME_CHECK_RATE] as const);
       await page.keyboard.press('Space');
       const grade = await page.evaluate(async () => {
         const w = window as unknown as DebugWindow;

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drawCalls, expectTier, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
+import { drawCalls, expectTier, GAME_CHECK_RATE, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
 // The draw-call caps (ADR-62): every switch combination, on the welcome
 // screen at rest, on the game screen at rest (with the skate spot, ADR-69),
@@ -85,8 +85,9 @@ for (const tier of TIERS)
     for (const c of COMBOS) {
       await setSwitches(page, c);
       const rest = await drawCalls(page);
-      await page.evaluate(() => {
+      await page.evaluate((rate) => {
         const st = (window as unknown as DebugWindow).__trickLabStore;
+        st.getState().setRate(rate);
         // A fresh game each time, with the player up first.
         st.getState().startSkate();
         for (let i = 0; i < 50 && st.getState().skate.first !== 'you'; i++) st.getState().startSkate();
@@ -96,7 +97,7 @@ for (const tier of TIERS)
         // A flick and a scoop set before the pop, as the slider guides had them (ADR-82, removed by ADR-84).
         st.getState().setInput('flick', 1.9);
         st.getState().setInput('scoop', 1.0);
-      });
+      }, GAME_CHECK_RATE);
       // The player's turn at rest, measured as before: nothing round the board now (ADR-84), and no motion cues in a game.
       const guided = await drawCalls(page);
       const { calls } = await popAndLand(page);

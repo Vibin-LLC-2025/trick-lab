@@ -55,6 +55,8 @@ interface Store {
   continueSkate: () => void;
   callSkateTrick: (id: string) => void;
   setInput: (key: 'pop' | 'flick' | 'scoop', value: number) => void;
+  /** The playback speed (a stop of SPEEDS), which a game runs at GAME_PACE of (ADR-78). */
+  setRate: (rate: number) => void;
   roll: 'still' | 'push' | 'slow';
   landing: 'none' | 'plays' | 'over';
   /** The instant replay (ADR-72). */
@@ -65,6 +67,21 @@ interface Store {
   setDeck: (deck: string) => void;
 }
 export type DebugWindow = Window & Debug & { gc?: () => void };
+
+/**
+ * The playback speed the checks play a game at: 2x, the fastest stop. A game
+ * runs at 0.4 of the playback speed (GAME_PACE, ADR-78), and one frame moves
+ * it on by at most 0.1 s (MAX_STALL, flightClock.ts). Without a GPU a frame
+ * on High takes 0.25 s here and longer on CI, so at 1x a go (the flight, the
+ * roll-out, the landing's motion and the instant replay) draws about 63
+ * frames and outlasted the checks' guards on CI; at 2x it draws about 42
+ * (measured 2026-11-11), about what a go drew before ADR-78. Nothing a check
+ * asserts depends on the speed: the grades come from the inputs, and the
+ * draws, the frames after rest and the memory are the same at any speed.
+ * The replay keeps its own slow rate (ADR-72). The speed is not saved, so a
+ * reload goes back to 1x; a tier change keeps it.
+ */
+export const GAME_CHECK_RATE = 2;
 
 /** Prefs in localStorage before the app starts (keys without the `trick-lab.` prefix). */
 export type Prefs = Record<string, string>;
@@ -205,7 +222,7 @@ export async function popAndLand(page: Page, windowMs = 0) {
 }
 
 /**
- * One go of a game of SKATE on the game screen (exact pops, the computer
+ * One go of a game of SKATE on the game screen, at GAME_CHECK_RATE (exact pops, the computer
  * waiting for a key: the prefs the ledger check opens with), by a real Space
  * press, then everything coming to rest: the roll, the landing's motion and
  * the instant replay (ADR-67, ADR-68, ADR-72). A game that is over, or not
@@ -215,10 +232,11 @@ export async function popAndLand(page: Page, windowMs = 0) {
  * landings, bails, replays and the computer's own goes. Returns the go's grade.
  */
 export async function gameGo(page: Page, n: number) {
-  const before = await page.evaluate((n) => {
+  const before = await page.evaluate(([n, rate]) => {
     const st = (window as unknown as DebugWindow).__trickLabStore;
     type Game = { phase: string; used: string[]; call: { flips: number; halfShoves: number } | null };
     const game = () => st.getState().skate as unknown as Game;
+    st.getState().setRate(rate);
     if (game().phase === 'off' || game().phase === 'over') st.getState().startSkate();
     // Past the coin flip or the last go's notice (ADR-80), as Continue does.
     if (st.getState().skateNotice) st.getState().continueSkate();
@@ -233,7 +251,7 @@ export async function gameGo(page: Page, n: number) {
       st.getState().setInput('scoop', 0.9 * call.halfShoves * k);
     }
     return (st.getState() as unknown as { flightId: number }).flightId;
-  }, n);
+  }, [n, GAME_CHECK_RATE] as const);
   await page.keyboard.press('Space');
   await page.waitForFunction(
     (before) => {
