@@ -5,6 +5,7 @@ import tokens from '../styles/tokens.css?raw';
 import { useTrickStore } from '../store';
 import { App } from './App';
 import { COMPUTER_DELAY_MS } from './Skate';
+import { pickList, pickTrick } from '../test/pick';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -228,7 +229,6 @@ describe('game screen (ADR-46)', () => {
   it('the student calls their trick from the picker before setting it; a trick already set is not offered', async () => {
     const user = await setup();
     await start(user);
-    const picker = within(game()).getByRole('combobox', { name: 'Call your trick' });
 
     // Pop without a call: refused, and said why.
     const pop = within(game()).getByRole('button', { name: 'Pop' });
@@ -237,8 +237,10 @@ describe('game screen (ADR-46)', () => {
     expect(useTrickStore.getState().flight).toBeNull();
     expect(announcer()).toHaveTextContent('Call your trick first: pick the trick you are going for, then pop.');
 
-    await user.selectOptions(picker, 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(announcer()).toHaveTextContent('You called a kickflip. Land it and the computer has to copy it.');
+    // The list folds away once a trick is called (ADR-88).
+    expect(pickList()).toBeNull();
     expect(within(game()).getByText('Kickflip', { selector: '.turn__trick' })).toBeInTheDocument();
     expect(within(game()).getByText('How to kickflip')).toBeInTheDocument();
     act(() => useTrickStore.getState().setInput('flick', 1.9));
@@ -253,10 +255,31 @@ describe('game screen (ADR-46)', () => {
     await user.click(within(game()).getByRole('button', { name: "Computer's go" }));
     landNow();
     nextGo();
-    const again = within(game()).getByRole('combobox', { name: 'Call your trick' });
-    expect(within(again).getByRole('option', { name: 'Kickflip (already set)' })).toBeDisabled();
-    expect(within(again).getByRole('option', { name: 'Heelflip' })).toBeEnabled();
-    expect(within(again).queryByRole('option', { name: /^Ollie/ })).toBeNull();
+    const again = pickList()!;
+    expect(within(again).getByRole('button', { name: 'Kickflip (already set)' })).toBeDisabled();
+    expect(within(again).getByRole('button', { name: 'Heelflip' })).toBeEnabled();
+    expect(within(again).queryByRole('button', { name: /^Ollie/ })).toBeNull();
+  });
+
+  it('a click on a trick leaves Space to pop: focus goes to the turn heading, not back to the picker (ADR-88)', async () => {
+    const user = await setup();
+    await start(user);
+    await pickTrick(user, 'Kickflip');
+    expect(document.activeElement).toBe(turnHeading());
+    expect(pickList()).toBeNull();
+
+    // Change trick opens the list again, keeping focus on its button; a pick folds it and focus goes back to the heading.
+    const change = within(game()).getByRole('button', { name: 'Change trick' });
+    await user.click(change);
+    expect(change).toHaveAttribute('aria-expanded', 'true');
+    expect(document.activeElement).toBe(change);
+    await user.click(within(pickList()!).getByRole('button', { name: 'Heelflip' }));
+    expect(useTrickStore.getState().skate.call?.id).toBe('heelflip');
+    expect(document.activeElement).toBe(turnHeading());
+
+    // Space pops from there: it does not open the picker again.
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().flight).not.toBeNull();
   });
 
   it('Slow motion is a switch on the game screen as well as the s key', async () => {
@@ -389,7 +412,7 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
   /** The student's kickflip, called, popped and landed; then the board comes to rest (FlightDriver's two calls). */
   async function madeSet(user: ReturnType<typeof userEvent.setup>) {
     await start(user);
-    await user.selectOptions(within(game()).getByRole('combobox', { name: 'Call your trick' }), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     act(() => useTrickStore.getState().setInput('flick', 1.9));
     fireEvent.click(within(game()).getByRole('button', { name: 'Pop' }));
     landNow();

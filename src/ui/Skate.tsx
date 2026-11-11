@@ -240,37 +240,71 @@ function Lesson() {
   );
 }
 
-/** The student's call before a set (ADR-44). Tricks already set this game cannot be called again. */
+/**
+ * The student's call before a set (ADR-44, ADR-88): the open tricks as
+ * buttons, one press calls one, so the call is made by a press and never by
+ * browsing (a select called a trick on every arrow key on some systems, and
+ * kept Space for itself after a click). Until a trick is called the list is
+ * open; then it folds to "Change trick", which opens it again. The store
+ * moves focus to the turn heading after a call, so Space pops next. Tricks
+ * already set this game cannot be called again.
+ */
 function CallPicker() {
   const game = useTrickStore((s) => s.skate);
   const callTrick = useTrickStore((s) => s.callSkateTrick);
+  const [changing, setChanging] = useState(false);
+  const call = game.call;
+  const listed = !call || changing;
   const open = new Set(openTricks(game).map((t) => t.id));
+  const pick = (id: TrickId) => {
+    setChanging(false);
+    callTrick(id);
+  };
   return (
-    <div className="field skate__pick">
-      <label className="field__label" htmlFor="skate-call">
-        Call your trick
-      </label>
-      <select
-        id="skate-call"
-        className="skate__select"
-        value={game.call?.id ?? ''}
-        onChange={(e) => {
-          if (e.currentTarget.value) callTrick(e.currentTarget.value as TrickId);
-        }}
-      >
-        <option value="" disabled>
-          Pick a trick
-        </option>
-        {SETTABLE_GROUPS.map((group) => (
-          <optgroup key={group.label} label={group.label}>
-            {group.tricks.map((t) => (
-              <option key={t.id} value={t.id} disabled={!open.has(t.id)}>
-                {open.has(t.id) ? t.name : `${t.name} (already set)`}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
+    <div className="pick">
+      <div className="pick__head">
+        <p id="skate-call-label" className="pick__label">
+          {call ? 'Your call' : 'Call your trick'}
+        </p>
+        {call && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            aria-expanded={changing}
+            aria-controls="skate-call"
+            onClick={() => setChanging(!changing)}
+          >
+            {changing ? 'Keep it' : 'Change trick'}
+          </button>
+        )}
+      </div>
+      {listed && (
+        <div id="skate-call" className="pick__groups" role="group" aria-label="Call your trick">
+          {SETTABLE_GROUPS.map((group) => (
+            <div key={group.label} className="pick__group" role="group" aria-label={group.label}>
+              <p className="pick__group-label" aria-hidden="true">
+                {group.label}
+              </p>
+              <ul className="pick__list">
+                {group.tricks.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      className="pick__trick"
+                      aria-pressed={call?.id === t.id}
+                      disabled={!open.has(t.id)}
+                      aria-label={open.has(t.id) ? undefined : `${t.name} (already set)`}
+                      onClick={() => pick(t.id)}
+                    >
+                      {t.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

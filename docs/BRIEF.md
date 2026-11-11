@@ -290,7 +290,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .turn-chip, .turn-chip--you, .turn-chip--computer, .turn-chip__who, .turn-chip__trick (whose turn, over the stage, ADR-46)
 .confirm, .confirm__title, .confirm__text, .confirm__actions (leave a game dialog, ADR-46)
 .fold, .fold--part, .fold__heading, .fold__heading--sub, .fold__toggle, .fold__body (the lab's sections that open, ADR-47)
-.skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
+.skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
 .skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar's track, ADR-65)
 .timing, .timing--run, .timing--in, .timing--off, .timing__head, .timing__who, .timing__verdict (the timing bar over the stage, ADR-83)
 .field__track, .field__zone, .field__zone--clean, .field__forecast (a slider's track, the game's landing zones and the forecast, ADR-83)

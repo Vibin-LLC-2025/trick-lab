@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTrickStore } from '../store';
 import { App } from './App';
+import { pickTrick } from '../test/pick';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -10,7 +11,7 @@ vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-s
 const announcer = () => document.getElementById('announcer')!;
 const game = () => screen.getByRole('main', { name: 'Game' });
 const state = () => useTrickStore.getState();
-const steps = () => within(game()).getAllByRole('listitem');
+const steps = () => [...game().querySelectorAll<HTMLElement>('.lesson__step')];
 const now = () => steps().find((li) => li.getAttribute('aria-current') === 'step');
 
 async function setup() {
@@ -47,7 +48,7 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
     expect(now()).toHaveTextContent('Call your trick.');
     expect(announcer()).toHaveTextContent(/First game, so here is your first trick in 2 steps\. Step 1 of 2: Call your trick\.$/);
 
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     // The game sets the sliders for the trick (ADR-83), and says so with the call.
     expect(state()).toMatchObject({ pop: 0.35, flick: 1.9, scoop: 0 });
     expect(announcer()).toHaveTextContent('You called a kickflip. Land it and the computer has to copy it. Sliders set for a kickflip. Step 1 of 2: Press Get ready.');
@@ -75,7 +76,7 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
     await user.click(within(game()).getByRole('button', { name: 'Start game' }));
     await user.click(document.getElementById('skate-notice-continue')!);
     expect(steps()).toHaveLength(3);
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     // Hard never sets the sliders (ADR-83).
     expect(state().flick).toBe(0);
     expect(now()).toHaveTextContent('Set the sliders for the kickflip: Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0.');

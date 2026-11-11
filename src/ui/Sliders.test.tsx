@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTrickStore } from '../store';
 import { App } from './App';
+import { pickTrick } from '../test/pick';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -43,7 +44,7 @@ describe("the game's sliders (ADR-83)", () => {
     expect(document.querySelectorAll('.field__zone')).toHaveLength(0);
     expect(slider(/^Flick/)).toHaveAccessibleDescription('This makes: ollie, clean.');
 
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     const flick = slider(/^Flick/);
     expect(flick).toHaveValue('1.9');
     expect(flick).toHaveAttribute('aria-valuetext', '1.9 revolutions per second, kickflip, clean');
@@ -79,7 +80,7 @@ describe("the game's sliders (ADR-83)", () => {
 
   it('on Easy too, and the turn card is the trick and one line: no word guide', async () => {
     const user = await playerUp('easy');
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(zones(slider(/^Flick/))).toHaveLength(2);
     expect(within(game()).queryByText('How to kickflip')).toBeNull();
     expect(within(game()).getByText('Land it and the computer has to copy it: press Get ready, then Pop! in the green band.')).toBeInTheDocument();
@@ -87,7 +88,7 @@ describe("the game's sliders (ADR-83)", () => {
 
   it('on Hard: no zones and no set sliders, the word guide stays, and the forecast still says what they make', async () => {
     const user = await playerUp('hard');
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(state().flick).toBe(0);
     expect(document.querySelectorAll('.field__zone')).toHaveLength(0);
     expect(slider(/^Flick/)).toHaveAttribute('aria-valuetext', '0 revolutions per second');
@@ -100,7 +101,7 @@ describe("the game's sliders (ADR-83)", () => {
   it('in Exact on Normal: the zones and the forecast, but nothing is set and the word guide stays', async () => {
     useTrickStore.setState({ popMode: 'exact' });
     const user = await playerUp('normal');
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(state().flick).toBe(0);
     expect(zones(slider(/^Flick/))).toHaveLength(2);
     expect(within(game()).getByText('How to kickflip')).toBeInTheDocument();

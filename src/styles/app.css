@@ -1919,16 +1919,75 @@ a {
 }
 
 /* The call picker and the trick guide (ADR-44). */
-.skate__select {
-  grid-area: range;
-  min-width: 0;
-  min-height: 36px;
-  width: 100%;
+/* The call picker (ADR-88, DESIGN.md 11.7): the open tricks as buttons in
+   their groups, two to a row; the called one in the accent's tint and
+   border, one already set struck through and muted. */
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+}
+
+.pick__label,
+.pick__group-label {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pick__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pick__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
   margin-top: var(--space-1);
-  padding: 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.pick__trick {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick__trick:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.pick__trick[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+}
+
+.pick__trick:disabled {
+  color: var(--color-muted);
+  text-decoration: line-through;
+  cursor: not-allowed;
 }
 
 .skate__guide {
@@ -2939,7 +2998,7 @@ a {
   }
 
   .preset,
-  .skate__select {
+  .pick__trick {
     min-height: 44px;
   }
 }

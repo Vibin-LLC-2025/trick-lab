@@ -1241,3 +1241,11 @@ Every box is inside the clear part across its width too, and none overlaps a car
 **Not adopted.** Raising every guard alone: CI would take far longer, and a run would still draw a different number of frames on each machine. Lifting `MAX_STALL` for the checks: a frame would still move the clocks by its real time, so runs would differ by machine.
 
 **Tests.** `src/scene/flightClock.test.ts` (`checkStep` reads a step only with `debug` and only up to 1 s; without one a frame moves the clocks by the real delta capped at `MAX_STALL`; with one, by exactly the step whatever the delta). In the browser, every check now runs on the steady clock.
+
+## ADR-88: The call picker is a list of buttons, and a call moves focus to the turn heading (2026-11-11)
+
+**Context.** The owner, 2026-11-11: picking a trick from the dropdown and then pressing Space to start the bar opened the dropdown again, so every go needed a click somewhere on the game first. A native `select` keeps focus after a choice, and the global shortcuts stand aside for it (`isTyping`), so Space was the select's. Moving focus away from a select on `change` is no fix: on Windows and Linux every arrow key on a closed select fires `change`, so a keyboard player could not browse the list.
+
+**Decision.** The call picker (`CallPicker` in `src/ui/Skate.tsx`, DESIGN.md 11.7) is the open tricks as buttons in their three groups, inside a group named "Call your trick". One press calls one trick, so a call is always made on purpose, by pointer or keyboard alike. Until a trick is called the list is open; then it folds to "Your call" and a "Change trick" button (`aria-expanded`) that opens it again and keeps focus while it does. A trick already set this game is a disabled button named "<trick> (already set)". `callSkateTrick` requests focus on the turn heading (`#skate-heading`, tabIndex -1) after a call, the same trick again included, so the next Space pops. Amends rule 10 of CLAUDE.md: a call is now a place a store action moves focus. It does not go to the Pop button: Space on a focused button fires on key up, which would release the timing bar late.
+
+**Tests.** `src/ui/Skate.test.tsx` ("a click on a trick leaves Space to pop"): focus is on the heading after a call and after a change, Change trick keeps focus as it opens, and Space pops. The UI tests call tricks through `src/test/pick.ts`.

@@ -6,6 +6,7 @@ import { BAR } from '../sim/bar';
 import { SKATE_LEVELS } from '../sim/skate';
 import { useTrickStore } from '../store';
 import { App } from './App';
+import { pickTrick, pickTrickNow } from '../test/pick';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -40,7 +41,7 @@ async function kickflipUp() {
   fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
   // Past the coin flip (ADR-80).
   fireEvent.click(document.getElementById('skate-notice-continue')!);
-  fireEvent.change(within(game()).getByLabelText('Call your trick'), { target: { value: 'kickflip' } });
+  pickTrickNow('Kickflip');
   act(() => state().setInput('flick', 1.9));
   act(() => turnHeading().focus());
 }
@@ -81,7 +82,7 @@ describe('how you pop, at the game\'s start (ADR-65)', () => {
     await user.keyboard('{Enter}');
     // Enter on the coin flip's Continue, where focus went (ADR-80).
     await user.keyboard('{Enter}');
-    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(timing()).toBeNull();
     // Exact keeps the one name, and never sets the sliders (ADR-83).
     expect(state().flick).toBe(0);
@@ -215,7 +216,7 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     act(() => state().quitSkate());
     fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
     fireEvent.click(document.getElementById('skate-notice-continue')!);
-    fireEvent.change(within(game()).getByLabelText('Call your trick'), { target: { value: 'kickflip' } });
+    pickTrickNow('Kickflip');
     const again = button('Get ready');
     fireEvent.click(again);
     act(() => void vi.advanceTimersByTime(700));
@@ -230,7 +231,7 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     act(() => state().quitSkate());
     fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
     fireEvent.click(document.getElementById('skate-notice-continue')!);
-    fireEvent.change(within(game()).getByLabelText('Call your trick'), { target: { value: 'kickflip' } });
+    pickTrickNow('Kickflip');
     fireEvent.click(button('Get ready'));
     act(() => void vi.advanceTimersByTime(BAR.centreMs + 120));
     fireEvent.click(button('Pop!'));

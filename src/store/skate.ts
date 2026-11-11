@@ -314,9 +314,14 @@ export const createSkateSlice =
           s.announce('The bar is running. Pop first, then call another trick.');
           return;
         }
-        if (s.skate.call?.id === id) return;
+        // A call moves focus to the turn heading (ADR-88): the picker folds away, and Space pops from there.
+        if (s.skate.call?.id === id) {
+          s.requestFocus({ kind: 'skate-heading' });
+          return;
+        }
         const skate = callTrick(s.skate, id);
         set({ skate });
+        s.requestFocus({ kind: 'skate-heading' });
         // Not logged on its own: the student's trick.popped carries the call. The sliders it sets are (ADR-83).
         const sliders = assist(skate.call!);
         const l = lesson();
