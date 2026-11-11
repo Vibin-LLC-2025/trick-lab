@@ -16,7 +16,7 @@ export { liveProgress, type Playhead } from './playhead';
 export { clearArea, FULL_STAGE, sameArea, type ClearArea, type Cover, type CoverSide, type PageRect } from './stage';
 export { noticeUp, type SkateNotice } from './notice';
 export { assistOn, sliderForecast, sliderPlace, sliderZones } from './forecast';
-export { computerWaiting, landingMoves, rollAllowed, rollMoves, type LandingState, type RollState } from './roll';
+export { COMPUTER_DELAY_MS, computerWaiting, landingMoves, rollAllowed, rollMoves, windUp, type LandingState, type RollState, type WindUp } from './roll';
 export { boardRider, DECK_KEY, shownDeck } from './deck';
 export { GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, type GameView, type ReplayState } from './replay';
 

@@ -16,6 +16,7 @@ import {
 import { ART, type Vec3 } from './artDirection';
 import { balancedLook, boxCorners, cameraRise, clearLens, fitDistance, fogDistance, framingPoints, orbitMaxDistance, riderFramingPoints } from './cameraFit';
 import { leavesFreeForReplay, newResetTracker, placeCamera, returnsFromReplay, setLens, takeReset } from './cameraPlacement';
+import { wind } from './windUp';
 
 const C = ART.camera;
 const BOARD_POINTS = framingPoints(C.fit);
@@ -198,14 +199,18 @@ const lookAt = new Vector3();
  * moves only the camera and the orbit target, reads the store's live
  * playhead, which FlightDriver advances, and allocates nothing. No frame of
  * its own: it moves on the frames the flight already draws, and a pause or a
- * scrub holds it where the board is.
+ * scrub holds it where the board is. Before the go it also stands
+ * `rideLift` higher while the rider rides tall (the wind-up, ADR-86), and
+ * comes down with the rider as it sinks into the crouch: the readiness
+ * FlightDriver left this frame (its useFrame runs first).
  */
 function Rise({ active, base, appliedRef }: { active: boolean; base: Vector3; appliedRef: Applied }) {
   useFrame((state) => {
     const camera = state.camera;
     const controls = state.controls as { target: Vector3 } | null;
     const s = useTrickStore.getState();
-    const r = active ? cameraRise(s.flight, liveProgress(useTrickStore.playhead, s), C.rest.riseEase, C.rest.bailEase) : 0;
+    // The flight's rise, plus the riding lift while the rider stands tall before its wind-up (FlightDriver stepped it this frame).
+    const r = active ? cameraRise(s.flight, liveProgress(useTrickStore.playhead, s), C.rest.riseEase, C.rest.bailEase) + (1 - wind.ready) * C.rest.rideLift : 0;
     const d = r - appliedRef.current;
     if (d === 0) return;
     appliedRef.current = r;

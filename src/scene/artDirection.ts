@@ -453,6 +453,15 @@ export const ART = {
       ],
       riseEase: 0.2,
       bailEase: 0.15,
+      /**
+       * How much higher the camera stands while the rider rides tall before
+       * its wind-up (ADR-86), metres; it comes down with the rider as it
+       * sinks into the crouch. The board at rest has this much room under it
+       * in the frame (the `board` box reaches below the pad for the pop), so
+       * the taller riding stance costs the frame nothing. The boxes are
+       * measured with it taken off, as with the rise.
+       */
+      rideLift: 0.15,
       margin: 0.02,
       /**
        * The arms may push the camera back by at most this much past what the
@@ -915,6 +924,15 @@ export const ART = {
    * picture).
    */
   replay: { rate: 0.3, bend: 0.28 },
+  /**
+   * The wind-up (ADR-86, 2026-11-11), seconds: the whole rider in a game
+   * sinks from the riding stance into the crouch over `sink` when the timing
+   * bar starts, and the computer's rider `lead` before its own pop; it comes
+   * back up over `rise` when a crouch is let go (the bar dropped). Eased with
+   * a smoothstep, only while the roll draws frames; otherwise it switches at
+   * once (reduced motion, Exact, a new turn behind the stage's fade).
+   */
+  windUp: { sink: 0.3, rise: 0.5, lead: 0.8 },
   /**
    * Dust (step 19, ADR-74): soft discs facing the camera, on Medium and High,
    * in a game. Metres and seconds (the roll's, so slow motion slows it).

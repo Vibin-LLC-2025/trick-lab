@@ -13,6 +13,7 @@ import {
   MIRROR_BONE,
   MOTION,
   newBodyPose,
+  RIDE,
   RIDER_BONES,
   writeBindPose,
   writeBodyPose,
@@ -21,7 +22,7 @@ import {
 } from './body';
 import { newFeetPose, writeFeetPose, type Stance } from './feet';
 import { computeFlight, heightAt, PHASE, type Flight, type TrickInputs } from './flight';
-import { LEG, newLegsPose, writeLegsPose, type Point3 } from './legs';
+import { HIPS, LEG, newLegsPose, writeLegsPose, type Point3 } from './legs';
 import { PRESETS } from './tricks';
 
 const STANCES: Stance[] = ['goofy', 'regular'];
@@ -32,11 +33,11 @@ const q = { x: 0, y: 0, z: 0 };
 const dot = (a: Point3, b: Point3) => a.x * b.x + a.y * b.y + a.z * b.z;
 const dist = (a: Point3, b: Point3) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
-/** Feet, legs, then the body at u, as FlightDriver calls them. */
-function pose(out: BodyPose, inputs: TrickInputs, flight: Flight | null, u: number, stance: Stance = 'goofy') {
+/** Feet, legs, then the body at u, as FlightDriver calls them; `ready` the wind-up's readiness (ADR-86). */
+function pose(out: BodyPose, inputs: TrickInputs, flight: Flight | null, u: number, stance: Stance = 'goofy', ready?: number) {
   writeFeetPose(feet, inputs, flight, u, stance);
-  writeLegsPose(legs, feet, flight, u, inputs, stance);
-  return writeBodyPose(out, legs, feet, flight, u, inputs, stance);
+  writeLegsPose(legs, feet, flight, u, inputs, stance, ready);
+  return writeBodyPose(out, legs, feet, flight, u, inputs, stance, ready);
 }
 
 /**
@@ -169,7 +170,8 @@ describe('the pose over the whole input range (ADR-85)', () => {
         const upper = b.bones[u]!;
         const fore = b.bones[f]!;
         const bend = hingeBend(upper, fore);
-        expect(bend).toBeGreaterThanOrEqual(MOTION.bail.elbow - 1e-6);
+        // Never straight: at least the riding stance's loose bend (ADR-86).
+        expect(bend).toBeGreaterThanOrEqual(RIDE.elbow - 1e-6);
         expect(bend).toBeLessThanOrEqual(90);
         // A hinge turns about its own X only: the forearm stays in the plane the upper arm's Z spans.
         expect(Math.abs(dot(fore.y, upper.x))).toBeLessThan(1e-9);
@@ -313,16 +315,115 @@ describe('the pose over the whole input range (ADR-85)', () => {
     expect(Math.abs(twist({ pop: 0.6, flick: 0, scoop: 4.2 }, 0.15))).toBeLessThanOrEqual(MOTION.shove.max + 1e-6);
   });
 
-  it('stands up out of a bail with the arms out wide', () => {
+  it('stands up out of a bail catching its balance: elbows bent, each arm its own way, coming down as it steps onto the pad (ADR-86)', () => {
     const b = newBodyPose();
     const bail = { pop: 0.15, flick: 1.9, scoop: 0 };
     const flight = computeFlight(bail);
     expect(flight.landed).toBe(false);
-    const c = pose(b, bail, flight, 1).bones[BONE.chest]!;
-    expect((Math.atan2(-c.y.z, c.y.y) * 180) / Math.PI).toBeCloseTo(MOTION.bail.lean, 6);
-    const arm = b.bones[BONE.upperArmR]!.y;
-    // Out along the board, near horizontal.
-    expect(arm.x).toBeGreaterThan(0.85);
+    const handY = (i: number) => b.bones[i]!.o.y;
+    const B = MOTION.bail;
+    for (const stance of STANCES) {
+      // Goofy's front arm is the right one; regular mirrors it onto the left.
+      const [front, back] = stance === 'goofy' ? [BONE.handR, BONE.handL] : [BONE.handL, BONE.handR];
+      const [frontUpper, frontFore] = stance === 'goofy' ? [BONE.upperArmR, BONE.forearmR] : [BONE.upperArmL, BONE.forearmL];
+      const [backUpper, backFore] = stance === 'goofy' ? [BONE.upperArmL, BONE.forearmL] : [BONE.upperArmR, BONE.forearmR];
+      pose(b, bail, flight, B.peakAt, stance);
+      const peak = [handY(front), handY(back)];
+      // Out for balance: the front hand higher than the back one, both elbows well bent, never a scarecrow's straight arms.
+      expect(peak[0]! - peak[1]!).toBeGreaterThan(0.08);
+      expect(hingeBend(b.bones[frontUpper]!, b.bones[frontFore]!)).toBeGreaterThan(45);
+      expect(hingeBend(b.bones[backUpper]!, b.bones[backFore]!)).toBeGreaterThan(35);
+      expect(Math.abs(b.bones[frontUpper]!.y.x)).toBeLessThan(0.85);
+      pose(b, bail, flight, 1, stance);
+      const c = b.bones[BONE.chest]!;
+      expect((Math.atan2(-c.y.z, c.y.y) * 180) / Math.PI).toBeCloseTo(B.lean, 6);
+      // Down as the rider settles: both hands lower at the landing than at the peak, still bent and still not mirror images.
+      expect(handY(front)).toBeLessThan(peak[0]! - 0.1);
+      expect(handY(back)).toBeLessThan(peak[1]!);
+      expect(hingeBend(b.bones[frontUpper]!, b.bones[frontFore]!)).toBeGreaterThan(55);
+      expect(Math.abs(handY(front) - handY(back))).toBeGreaterThan(0.02);
+    }
+  });
+
+  describe('the riding stance and the wind-up (ADR-86)', () => {
+    const inputs = PRESETS[0]!.inputs;
+    const chestLean = (b: BodyPose) => {
+      const c = b.bones[BONE.chest]!;
+      return (Math.atan2(-c.y.z, c.y.y) * 180) / Math.PI;
+    };
+    /** The head's forward (-Z) turned toward the nose, degrees, goofy frame (the nose +X): positive toward the nose. */
+    const headToNose = (b: BodyPose, stance: Stance) => {
+      const h = b.bones[BONE.head]!;
+      return (Math.atan2((stance === 'goofy' ? 1 : -1) * -h.z.x, h.z.z) * 180) / Math.PI;
+    };
+
+    it('is the crouch exactly at readiness 1 and when left out, so the pop leaves from the same pose', () => {
+      const a = newBodyPose();
+      const b = newBodyPose();
+      for (const stance of STANCES) {
+        pose(a, inputs, null, 0, stance);
+        pose(b, inputs, null, 0, stance, 1);
+        for (let i = 0; i < RIDER_BONES.length; i++) {
+          expect(b.bones[i]!.o).toEqual(a.bones[i]!.o);
+          expect(b.bones[i]!.q).toEqual(a.bones[i]!.q);
+        }
+        // The first frame of a flight is that crouch whatever the readiness was: a flight ignores it.
+        const flight = computeFlight(inputs);
+        pose(b, inputs, flight, 0, stance, 0);
+        for (let i = 0; i < RIDER_BONES.length; i++) expect(dist(b.bones[i]!.o, a.bones[i]!.o)).toBeLessThan(1e-9);
+      }
+    });
+
+    it('rides taller and more upright, arms loose, the head toward the nose, the shoes untouched', () => {
+      const r = newBodyPose();
+      const c = newBodyPose();
+      for (const stance of STANCES) {
+        pose(c, inputs, null, 0, stance, 1);
+        const crouchSole = { ...feet.front };
+        pose(r, inputs, null, 0, stance, 0);
+        expect(feet.front).toEqual(crouchSole);
+        // The pelvis higher by the riding stance's height (the reach clamp leaves it alone there).
+        expect(r.bones[BONE.pelvis]!.o.y - c.bones[BONE.pelvis]!.o.y).toBeCloseTo(HIPS.ride - HIPS.crouch, 6);
+        expect(chestLean(r)).toBeCloseTo(RIDE.lean, 6);
+        expect(chestLean(c)).toBeCloseTo(MOTION.lean[0], 6);
+        expect(headToNose(r, stance)).toBeGreaterThan(30);
+        expect(Math.abs(headToNose(c, stance))).toBeLessThan(15);
+        // Loose arms: the hands lower than in the crouch's carry, relative to the shoulders.
+        const drop = (b: BodyPose) => b.bones[BONE.upperArmR]!.o.y - b.bones[BONE.handR]!.o.y;
+        expect(drop(r)).toBeGreaterThan(drop(c));
+      }
+      // Regular is goofy's mirror.
+      const g = newBodyPose();
+      pose(g, inputs, null, 0, 'goofy', 0.4);
+      pose(r, inputs, null, 0, 'regular', 0.4);
+      for (let i = 0; i < RIDER_BONES.length; i++) {
+        const m = r.bones[MIRROR_BONE[i]!]!.o;
+        const o = g.bones[i]!.o;
+        expect(Math.hypot(m.x + o.x, m.y - o.y, m.z - o.z)).toBeLessThan(1e-9);
+      }
+    });
+
+    it('moves smoothly from riding to the crouch: small steps of readiness, small moves, every frame valid', () => {
+      const a = newBodyPose();
+      const b = newBodyPose();
+      for (const stance of STANCES) {
+        pose(a, inputs, null, 0, stance, 0);
+        for (let i = 1; i <= 200; i++) {
+          pose(b, inputs, null, 0, stance, i / 200);
+          for (let k = 0; k < RIDER_BONES.length; k++) {
+            expect(dist(a.bones[k]!.o, b.bones[k]!.o)).toBeLessThan(0.01);
+            const q1 = a.bones[k]!.q;
+            const q2 = b.bones[k]!.q;
+            expect(Math.abs(q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w)).toBeGreaterThan(Math.cos((2 * Math.PI) / 180 / 2));
+          }
+          a.bones.forEach((f, k) => {
+            const t = b.bones[k]!;
+            f.o = { ...t.o };
+            f.q = { ...t.q };
+          });
+        }
+      }
+    });
   });
 
   it('returns out and keeps its objects, so FlightDriver allocates nothing', () => {
@@ -347,7 +448,8 @@ describe('describeBody (ADR-85)', () => {
     expect(describeBody(PHASE.catch.start, landed)).toBe('Arms come down as the rider folds to catch the board.');
     expect(describeBody(1, landed)).toBe('The rider rides it out, body folded and arms low.');
     expect(describeBody(0.9, bailed)).toBe('Arms out, the rider steps down beside the board.');
-    expect(describeBody(1, bailed)).toBe('The rider stands up beside the board, arms out wide.');
+    expect(describeBody(1, bailed)).toBe('The rider stands beside the board, arms coming down as it catches its balance.');
+    expect(describeBody(0, null, true)).toBe('The rider rides along, standing tall, arms loose, looking ahead past the nose.');
     for (let u = 0; u <= 1; u += 0.05) expect(describeBody(u, landed)).not.toContain(String.fromCharCode(0x2014));
   });
 });

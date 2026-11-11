@@ -565,14 +565,15 @@ describe('the rider at rest, in the clear part of the stage (ADR-86)', () => {
 
   /**
    * What must be in frame at progress u of a flight (null: at rest, before the
-   * pop), the camera's rise taken off: the board's outline (turned by the
-   * flip, the shove and the pop's pitch), both shoes' soles and the
-   * beanie's crown, the essentials; and the hands.
+   * pop, at the wind-up's readiness `ready`, ADR-86), the camera's rise
+   * taken off: the board's outline (turned by the flip, the shove and the
+   * pop's pitch), both shoes' soles and the beanie's crown, the essentials;
+   * and the hands.
    */
-  function sample(inputs: { pop: number; flick: number; scoop: number }, u: number | null, stance: 'goofy' | 'regular', bufs: ReturnType<typeof buffers>) {
+  function sample(inputs: { pop: number; flick: number; scoop: number }, u: number | null, stance: 'goofy' | 'regular', bufs: ReturnType<typeof buffers>, ready = 1) {
     const flight = u === null ? null : computeFlight(inputs);
     const at = u ?? 0;
-    const rise = cameraRise(flight, at, C.rest.riseEase, C.rest.bailEase);
+    const rise = cameraRise(flight, at, C.rest.riseEase, C.rest.bailEase) + (flight ? 0 : (1 - ready) * C.rest.rideLift);
     const pose = writePose(bufs.pose, flight, at);
     bufs.deck.makeRotationFromEuler(setBoardRotation(bufs.turn, pose, stance)).setPosition(0, restY + pose.y - rise, 0);
     const essential: Vector3[] = [];
@@ -591,8 +592,8 @@ describe('the rider at rest, in the clear part of the stage (ADR-86)', () => {
         essential.push(new Vector3(x, restY + s.y - rise, z), new Vector3(x, restY + s.y + 0.12 - rise, z));
       }
     }
-    const l = writeLegsPose(bufs.legs, f, flight, at, inputs, stance);
-    const b = writeBodyPose(bufs.body, l, f, flight, at, inputs, stance);
+    const l = writeLegsPose(bufs.legs, f, flight, at, inputs, stance, ready);
+    const b = writeBodyPose(bufs.body, l, f, flight, at, inputs, stance, ready);
     bonePoint(bufs.p, b.bones[BONE.head]!, 0, crown, 0);
     essential.push(new Vector3(bufs.p.x, restY + bufs.p.y - rise, bufs.p.z));
     const hands: Vector3[] = [];
@@ -615,12 +616,12 @@ describe('the rider at rest, in the clear part of the stage (ADR-86)', () => {
     ...PRESETS.flatMap((pr) => [0.15, 0.35, 0.6].map((pop) => ({ ...pr.inputs, pop }))),
     ...[0.15, 0.35, 0.6].flatMap((pop) => [-4.2, 4.2].flatMap((flick) => [-4.2, 0, 4.2].map((scoop) => ({ pop, flick, scoop })))),
   ];
-  /** Every sample of every case, both stances, at rest and over the flight. */
+  /** Every sample of every case, both stances, at rest (riding, winding up, crouched, ADR-86) and over the flight. */
   const SAMPLES = (() => {
     const bufs = buffers();
     const out: { essential: Vector3[]; hands: Vector3[] }[] = [];
     for (const stance of ['goofy', 'regular'] as const) {
-      out.push(sample({ pop: 0.35, flick: 0, scoop: 0 }, null, stance, bufs));
+      for (const pr of PRESETS) for (const ready of [0, 0.5, 1]) out.push(sample(pr.inputs, null, stance, bufs, ready));
       for (const inputs of CASES) for (let i = 0; i <= 60; i++) out.push(sample(inputs, i / 60, stance, bufs));
     }
     return out;

@@ -133,8 +133,13 @@ export const BIND = { thigh: 20, abd: 42, flex: 8, elbow: 22, wrist: 0 } as cons
  * - `sketchy`: a sketchy landing (ADR-63) throws the arms out by up to this
  *   much more, for balance.
  * - `bail` (the feet step off to the heel side, feet.ts MOTION.bail): from
- *   the catch's start to the landing the rider stands up out of the trick,
- *   upright with the arms out wide.
+ *   the catch's start the rider stands up out of the trick (`lean`) and
+ *   throws the arms out to catch its balance, the elbows bent and the two
+ *   arms different, the front one higher and forward, the back one lower
+ *   and a little behind (`up`, front then back, at `peakAt` of the flight),
+ *   then lets them come down as it steps onto the pad (`down`, at the
+ *   landing). Until ADR-86 both arms went straight out sideways, 74 degrees,
+ *   and stayed there.
  * - `shove`: a shove-it turns the shoulders: first a little against the
  *   board's turn (the board and the body share the pop's spin), then along
  *   with it, back square by the landing. `perRev` degrees per rev/s of scoop,
@@ -154,9 +159,35 @@ export const MOTION = {
   lead: { abd: 6, flex: 10 },
   pop: { min: 0.55 },
   sketchy: { abd: 20, flex: 8 },
-  bail: { lean: 4, abd: 74, flex: 6, elbow: 20, wrist: 4 },
+  bail: {
+    lean: 6,
+    peakAt: 0.88,
+    up: { abd: [58, 40], flex: [34, -8], elbow: [56, 42] },
+    down: { abd: [30, 22], flex: [24, 2], elbow: [62, 48] },
+    wrist: 10,
+  },
   shove: { perRev: 5, max: 14, against: 1, follow: 0.6, spine: 0.4 },
   look: { weight: 0.7, max: 50 },
+} as const;
+
+/**
+ * The riding stance (ADR-86, 2026-11-11): rolling along in a game before the
+ * go, before the wind-up sinks the rider into the crouch (MOTION's first
+ * key). Estimates from how skaters ride between tricks: the trunk nearly
+ * upright (`lean`), the arms loose at the sides (`abd`, `flex`, `elbow`,
+ * `wrist`), the head turned toward the nose, where the board is going
+ * (`look`, goofy board frame, the point it turns toward, held to
+ * MOTION.look.max of the chest's forward). The readiness (0 riding, 1
+ * crouched) blends these into the crouch; the legs' own height is legs.ts
+ * HIPS.ride.
+ */
+export const RIDE = {
+  lean: 16,
+  abd: 9,
+  flex: 6,
+  elbow: 16,
+  wrist: 6,
+  look: { x: 2.4, y: 0.3, z: -0.8 },
 } as const;
 
 /** One bone's pose: its proximal joint, its three axes and the same rotation as a quaternion. */
@@ -482,9 +513,11 @@ const LOOK_Z = -0.03;
  * the MOTION keys for its own inputs, the bail blended in, the shove's
  * turn, the head on the board's centre at its height.
  */
-export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight | null, u: number, stance: Stance): UpperParams {
+export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight | null, u: number, stance: Stance, ready = 1): UpperParams {
   const M = MOTION;
   const p = flight ? clamp01(u) : 0;
+  // Riding along before a game's wind-up (ADR-86): RIDE blended into the crouch by the readiness.
+  const rideBy = flight ? 0 : 1 - clamp01(ready);
   const pop = flight ? flight.inputs.pop : 0.35;
   const amp = M.pop.min + (1 - M.pop.min) * clamp01((pop - 0.15) / 0.45);
   const sk = flight && flight.landed ? sketchAmount(flight.rollTotal, flight.yawTotal) : 0;
@@ -494,16 +527,13 @@ export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight |
   let elbow = track(M.elbow, p, amp, M.elbow[4]);
   let wrist = track(M.wrist, p, amp, M.wrist[4]);
   let leanB = lean;
-  // The bail: up out of the trick from the catch's start, arms wide (feet.ts MOTION.bail).
-  const b = flight && !flight.landed ? smooth(PHASE.catch.start, 1, p) : 0;
-  if (b > 0) {
-    leanB = lerp(lean, M.bail.lean, b);
-    abd = lerp(abd, M.bail.abd, b);
-    flex = lerp(flex, M.bail.flex, b);
-    elbow = lerp(elbow, M.bail.elbow, b);
-    wrist = lerp(wrist, M.bail.wrist, b);
+  if (rideBy > 0) {
+    leanB = lerp(lean, RIDE.lean, rideBy);
+    abd = lerp(abd, RIDE.abd, rideBy);
+    flex = lerp(flex, RIDE.flex, rideBy);
+    elbow = lerp(elbow, RIDE.elbow, rideBy);
+    wrist = lerp(wrist, RIDE.wrist, rideBy);
   }
-  P.lean = leanB;
   // The lead arm reaches a little more, fading in with the flight's moves and out at the landing.
   const lead = flight ? bump(0, M.knots[1]!, 1, p) : 0;
   P.abd[0] = abd + M.lead.abd * lead;
@@ -512,6 +542,22 @@ export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight |
   P.flex[1] = flex - M.lead.flex * lead * 0.5;
   P.elbow[0] = elbow;
   P.elbow[1] = elbow;
+  // The bail (feet.ts MOTION.bail): up out of the trick from the catch's start, the arms out to catch the balance, each
+  // its own way, then down as the feet reach the pad.
+  const B = M.bail;
+  const b = flight && !flight.landed ? smooth(PHASE.catch.start, 1, p) : 0;
+  if (b > 0) {
+    const up = smooth(PHASE.catch.start, B.peakAt, p);
+    const down = smooth(B.peakAt, 1, p);
+    leanB = lerp(leanB, B.lean, b);
+    for (let i = 0; i < 2; i++) {
+      P.abd[i] = lerp(lerp(P.abd[i]!, B.up.abd[i]!, up), B.down.abd[i]!, down);
+      P.flex[i] = lerp(lerp(P.flex[i]!, B.up.flex[i]!, up), B.down.flex[i]!, down);
+      P.elbow[i] = lerp(lerp(P.elbow[i]!, B.up.elbow[i]!, up), B.down.elbow[i]!, down);
+    }
+    wrist = lerp(wrist, B.wrist, b);
+  }
+  P.lean = leanB;
   P.wrist = wrist;
   // The shove (goofy: a positive scoop turns the board counterclockwise from above).
   const S = M.shove;
@@ -523,6 +569,8 @@ export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight |
   const lx = (sx * (feet.front.x + feet.back.x)) / 4;
   const k = flight ? smooth(0, M.knots[1]!, p) : 0;
   set(P.look, lx * (1 - k), flight ? heightAt(flight.peak, p) : 0, LOOK_Z * (1 - k));
+  // Riding along, the head turns toward the nose, where the board is going (RIDE.look, goofy frame).
+  if (rideBy > 0) set(P.look, lerp(P.look.x, RIDE.look.x, rideBy), lerp(P.look.y, RIDE.look.y, rideBy), lerp(P.look.z, RIDE.look.z, rideBy));
   return P;
 }
 
@@ -538,6 +586,8 @@ function unmirror(o: Point3, a: Point3, sx: number) {
  * FlightDriver can call it every frame. The thighs and shins are the legs'
  * own segments; the pelvis is the legs' pelvis; the rest follows the MOTION
  * keys from it. Regular is the X mirror of goofy, left and right swapped.
+ * `ready` is the wind-up's readiness for the pose with no flight (ADR-86):
+ * 0 the riding stance (RIDE), 1 the crouch, as legs.ts takes it.
  */
 export function writeBodyPose(
   out: BodyPose,
@@ -547,6 +597,7 @@ export function writeBodyPose(
   u: number,
   inputs: TrickInputs,
   stance: Stance = 'goofy',
+  ready = 1,
 ): BodyPose {
   // The inputs move nothing the legs and feet have not already taken: kept for the legs' signature.
   void inputs;
@@ -560,7 +611,7 @@ export function writeBodyPose(
   unmirror(G.hipB, legs.back.hip, sx);
   unmirror(G.kneeB, legs.back.knee, sx);
   unmirror(G.ankleB, legs.back.ankle, sx);
-  writeBodyParams(params, feet, flight, u, stance);
+  writeBodyParams(params, feet, flight, u, stance, ready);
   writeUpper(G.pelvis, params);
   // Goofy: the front leg is the right one.
   writeLeg(g.bones[BONE.thighR]!, g.bones[BONE.shinR]!, G.hipF, G.kneeF, G.ankleF);
@@ -606,11 +657,13 @@ export const hingeBend = (a: BoneFrame, b: BoneFrame) => Math.acos(Math.max(-1, 
  * One sentence for #scene-description (format.ts), from the same phases the
  * body follows: crouched before the pop, rising with it, arms out in the
  * air, folding to catch, absorbing the landing; for a bail, up and out
- * beside the board.
+ * beside the board; riding along before a game's wind-up (`riding`,
+ * ADR-86).
  */
-export function describeBody(u: number, flight: Flight | null): string {
+export function describeBody(u: number, flight: Flight | null, riding = false): string {
+  if (!flight && riding) return 'The rider rides along, standing tall, arms loose, looking ahead past the nose.';
   if (!flight || u <= 0) return 'The rider crouches over the board, arms low, eyes on the board.';
-  if (u >= 1) return flight.landed ? 'The rider rides it out, body folded and arms low.' : 'The rider stands up beside the board, arms out wide.';
+  if (u >= 1) return flight.landed ? 'The rider rides it out, body folded and arms low.' : 'The rider stands beside the board, arms coming down as it catches its balance.';
   if (u < MOTION.knots[1]!) return 'The rider rises with the pop, arms swinging up.';
   if (u < PHASE.catch.start) return 'Arms out for balance, the rider watches the board below.';
   return flight.landed ? 'Arms come down as the rider folds to catch the board.' : 'Arms out, the rider steps down beside the board.';

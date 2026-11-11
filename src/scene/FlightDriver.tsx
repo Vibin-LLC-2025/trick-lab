@@ -26,6 +26,7 @@ import { dustShown } from './sceneTier';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
 import { replayClock, replayProgress } from './replayClock';
 import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
+import { noWindUp, stepWindUp } from './windUp';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
@@ -289,6 +290,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // board's volume run only while a shoe group is mounted. Turned on
     // mid-flight, the shoes are posed from the next frame.
     const feetShown = front.current !== null || back.current !== null;
+    // The wind-up (ADR-86): the whole rider in a game rides along before its go and sinks into the crouch for the pop.
+    // Stepped once a frame, here, before the camera reads it (this useFrame runs first).
+    const ready = feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
     if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
       // In a bail the board leaves the feet where they stepped down, cleared against it as it slides (ADR-68).
@@ -301,14 +305,14 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const rig = legs.current;
       const whole = rider.current;
       if (rig || whole) {
-        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance);
+        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance, ready);
         if (rig) {
           applySegment(rig.frontThigh, l.front.thigh);
           applySegment(rig.frontShank, l.front.shank);
           applySegment(rig.backThigh, l.back.thigh);
           applySegment(rig.backShank, l.back.shank);
         }
-        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, flight, progress, inputs, s.stance));
+        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, flight, progress, inputs, s.stance, ready));
       }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
@@ -352,7 +356,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       sh.instanceMatrix.needsUpdate = true;
       shadowOpacity.needsUpdate = true;
     }
-  });
+    // First of the frame (priority -1): the camera reads the pose it leaves (the wind-up, ADR-86), and PerfProbe (1) draws it.
+  }, -1);
 
   return (
     <>

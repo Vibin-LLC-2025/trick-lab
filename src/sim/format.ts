@@ -422,6 +422,8 @@ export function describeScene(s: {
   riderShown?: boolean;
   /** Goofy when left out (ADR-25). */
   stance?: Stance;
+  /** The whole rider's wind-up (ADR-86, store windUp): riding along before a go; the crouch when left out. */
+  windUp?: 'ride' | 'crouch' | 'wait';
   /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
   flightBy?: 'you' | 'computer';
   /** Rolling in the game (ADR-67); still when left out. */
@@ -449,7 +451,9 @@ export function describeScene(s: {
   const rolling = s.roll === 'push' ? ' Rolling along the concrete, nose first.' : s.roll === 'slow' ? ' Rolling to a stop.' : '';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
   const at = s.status === 'idle' ? 0 : s.progress;
-  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight)}${s.riderShown ? ` ${describeBody(at, s.flight)}` : ''}`;
+  // The riding stance is the whole rider's (ADR-86); the legs alone (Low, the lab) keep the crouch. The computer's wait reads as riding.
+  const riding = !!s.riderShown && s.windUp !== undefined && s.windUp !== 'crouch';
+  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight, riding)}${s.riderShown ? ` ${describeBody(at, s.flight, riding)}` : ''}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
   const cpu = s.flightBy === 'computer';

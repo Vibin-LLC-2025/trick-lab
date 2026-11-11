@@ -83,6 +83,9 @@ const KB = 1024;
  * plus about 5 percent; a second model chunk importing gltf.ts made Vite
  * split it out of BoardModel's chunk into a shared one (`_gltf`), so
  * BoardModel's 49 KB became 1 KB and `_gltf` 29 KB: moved, not added.
+ * The 3D chunk goes from 83 to 84 KB with the polish pass (ADR-86,
+ * 2026-11-11): the camera's rest framing and rise, the clear part of the
+ * stage and the rider's wind-up came to 83.0 KB, a whisker over.
  */
 export const FILE_BUDGETS: Record<string, number> = {
   'index.html (the page)': 2 * KB,
@@ -91,7 +94,7 @@ export const FILE_BUDGETS: Record<string, number> = {
   [FONT]: 16 * KB,
   _artDirection: 202 * KB,
   _shoeSpec: 2 * KB,
-  'src/scene/TrickScene.tsx': 83 * KB,
+  'src/scene/TrickScene.tsx': 84 * KB,
   'src/scene/nodeRenderer.ts': 185 * KB,
   'src/scene/BoardModel.tsx': 1 * KB,
   _gltf: 29 * KB,

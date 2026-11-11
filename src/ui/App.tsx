@@ -3,7 +3,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { describeScene } from '../sim/format';
 import { skateActive } from '../sim/skate';
 import { PRESETS } from '../sim/tricks';
-import { noticeUp, previewCanPlay, replayMoves, riderShown, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
+import { noticeUp, previewCanPlay, replayMoves, riderShown, screenFromHash, screenHash, useTrickStore, windUp, type Screen } from '../store';
 import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
 import { FootMotion } from './FootMotion';
@@ -180,7 +180,7 @@ export const PREVIEW_DESCRIPTION =
   'Preview: a rider on a skateboard doing a kickflip, a 360 flip and other tricks in slow motion, one after another.';
 
 function SceneDescription() {
-  const text = useTrickStore((s) => (s.screen === 'home' ? PREVIEW_DESCRIPTION : describeScene({ ...s, riderShown: riderShown(s) })));
+  const text = useTrickStore((s) => (s.screen === 'home' ? PREVIEW_DESCRIPTION : describeScene({ ...s, riderShown: riderShown(s), windUp: windUp(s) })));
   return (
     <p id="scene-description" className="visually-hidden">
       {text}

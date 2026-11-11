@@ -315,7 +315,33 @@ describe('the rider crouches, jumps and absorbs (ADR-37)', () => {
       expect(bestAt).toBeGreaterThan(0.5);
       expect(best - hipHeight(flight, 0)).toBeCloseTo(inputs.pop * HIPS.jump.perPop + HIPS.jump.extra, 9);
       expect(hipHeight(flight, 1.5)).toBe(hipHeight(flight, 1));
+      // A flight leaves from the crouch whatever the wind-up's readiness (ADR-86).
+      expect(hipHeight(flight, 0, 0)).toBe(hipHeight(null, 0));
     }
+  });
+});
+
+describe('the riding stance (ADR-86)', () => {
+  it('stands taller before the wind-up, knees a little bent, never clamped, blending into the crouch with the readiness', () => {
+    const out = newLegsPose();
+    for (const p of PRESETS)
+      for (const stance of STANCES) {
+        writeFeetPose(feet, p.inputs, null, 0, stance);
+        const crouch = writeLegsPose(out, feet, null, 0, p.inputs, stance).pelvis.y;
+        const crouchBend = kneeBend(out.front);
+        writeLegsPose(out, feet, null, 0, p.inputs, stance, 0);
+        expect(out.clamped).toBe(0);
+        expect(out.pelvis.y - crouch).toBeCloseTo(HIPS.ride - HIPS.crouch, 9);
+        // Knees a little bent: well short of the crouch's, never straight.
+        for (const leg of [out.front, out.back]) {
+          expect(kneeBend(leg)).toBeGreaterThan(30);
+          expect(kneeBend(leg)).toBeLessThan(55);
+        }
+        expect(kneeBend(out.front)).toBeLessThan(crouchBend - 25);
+        // Half ready is half way.
+        writeLegsPose(out, feet, null, 0, p.inputs, stance, 0.5);
+        expect(out.pelvis.y - crouch).toBeCloseTo((HIPS.ride - HIPS.crouch) / 2, 9);
+      }
   });
 });
 
@@ -325,6 +351,7 @@ describe('legs in words (ADR-37)', () => {
 
   it('follows the hips: crouched, tucked, reaching for the catch, absorbing', () => {
     expect(describeLegs(0, null)).toBe('Legs crouched, knees bent, ready to pop.');
+    expect(describeLegs(0, null, true)).toBe('Knees a little bent, riding along.');
     expect(describeLegs(0, landed)).toBe('Legs crouched, knees bent, ready to pop.');
     expect(describeLegs(0.3, landed)).toBe('Knees tucked up in the air.');
     expect(describeLegs(PHASE.catch.start, landed)).toBe('Legs reach down to catch the board.');
