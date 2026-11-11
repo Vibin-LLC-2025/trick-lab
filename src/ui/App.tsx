@@ -3,7 +3,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { describeScene } from '../sim/format';
 import { skateActive } from '../sim/skate';
 import { PRESETS } from '../sim/tricks';
-import { previewCanPlay, replayMoves, screenFromHash, screenHash, useTrickStore, type Screen } from '../store';
+import { noticeUp, previewCanPlay, replayMoves, riderShown, screenFromHash, screenHash, useTrickStore, windUp, type Screen } from '../store';
 import { Announcer } from './Announcer';
 import { EventLog } from './EventLog';
 import { FootMotion } from './FootMotion';
@@ -19,7 +19,8 @@ import { Celebration } from './Celebration';
 import { StageStill } from './StageStill';
 import { useSound } from '../hooks/useSound';
 import { ShortcutsDialog } from './ShortcutsDialog';
-import { LeaveDialog, Skate, TurnChip } from './Skate';
+import { LeaveDialog, Notice, Skate, StageWipe, TurnChip } from './Skate';
+import { useStageClear } from './useStageClear';
 import { Telemetry } from './Telemetry';
 import { TopBar } from './TopBar';
 import { PreviewToggle } from './Utilities';
@@ -53,8 +54,9 @@ const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
  * The keys each screen answers to (ADR-45), each backed by a DOM control on
  * that screen. The theme and the shortcuts dialog work everywhere. The game
  * adds Space (Pop, which starts and releases the timing bar, ADR-65, or the
- * computer's go, or skips the instant replay, ADR-72), s (its Slow motion
- * switch, ADR-46) and Escape (skips the replay),
+ * computer's go, or skips the instant replay, ADR-72, or continues past a
+ * notice, ADR-80), s (its Slow motion switch, ADR-46), Escape (skips the
+ * replay) and Enter (continues past a notice),
  * but not the presets (off in a game), Reset (it would end the game) or the
  * speed steps (the game has no speed slider). The lab has them all, and the
  * perf badge, whose switch is in its View panel. The welcome screen has
@@ -64,7 +66,7 @@ const EVERYWHERE = ['t', 'T', '?'];
 const PLAY = [' ', 's', 'S'];
 export const SCREEN_KEYS: Record<Screen, ReadonlySet<string>> = {
   home: new Set(EVERYWHERE),
-  skate: new Set([...EVERYWHERE, ...PLAY, 'Escape']),
+  skate: new Set([...EVERYWHERE, ...PLAY, 'Escape', 'Enter']),
   lab: new Set([...EVERYWHERE, ...PLAY, '[', ']', 'p', 'P', 'r', 'R', ...PRESET_BY_KEY.keys()]),
 };
 
@@ -98,6 +100,8 @@ function useGlobalShortcuts() {
       else if (e.key === '?') s.setShortcutsOpen(true);
       // Escape skips the game's instant replay (ADR-72), and is left alone otherwise.
       else if (e.key === 'Escape' && replayMoves(s)) s.endReplay();
+      // Enter continues past the game's notice (ADR-80); on a button or a link it is the button's own.
+      else if (e.key === 'Enter' && noticeUp(s) && !spaceIsNative(target)) s.continueSkate();
       else handled = false;
       if (handled) e.preventDefault();
     };
@@ -124,6 +128,7 @@ function useFocusRequests() {
     if (request?.kind === 'setup-heading') document.getElementById('setup-heading')?.focus();
     else if (request?.kind === 'skate-heading') document.getElementById('skate-heading')?.focus();
     else if (request?.kind === 'screen-heading') document.getElementById('screen-heading')?.focus();
+    else if (request?.kind === 'skate-notice') document.getElementById('skate-notice-continue')?.focus();
   }, [request]);
 }
 
@@ -175,7 +180,7 @@ export const PREVIEW_DESCRIPTION =
   'Preview: a rider on a skateboard doing a kickflip, a 360 flip and other tricks in slow motion, one after another.';
 
 function SceneDescription() {
-  const text = useTrickStore((s) => (s.screen === 'home' ? PREVIEW_DESCRIPTION : describeScene(s)));
+  const text = useTrickStore((s) => (s.screen === 'home' ? PREVIEW_DESCRIPTION : describeScene({ ...s, riderShown: riderShown(s), windUp: windUp(s) })));
   return (
     <p id="scene-description" className="visually-hidden">
       {text}
@@ -196,6 +201,7 @@ export function App() {
   useReducedMotionSync();
   useScreenRoute();
   useSound();
+  useStageClear();
   const screen = useTrickStore((s) => s.screen);
   const canPause = useTrickStore(previewCanPlay);
 
@@ -237,6 +243,9 @@ export function App() {
           <PerfBadge />
           {canPause && <PreviewToggle />}
           {screen === 'skate' && <TurnChip />}
+          {/* The coin flip and each go's result, waiting for Continue (ADR-80); over the game's cards too. */}
+          {screen === 'skate' && <StageWipe />}
+          {screen === 'skate' && <Notice />}
           {/* The student's landed trick, over the stage (ADR-57); never on the welcome preview. */}
           {screen !== 'home' && <Celebration />}
         </section>

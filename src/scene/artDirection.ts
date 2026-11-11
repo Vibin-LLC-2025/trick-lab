@@ -170,14 +170,19 @@ export const ART = {
    * top of a 0.6 m pop) from the farthest allowed camera is 5.3 m on most
    * stages, and the orbit's zoom-out stops where it would pass 5.5 m (the
    * detail view on the narrowest stage, `orbitMaxDistance`), so the board,
-   * the feet and the trails are never fogged. `far` 15 m: from the
+   * the feet and the trails are never fogged. 6.0 since the whole rider
+   * (ADR-85, 2026-11-11): framing the body at the top of a 0.6 m pop puts
+   * Free and Filmer's farthest point (a hand out wide on the toe side) 5.6
+   * m from the camera on every stage the layout makes, so the rider is
+   * never fogged either; on a narrower stage the fit stops at the fog
+   * (`distanceFor` in SceneCamera.tsx) and the arms may crop. `far` 15 m: from the
    * lowest orbit (maxPolarAngle 1.25 rad, whose frame reaches the horizon)
    * and from the welcome camera, the nearest visible point of the plane's
    * edge is at least 19 m away on any stage from 0.5:1 to 50:1, so the edge
    * is never seen. Tested in artDirection.test.ts and sky.test.ts. Colour
    * per theme is the clear colour, nothing else.
    */
-  fog: { color: SCENE_BG, near: 5.5, far: 15 },
+  fog: { color: SCENE_BG, near: 6.5, far: 15 },
   /**
    * The ground (ground pass, 2026-11-04, ADR-31). The GLB (Medium and High)
    * and the untextured plane (Low, and the fallback while it streams or if
@@ -235,10 +240,27 @@ export const ART = {
      * Below 1 m: the board's spin circle (|z| to 0.42) and the soles, which
      * reach |x| 0.595 at the highest pops. Above: only the knees, |x| to
      * 0.354 and z from -0.388 to -0.075 (the rider faces -Z), up to 1.343 m.
+     * The fit wherever the legs show (the lab, Low).
      */
     casters: [
       { min: v(-0.6, 0, -0.43), max: v(0.6, 1.0, 0.43) },
       { min: v(-0.37, 1.0, -0.4), max: v(0.37, 1.36, 0) },
+    ],
+    /**
+     * The fit wherever the whole rider shows (ADR-85, 2026-11-11, store
+     * riderShown): the board and soles as above, and the body, swept in
+     * cameraFit.test.ts over every preset at three pops and the timing bar's
+     * corners (4.2 rev/s) in both stances, each bone a capsule as thick as the
+     * mesh. Below REST_Y + 0.9 m: |x| to 0.80 (the hands), z from -0.72;
+     * above: |x| to 0.93 (a bail's arms out wide at a 0.6 m pop), z from
+     * -0.77 to 0.40, the beanie up to 2.20 m above the deck. The frustum is
+     * larger than the legs' (1.74 x 3.05 m and 4.28 m deep, a texel of
+     * 1.49 mm where the legs' is 0.87), still one 2048
+     * map: measured in PERF-BUDGET.md.
+     */
+    riderCasters: [
+      { min: v(-0.8, 0, -0.72), max: v(0.8, REST_Y + 0.9, 0.43) },
+      { min: v(-0.94, REST_Y + 0.9, -0.77), max: v(0.94, REST_Y + 2.21, 0.4) },
     ],
     /** Margin around the fitted frustum on each side, metres (covers the PCF kernel). */
     pad: 0.03,
@@ -371,6 +393,84 @@ export const ART = {
      */
     fit: { margin: 0.06, reach: OUTLINE.noseTip + 0.01, bottom: 0, top: REST_Y + 0.6 + 0.13 },
     /**
+     * The whole rider's outline (ADR-85, 2026-11-11), for the views that film
+     * the rider (`filmsRider`): the head's column up to the beanie at the top
+     * of a 0.6 m pop, the highest the sliders and the timing bar allow (2.08
+     * m above the deck centre at rest, swept over every input in
+     * body.test.ts), plus `headroom`; the arms' band out to the hands at their
+     * widest (0.94 m along the board) and highest (1.68 m). Above and the
+     * replay's low close shot keep the board's own box and may crop the body.
+     */
+    rider: {
+      head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.78, back: 0.2 },
+    },
+    filmsRider: ['free', 'film', 'side', 'showcase'] as readonly string[],
+    /**
+     * Where the views that film the whole rider look (ADR-85): 1.0 m up, the
+     * rider's middle at the top of an average pop, each view's target and
+     * camera lifted together so its direction is unchanged. From the deck's
+     * 0.32 m the fit had to stand so far back to reach the head that the
+     * body passed the fog's start; the welcome view's 0.45 m did too.
+     */
+    riderLook: 1.0,
+    /**
+     * The game's framing of the rider at rest (ADR-86, 2026-11-11), for Free,
+     * Filmer and Side while the whole rider shows and motion is allowed: the
+     * board on the pad and the rider over it, with the room the body takes
+     * as the pop extends it, measured against the camera's rise (`cameraRise`
+     * in cameraFit.ts: the board's height, eased in and out over the first
+     * and last `riseEase` of the flight). Four boxes, world metres, swept in
+     * gameCamera.test.ts over every preset at 0.15, 0.35 and 0.6 m and the
+     * timing bar's corners, both stances, with the rise taken off:
+     * - `board`: its outline never more than 15 cm below the pad (the tail
+     *   hanging under the deck's centre as the pop pitches it nose up, while
+     *   the eased rise catches up) nor more than 0.35 m over its rest height
+     *   (a flipped board's edge, ahead of the rise), 0.16 m either side.
+     * - `shoes`: 0.37 m over the deck's centre (tucked in the air, ahead of
+     *   the eased rise) plus their height, down to 15 cm under the pad (the
+     *   pop's tail strike),
+     *   0.68 m along the board, 0.63 m toward the toe side and 0.46 m toward
+     *   the heel side (a bail's step).
+     * - `arms`: the hands, 0.88 m out (a bail's) and 1.09 m up, plus the
+     *   mitten; framed only while it costs little (`armsSlack`).
+     * - `head`: the beanie's crown, at most 1.53 m over the deck's centre
+     *   (the pop's extension, ahead of the rise), 0.2 to 0.47 m toward the toe
+     *   side as it gets there, plus 4 cm of headroom.
+     * The board is the frame's bottom, the crown its top, with `margin` of
+     * the clear area kept free at each edge (the clear area is already clear
+     * of the cards). Framing the whole flight (ADR-85) stays for reduced
+     * motion, where the camera does not move. Each view looks at the height
+     * that fills the clear area's height best (`balancedLook` in
+     * cameraFit.ts), so neither the top nor the bottom of the frame is empty.
+     */
+    rest: {
+      boxes: [
+        { min: v(-0.44, -0.16, -0.16), max: v(0.44, REST_Y + 0.36, 0.16) },
+        { min: v(-0.7, -0.15, -0.64), max: v(0.7, REST_Y + 0.5, 0.47) },
+        { min: v(-0.94, REST_Y + 0.4, -0.76), max: v(0.94, REST_Y + 1.14, 0.2) },
+        { min: v(-0.25, REST_Y + 1.0, -0.5), max: v(0.25, REST_Y + 1.53 + 0.04, -0.17) },
+      ],
+      riseEase: 0.2,
+      bailEase: 0.15,
+      /**
+       * How much higher the camera stands while the rider rides tall before
+       * its wind-up (ADR-86), metres; it comes down with the rider as it
+       * sinks into the crouch. The board at rest has this much room under it
+       * in the frame (the `board` box reaches below the pad for the pop), so
+       * the taller riding stance costs the frame nothing. The boxes are
+       * measured with it taken off, as with the rise.
+       */
+      rideLift: 0.15,
+      margin: 0.02,
+      /**
+       * The arms may push the camera back by at most this much past what the
+       * board, the shoes and the head need; past it a hand flung out (a
+       * sketchy landing, a bail) may go under a card, never the rest.
+       */
+      armsSlack: 1.1,
+    },
+    /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
      * persisted (`cameraView` in the ui slice). Only each `position`'s
      * direction from its `target` matters: the ADR-18 fit sets the distance,
@@ -404,7 +504,9 @@ export const ART = {
        * once. The orbit is off on the welcome screen. Sky pass (2026-11-09,
        * ADR-52): 8 degrees above the horizon (was 28) with the target 0.45 m
        * up (was 0.28), so the horizon, the sky and its city sit in the top
-       * quarter of the frame and the street reads as a place.
+       * quarter of the frame and the street reads as a place. With the
+       * whole rider (ADR-85) it looks at `riderLook` instead, the 8 degrees
+       * keeping the horizon where it is.
        */
       showcase: {
         position: v(
@@ -427,12 +529,34 @@ export const ART = {
        * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
        * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
        *   (its own field of view, `fov` below), close to the board.
+       * With the whole rider on screen (ADR-85, 2026-11-11), `free`, `film`
+       * and `side` look at `riderLook`, not the deck at 0.32 m, and fit the
+       * rider's outline (`rider` above): the whole body at the top of a 0.6 m
+       * pop with headroom, the board low in the frame. `above` and `replay`
+       * keep the board's box and may crop the body.
        */
+      /**
+       * `free` (ADR-81, 2026-11-10), the game's default: where the free
+       * camera starts and where "Reset view" brings it back, a little higher
+       * than the filmer's so the board and both shoes read at once. The
+       * student turns it from there, inside `free` below.
+       */
+      free: look(18, 30, 0.32),
       film: look(12, 30, 0.32),
       side: look(7, 0, 0.32),
       above: look(34, -20, 0.28),
       replay: look(4, 40, 0.36),
     },
+    /**
+     * The game's free camera (ADR-81): how far it turns. Round the board
+     * from the heel side (+Z) up to `azimuth` radians either way, so it never
+     * reaches the toe side, where the skate spot would be in front of the
+     * board and the plane's edge out of the fog (ADR-72); from 72 degrees
+     * above the horizon (`minPolarAngle`) down to 9 (`maxPolarAngle`), lower
+     * than the lab's 18 to match the game's low angles. Tested in
+     * gameCamera.test.ts at every corner.
+     */
+    free: { azimuth: (75 * Math.PI) / 180, minPolarAngle: (18 * Math.PI) / 180, maxPolarAngle: (81 * Math.PI) / 180 },
     /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
     fovs: { replay: 60 } as Partial<Record<string, number>>,
   },
@@ -775,6 +899,24 @@ export const ART = {
    */
   computer: { shoe: '#5fd0c5' },
   /**
+   * The rider (ADR-85, DESIGN.md 8.8): the whole body's colours, one per
+   * region of the mesh (src/asset/riderSpec.ts RIDER_REGIONS, in that order:
+   * hoodie, its ribbed cuffs and hem, the pocket's seam, the drawstrings, the
+   * trousers, the cuff's fold, the sock, the mittens, the skin, the beanie and
+   * its rolled brim, the hair under it), sRGB. Two outfits on one mesh, so whose go it is reads
+   * at a glance from any camera: the player in the deck's burnt orange with
+   * the charcoal twill trousers the legs have worn since ADR-70; the computer
+   * in its deck's teal (Circuit, ADR-71) with sand trousers and a mustard
+   * beanie, and a different skin tone, a different person. `roughness` and
+   * `cloth` (the twill's strength, as ADR-70's) are the material's.
+   */
+  rider: {
+    player: ['#c8562a', '#a8461f', '#7f3315', '#efe9df', '#3b3e44', '#2b2d32', '#2f3035', '#2a2c31', '#c99a7a', '#2d3138', '#24272d', '#3a2a20'],
+    computer: ['#2b8a83', '#226f6a', '#18534f', '#efe9df', '#6b6252', '#524b3f', '#2f3035', '#2a2c31', '#8a5d43', '#d9a63a', '#b88a2a', '#1b1716'],
+    roughness: 0.9,
+    cloth: 0.55,
+  },
+  /**
    * The instant replay (step 17, ADR-72): after the student's made set or
    * copy, the flight once more at `rate` of its own speed from the replay
    * view, with a fisheye `bend` on High and Medium (the effects' composite:
@@ -782,6 +924,15 @@ export const ART = {
    * picture).
    */
   replay: { rate: 0.3, bend: 0.28 },
+  /**
+   * The wind-up (ADR-86, 2026-11-11), seconds: the whole rider in a game
+   * sinks from the riding stance into the crouch over `sink` when the timing
+   * bar starts, and the computer's rider `lead` before its own pop; it comes
+   * back up over `rise` when a crouch is let go (the bar dropped). Eased with
+   * a smoothstep, only while the roll draws frames; otherwise it switches at
+   * once (reduced motion, Exact, a new turn behind the stage's fade).
+   */
+  windUp: { sink: 0.3, rise: 0.5, lead: 0.8 },
   /**
    * Dust (step 19, ADR-74): soft discs facing the camera, on Medium and High,
    * in a game. Metres and seconds (the roll's, so slow motion slows it).

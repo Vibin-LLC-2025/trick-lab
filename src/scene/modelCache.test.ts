@@ -17,7 +17,7 @@ import { GLTFLoader, MeshoptDecoder } from 'three-stdlib';
 import { useGLTF } from '@react-three/drei';
 import { allShown, noteRenderer, noteShown, onShown, prefetchModels, RELEASE_AFTER_MS, releaseModels, setUnwanted, takePrefetched } from './modelCache';
 import { disposeModel, missingTextures, shareEarlyDownloads } from './gltf';
-import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, SHOES_URL, SPOT_URL } from './modelUrls';
+import { BOARD_HIGH_URL, BOARD_URL, GROUND_URL, modelsFor, modelsUnusedBy, RIDER_URL, SHOES_URL, SPOT_URL } from './modelUrls';
 
 type Loader = Parameters<typeof shareEarlyDownloads>[0];
 
@@ -70,12 +70,19 @@ describe('the models each tier shows (ADR-48)', () => {
     expect(modelsFor('low', true)).toEqual([]);
   });
 
+  it('adds the rider last on Medium and High while it is on screen with the feet, never on Low (ADR-85)', () => {
+    expect(modelsFor('high', true, true)).toEqual([BOARD_HIGH_URL, GROUND_URL, SHOES_URL, RIDER_URL]);
+    expect(modelsFor('medium', true, true)).toEqual([BOARD_URL, GROUND_URL, RIDER_URL]);
+    expect(modelsFor('high', false, true)).toEqual([BOARD_HIGH_URL, GROUND_URL]);
+    expect(modelsFor('low', true, true)).toEqual([]);
+  });
+
   it('frees on a move down only what the new tier never shows', () => {
     expect(modelsUnusedBy('high')).toEqual([]);
     expect(modelsUnusedBy('medium').sort()).toEqual([BOARD_HIGH_URL, SHOES_URL].sort());
     // The skate spot too (ADR-69): only the game screen on Medium and High shows it.
-    expect(modelsUnusedBy('low').sort()).toEqual([BOARD_HIGH_URL, BOARD_URL, GROUND_URL, SHOES_URL, SPOT_URL].sort());
-    for (const q of ['high', 'medium'] as const) for (const url of modelsFor(q, true)) expect(modelsUnusedBy(q)).not.toContain(url);
+    expect(modelsUnusedBy('low').sort()).toEqual([BOARD_HIGH_URL, BOARD_URL, GROUND_URL, SHOES_URL, SPOT_URL, RIDER_URL].sort());
+    for (const q of ['high', 'medium'] as const) for (const url of modelsFor(q, true, true)) expect(modelsUnusedBy(q)).not.toContain(url);
   });
 });
 

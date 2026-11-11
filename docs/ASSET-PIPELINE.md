@@ -158,7 +158,7 @@ Every texture in all four GLBs is now KTX2: Basis Universal ETC1S at quality 255
 | `shoes.glb` | 520.4 KB | **208.9 KB** | shoe-sole 62.3, shoe-upper 56.1 KB | 2.00 MB (was 8.00) |
 | `ground.glb` | 432.7 KB | **143.4 KB** | concrete-color 107.5, concrete-normal 11.1, concrete-roughness 21.4 KB | 3.00 MB (was 12.00) |
 
-The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder: three's own `basis_transcoder.js` and `.wasm`, which `KTX2Loader` names with `new URL(..., import.meta.url)`, so Vite emits them into the build with a content hash (until 2026-11-09 a second copy in `public/basis/`, ADR-49's update). `assets:check` adds two rows per file: every texture KTX2 with `KHR_texture_basisu` required, and every mip chain complete; the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
+The runtime reads them with three's `KTX2Loader` (`src/scene/gltf.ts`) and its transcoder: three's own `basis_transcoder.js` and `.wasm`, which `KTX2Loader` names with `new URL(..., import.meta.url)`, so Vite emits them into the build with a content hash (until 2026-11-09 a second copy in `public/basis/`, ADR-49's update). `assets:check` adds three rows per file: every texture KTX2 with `KHR_texture_basisu` required, every mip chain complete, and none with zstd supercompression (since 2026-11-11 `vite.config.ts` swaps the zstd decoder that `KTX2Loader` imports for a stub, 17 KB gzipped off the model chunk; a zstd texture would fail to load); the GPU estimate is 1 byte a pixel (BC7, what a desktop GPU gets) plus a third. The pilot that chose ETC1S q255 over WebP and UASTC is in ADR-49.
 
 ## High finish (2026-11-09, ADR-53)
 
@@ -176,7 +176,7 @@ playwright-cli -s=still close
 npx tsx scripts/still/write.ts stills.json
 ```
 
-`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.6 (0.8 until 2026-11-10, ADR-70). `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them.
+`capture.js` renders the welcome screen on High, the stage alone at 1600 x 800, under reduced motion (the preview holds its still pose), waits for every High model, screenshots the canvas and has the browser encode the WebP at 0.6 (0.8 until 2026-11-10, ADR-70). `write.ts` checks each file against `src/asset/stillSpec.ts` (WebP, 1600 x 800, at most 80 KB) and writes nothing if one fails. `npm run assets:check` prints a line per still and fails on the same checks. The files are not byte-deterministic (a GPU render); review a change by looking at them. Rebuilt 2026-11-11 with the whole rider (ADR-85): `capture.js` also waits for the rider's mesh (`Rider_Body`); 18.2 KB light and 17.9 KB dark.
 
 ## The skate spot (2026-11-10, ADR-69)
 
@@ -212,3 +212,19 @@ Four more deck bottoms, each a KTX2 texture per board level in `public/models/de
 - **Build:** `npm run sounds` (`scripts/build-sounds.ts`, needs ffmpeg): mix the layers, cut leading silence, high-pass at 60 Hz, cut and fade, level to the peak (measured with volumedetect, then applied), encode mono MP3 at 64 kbit/s with no tags, one thread. Repeatable byte for byte. Writes `public/sounds/<kind>-<n>.mp3` and `public/sounds/CREDITS.md`.
 - **Check:** `npm run assets:check` reads every file: an MP3, at most 12 KB, all of them at most 150 KB, and each listed in CREDITS.md.
 - **Swap a sound:** copy the new CC0 file into the sources folder, point the take at it in `soundSpec.ts`, run `npm run sounds`, and commit the sources, the MP3s and CREDITS.md together. A source from somewhere else needs its own entry in CREDITS.md (`SOUND_SOURCE`).
+
+## The rider (2026-11-11, ADR-85)
+
+A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh over the 17 bones of `src/sim/body.ts`, without the shoes (those stay `shoes.glb`). `npm run assets -- rider` builds it alone.
+
+| File | What it holds | Tests |
+| --- | --- | --- |
+| `src/asset/riderSpec.ts` | the node names, `RIDER_REGIONS` (what each vertex is, for its colour), `RIDER_UV` (the cloth coordinates' tiles and span), `RIDER_MESH` (points round each loft), and every shape: `TROUSER` (ADR-70's leg, cuff and sock, kept), `SEAT`, `TORSO`, `HOODIE` (rib, pocket, sleeves, the hood rolled on the back, the strings), `NECK`, `HEAD`, `BEANIE`, `HAIR`, `MITTEN` | `rider.test.ts` |
+| `src/asset/rider.ts` | `buildRider()`: lofted rings round the bind pose (`writeBindPose`), each vertex weighted to at most four bones and blended across every joint (no capsule seams), the right side built and mirrored for the left (the weights mirrored with `MIRROR_BONE`), smooth normals, a one-byte region per vertex | `rider.test.ts` (budget, weights sum to 1 and blend across each joint, symmetry, unit normals, every region used, the cuff over the shoe collar) |
+| `scripts/lib/build.ts` | `riderSpec()`: one material with no texture, the joints flat under the root at their bind frames, the inverse bind matrices from the bind frames, `JOINTS_0`, `WEIGHTS_0`, `TEXCOORD_0` and the custom `_REGION`; texture coordinates quantized to 16 bits (the twill repeats 128 times over them) | `budget.test.ts` (the committed file matches the source, its joints in `RIDER_BONES` order) |
+| `scripts/lib/inspect.ts` | the joints of each skin, and the bounds of a skinned mesh in its bind pose (joint world matrix times inverse bind, so quantization's transform is undone) | `budget.test.ts` |
+| `scripts/lib/budget.ts` | the rider's rows: the joint order, the top of the beanie (1.70 to 1.80 m), the soles inside the shoes, symmetric | `npm run assets:check` |
+
+No colour and no texture in the file: the scene paints each region from `ART.rider` (one outfit per rider, `scene/riderLook.ts`), so the player and the computer are one download, and the cloth's twill normal map is ADR-70's, made in code by `scene/resources.ts`. Skin sits on a flat texel of that map, so the head and neck shade smooth.
+
+`assets:check` for `rider.glb` (2026-11-11): 98.5 KB of 150 KB, 1 of 1 draw call, 18,500 of 20,000 triangles (legs 5,400, torso 4,896, sleeves 2,592, head 1,400, hood 1,120, mittens 1,032, seat 896, beanie 672, neck 252, strings 240), no texture, 17 joints in order, the top 1748.8 mm, the bottom 36.8 mm (inside the shoes), symmetric to 0.0 mm.

@@ -11,7 +11,7 @@ const SHORTCUTS: [string[], string, readonly Screen[]][] = [
   [['Tab'], 'Move through the controls', ALL],
   // One key cap for the range (an en-dash, as for any numeric range) so the seven keys do not widen the key column.
   [['1–7'], 'Apply presets 1 to 7, in order: kickflip, heelflip, pop shove-it, frontside shove-it, varial flip, varial heelflip, 360 flip', LAB],
-  [['Space'], "Pop, or the computer's go in a game of SKATE; with the timing bar, once to start it and again to release (when focus is not on a slider or button, where Space keeps its usual job)", PLAY],
+  [['Space'], "Pop, or the computer's go in a game of SKATE; with the timing bar, Get ready, then Pop! in the green band (when focus is not on a slider or button, where Space keeps its usual job)", PLAY],
   [['←', '→'], 'Move the focused slider', PLAY],
   [['Page Up', 'Page Down'], 'On the timeline, 10 percent (the arrows move it 1 percent)', LAB],
   [['s'], 'Slow motion on or off (back to the last slow speed)', PLAY],

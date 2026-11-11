@@ -29,6 +29,7 @@ const roll = (s: Store) => s.getState().roll;
 function kickflipUp(queue?: number[]) {
   const s = makeStore(queue);
   s.getState().startSkate();
+  s.getState().continueSkate();
   s.getState().callSkateTrick('kickflip');
   s.getState().setInput('flick', 1.9);
   return s;
@@ -62,6 +63,9 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     expect(s.getState().replay).toBe('plays');
     expect(roll(s)).toBe('still');
     s.getState().endReplay();
+    // The go's notice waits for Continue (ADR-80), and the computer with it.
+    expect(roll(s)).toBe('still');
+    s.getState().continueSkate();
     expect(roll(s)).toBe('push');
     // With the game screen held by a dialog the computer is not waiting, so a stopped board stays stopped.
     s.getState().slowRoll();
@@ -74,6 +78,7 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     const s = makeStore();
     s.getState().setPopMode('exact');
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().callSkateTrick('kickflip');
     s.getState().popTrick();
     expect(roll(s)).toBe('push');
@@ -90,6 +95,7 @@ describe('rolling in the game (step 12, ADR-67)', () => {
   it('the computer rolls in before it pops: at the start when it sets first, and again once the board has stopped', () => {
     const s = makeStore([COMPUTER_FIRST]);
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(roll(s)).toBe('push');
     s.getState().popTrick();
     expect(s.getState().flightBy).toBe('computer');
@@ -104,6 +110,7 @@ describe('rolling in the game (step 12, ADR-67)', () => {
   it('with auto off the computer waits for its button, stopped', () => {
     const s = makeStore([COMPUTER_FIRST]);
     s.getState().startSkate();
+    s.getState().continueSkate();
     expect(roll(s)).toBe('push');
     s.getState().toggleSkateAuto();
     expect(roll(s)).toBe('slow');
@@ -140,6 +147,7 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     reduced.getState().setReducedMotion(true);
     reduced.getState().setPopMode('exact');
     reduced.getState().startSkate();
+    reduced.getState().continueSkate();
     reduced.getState().callSkateTrick('kickflip');
     reduced.getState().popTrick();
     expect(roll(reduced)).toBe('still');
@@ -176,6 +184,7 @@ function exactUp(flick: number) {
   const s = makeStore();
   s.getState().setPopMode('exact');
   s.getState().startSkate();
+  s.getState().continueSkate();
   s.getState().callSkateTrick('kickflip');
   s.getState().setInput('flick', flick);
   return s;
@@ -219,6 +228,7 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     expect(s.getState().replay).toBe('plays');
     expect(roll(s)).toBe('still');
     s.getState().endReplay();
+    s.getState().continueSkate();
     // The computer rolls in on a fresh board: the bailed one is gone.
     expect(roll(s)).toBe('push');
     expect(s.getState().landing).toBe('none');
@@ -230,6 +240,7 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().land();
     s.getState().landingDone();
     s.getState().endReplay();
+    s.getState().continueSkate();
     expect(roll(s)).toBe('push');
     expect(s.getState().landing).toBe('none');
     s.getState().popTrick();
@@ -296,7 +307,9 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     expect(roll(s)).toBe('slow');
     expect(computerWaiting(s.getState())).toBe(false);
     s.getState().rollRested();
-    // At rest: the wait runs, and the computer rolls in while it does.
+    // At rest, the go's notice is up; Continue, and the wait runs, and the computer rolls in while it does (ADR-80).
+    expect(computerWaiting(s.getState())).toBe(false);
+    s.getState().continueSkate();
     expect(computerWaiting(s.getState())).toBe(true);
     expect(roll(s)).toBe('push');
   });

@@ -16,8 +16,8 @@
 // What it draws: the welcome screen on High at the picture's size, the stage
 // alone filling the window (the rest of the page hidden), under reduced
 // motion, so the preview holds its still pose (SHOWCASE_STILL) instead of
-// looping; feet and legs on (the defaults on High since ADR-70). It waits until the lit scene
-// shows every High model, lets a few more frames draw, screenshots the
+// looping; feet and the rider on (the defaults on High since ADR-70; the whole rider since ADR-85).
+// It waits until the lit scene shows every High model and the rider, lets a few more frames draw, screenshots the
 // canvas, and has the browser encode the WebP (no encoder to install).
 // Nothing here changes the app; the page's storage is set per theme.
 async (page) => {
@@ -27,7 +27,8 @@ async (page) => {
   const quality = Number(opts.get('q') ?? 0.6);
   const base = opts.get('base') ?? '/';
   const origin = new URL(page.url()).origin;
-  const MODELS = ['Deck_Grip', 'Shoe_Sole', 'Ground_Concrete'];
+  // The board, the shoes, the ground and the whole rider (ADR-85, src/scene/riderPose.ts RIDER_MESH_NAME).
+  const MODELS = ['Deck_Grip', 'Shoe_Sole', 'Ground_Concrete', 'Rider_Body'];
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width, height });

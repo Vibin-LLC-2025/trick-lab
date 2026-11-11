@@ -93,6 +93,50 @@ export function framingPoints(flight: { reach: number; bottom: number; top: numb
   return pts;
 }
 
+/**
+ * The farthest the camera may stand from `target`, looking along `from`'s
+ * direction, before any of `points` is farther than `fogNear` from it (ADR-85):
+ * for each point the distance d where |target + d u - p| = fogNear, solved
+ * exactly, the least of them. Infinity if no point would ever reach it.
+ */
+export function fogDistance({ from, target, points, fogNear }: { from: Vec3; target: Vec3; points: readonly Vec3[]; fogNear: number }): number {
+  const ux = from[0] - target[0];
+  const uy = from[1] - target[1];
+  const uz = from[2] - target[2];
+  const len = Math.hypot(ux, uy, uz) || 1;
+  let best = Infinity;
+  for (const p of points) {
+    const wx = target[0] - p[0];
+    const wy = target[1] - p[1];
+    const wz = target[2] - p[2];
+    const b = (ux * wx + uy * wy + uz * wz) / len;
+    const disc = b * b - (wx * wx + wy * wy + wz * wz) + fogNear * fogNear;
+    if (disc < 0) return 0;
+    best = Math.min(best, -b + Math.sqrt(disc));
+  }
+  return best;
+}
+
+/** The rider's outline for the framing (ADR-85): the head's column and the arms' band, metres in the world. */
+export interface RiderFrame {
+  /** The head's column: half width about x 0 and its top (the beanie at the top of the highest pop, plus headroom). */
+  head: { reach: number; top: number; front: number; back: number };
+  /** The arms' band: as far as a hand reaches along the board, up to `top`, from `front` (toward the toe side, -Z) to `back`. */
+  arms: { reach: number; top: number; front: number; back: number };
+}
+
+/**
+ * What a view that films the whole rider keeps in frame (ADR-85): the
+ * board's flight box (framingPoints) and the rider's outline round it, the
+ * head's column above and the arms' band either side, as boxes' corners.
+ */
+export function riderFramingPoints(flight: { reach: number; bottom: number; top: number }, rider: RiderFrame): Vec3[] {
+  const pts = framingPoints(flight);
+  for (const b of [rider.head, rider.arms])
+    for (const x of [-b.reach, b.reach]) for (const z of [b.front, b.back]) for (const y of [flight.top, b.top]) pts.push([x, y, z]);
+  return pts;
+}
+
 /** An axis-aligned box by its min and max corners. */
 export interface Box3 {
   min: Vec3;
@@ -153,4 +197,83 @@ export function shadowFrustum(light: Vec3, target: Vec3, boxes: readonly Box3[],
     near: Math.max(0.01, out.near - pad),
     far: out.far + pad,
   };
+}
+
+/** The clear part of the stage (store/stage.ts, ADR-86): fractions of the stage from its top left. */
+export interface Clear {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * The lens that frames inside a clear area (ADR-86). The camera keeps its
+ * field of view, so a pixel covers the same angle as before; its principal
+ * point moves to the clear area's centre with a view offset (three's
+ * setViewOffset in units of the stage, 1 by 1, which a resize never
+ * invalidates because R3F only resets the aspect): `x` and `y` are where the
+ * stage's top left sits in that unit square. The fit then fills the clear
+ * area alone: a vertical field of view as tall as the clear area
+ * (`fitFov`) and its own shape (`fitAspect`, for a stage of `aspect`).
+ */
+export function clearLens(fov: number, aspect: number, clear: Clear) {
+  const tan = Math.tan(((fov / 2) * Math.PI) / 180);
+  const h = clear.bottom - clear.top;
+  const w = clear.right - clear.left;
+  return {
+    x: 0.5 - (clear.left + clear.right) / 2,
+    y: 0.5 - (clear.top + clear.bottom) / 2,
+    fitFov: (2 * Math.atan(tan * h) * 180) / Math.PI,
+    fitAspect: (aspect * w) / h,
+  };
+}
+
+/** 0 at a, rising smoothly to 1 at b (smoothstep). */
+const ease = (a: number, b: number, u: number) => {
+  const t = Math.min(1, Math.max(0, (u - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * How far the views that film the rider rise during a flight (ADR-86): the
+ * board's own height (its parabola, 4u(1 - u) times the peak), eased in over
+ * the first `easeBy` of the flight and out over the last, so the camera
+ * starts and stops with no jolt (zero slope at both ends) and is back where
+ * it was at the landing. It follows the board closely in between, so the
+ * board stays about where it was in the frame and the body's extension above
+ * it is all the headroom the frame needs; it never rises faster than the
+ * board, so the board is never lower in the frame than it was at rest. A
+ * function of the flight and its progress alone: a paused flight, a scrubbed
+ * one and a replayed one sit at the same height. Zero with no flight. A bail
+ * eases out over a shorter `bailEase`, since its rider stands up out of the
+ * trick while the board is still in the air.
+ */
+export function cameraRise(flight: { peak: number; landed: boolean } | null, u: number, easeBy = 0.2, bailEase = 0.15): number {
+  if (!flight || !(u > 0) || u >= 1) return 0;
+  // A bail stands the rider up out of the trick before the board lands (body.ts MOTION.bail): the camera stays up longer.
+  return flight.peak * 4 * u * (1 - u) * ease(0, easeBy, u) * ease(0, flight.landed ? easeBy : bailEase, 1 - u);
+}
+
+/**
+ * The height to look at for a direction and a set of points (ADR-86): the
+ * one that lets the camera stand nearest while every point fits the frame's
+ * height, so the frame's top and bottom bind together and none of its height
+ * is left empty at one end (a camera above the subject sees its near bottom
+ * lower and its far top higher than the middle height would). A golden-section
+ * search between `low` and `high`; pure, done once per view.
+ */
+export function balancedLook({ from, target, fov, points, margin, low, high }: { from: Vec3; target: Vec3; fov: number; points: readonly Vec3[]; margin: number; low: number; high: number }): number {
+  const dir: Vec3 = [from[0] - target[0], from[1] - target[1], from[2] - target[2]];
+  const at = (y: number) => fitDistance({ from: [target[0] + dir[0], y + dir[1], target[2] + dir[2]], target: [target[0], y, target[2]], fov, aspect: 1e6, points, margin });
+  const k = (Math.sqrt(5) - 1) / 2;
+  let a = low;
+  let b = high;
+  for (let i = 0; i < 60; i++) {
+    const c = b - k * (b - a);
+    const d = a + k * (b - a);
+    if (at(c) < at(d)) b = d;
+    else a = c;
+  }
+  return (a + b) / 2;
 }

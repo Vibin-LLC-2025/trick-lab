@@ -70,14 +70,18 @@ export interface ComputerTiming {
 
 /**
  * Per level: the timing bar's band (ADR-65), how well the computer times it,
- * what it may call, and whether only a clean landing counts (ADR-63).
+ * what it may call, whether only a clean landing counts (ADR-63), and
+ * whether the game sets the player's sliders for them and shows the landing
+ * zones (`assist`, ADR-83: Easy and Normal, where timing is the skill; on
+ * Hard dialing is part of the game). `hint` is the level in one line on the
+ * timing bar; `exactHint` the same in Exact, where nothing is set.
  * The band is narrower and a miss costs more as the level goes up. Normal
  * makes a kickflip about 4 times in 5 and a 360 flip about half the time
  * (skate.test.ts). Hard counts only clean landings, for both players.
  */
 export const SKATE_LEVELS: Record<
   SkateLevel,
-  { label: string; band: Band; timing: ComputerTiming; calls: readonly TrickId[]; cleanOnly: boolean; hint: string }
+  { label: string; band: Band; timing: ComputerTiming; calls: readonly TrickId[]; cleanOnly: boolean; assist: boolean; hint: string; exactHint: string }
 > = {
   easy: {
     label: 'Easy',
@@ -85,7 +89,9 @@ export const SKATE_LEVELS: Record<
     timing: { baseMs: 103, perFlip: 2.4, perShove: 3 },
     calls: ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it'],
     cleanOnly: false,
-    hint: 'The computer misses often and sticks to simple flips and shove-its.',
+    assist: true,
+    hint: 'The sliders are set for you and the band is wide: timing is the skill. The computer misses often.',
+    exactHint: 'The computer misses often and sticks to simple flips and shove-its.',
   },
   normal: {
     label: 'Normal',
@@ -93,7 +99,9 @@ export const SKATE_LEVELS: Record<
     timing: { baseMs: 55, perFlip: 1.5, perShove: 1.8 },
     calls: PRESETS.map((p) => p.id),
     cleanOnly: false,
-    hint: 'The computer goes for the seven classic tricks, up to the 360 flip.',
+    assist: true,
+    hint: 'The sliders are set for you and the band is narrower: timing is the skill. The computer goes up to the 360 flip.',
+    exactHint: 'The computer goes for the seven classic tricks, up to the 360 flip.',
   },
   hard: {
     label: 'Hard',
@@ -101,7 +109,9 @@ export const SKATE_LEVELS: Record<
     timing: { baseMs: 21, perFlip: 0.9, perShove: 0.95 },
     calls: NAMED_TRICKS.filter((t) => t.id !== 'ollie').map((t) => t.id),
     cleanOnly: true,
-    hint: 'The computer rarely misses and goes for every trick, doubles included. Only a clean landing counts, for both of you.',
+    assist: false,
+    hint: 'You set the sliders yourself, the band is narrow, and only a clean landing counts, for both of you.',
+    exactHint: 'The computer rarely misses and goes for every trick, doubles included. Only a clean landing counts, for both of you.',
   },
 };
 
@@ -110,7 +120,23 @@ export const CLEAN_ONLY_NOTE = `Only a clean landing counts on Hard: within ${CL
 
 export const SKATE_LEVEL_ORDER: readonly SkateLevel[] = ['easy', 'normal', 'hard'];
 
-export const isSkateLevel = (v: unknown): v is SkateLevel => v === 'easy' || v === 'normal' || v === 'hard';
+/**
+ * How the player pops in a game (ADR-83). assisted: on the timing bar, with
+ * the sliders set for each trick (Easy and Normal). timed: on the bar, the
+ * sliders the player's own (Hard). exact: no bar, the sliders are the game
+ * (ADR-65's Exact, at any level).
+ */
+export type PopStyle = 'assisted' | 'timed' | 'exact';
+
+export const popStyle = (level: SkateLevel, timed: boolean): PopStyle => (!timed ? 'exact' : SKATE_LEVELS[level].assist ? 'assisted' : 'timed');
+
+/** The level's one line at the game's start, for how the player pops. */
+export const levelHint = (level: SkateLevel, timed: boolean) => (timed ? SKATE_LEVELS[level].hint : SKATE_LEVELS[level].exactHint);
+
+/** The two presses on the bar, in the words the button, the hints and the announcements share (ADR-83). */
+export const BAR_STEPS = 'Press Get ready, then Pop! when the marker is in the green band.';
+/** What a release off the band does. */
+export const BAR_MISS = 'Early spins less, late spins more.';
 
 const callOf = (id: TrickId): SkateCall => {
   const t = NAMED_TRICKS.find((n) => n.id === id);
@@ -236,10 +262,11 @@ export function cleanSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): Trick
 }
 
 /**
- * The setup the first game's walk-through asks for (ADR-66): the one at the
- * pop height the sliders start on, 0.35 m, when that lands clean, so a first
- * trick is one slider to move; otherwise the cleanest (the double flips need
- * the highest pop).
+ * A trick's setup for the player: what Easy and Normal set the sliders to
+ * when a trick becomes the player's (ADR-83), and what the first game's
+ * walk-through asks for on Hard and in Exact (ADR-66). The one at the pop
+ * height the sliders start on, 0.35 m, when that lands clean; otherwise the
+ * cleanest (the double flips need the highest pop).
  */
 export function lessonSetup(call: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickInputs {
   const first = setupAt(call, DEFAULT_INPUTS.pop);
@@ -491,22 +518,19 @@ export function trickGuide(t: Pick<SkateCall, 'flips' | 'halfShoves'>): TrickGui
 /** The tip under every guide: how pop trades against spin. */
 export const GUIDE_TIP = 'Pop higher and the board stays up longer, so it needs less flick and scoop to turn the same amount.';
 
-/** The guide as one sentence, for announcements: "Kickflip: flick toward kickflip, for one full flip. No scoop." */
-export function guideText(t: SkateCall): string {
-  const g = trickGuide(t);
-  const flick = t.flips === 0 ? 'No flick.' : `Flick ${g.flick.charAt(0).toLowerCase()}${g.flick.slice(1)}`;
-  const scoop = t.halfShoves === 0 ? 'No scoop.' : `Scoop ${g.scoop.charAt(0).toLowerCase()}${g.scoop.slice(1)}`;
-  return `${t.name}: ${flick} ${scoop}`;
-}
-
-/** What to do now, in plain words: the panel's call line and the end of each announcement. */
-export function skateInstruction(g: SkateGame): string {
+/**
+ * What to do now, in plain words: the panel's call line and the end of each
+ * announcement. With the sliders set for the player (`assisted`) a copy says
+ * only what to copy; the store adds that the sliders are set.
+ */
+export function skateInstruction(g: SkateGame, style: PopStyle = 'exact'): string {
   const retry = g.secondTry ? ' Last letter: this is the second try.' : '';
   switch (g.phase) {
     case 'computer-set':
       return g.call ? `Computer's turn: it's going for ${a(g.call.name)}.` : "Computer's turn to set a trick.";
     case 'you-copy':
-      return g.call ? `Your turn: copy the computer's ${g.call.name.toLowerCase()}. Set the sliders, then press Pop.${retry}` : '';
+      if (!g.call) return '';
+      return `Your turn: copy the computer's ${g.call.name.toLowerCase()}.${style === 'assisted' ? '' : style === 'timed' ? ' Set the sliders, then press Get ready.' : ' Set the sliders, then press Pop.'}${retry}`;
     case 'you-set':
       return g.call
         ? `Your turn to set: land the ${g.call.name.toLowerCase()} you called and the computer has to copy it.`
@@ -549,12 +573,13 @@ export function turnView(g: SkateGame): TurnView | null {
 }
 
 /**
- * The first game's walk-through (ADR-66): the player's first go, as two or
- * three short prompts, with `at` the one to do now. It is for whatever trick
- * that go is: the computer's set to copy, the trick the player called, or a
- * kickflip when they are up to set and have not called yet. The one place
- * the game gives slider values (the trick guide never does, ADR-44): the
- * clean setup of the trick, so a first try at the bar is a fair one.
+ * The first game's walk-through (ADR-66, ADR-83): the player's first go, as
+ * short prompts, with `at` the one to do now. With the sliders set for the
+ * player (assisted) it is the two presses on the bar, after the call when
+ * the player is up to set. Where the player sets the sliders (Hard, Exact)
+ * it is for whatever trick that go is: the computer's set to copy, the trick
+ * the player called, or a kickflip when they are up to set and have not
+ * called yet; and it gives the trick's clean setup, so a first try is a fair one.
  */
 export interface Lesson {
   steps: readonly string[];
@@ -572,20 +597,30 @@ const setupWords = (i: TrickInputs) => {
   return `Pop ${displayValue('pop', i.pop)} m, ${rate('flick', 'Flick')}, ${rate('scoop', 'Scoop')}`;
 };
 
+/** The bar's two presses as two prompts. */
+const GET_READY = 'Press Get ready.';
+const POP_IN_BAND = 'Press Pop! when the marker is in the green band.';
+
 /**
  * The walk-through for the game as it stands, or null when it is not the
- * player's go. `timed`: the game is played on the timing bar. `inputs`: the
+ * player's go. `style`: how the player pops (popStyle). `inputs`: the
  * sliders now. `barRunning`: the bar has been started and not released.
  */
-export function lessonFor(g: SkateGame, timed: boolean, inputs: TrickInputs, barRunning: boolean): Lesson | null {
+export function lessonFor(g: SkateGame, style: PopStyle, inputs: TrickInputs, barRunning: boolean): Lesson | null {
   if (turnOf(g) !== 'you') return null;
+  if (style === 'assisted') {
+    // At most two prompts: the sliders are the game's to set (ADR-83).
+    if (!g.call) return { steps: ['Call your trick.', 'Press Get ready, then Pop! in the green band.'], at: 0 };
+    return { steps: [GET_READY, POP_IN_BAND], at: barRunning ? 1 : 0 };
+  }
+  const timed = style === 'timed';
   const trick = g.call ?? KICKFLIP;
   const setup = lessonSetup(trick);
   const set = `the sliders for the ${trick.name.toLowerCase()}: ${setupWords(setup)}.`;
   const steps = [
     g.call ? `Set ${set}` : `Call the kickflip, then set ${set}`,
-    timed ? 'Press Pop, or Space, to start the bar.' : 'Press Pop, or Space.',
-    ...(timed ? ['Press Pop again when the marker is in the band.'] : []),
+    timed ? 'Press Get ready, or Space, to start the bar.' : 'Press Pop, or Space.',
+    ...(timed ? [POP_IN_BAND] : []),
   ];
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   const ready = g.call !== null && near(inputs.pop, setup.pop) && near(inputs.flick, setup.flick) && near(inputs.scoop, setup.scoop);

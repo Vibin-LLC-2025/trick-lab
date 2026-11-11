@@ -3,9 +3,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Matrix4, MathUtils, Vector3, type Bone, type BufferAttribute, type Group, type InstancedBufferAttribute, type InstancedMesh, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
+import { newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, playRate, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
+import { landingMoves, playRate, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
@@ -16,12 +17,16 @@ import { MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './f
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
+import { Rider } from './Rider';
+import type { RiderRig } from './RiderModel';
+import { applyBody } from './riderPose';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { dustShown } from './sceneTier';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
 import { replayClock, replayProgress } from './replayClock';
 import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
+import { noWindUp, stepWindUp } from './windUp';
 import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
 
 const S = ART.shadow;
@@ -119,6 +124,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const feet = useRef<FeetPose>(newFeetPose());
   const legs = useRef<LegRig>(null);
   const legsPose = useRef<LegsPose>(newLegsPose());
+  const rider = useRef<RiderRig>(null);
+  const bodyPose = useRef<BodyPose>(newBodyPose());
   const clock = useRef(newFlightClock());
   const show = useRef(newShowcaseClock());
   // The landing's move (ADR-68): one pair of groups round the board, one round the rider.
@@ -132,8 +139,12 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const dustPrimed = useRef<Mesh | null>(null);
   const dusty = useTrickStore(dustShown);
   const home = useTrickStore((s) => s.screen === 'home');
+  // The motion cues are the lab's (ADR-26): never on the game screen (ADR-84), nor the welcome screen's preview.
+  const lab = useTrickStore((s) => s.screen === 'lab');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
+  // The whole rider on the game and welcome screens (ADR-85); the lab keeps the fading legs.
+  const wholeRider = useTrickStore(riderShown);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
   // The shadow footprints' material for the renderer in use (ADR-50).
@@ -279,6 +290,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // board's volume run only while a shoe group is mounted. Turned on
     // mid-flight, the shoes are posed from the next frame.
     const feetShown = front.current !== null || back.current !== null;
+    // The wind-up (ADR-86): the whole rider in a game rides along before its go and sinks into the crouch for the pop.
+    // Stepped once a frame, here, before the camera reads it (this useFrame runs first).
+    const ready = feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
     if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
       // In a bail the board leaves the feet where they stepped down, cleared against it as it slides (ADR-68).
@@ -287,13 +301,18 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
       // The legs (ADR-37) reach the shoes just posed; mounted only with the feet.
+      // The whole rider (ADR-85) stands on the same legs, posed from the pelvis up.
       const rig = legs.current;
-      if (rig) {
-        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance);
-        applySegment(rig.frontThigh, l.front.thigh);
-        applySegment(rig.frontShank, l.front.shank);
-        applySegment(rig.backThigh, l.back.thigh);
-        applySegment(rig.backShank, l.back.shank);
+      const whole = rider.current;
+      if (rig || whole) {
+        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance, ready);
+        if (rig) {
+          applySegment(rig.frontThigh, l.front.thigh);
+          applySegment(rig.frontShank, l.front.shank);
+          applySegment(rig.backThigh, l.back.thigh);
+          applySegment(rig.backShank, l.back.shank);
+        }
+        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, flight, progress, inputs, s.stance, ready));
       }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
@@ -337,7 +356,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       sh.instanceMatrix.needsUpdate = true;
       shadowOpacity.needsUpdate = true;
     }
-  });
+    // First of the frame (priority -1): the camera reads the pose it leaves (the wind-up, ADR-86), and PerfProbe (1) draws it.
+  }, -1);
 
   return (
     <>
@@ -351,7 +371,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={boardOuter}>
         <group ref={boardInner}>
           <Board ref={board} shadows={shadows}>
-            {motionCuesVisible && !home && <MotionCues />}
+            {motionCuesVisible && lab && <MotionCues />}
           </Board>
         </group>
       </group>
@@ -360,7 +380,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={riderOuter}>
         <group ref={riderInner}>
           {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
-          {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
+          {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
           {footPathsVisible && !home && <FootPaths />}
         </group>
       </group>

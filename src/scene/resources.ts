@@ -20,6 +20,7 @@ import { PLANE_BAYS } from '../asset/groundSpec';
 import { SPOT_FOOTPRINTS } from '../asset/spotSpec';
 import { footHalfWidth, footRingXs, lerpProfile, loftFacing } from '../asset/shoe';
 import { FOOTPRINT } from '../asset/shoeSpec';
+import { RIDER_UV } from '../asset/riderSpec';
 import { TRUCK, WHEEL } from '../asset/spec';
 import { hexToRgb } from '../asset/textures';
 import { LEG } from '../sim/legs';
@@ -687,8 +688,15 @@ export function twillNormal(): THREE.DataTexture {
   return t;
 }
 
+/** The rider's cloth (ADR-85): the same twill, repeated as its coordinates ask (riderSpec RIDER_UV: stored divided by `span`). */
+function riderCloth() {
+  const t = twillNormal();
+  t.repeat.set(RIDER_UV.span, RIDER_UV.span);
+  return t;
+}
+
 /** Textures the materials below hold, freed with them. */
-const tex = { toon: toonGradient(), joints: jointTexture(), cloth: twillNormal() };
+const tex = { toon: toonGradient(), joints: jointTexture(), cloth: twillNormal(), riderCloth: riderCloth() };
 /** The trousers' cloth, for the legs' TSL twin (nodeRenderer.ts). */
 export const legsCloth = tex.cloth;
 
@@ -710,6 +718,15 @@ export const mat = {
   legs: legsMaterial(),
   // The legs' shadow on WebGLRenderer (High's fallback): the shanks only, as before.
   legsDepth: legsDepthMaterial(),
+  // The rider (ADR-85): white times the vertex colours (scene/riderLook.ts
+  // paints them from ART.rider by region), the twill on the cloth, opaque. A
+  // plain standard material, so both renderers draw it as it is (no twin).
+  rider: new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: ART.rider.roughness,
+    normalMap: tex.riderCloth,
+    normalScale: new THREE.Vector2(ART.rider.cloth, ART.rider.cloth),
+  }),
   // uProgress is mutated by FlightDriver; never swapped.
   footPath: footPathMaterial(),
   // The ground shadows (ADR-38); the per-instance opacity is on geo.shadow. Never swapped.

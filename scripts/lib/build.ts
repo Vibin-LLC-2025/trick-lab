@@ -20,6 +20,9 @@ import { buildBoard, triangleCount } from '../../src/asset/board';
 import { buildGround } from '../../src/asset/ground';
 import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS, groundRepeat } from '../../src/asset/groundSpec';
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
+import { buildRider } from '../../src/asset/rider';
+import { RIDER_MATERIAL, RIDER_PARTS, RIDER_ROOT, RIDER_UV } from '../../src/asset/riderSpec';
+import { RIDER_BONES } from '../../src/sim/body';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
 import { DECKS, type FileDeck } from '../../src/asset/deckSpec';
@@ -189,6 +192,15 @@ interface AssetSpec {
   }[];
   parts: { node: string; material: string; geometry: BufferGeometry }[];
   droppedTriangles: number;
+  /**
+   * A skin (the rider, ADR-85): its joints in skinning order, each a node
+   * under the root at its bind frame, and their inverse bind matrices
+   * (column-major 4 x 4 each). The parts then carry JOINTS_0 and WEIGHTS_0
+   * (from skinIndex and skinWeight) and the custom `_REGION` (from region).
+   */
+  skin?: { joints: { name: string; translation: [number, number, number]; rotation: [number, number, number, number] }[]; inverseBind: Float32Array };
+  /** Overrides for the meshopt step (the rider keeps 16-bit cloth coordinates). */
+  meshopt?: { quantizeTexcoord?: number };
 }
 
 /** The board's tiling maps (the grip) repeat every `tile` metres over the deck's outline. */
@@ -402,12 +414,25 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
     materials.set(M.key, m);
   }
 
-  const accessor = (type: 'VEC2' | 'VEC3' | 'SCALAR', array: Float32Array | Uint16Array | Uint32Array) =>
+  const accessor = (type: 'VEC2' | 'VEC3' | 'VEC4' | 'MAT4' | 'SCALAR', array: Float32Array | Uint8Array | Uint16Array | Uint32Array) =>
     doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
 
   const root = doc.createNode(spec.rootName).setExtras(spec.extras);
   const scene = doc.createScene(spec.rootName).addChild(root);
   doc.getRoot().setDefaultScene(scene);
+
+  // The skin's joints, flat under the root, at their bind frames, in skinning order.
+  const skin = spec.skin
+    ? (() => {
+        const sk = doc.createSkin(`${spec.rootName}Skin`).setSkeleton(root);
+        for (const j of spec.skin.joints) {
+          const n = doc.createNode(j.name).setTranslation(j.translation).setRotation(j.rotation);
+          root.addChild(n);
+          sk.addJoint(n);
+        }
+        return sk.setInverseBindMatrices(accessor('MAT4', spec.skin.inverseBind));
+      })()
+    : null;
 
   const textured = new Set(spec.materials.filter((m) => m.map).map((m) => m.key));
   for (const { node, material, geometry: g } of spec.parts) {
@@ -421,16 +446,24 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
     // A linear vertex colour multiplies the base colour (the board's dark bolts in the steel group, ADR-40).
     const color = g.getAttribute('color');
     if (color) prim.setAttribute('COLOR_0', accessor('VEC3', color.array as Float32Array));
+    if (skin) {
+      prim.setAttribute('JOINTS_0', accessor('VEC4', new Uint16Array(g.getAttribute('skinIndex').array)));
+      prim.setAttribute('WEIGHTS_0', accessor('VEC4', g.getAttribute('skinWeight').array as Float32Array));
+      prim.setAttribute('_REGION', accessor('SCALAR', g.getAttribute('region').array as Uint8Array));
+      if (uv && !textured.has(material)) prim.setAttribute('TEXCOORD_0', accessor('VEC2', uv.array as Float32Array));
+    }
     const count = g.getAttribute('position').count;
     const index = Array.from(g.index!.array);
     prim.setIndices(accessor('SCALAR', count < 65536 ? new Uint16Array(index) : new Uint32Array(index)));
-    root.addChild(doc.createNode(node).setMesh(doc.createMesh(node).addPrimitive(prim)));
+    const meshNode = doc.createNode(node).setMesh(doc.createMesh(node).addPrimitive(prim));
+    if (skin) meshNode.setSkin(skin);
+    root.addChild(meshNode);
   }
 
   await MeshoptEncoder.ready;
   // meshopt() = reorder for size + KHR_mesh_quantization (14-bit positions,
   // 8-bit octahedral normals, 12-bit UVs) + EXT_meshopt_compression filters.
-  await doc.transform(dedup(), prune(), meshopt({ encoder: MeshoptEncoder, level: 'high' }));
+  await doc.transform(dedup(), prune(), meshopt({ encoder: MeshoptEncoder, level: 'high', ...spec.meshopt }));
 
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
   const glb = await io.writeBinary(doc);
@@ -483,6 +516,51 @@ function spotSpec(): AssetSpec {
 /** The skate spot GLB (public/models/spot.glb). */
 export const buildSpotGlb = () => buildGlb(spotSpec());
 
+/**
+ * The rider (ADR-85): one skinned mesh round the bind pose of src/sim/body.ts
+ * (src/asset/rider.ts), its joints flat under the root. Its material has no
+ * texture: the scene gives it the twill normal map and the colours by region.
+ */
+function riderSpec(): AssetSpec {
+  const r = buildRider();
+  const ibm = new Float32Array(RIDER_BONES.length * 16);
+  const joints = RIDER_BONES.map((name, i) => {
+    const f = r.bind.bones[i]!;
+    // The bind matrix is [x y z | o]; its inverse is [R^T | -R^T o].
+    const R = [f.x, f.y, f.z];
+    const o = f.o;
+    const m = new Float32Array(16);
+    for (let row = 0; row < 3; row++) {
+      const ax = R[row]!;
+      m[0 * 4 + row] = ax.x;
+      m[1 * 4 + row] = ax.y;
+      m[2 * 4 + row] = ax.z;
+      m[3 * 4 + row] = -(ax.x * o.x + ax.y * o.y + ax.z * o.z);
+    }
+    m[15] = 1;
+    ibm.set(m, i * 16);
+    const round = (n: number) => Number(n.toFixed(7));
+    return {
+      name,
+      translation: [round(o.x), round(o.y), round(o.z)] as [number, number, number],
+      rotation: [round(f.q.x), round(f.q.y), round(f.q.z), round(f.q.w)] as [number, number, number, number],
+    };
+  });
+  return {
+    rootName: RIDER_ROOT,
+    extras: { units: 'metres', bones: RIDER_BONES.length, uvSpan: RIDER_UV.span, source: 'procedural, scripts/build-board.ts', design: 'src/asset/riderSpec.ts' },
+    textures: [],
+    materials: [{ key: RIDER_PARTS[0].material, name: RIDER_MATERIAL.name, baseColor: [1, 1, 1, 1], roughness: RIDER_MATERIAL.roughness, metalness: RIDER_MATERIAL.metalness }],
+    parts: RIDER_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: r.geometry })),
+    droppedTriangles: 0,
+    skin: { joints, inverseBind: ibm },
+    meshopt: { quantizeTexcoord: RIDER_UV.bits },
+  };
+}
+
+/** The rider GLB (public/models/rider.glb). */
+export const buildRiderGlb = () => buildGlb(riderSpec());
+
 /** The concrete ground GLB (public/models/ground.glb). */
 export const buildGroundGlb = () => buildGlb(groundSpec());
 
@@ -492,5 +570,6 @@ export function buildAsset(key: AssetKey): Promise<{ glb: Uint8Array; report: Bu
   if (key === 'boardHigh') return buildBoardGlb('high');
   if (key === 'ground') return buildGroundGlb();
   if (key === 'spot') return buildSpotGlb();
+  if (key === 'rider') return buildRiderGlb();
   return buildShoesGlb();
 }

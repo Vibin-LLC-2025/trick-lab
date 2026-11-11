@@ -17,21 +17,22 @@ const REST_Y = ART.board.restY;
  * code: FlightDriver moves the material's playhead.
  */
 export function FootPaths() {
-  const flight = useTrickStore((s) => s.flight);
-  // With a flight in hand the inputs do not matter (the feet follow the
-  // flight's own inputs), so they drop out of the dependencies.
-  const pop = useTrickStore((s) => (s.flight ? 0 : s.pop));
-  const flick = useTrickStore((s) => (s.flight ? 0 : s.flick));
-  const scoop = useTrickStore((s) => (s.flight ? 0 : s.scoop));
+  // The shown inputs: the flight's while there is one, else the sliders'. A
+  // flight is computeFlight of its inputs alone, so the same numbers give the
+  // same paths: popping the sliders' own values, or a clear stage bringing
+  // them back, rebuilds nothing.
+  const pop = useTrickStore((s) => (s.flight ? s.flight.inputs.pop : s.pop));
+  const flick = useTrickStore((s) => (s.flight ? s.flight.inputs.flick : s.flick));
+  const scoop = useTrickStore((s) => (s.flight ? s.flight.inputs.scoop : s.scoop));
   // Regular mirrors the feet along X (ADR-25), so the trails rebuild on a stance change.
   const stance = useTrickStore((s) => s.stance);
   // The GLSL material on WebGLRenderer, its TSL twin on WebGPURenderer (ADR-50).
   const nodeRenderer = useThree((s) => isNodeRenderer(s.gl));
 
   const geometry = useMemo(() => {
-    const inputs = flight?.inputs ?? { pop, flick, scoop };
-    return buildFootPaths(inputs, flight ?? computeFlight(inputs), stance);
-  }, [flight, pop, flick, scoop, stance]);
+    const inputs = { pop, flick, scoop };
+    return buildFootPaths(inputs, computeFlight(inputs), stance);
+  }, [pop, flick, scoop, stance]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   return <mesh geometry={geometry} material={shaderMat('footPath', nodeRenderer)} position={[0, REST_Y, 0]} renderOrder={2} />;

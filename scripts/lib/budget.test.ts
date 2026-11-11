@@ -7,6 +7,8 @@ import { boardTriangles, buildBoard, triangleCount } from '../../src/asset/board
 import { buildGround } from '../../src/asset/ground';
 import { PLANE } from '../../src/asset/groundSpec';
 import { buildShoe, shoeTriangles } from '../../src/asset/shoe';
+import { buildRider } from '../../src/asset/rider';
+import { RIDER_BONES } from '../../src/sim/body';
 import { SHOE } from '../../src/asset/shoeSpec';
 import { DECK_BUDGET, DECK_FILES } from '../../src/asset/deckSpec';
 import { ASSET_FILES, BUDGET, BUDGETS, OUTLINE, REST_Y, type AssetKey } from '../../src/asset/spec';
@@ -20,8 +22,8 @@ const good: AssetStats = {
   triangles: 13000,
   materials: 7,
   textures: [
-    { name: 'grip', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10 },
-    { name: 'deckBottom', width: 1024, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
+    { name: 'grip', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10, zstd: false },
+    { name: 'deckBottom', width: 1024, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11, zstd: false },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
   extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
@@ -35,8 +37,8 @@ const goodShoe: AssetStats = {
   triangles: 9000,
   materials: 3,
   textures: [
-    { name: 'sole', width: 16, height: 64, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 7 },
-    { name: 'upper', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10 },
+    { name: 'sole', width: 16, height: 64, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 7, zstd: false },
+    { name: 'upper', width: 512, height: 512, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 10, zstd: false },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization'],
   extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
@@ -50,9 +52,9 @@ const goodGround: AssetStats = {
   triangles: 2,
   materials: 1,
   textures: [
-    { name: 'color', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
-    { name: 'normal', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11 },
-    { name: 'roughness', width: 256, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 9 },
+    { name: 'color', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11, zstd: false },
+    { name: 'normal', width: 1024, height: 1024, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 11, zstd: false },
+    { name: 'roughness', width: 256, height: 256, bytes: 100, mipmapped: true, mimeType: 'image/ktx2', levels: 9, zstd: false },
   ],
   extensionsUsed: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_transform'],
   extensionsRequired: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'KHR_texture_basisu'],
@@ -92,6 +94,7 @@ describe('asset budget rules', () => {
     const t = good.textures[0]!;
     expect(failing({ ...good, textures: [{ ...t, mimeType: 'image/png', levels: 1 }] })).toEqual(['Textures KTX2 (Basis)', 'Mip chains in the file']);
     expect(failing({ ...good, textures: [{ ...t, levels: 9 }] })).toEqual(['Mip chains in the file']);
+    expect(failing({ ...good, textures: [{ ...t, zstd: true }] })).toEqual(['No zstd (decoder not shipped)']);
     expect(fullMipLevels({ width: 2048, height: 512 })).toBe(12);
     expect(fullMipLevels({ width: 16, height: 128 })).toBe(8);
   });
@@ -185,6 +188,22 @@ describe('the committed GLBs', () => {
     expect(stats.extensionsUsed).toContain('KHR_texture_transform');
   });
 
+  it('rider.glb meets the rider budget, matches the source and carries the 17 bones in skinning order (ADR-85)', async () => {
+    const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.rider));
+    expect(failing(stats, 'rider')).toEqual([]);
+    expect(stats.triangles).toBe(sum(buildRider().triangles));
+    expect(stats.drawCalls).toBe(1);
+    expect(stats.textures).toHaveLength(0);
+    expect(stats.joints).toEqual([[...RIDER_BONES]]);
+  });
+
+  it('fails a rider with its bones out of order, a missing joint or the wrong height', async () => {
+    const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.rider));
+    expect(failing({ ...stats, joints: [[...RIDER_BONES].reverse()] }, 'rider')).toEqual(['Joint order']);
+    expect(failing({ ...stats, joints: [RIDER_BONES.slice(1)] }, 'rider')).toEqual(['Skin joints', 'Joint order']);
+    expect(failing({ ...stats, bounds: { ...stats.bounds, max: [stats.bounds.max[0], 1.9, stats.bounds.max[2]] } }, 'rider')).toEqual(['Top (max y)']);
+  });
+
   it.each(Object.keys(ASSET_FILES) as AssetKey[])('%s is built deterministically and the committed file is byte for byte that build', async (key) => {
     const [a, b] = await Promise.all([buildAsset(key), buildAsset(key)]);
     expect(a.glb.length).toBeGreaterThan(0);
@@ -197,7 +216,7 @@ describe('the committed GLBs', () => {
 });
 
 describe('deck textures (step 16, ADR-71)', () => {
-  const ok: DeckTextureStat = { bytes: 30 * 1024, width: 1024, height: 256, levels: 11, srgb: true };
+  const ok: DeckTextureStat = { bytes: 30 * 1024, width: 1024, height: 256, levels: 11, srgb: true, zstd: false };
   const failing = (s: DeckTextureStat, level: 'medium' | 'high' = 'medium') => evaluateDeckTexture(s, level).filter((r) => !r.ok).map((r) => r.check);
 
   it('passes a Medium deck the size of the GLB deck bottom with its full mip chain, sRGB, inside the budget', () => {
@@ -205,11 +224,12 @@ describe('deck textures (step 16, ADR-71)', () => {
     expect(failing({ ...ok, width: 2048, height: 512, levels: 12 }, 'high')).toEqual([]);
   });
 
-  it('fails a file that is not KTX2, the wrong size, a short mip chain, linear, or over its budget', () => {
+  it('fails a file that is not KTX2, the wrong size, a short mip chain, linear, zstd, or over its budget', () => {
     expect(failing({ ...ok, width: null, height: null, levels: 0 })).toEqual(['KTX2', 'Size', 'Mip levels']);
     expect(failing({ ...ok, width: 2048, height: 512 })).toEqual(['Size']);
     expect(failing({ ...ok, levels: 1 })).toEqual(['Mip levels']);
     expect(failing({ ...ok, srgb: false })).toEqual(['sRGB']);
+    expect(failing({ ...ok, zstd: true })).toEqual(['No zstd']);
     expect(failing({ ...ok, bytes: DECK_BUDGET.medium.bytes + 1 })).toEqual(['File size']);
   });
 

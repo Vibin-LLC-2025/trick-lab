@@ -276,7 +276,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .presets, .preset, .preset--active, .preset__key (small key hint)
 .inputs, .field, .field__label, .field__value, .field__unit, .field__range
 .playback, .btn, .btn--primary, .btn--ghost, .btn--danger, .btn--sm (small header button)
-.toggle (button with aria-pressed, drawn as a switch), .toggle--on, .toggle__state
+.toggle (button with aria-pressed, drawn as a switch), .toggle--on
 .view-panel__actions (View header buttons), .view-panel__toggles (grid of View switches)
 .segmented, .segmented__legend, .segmented__options, .segmented__option, .segmented__input, .segmented__label, .segmented__hint
 .timeline, .timeline__range, .timeline__label
@@ -291,7 +291,9 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .confirm, .confirm__title, .confirm__text, .confirm__actions (leave a game dialog, ADR-46)
 .fold, .fold--part, .fold__heading, .fold__heading--sub, .fold__toggle, .fold__body (the lab's sections that open, ADR-47)
 .skate__pick, .skate__select, .skate__guide, .skate__guide-title, .skate__guide-list (the call picker and trick guide, ADR-44)
-.skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar, ADR-65)
+.skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar's track, ADR-65)
+.timing, .timing--run, .timing--in, .timing--off, .timing__head, .timing__who, .timing__verdict (the timing bar over the stage, ADR-83)
+.field__track, .field__zone, .field__zone--clean, .field__forecast (a slider's track, the game's landing zones and the forecast, ADR-83)
 .hud__turn, .hud__score, .hud__last, .hud__tray (the game's cards over the stage, ADR-66)
 .lesson, .lesson__title, .lesson__steps, .lesson__step, .lesson__step--now, .lesson__step--done (the first game's walk-through, ADR-66)
 .app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)

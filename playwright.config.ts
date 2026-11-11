@@ -5,7 +5,13 @@
 // assert it. Not part of `verify`, which stays quick and needs no browser.
 import { defineConfig } from '@playwright/test';
 
-const PORT = 4173;
+// The port the build is served on: 4173, or BROWSER_PORT when set (ADR-86).
+// Another checkout on the same machine may be serving its own build on 4173,
+// so with BROWSER_PORT set the checks always start their own server there and
+// never reuse one that is already running.
+const OWN_PORT = process.env.BROWSER_PORT;
+const PORT = OWN_PORT ? Number(OWN_PORT) : 4173;
+if (!Number.isInteger(PORT) || PORT <= 0) throw new Error(`BROWSER_PORT must be a port number, not ${OWN_PORT}`);
 
 export default defineConfig({
   testDir: 'browser',
@@ -26,6 +32,6 @@ export default defineConfig({
   webServer: {
     command: `npx tsx scripts/measure/serve.ts dist ${PORT}`,
     url: `http://localhost:${PORT}/`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && !OWN_PORT,
   },
 });

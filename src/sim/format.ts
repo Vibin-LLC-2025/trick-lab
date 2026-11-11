@@ -15,19 +15,23 @@ import {
   type Stance,
 } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
+import { describeBody } from './body';
 import { describeLegs } from './legs';
 import { restSide, type RestSide } from './settle';
+import { landingZones } from './zones';
 import {
   directionWord,
   FLIP_WORDS,
   isLanded,
   isUnderRotated,
+  recognize,
   ROLL_TOLERANCE,
   SHOVE_WORDS,
   sketchAmount,
   sketchOf,
   YAW_TOLERANCE,
   type InputKey,
+  type TrickId,
   type TrickResult,
 } from './tricks';
 
@@ -182,6 +186,59 @@ export function outcomeCard(r: TrickResult): { name: string; detail: string } {
       ? `${off.map((a, i) => `${i === 0 ? cap(dir(a.under)) : dir(a.under)}-rotated ${Math.abs(deg(a.err))} deg of ${a.axis}`).join(', ')}.`
       : `${cap(failed)}-rotated by ${Math.abs(deg(r.failedBy))} deg of ${r.failedAxis}. ${HINT[r.failedAxis!][failed]}`;
   return { name: `${r.name} not landed`, detail };
+}
+
+/** A trick the player has to do in a game: its name and its turn on each axis (a SkateCall). */
+export interface ForecastCall {
+  id: TrickId;
+  name: string;
+  flips: number;
+  halfShoves: number;
+}
+
+/**
+ * How far a bail misses the trick to do, on the axis that misses most past
+ * its tolerance (the same choice recognition makes): "38 degrees short on the
+ * flip", "96 degrees past on the shove", or "the flip turns the wrong way"
+ * when it turns against the trick's own direction.
+ */
+function missOf(r: TrickResult, call: ForecastCall): string {
+  const axes = [
+    { axis: 'flip' as const, total: r.rollTotal, target: call.flips * 360, tol: ROLL_TOLERANCE },
+    { axis: 'shove' as const, total: r.yawTotal, target: call.halfShoves * 180, tol: YAW_TOLERANCE },
+  ];
+  const worst = axes.reduce((a, b) => (Math.abs(b.total - b.target) - b.tol > Math.abs(a.total - a.target) - a.tol ? b : a));
+  if (worst.target !== 0 && deg(worst.total) !== 0 && Math.sign(worst.total) !== Math.sign(worst.target)) return `the ${worst.axis} turns the wrong way`;
+  const short = worst.target !== 0 && Math.abs(worst.total) < Math.abs(worst.target);
+  return `${degWord(worst.total - worst.target)} ${short ? 'short' : 'past'} on the ${worst.axis}`;
+}
+
+/**
+ * The forecast under the game's sliders (ADR-83): what the sliders make if
+ * the pop is timed right (a release in the band is exactly the sliders,
+ * ADR-65), from the same flight and recognition that fly the trick. Against
+ * the trick to do when there is one: "This makes: kickflip, clean.", "This
+ * makes: kickflip, sketchy: 19 degrees short on the flip.", "This makes: a
+ * bail: 38 degrees short on the flip.", "This makes: heelflip, not the
+ * kickflip you need.". `cleanOnly` (Hard) says a sketchy one will not count.
+ * When no slider value can land the trick from this pop (its landing zone
+ * lies past a slider's end, zones.ts), it says what the sliders make and to
+ * pop higher.
+ */
+export function forecastText(inputs: TrickInputs, call: ForecastCall | null, cleanOnly = false): string {
+  const r = recognize(computeFlight(inputs));
+  const name = r.name.charAt(0).toLowerCase() + r.name.slice(1);
+  // A zone past the slider's end (a double flip from a low pop): no slider value lands it from this pop.
+  if (call) {
+    const zones = landingZones(call, inputs.pop);
+    const off = !zones.flick ? 'flick' : !zones.scoop ? 'scoop' : null;
+    if (off) return `${forecastText(inputs, null)} Pop higher: the ${off} slider cannot reach the ${call.name.toLowerCase()} from here.`;
+  }
+  if (call && r.landed && r.id !== call.id) return `This makes: ${name}, not the ${call.name.toLowerCase()} you need.`;
+  if (r.grade === 'clean') return `This makes: ${name}, clean.`;
+  if (r.grade === 'sketchy') return `This makes: ${name}, sketchy: ${sketchText(r)}.${call && cleanOnly ? ' Only clean counts on Hard.' : ''}`;
+  if (call) return `This makes: a bail: ${missOf(r, call)}.`;
+  return `This makes: a bail: ${degWord(r.failedBy)} ${r.outcome === 'under-rotated' ? 'short' : 'past'} on the ${r.failedAxis}.`;
 }
 
 /**
@@ -361,8 +418,12 @@ export function describeScene(s: {
   feetVisible?: boolean;
   /** Shown when left out, and only with the feet (ADR-37). */
   legsVisible?: boolean;
+  /** The whole rider on screen (ADR-85, store riderShown): a sentence for the body after the legs'. Not when left out. */
+  riderShown?: boolean;
   /** Goofy when left out (ADR-25). */
   stance?: Stance;
+  /** The whole rider's wind-up (ADR-86, store windUp): riding along before a go; the crouch when left out. */
+  windUp?: 'ride' | 'crouch' | 'wait';
   /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
   flightBy?: 'you' | 'computer';
   /** Rolling in the game (ADR-67); still when left out. */
@@ -389,7 +450,10 @@ export function describeScene(s: {
             : 'Skateboard resting flat on a concrete pad, grip side up.';
   const rolling = s.roll === 'push' ? ' Rolling along the concrete, nose first.' : s.roll === 'slow' ? ' Rolling to a stop.' : '';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
-  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
+  const at = s.status === 'idle' ? 0 : s.progress;
+  // The riding stance is the whole rider's (ADR-86); the legs alone (Low, the lab) keep the crouch. The computer's wait reads as riding.
+  const riding = !!s.riderShown && s.windUp !== undefined && s.windUp !== 'crouch';
+  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight, riding)}${s.riderShown ? ` ${describeBody(at, s.flight, riding)}` : ''}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
   const cpu = s.flightBy === 'computer';

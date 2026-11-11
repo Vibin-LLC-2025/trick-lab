@@ -52,6 +52,10 @@ export const LEG = {
  *   (a crouch puts the hips back over the heels).
  * - crouch: hip joints above the ankle line (DECK_TOP + ankleHeight) before
  *   the pop: about 90 degrees of knee bend.
+ * - ride: the same in the riding stance before the wind-up (ADR-86): rolling
+ *   along in a game before the go, the knees a little bent (45 to 53
+ *   degrees, an estimate from how skaters ride: loose, ready, not locked).
+ *   The readiness (0 riding, 1 crouched) blends `ride` to `crouch`.
  * - absorb: hip joints above the landed ankles at progress 1 (the landing
  *   bend, about 80 degrees), held after it.
  * - jump: the hips' rise at their peak is `perPop` times the pop plus
@@ -66,6 +70,7 @@ export const LEG = {
 export const HIPS = {
   z: 0.05,
   crouch: 0.62,
+  ride: 0.79,
   absorb: 0.62,
   jump: { perPop: 1.0, extra: 0.1, peakAt: 0.55 },
   shift: { start: 0.2, end: CATCH.back },
@@ -148,11 +153,13 @@ export const MAX_REACH = (LEG.thigh + LEG.shank) * (1 - LEG.reachMargin);
  * crouch at progress 0 and with no flight, an ease-out rise to the jump's
  * top at HIPS.jump.peakAt, an ease-in fall to the absorb at progress 1
  * (above the landed ankles, or the pad's for a bail), held after it.
- * Continuous, with a level top. Allocation-free.
+ * Continuous, with a level top. Allocation-free. With no flight, `ready`
+ * (ADR-86, 0 riding to 1 crouched, 1 when left out) blends the riding
+ * stance's height into the crouch's; a flight always leaves the crouch.
  */
-export function hipHeight(flight: Flight | null, u: number): number {
+export function hipHeight(flight: Flight | null, u: number, ready = 1): number {
   const crouch = ANKLE_REST + HIPS.crouch;
-  if (!flight) return crouch;
+  if (!flight) return ANKLE_REST + HIPS.ride + (HIPS.crouch - HIPS.ride) * clamp01(ready);
   const p = clamp01(u);
   const J = HIPS.jump;
   const top = crouch + flight.peak * J.perPop + J.extra;
@@ -289,7 +296,8 @@ const stanceFeet = newFeetPose();
  * feet do. Steps: the ankle targets from the shoes; the pelvis (x from the
  * middle of the stance to the board's centre, HIPS.z, hipHeight); the reach
  * clamp, which lowers the pelvis just enough that neither hip joint is more
- * than MAX_REACH from its ankle; the knee poles; the IK.
+ * than MAX_REACH from its ankle; the knee poles; the IK. `ready` is the
+ * wind-up's readiness for the pose with no flight (hipHeight, ADR-86).
  */
 export function writeLegsPose(
   out: LegsPose,
@@ -298,6 +306,7 @@ export function writeLegsPose(
   u: number,
   inputs: TrickInputs,
   stance: Stance = 'goofy',
+  ready = 1,
 ): LegsPose {
   const regular = stance === 'regular';
   const sx = regular ? -1 : 1;
@@ -315,7 +324,7 @@ export function writeLegsPose(
   const half = LEG.hipWidth / 2;
   const fx = cx + sx * half;
   const bx = cx - sx * half;
-  const free = hipHeight(flight, p);
+  const free = hipHeight(flight, p, ready);
   const cy = Math.min(free, reachTop(fx, cz, out.front.target), reachTop(bx, cz, out.back.target));
   out.clamped = free - cy;
   out.pelvis.x = cx;
@@ -345,9 +354,11 @@ export const kneeBend = (leg: LegPose) => {
 /**
  * One sentence for #scene-description (format.ts), from the same phases the
  * hips follow: crouched before the pop, tucked in the air, reaching down in
- * the catch, bent at the landing.
+ * the catch, bent at the landing; riding along, a little bent, before a
+ * game's wind-up (`riding`, ADR-86).
  */
-export function describeLegs(u: number, flight: Flight | null): string {
+export function describeLegs(u: number, flight: Flight | null, riding = false): string {
+  if (!flight && riding) return 'Knees a little bent, riding along.';
   if (!flight || u <= 0) return 'Legs crouched, knees bent, ready to pop.';
   if (u >= 1) return flight.landed ? 'Knees bent, absorbing the landing.' : 'Knees bent, landing on the pad beside the board.';
   if (u < PHASE.catch.start) return 'Knees tucked up in the air.';

@@ -125,6 +125,7 @@ describe('records in the store (ADR-64)', () => {
     // The computer wins the coin flip and lands its heelflip.
     const store = makeStore([0.75]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     pop(store);
     expect(store.getState().flightBy).toBe('computer');
     expect(store.getState().result?.landed).toBe(true);
@@ -135,6 +136,7 @@ describe('records in the store (ADR-64)', () => {
     localStorage.setItem(RECORDS_KEY, serializeRecords({ ...emptyRecords(), streak: 3 }));
     const store = makeStore([0.75]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     // The computer sets and never misses; the player answers every set with an ollie and takes five letters.
     for (let i = 0; i < 40 && store.getState().skate.phase !== 'over'; i++) {
       if (store.getState().skate.phase === 'computer-set') pop(store);
@@ -149,6 +151,7 @@ describe('records in the store (ADR-64)', () => {
     expect(s.records.tricks.ollie?.best).toBe('clean');
     // A game that is quit is not a record.
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().quitSkate();
     expect(store.getState().records.games.normal).toEqual({ won: 0, lost: 1 });
   });

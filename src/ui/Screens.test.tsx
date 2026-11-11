@@ -173,6 +173,7 @@ describe('welcome screen (ADR-45)', () => {
     const user = await setup();
     await user.click(screen.getByRole('button', { name: 'Play a game of SKATE' }));
     await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(document.getElementById('skate-notice-continue')!);
     screen.getByRole('heading', { level: 2, name: /turn$/ }).focus();
     await user.keyboard('r1[[');
     expect(useTrickStore.getState().skate.phase).not.toBe('off');
@@ -186,6 +187,7 @@ describe('welcome screen (ADR-45)', () => {
     const user = await setup();
     await user.click(screen.getByRole('button', { name: 'Play a game of SKATE' }));
     await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(document.getElementById('skate-notice-continue')!);
     await user.click(screen.getByRole('button', { name: "Computer's go" }));
     expect(useTrickStore.getState().status).toBe('playing');
 

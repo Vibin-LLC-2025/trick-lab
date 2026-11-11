@@ -57,9 +57,64 @@ export function placeCamera(
   camera.position.sub(target).setLength(distance).add(target);
 }
 
+/**
+ * The game's free camera across the instant replay (ADR-81): the replay has
+ * its own spot, and coming back from it would snap the camera to the free
+ * view's home, losing the student's orbit after every go. So the orbit is
+ * kept as the replay starts and given back as it ends, unless "Reset view"
+ * was asked for in between.
+ */
+/** True when this change of view is the replay taking over from the free camera: keep the orbit. */
+export const leavesFreeForReplay = (from: string, to: string) => from === 'free' && to === 'replay';
+/** True when this change of view is the free camera coming back from the replay with no reset asked for: give the orbit back. */
+export const returnsFromReplay = (from: string, to: string, resetAsked: boolean) => from === 'replay' && to === 'free' && !resetAsked;
+
 /** Gives a perspective camera a field of view (the replay's wide lens, ADR-72), and its projection with it; no change, no work. */
 export function setFov(camera: { fov?: number; updateProjectionMatrix?: () => void }, fov: number) {
   if (camera.fov === undefined || camera.fov === fov) return;
   camera.fov = fov;
+  camera.updateProjectionMatrix?.();
+}
+
+/** The clear part of the stage (store/stage.ts), as fractions from its top left. */
+interface ClearRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * Gives a perspective camera its field of view and moves its principal point
+ * to the centre of the clear part of the stage (ADR-86) with a view offset.
+ * three's setViewOffset also sets the aspect to fullWidth / fullHeight, so
+ * the full image is the stage at the camera's own aspect, by 1: the offset is
+ * then in units of the stage's height, and the projection only reads its
+ * ratios to the full size, so the aspect R3F sets on a resize keeps it right.
+ * The whole stage clears the offset. One projection update, only on a change.
+ */
+export function setLens(
+  camera: {
+    fov?: number;
+    aspect?: number;
+    view?: { enabled: boolean; offsetX: number; offsetY: number; fullWidth: number } | null;
+    setViewOffset?: (fw: number, fh: number, x: number, y: number, w: number, h: number) => void;
+    clearViewOffset?: () => void;
+    updateProjectionMatrix?: () => void;
+  },
+  fov: number,
+  clear: ClearRect,
+) {
+  if (camera.fov === undefined) return;
+  const x = 0.5 - (clear.left + clear.right) / 2;
+  const y = 0.5 - (clear.top + clear.bottom) / 2;
+  const full = clear.left === 0 && clear.top === 0 && clear.right === 1 && clear.bottom === 1;
+  const view = camera.view;
+  const same = full ? !view?.enabled : !!view?.enabled && view.offsetX / view.fullWidth === x && view.offsetY === y;
+  if (same && camera.fov === fov) return;
+  camera.fov = fov;
+  const a = camera.aspect ?? 1;
+  if (full) camera.clearViewOffset?.();
+  else camera.setViewOffset?.(a, 1, x * a, y, a, 1);
   camera.updateProjectionMatrix?.();
 }

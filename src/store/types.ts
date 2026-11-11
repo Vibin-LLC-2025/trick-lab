@@ -1,9 +1,11 @@
+import type { ClearArea } from './stage';
 import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 import type { DeckId, PlayerDeck } from '../asset/deckSpec';
 import type { Records } from './records';
+import type { SkateNotice } from './notice';
 import type { GameView, ReplayState } from './replay';
 import type { LandingState, RollState } from './roll';
 
@@ -41,7 +43,7 @@ export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'done';
 export type SoundKind = 'pop' | 'land' | 'sketchy' | 'bail' | 'letter' | 'win' | 'lose';
 /** One of SPEEDS in store/speed.ts. */
 export type PlaybackRate = number;
-export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' };
+export type FocusTarget = { kind: 'setup-heading' } | { kind: 'skate-heading' } | { kind: 'screen-heading' } | { kind: 'skate-notice' };
 /**
  * Which screen is showing (ADR-45): the welcome screen with the two choices,
  * the game of SKATE, or the practice lab. Mirrored in the URL hash, so the
@@ -146,6 +148,14 @@ export interface PlaybackSlice {
   replay: ReplayState;
   /** The replay is over (FlightDriver at its end) or skipped (Pop, Space or Escape): the computer's go may come. */
   endReplay: () => void;
+  /**
+   * Internal, Continue on a game's notice (ADR-80): the go just played is
+   * cleared from the stage, the board back at rest on the pad, so the next
+   * go starts fresh. The result stays for the "Last trick" card.
+   */
+  clearStage: () => void;
+  /** How many times Continue has cleared the stage (ADR-80): the stage's fade between turns is keyed on it. Not logged. */
+  stageClears: number;
 }
 
 /** How you pop in a game (ADR-65): on the timing bar, or exactly what the sliders say. */
@@ -203,7 +213,7 @@ export interface UiSlice {
   viewResetNonce: number;
   /** The camera preset that SceneCamera places and "Reset view" returns to (ADR-38). Persisted under trick-lab.camera-view, default rider. Not logged, not reset, not exported. */
   cameraView: CameraView;
-  /** The game screen's fixed camera (step 17, ADR-72). Persisted under trick-lab.game-camera, default the filmer. Not logged, not reset, not exported. */
+  /** The game screen's camera: free (ADR-81) or one of the fixed angles (ADR-72). Persisted under trick-lab.game-view, default free. Not logged, not reset, not exported. */
   gameView: GameView;
   /** The "Instant replay" switch (ADR-72). Persisted under trick-lab.instant-replay, default on. Never plays under reduced motion. Not logged. */
   instantReplay: boolean;
@@ -239,6 +249,15 @@ export interface UiSlice {
    */
   stageReady: boolean;
   /**
+   * The part of the stage the game's cards and tray leave uncovered (ADR-86),
+   * as fractions of the stage, measured by the page (ui/useStageClear.ts) and
+   * set only by setStageClear on a layout change, never per frame. Null
+   * before the first measurement and wherever nothing covers the stage (the
+   * lab, the welcome screen): the cameras then frame the whole stage. Not
+   * persisted, not logged, not exported, not announced.
+   */
+  stageClear: ClearArea | null;
+  /**
    * The student's last landing worth a cheer (ADR-57): any landed trick in
    * the lab, and in a game a set landed as called or a copy made. `nonce`
    * goes up by one each time, so the stage's celebration plays once per
@@ -269,7 +288,7 @@ export interface UiSlice {
   deckBefore: PlayerDeck;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
-  /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs; without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
+  /** The rider (the "Rider" switch, ADR-85): the whole body in a game and on the welcome screen, its legs above the shoes in the lab and on Low (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs (the key kept, so no saved choice is lost); without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
   legsVisible: boolean;
   /** Foot trails: the route of each shoe through the trick, with arrowheads (DESIGN.md 8.5). Persisted under trick-lab.foot-trails, default off. Not logged. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   footPathsVisible: boolean;
@@ -302,7 +321,7 @@ export interface UiSlice {
   toggleInstantReplay: () => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
-  /** Shows or hides the legs, persisted and announced. */
+  /** Shows or hides the rider, persisted and announced ("Rider shown."). */
   toggleLegs: () => void;
   /** Shows or hides the foot trails. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   toggleFootPaths: () => void;
@@ -329,6 +348,8 @@ export interface UiSlice {
   setSceneUnavailable: () => void;
   /** Called by the scene (StageReady) when the tier's real scene is first drawn. Once; never undone. */
   setStageReady: () => void;
+  /** The page's measurement of the clear part of the stage (ADR-86); a no-op when it has not changed. Never logged. */
+  setStageClear: (area: ClearArea | null) => void;
   /** Internal: marks a landing to celebrate. Called from store actions only (the landing's resolution and the game's scoring). */
   celebrate: (trick: string, clean: boolean) => void;
   /** Turns sound on or off, persisted and announced (ADR-58). */
@@ -413,6 +434,17 @@ export interface SkateSlice {
   endLesson: () => void;
   /** Internal, a slider or the call changed: says the walk-through's next prompt when its setup has just been reached. */
   lessonMoved: () => void;
+  /**
+   * The notice waiting over the stage (ADR-80, store/notice.ts): the coin
+   * flip, or what the last go did and whose turn is next. On screen once the
+   * go has come to rest (noticeUp); the computer's go waits for it. Not
+   * persisted, not logged.
+   */
+  skateNotice: SkateNotice | null;
+  /** Continue (the notice's button, Space or Enter): the notice goes, the stage is cleared for the next go, focus goes to the turn's heading. */
+  continueSkate: () => void;
+  /** Internal, a go has come to rest: when its notice is now on screen, focus goes to its Continue button. */
+  revealNotice: () => void;
 }
 
 /**

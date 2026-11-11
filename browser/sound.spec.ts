@@ -15,6 +15,8 @@ test('with sound off, a visit downloads no sound file and not the player', async
   });
   const errors = await open(page, 'low', 'skate', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
   await page.getByRole('button', { name: 'Start game' }).click();
+  // Enter on the coin flip's Continue (ADR-80), then Space pops.
+  await page.keyboard.press('Enter');
   await page.keyboard.press('Space');
   await page.waitForTimeout(2000);
   expect(asked).toEqual([]);

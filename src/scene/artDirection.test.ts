@@ -109,7 +109,8 @@ describe('fog and ground (ground pass, ADR-31)', () => {
     const narrow = 368 / 744;
     expect(orbitMax('rider', narrow)).toBeCloseTo(C.maxDistance, 9);
     expect(orbitMax('detail', narrow)).toBeGreaterThan(fitFor('detail', narrow));
-    expect(orbitMax('detail', narrow)).toBeLessThan(fitFor('detail', narrow) * C.zoomOut);
+    // With the fog starting at 6.5 m (ADR-86) the zoom-out's own limit can bind before the fog does.
+    expect(orbitMax('detail', narrow)).toBeLessThanOrEqual(fitFor('detail', narrow) * C.zoomOut);
     for (const aspect of [1, 1.6]) for (const view of ['rider', 'detail'] as const) expect(orbitMax(view, aspect)).toBeCloseTo(C.maxDistance, 9);
   });
 

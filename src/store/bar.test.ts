@@ -39,6 +39,7 @@ const types = (s: Store) => s.getState().events.map((e) => e.type);
 function kickflipUp(queue?: number[]) {
   const s = makeStore(queue);
   s.getState().startSkate();
+  s.getState().continueSkate();
   s.getState().callSkateTrick('kickflip');
   s.getState().setInput('flick', 1.9);
   return s;
@@ -57,7 +58,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.flight).toBeNull();
     expect(popped(s)).toHaveLength(0);
     // Sound is off by default, so the start says the bar is silent and where Exact is.
-    expect(said(s)).toBe('Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
+    expect(said(s)).toBe('Bar running, with no sound: press Pop! when the marker is in the green band. Turn sound on to hear it, or choose Exact before a game.');
   });
 
   it('with sound on the start is two words, so it does not talk over the ticks', () => {
@@ -186,6 +187,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     const s = kickflipUp();
     s.getState().setScreen('skate');
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().callSkateTrick('kickflip');
     s.getState().pressPop();
     expect(s.getState().pendingPop).not.toBeNull();
@@ -211,6 +213,7 @@ describe('the timing bar in the store (ADR-65)', () => {
   it('a set needs its call first, and a board in the air is not a bar: the plain pop says what is wrong', () => {
     const s = makeStore();
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().pressPop();
     expect(s.getState().pendingPop).toBeNull();
     expect(said(s)).toBe('Call your trick first: pick the trick you are going for, then pop.');
@@ -229,6 +232,7 @@ describe('the timing bar in the store (ADR-65)', () => {
   it("on the computer's turn Pop is its go, and it goes through the same bar", () => {
     const s = makeStore([COMPUTER_FIRST]);
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().pressPop();
     const st = s.getState();
     expect(st.pendingPop).toBeNull();
@@ -255,6 +259,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     const s = makeStore();
     s.getState().setSkateLevel('hard');
     s.getState().startSkate();
+    s.getState().continueSkate();
     s.getState().callSkateTrick('kickflip');
     s.getState().setInput('flick', 1.9);
     s.getState().pressPop();
@@ -278,6 +283,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(makeStore().getState().popMode).toBe('exact');
 
     s.getState().startSkate();
+    s.getState().continueSkate();
     // Not in the middle of a game.
     s.getState().setPopMode('timed');
     expect(s.getState().popMode).toBe('exact');
@@ -292,7 +298,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     s.getState().land();
     s.getState().quitSkate();
     s.getState().setPopMode('timed');
-    expect(said(s)).toBe('Timing bar: Pop starts the bar, and Pop again in the band releases it.');
+    expect(said(s)).toBe('Timing bar: Press Get ready, then Pop! when the marker is in the green band. Early spins less, late spins more.');
     expect(localStorage.getItem(POP_MODE_KEY)).toBe('timed');
   });
 

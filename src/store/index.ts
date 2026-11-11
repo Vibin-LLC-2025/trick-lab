@@ -10,10 +10,13 @@ import type { TrickState } from './types';
 
 export { GAME_PACE, playRate, SPEEDS, speedIndex, speedLabel, speedText } from './speed';
 export { animates } from './playback';
-export { effectiveQuality } from './quality';
+export { effectiveQuality, riderShown } from './quality';
 export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
-export { computerWaiting, landingMoves, rollAllowed, rollMoves, type LandingState, type RollState } from './roll';
+export { clearArea, FULL_STAGE, sameArea, type ClearArea, type Cover, type CoverSide, type PageRect } from './stage';
+export { noticeUp, type SkateNotice } from './notice';
+export { assistOn, sliderForecast, sliderPlace, sliderZones } from './forecast';
+export { COMPUTER_DELAY_MS, computerWaiting, landingMoves, rollAllowed, rollMoves, windUp, type LandingState, type RollState, type WindUp } from './roll';
 export { boardRider, DECK_KEY, shownDeck } from './deck';
 export { GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, type GameView, type ReplayState } from './replay';
 

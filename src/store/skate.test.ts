@@ -48,6 +48,7 @@ describe('game of SKATE', () => {
   it('starts with a coin flip: the computer won, so its call is up before it pops', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     const s = store.getState();
     expect(s.skate.phase).toBe('computer-set');
     expect(s.skate.first).toBe('computer');
@@ -69,6 +70,7 @@ describe('game of SKATE', () => {
   it('the student won the coin flip: they call a trick before they can pop, and the set counts only for that trick', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     expect(store.getState().skate).toMatchObject({ phase: 'you-set', first: 'you', call: null });
     expect(said(store)).toMatch(/Coin flip: you set first\. Your turn to set: call a trick, then land it\./);
 
@@ -78,7 +80,8 @@ describe('game of SKATE', () => {
 
     store.getState().callSkateTrick('kickflip');
     expect(store.getState().skate.call?.id).toBe('kickflip');
-    expect(said(store)).toBe('You called a kickflip. Land it and the computer has to copy it.');
+    // On Normal with the timing bar the call sets the sliders too (ADR-83).
+    expect(said(store)).toBe('You called a kickflip. Land it and the computer has to copy it. Sliders set for a kickflip.');
     callAndSet(store, 'kickflip');
     const s = store.getState();
     expect(s.events.find((e) => e.type === 'trick.popped')).toMatchObject({ payload: { by: 'you', call: 'kickflip', preset: null } });
@@ -91,6 +94,7 @@ describe('game of SKATE', () => {
   it('a set that lands a different trick than the call does not count and passes the turn', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().callSkateTrick('kickflip');
     tryInputs(store, -1.9); // a heelflip
     const s = store.getState();
@@ -105,6 +109,7 @@ describe('game of SKATE', () => {
   it('calls are refused for a trick already set, off the set turn, and while a trick is in the air', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     callAndSet(store, 'kickflip');
     store.aim.value = 0.25;
     pop(store); // the computer copies the kickflip: the student sets again
@@ -131,6 +136,7 @@ describe('game of SKATE', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().setInput('pop', 0.5);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().popTrick();
     const s = store.getState();
     expect(s.flightBy).toBe('computer');
@@ -147,12 +153,14 @@ describe('game of SKATE', () => {
     expect(after.events.find((e) => e.type === 'trick.resolved')?.payload.by).toBe('computer');
     expect(after.events.at(-1)).toMatchObject({ type: 'skate.set', payload: { by: 'computer', trick: 'heelflip' } });
     expect(said(store)).toMatch(/^The computer's trick: Heelflip landed clean./);
-    expect(said(store)).toMatch(/The computer landed a heelflip\. Your turn: copy the computer's heelflip\. Set the sliders, then press Pop\.$/);
+    // The copy is the player's now, so on Normal with the timing bar its sliders are set (ADR-83); the computer's go left them alone.
+    expect(said(store)).toMatch(/The computer landed a heelflip\. Your turn: copy the computer's heelflip\. Sliders set for a heelflip\.$/);
   });
 
   it('a copy of the right trick earns its objective and the computer sets again, never a trick already set', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     pop(store); // computer: heelflip
     tryInputs(store, -1.9); // student: heelflip
     let s = store.getState();
@@ -175,6 +183,7 @@ describe('game of SKATE', () => {
   it('the student sets after the computer misses, and the computer takes a letter when it cannot copy', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.aim.value = 0.999;
     pop(store);
     expect(store.getState().skate.phase).toBe('you-set');
@@ -192,6 +201,7 @@ describe('game of SKATE', () => {
   it('plays to the end: the student gets a second try on the last letter, then the computer wins', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     for (let i = 0; i < 4; i++) {
       pop(store); // the computer lands its set
       tryInputs(store, 0); // the student ollies
@@ -202,7 +212,7 @@ describe('game of SKATE', () => {
     let s = store.getState();
     expect(s.skate).toMatchObject({ phase: 'you-copy', secondTry: true });
     expect(s.skate.letters.you).toBe(4);
-    expect(said(store)).toMatch(/so you get a second try\. Your turn: copy .* Last letter: this is the second try\.$/);
+    expect(said(store)).toMatch(/so you get a second try\. Your turn: copy .* Last letter: this is the second try\. Sliders set for an? [^.]+\.$/);
     // Five different sets: no trick was set twice.
     expect(new Set(s.skate.used).size).toBe(5);
 
@@ -226,6 +236,7 @@ describe('game of SKATE', () => {
     const store = makeStore([YOU_FIRST]);
     store.aim.value = 0.999;
     store.getState().startSkate();
+    store.getState().continueSkate();
     const sets: PresetId[] = ['kickflip', 'heelflip', 'pop-shove-it', 'frontside-pop-shove-it', 'varial-flip'];
     for (const id of sets) {
       callAndSet(store, id);
@@ -245,6 +256,7 @@ describe('game of SKATE', () => {
   it('a paused trick must land before the next pop', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().popTrick();
     store.getState().togglePause();
     store.getState().popTrick();
@@ -256,11 +268,13 @@ describe('game of SKATE', () => {
     const queue = [COMPUTER_FIRST];
     const store = makeStore(queue);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().popTrick(); // the computer goes for its heelflip
     store.getState().togglePause();
     store.getState().quitSkate();
 
     store.getState().startSkate();
+    store.getState().continueSkate();
     expect(store.getState().skate.phase).toBe('off');
     expect(said(store)).toBe('A trick is paused in the air. Press Resume to land it, then start the game.');
     expect(types(store).filter((t) => t === 'skate.started')).toHaveLength(1);
@@ -270,6 +284,7 @@ describe('game of SKATE', () => {
     expect(types(store)).not.toContain('skate.set');
     queue.push(COMPUTER_FIRST);
     store.getState().startSkate();
+    store.getState().continueSkate();
     expect(store.getState().skate).toMatchObject({ phase: 'computer-set', used: [], letters: { you: 0, computer: 0 } });
     expect(types(store).filter((t) => t === 'skate.started')).toHaveLength(2);
   });
@@ -278,12 +293,14 @@ describe('game of SKATE', () => {
     const store = makeStore();
     store.getState().setSkateLevel('hard');
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().quitSkate();
     expect(store.getState().skate.phase).toBe('off');
     expect(store.getState().skate.level).toBe('hard');
     expect(store.getState().events.at(-1)).toMatchObject({ type: 'skate.ended', payload: { winner: null, reason: 'quit' } });
 
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().resetSession();
     expect(store.getState().skate.phase).toBe('off');
     expect(store.getState().skate.level).toBe('hard');
@@ -299,6 +316,7 @@ describe('game of SKATE', () => {
     store.getState().toggleSlowMotion();
     expect(store.getState().result).not.toBeNull();
     store.getState().startSkate();
+    store.getState().continueSkate();
     const s = store.getState();
     expect(s).toMatchObject({ status: 'idle', progress: 0, flight: null, result: null, flightBy: 'you' });
     expect(s.rate).toBeLessThan(1);
@@ -309,6 +327,7 @@ describe('game of SKATE', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().setScreen('skate');
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().requestLeave('home');
     expect(store.getState().skateLeave).toBe('home');
     expect(store.getState().screen).toBe('skate');
@@ -335,6 +354,7 @@ describe('game of SKATE', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().setScreen('skate');
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().requestLeave('home');
     store.getState().setScreen('lab');
     expect(store.getState().skateLeave).toBeNull();
@@ -358,6 +378,7 @@ describe('game of SKATE', () => {
   it('the end of a game moves focus to its result, since the turn controls are gone', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.setState({ skate: { ...store.getState().skate, letters: { you: 0, computer: 4 }, secondTry: true, phase: 'computer-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 } } });
     const before = store.getState().focusRequest?.nonce ?? 0;
     store.aim.value = 0.999;
@@ -371,6 +392,7 @@ describe('game of SKATE', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().setScreen('skate');
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.setState({ skate: { ...store.getState().skate, letters: { you: 0, computer: 4 }, secondTry: true, phase: 'computer-copy', call: { id: 'kickflip', name: 'Kickflip', flips: 1, halfShoves: 0 } } });
     store.aim.value = 0.999;
     store.getState().popTrick();
@@ -385,6 +407,7 @@ describe('game of SKATE', () => {
   it('the level changes only between games', () => {
     const store = makeStore();
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().setSkateLevel('easy');
     expect(store.getState().skate.level).toBe('normal');
   });
@@ -395,6 +418,7 @@ describe('the celebration in a game', () => {
   it("celebrates the student's copy and set that count, never a miss, a wrong trick or the computer's", () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     // The computer lands its heelflip: its trick, not the student's to celebrate.
     pop(store);
     expect(store.getState().skate.phase).toBe('you-copy');
@@ -419,6 +443,7 @@ describe('the celebration in a game', () => {
   it("celebrates the student's own set when it lands as called", () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     callAndSet(store, 'kickflip');
     expect(store.getState().skate.phase).toBe('computer-copy');
     expect(store.getState().celebration).toEqual({ nonce: 1, trick: 'Kickflip', clean: true });
@@ -438,6 +463,7 @@ describe('the game sounds', () => {
   it('asks for a letter after the landing that earns it, and the jingle when someone spells SKATE', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     const kinds = cues(store);
     pop(store);
     expect(kinds).toEqual(['pop', 'land']);
@@ -449,6 +475,7 @@ describe('the game sounds', () => {
   it('plays the losing jingle after the fifth letter', () => {
     const store = makeStore([COMPUTER_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.setState((s) => ({ skate: { ...s.skate, letters: { you: 4, computer: 0 }, secondTry: true } }));
     pop(store);
     const kinds = cues(store);
@@ -460,6 +487,7 @@ describe('the game sounds', () => {
   it('plays the winning jingle when the computer spells SKATE', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.setState((s) => ({ skate: { ...s.skate, letters: { you: 0, computer: 4 } } }));
     callAndSet(store, 'kickflip');
     const kinds = cues(store);
@@ -477,6 +505,7 @@ describe('graded landings in a game (ADR-63)', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().setSkateLevel('hard');
     store.getState().startSkate();
+    store.getState().continueSkate();
     expect(said(store)).toBe(
       'Game of SKATE started, hard level. Only a clean landing counts on Hard: within 10 degrees on the flip and 8 on the shove. Coin flip: you set first. Your turn to set: call a trick, then land it. The computer has to copy it.',
     );
@@ -497,6 +526,7 @@ describe('graded landings in a game (ADR-63)', () => {
   it('on Normal the same sketchy set counts, and its celebration is not a clean one', () => {
     const store = makeStore([YOU_FIRST]);
     store.getState().startSkate();
+    store.getState().continueSkate();
     store.getState().callSkateTrick('kickflip');
     tryInputs(store, 2);
     expect(store.getState().skate.phase).toBe('computer-copy');

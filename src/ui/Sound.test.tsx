@@ -147,6 +147,7 @@ describe('useSound (ADR-58)', () => {
     const s = () => useTrickStore.getState();
     act(() => {
       s().startSkate();
+      s().continueSkate();
       s().callSkateTrick('kickflip');
     });
     // Sound off: the bar runs in silence, and dropping it has nothing to cut but is harmless.

@@ -362,8 +362,6 @@ export const TEXTURES = {
   wheel: { file: 'wheel.png', width: 64, height: 256, wrap: 'repeat' },
 } as const;
 
-export type TextureKey = keyof typeof TEXTURES;
-
 /**
  * High-tier textures (board-high.glb). The grip is RGB with a tangent-space
  * normal map from the same grain height field; the graphic is the SVG at full
@@ -379,8 +377,6 @@ export const TEXTURES_HIGH = {
   ply: { file: 'ply-high.png', width: 32, height: 256, wrap: 'clamp' },
   wheel: { file: 'wheel-high.png', width: 64, height: 512, wrap: 'repeat' },
 } as const;
-
-export type TextureHighKey = keyof typeof TEXTURES_HIGH;
 
 /** Normal map strength for the high grip (glTF normalTexture scale). */
 export const GRIP_NORMAL_SCALE = 0.6;
@@ -550,6 +546,17 @@ export const BUDGETS = {
    * The plan's proposal: 300 KB, 15,000 triangles, 3 textures at 1024 px.
    */
   spot: { drawCalls: 1, triangles: 15000, fileBytes: 300 * 1024, textures: 3, textureMaxSide: 1024 },
+  /**
+   * The rider (ADR-85, 2026-11-11): the whole body as one skinned mesh over
+   * 17 bones, loaded on Medium and High for the game and the welcome screen.
+   * No texture of its own: the cloth's twill normal map is made in code by
+   * scene/resources.ts (ADR-70's, shared with nothing to download) and the
+   * colours are painted per region from ART.rider. The brief's aim was 350 KB,
+   * one draw call, 20,000 triangles and 2 textures at 1024 px; built, it is
+   * 98.5 KB and 18,500 triangles, so the file limit is set to 150 KB (room to
+   * refine the mesh, not to hide waste) and the texture limit to none.
+   */
+  rider: { drawCalls: 1, triangles: 20000, fileBytes: 150 * 1024, textures: 0, textureMaxSide: 1024 },
 } as const satisfies Record<string, AssetBudget>;
 
 export type AssetKey = keyof typeof BUDGETS;
@@ -571,6 +578,7 @@ export const BOARD_HIGH_GLB = 'models/board-high.glb';
 export const SHOES_GLB = 'models/shoes.glb';
 export const GROUND_GLB = 'models/ground.glb';
 export const SPOT_GLB = 'models/spot.glb';
+export const RIDER_GLB = 'models/rider.glb';
 
-export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB, spot: SPOT_GLB };
+export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB, spot: SPOT_GLB, rider: RIDER_GLB };
 

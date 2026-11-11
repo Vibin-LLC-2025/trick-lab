@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drawCalls, expectTier, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
+import { drawCalls, expectTier, GAME_CHECK_RATE, GATE, LEDGER, open, popAndLand, TIERS, type DebugWindow } from './helpers';
 
 // The draw-call caps (ADR-62): every switch combination, on the welcome
 // screen at rest, on the game screen at rest (with the skate spot, ADR-69),
 // over a 360 flip and through its landing (the dust, ADR-74: one draw on
-// Medium and High while it is in the air, which the motion cues' draw has
-// left by then), and in the lab over a 360 flip, fits the tier's cap and its
+// Medium and High while it is in the air; the motion cues are the lab's
+// alone, ADR-84), and in the lab over a 360 flip, fits the tier's cap and its
 // expected worst case (LEDGER). The switches are the store's own actions, as the View
 // panel's switches call them; none of them remounts the Canvas.
 
@@ -37,7 +37,7 @@ async function setSwitches(page: Page, c: Switches) {
 /**
  * The most draw calls over the landing's own frames: up to 1.5 s from
  * touchdown, ending when the board has come to rest and the instant replay
- * (which shows the cues again) or the next go begins.
+ * or the next go begins.
  */
 const landingCalls = (page: Page) =>
   page.evaluate(async () => {
@@ -85,18 +85,26 @@ for (const tier of TIERS)
     for (const c of COMBOS) {
       await setSwitches(page, c);
       const rest = await drawCalls(page);
-      await page.evaluate(() => {
+      await page.evaluate((rate) => {
         const st = (window as unknown as DebugWindow).__trickLabStore;
+        st.getState().setRate(rate);
         // A fresh game each time, with the player up first.
         st.getState().startSkate();
         for (let i = 0; i < 50 && st.getState().skate.first !== 'you'; i++) st.getState().startSkate();
+        // Past the coin flip (ADR-80).
+        st.getState().continueSkate();
         st.getState().callSkateTrick('360-flip');
-      });
+        // A flick and a scoop set before the pop, as the slider guides had them (ADR-82, removed by ADR-84).
+        st.getState().setInput('flick', 1.9);
+        st.getState().setInput('scoop', 1.0);
+      }, GAME_CHECK_RATE);
+      // The player's turn at rest, measured as before: nothing round the board now (ADR-84), and no motion cues in a game.
+      const guided = await drawCalls(page);
       const { calls } = await popAndLand(page);
       // The landing's own frames follow: its dust, where the tier and the switches have it.
       const landing = await landingCalls(page);
       landed[name(c)] = landing;
-      seen[`skate/${name(c)}`] = Math.max(rest, calls, landing);
+      seen[`skate/${name(c)}`] = Math.max(rest, guided, calls, landing);
     }
     // The welcome screen at rest (its preview has no trails or cues).
     await page.evaluate(() => (window as unknown as DebugWindow).__trickLabStore.getState().setScreen('home'));
@@ -110,8 +118,8 @@ for (const tier of TIERS)
     expect(most, JSON.stringify(seen)).toBeLessThanOrEqual(LEDGER[tier]);
     // Every switch on reaches the ledger's number: the count saw the full scene.
     expect(Math.max(seen['lab/feet+legs+trails+cues']!, seen['skate/feet+legs+trails+cues']!)).toBe(LEDGER[tier]);
-    // The dust (ADR-74) follows the Motion cues switch, and the cues themselves have faded by the landing: so a
-    // landing with the switch on draws exactly one more than with it off on Medium and High, and the same on Low.
-    for (const c of COMBOS.filter((c) => c.cues)) expect(landed[name(c)]! - landed[name({ ...c, cues: false })]!, name(c)).toBe(tier === 'low' ? 0 : 1);
+    // The dust (ADR-74) no longer follows the Motion cues switch (ADR-86), and the cues never show in a game (ADR-84):
+    // a landing draws the same with the switch on and off.
+    for (const c of COMBOS.filter((c) => c.cues)) expect(landed[name(c)]! - landed[name({ ...c, cues: false })]!, name(c)).toBe(0);
     expect(errors).toEqual([]);
   });

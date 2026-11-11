@@ -226,6 +226,23 @@ describe('the legs in the scene description', () => {
     expect(describeScene({ ...base, legsVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
     expect(describeScene({ ...base, feetVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
   });
+
+  it('adds what the whole body does after the legs when the rider shows (ADR-85), and nothing about it otherwise', () => {
+    const idle = describeScene({ ...base, riderShown: true, status: 'idle', progress: 0, flight: null });
+    expect(idle).toContain('Legs crouched, knees bent, ready to pop. The rider crouches over the board, arms low, eyes on the board.');
+    expect(describeScene({ ...base, riderShown: true, status: 'playing', progress: 0.4, flight: landed })).toContain('Arms out for balance, the rider watches the board below.');
+    expect(describeScene({ ...base, riderShown: true, status: 'done', progress: 1, flight: landed })).toContain('The rider rides it out, body folded and arms low.');
+    expect(describeScene({ ...base, status: 'idle', progress: 0, flight: null })).not.toContain('The rider');
+    expect(describeScene({ ...base, riderShown: true, legsVisible: false, status: 'idle', progress: 0, flight: null })).not.toContain('The rider');
+  });
+
+  it("says the rider rides along before a game's wind-up (ADR-86), and crouches once it winds up or with the legs alone", () => {
+    const riding = 'Knees a little bent, riding along. The rider rides along, standing tall, arms loose, looking ahead past the nose.';
+    expect(describeScene({ ...base, riderShown: true, windUp: 'ride', status: 'idle', progress: 0, flight: null })).toContain(riding);
+    expect(describeScene({ ...base, riderShown: true, windUp: 'wait', status: 'idle', progress: 0, flight: null })).toContain(riding);
+    expect(describeScene({ ...base, riderShown: true, windUp: 'crouch', status: 'idle', progress: 0, flight: null })).toContain('Legs crouched, knees bent, ready to pop.');
+    expect(describeScene({ ...base, windUp: 'ride', status: 'idle', progress: 0, flight: null })).toContain('Legs crouched, knees bent, ready to pop.');
+  });
 });
 
 describe('the last trick in the scene description (audit fix, 2026-11-04)', () => {

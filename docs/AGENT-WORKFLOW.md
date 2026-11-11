@@ -15,7 +15,7 @@ Design and implementation ran in parallel without talking to each other. What ma
 
 ## What the agents were told
 
-- Follow `docs/BRIEF.md` exactly and stay inside their own files (implementation does not touch `src/styles/` or `DESIGN.md`).
+- Follow `docs/BRIEF.md` exactly and stay inside their own files (implementation does not touch `src/styles/` or `DESIGN.md`). Since ADR-79 (2026-11-10) any change may edit the styles, with its DESIGN.md entry in the same commit.
 - No Playwright in the project; browser checks use the global `playwright-cli` with a named session over HTTP. (Since 2026-11-09, ADR-61, `@playwright/test` is a pinned dev dependency for the checks CI runs; looking at the app by hand still uses `playwright-cli`.)
 - House writing rules: no em-dashes, absolute dates, model aliases.
 
@@ -101,7 +101,7 @@ Left open: timings for High with the shadow pass at DPR 2; the bail ignores the 
 
 Things that cost time in the play, polish and reach plan's threads, kept here so they cost it once.
 
-- **Serving a build.** `npx tsx scripts/measure/serve.ts dist 4173`, in the background with a long timeout. `npm run test:browser` starts it by itself.
+- **Serving a build.** `npx tsx scripts/measure/serve.ts dist 4173`, in the background with a long timeout. `npm run test:browser` starts it by itself. With `BROWSER_PORT` set (for example `BROWSER_PORT=4191 npm run test:browser`) it serves on that port and never reuses a server already there (ADR-86): the safe choice when another checkout may be on 4173.
 - **Stale servers.** A stopped background task can leave its node process alive and still serving the old build, and Playwright reuses whatever answers on port 4173 when run locally. Before trusting a run, list them in PowerShell and stop the stale ones: `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'serve\.ts' }`. Or compare the script hash in the served `index.html` with `dist/index.html`.
 - **The browser checks run the last build**, not the source. Run `npm run verify` (or `npx vite build`) first, or they test yesterday's code.
 - **Git Bash rewrites arguments that start with `/`**: `--base=/trick-lab/` became `/Program Files/Git/trick-lab/`. Prefix such commands with `MSYS_NO_PATHCONV=1`.
@@ -123,7 +123,7 @@ Things that cost time in the play, polish and reach plan's threads, kept here so
 - **A first game has a walk-through (step 10, ADR-66).** A store made on an empty `localStorage` is a first game, so tests that are not about the walk-through set `skateTaught: true` (`store.setState` in a store test's `makeStore`, `useTrickStore.setState` in a UI test's `beforeEach`). Its own tests are `src/store/lesson.test.ts` and `src/ui/Lesson.test.tsx`.
 - **jsdom does not move a range input by its arrow keys,** so a UI test sets a slider with `fireEvent.change`; the real keys are checked in the browser pass.
 - **Playing a whole game by script:** a loop that reads the store each turn (`skate.phase`, `status`, `pendingPop`) and acts on whose go it is. On Hard the computer rarely misses, so a game the player loses on purpose ends in about 25 seconds. Keyboard alone means `Tab` until `document.activeElement.matches(selector)`, never `.focus()`. On a closed native select, `ArrowDown` picks the next open option.
-- **The download budget is nearly used:** after step 10 the stylesheet is 7.4 of 8.0 KB compressed and the main script 103.0 of 106.0 KB. Run `npx vite build && npm run bundle:check` early in any step that adds interface.
+- **The download budget was nearly used:** after step 10 the stylesheet was 7.4 of 8.0 KB compressed and the main script 103.0 of 106.0 KB. ADR-79 (2026-11-10) loosened them to 16 and 160 KB. Still run `npx vite build && npm run bundle:check` early in any step that adds interface.
 - **The computer's rates.** To measure how often it makes each trick, a one-off `rates.tmp.ts` in the repo root that loops `computerAttempt` through `recognize(computeFlight(...))` with a seeded generator (`mulberry32`, as in `src/sim/skate.test.ts`), 40,000 tries per cell, takes about 20 seconds. Refit `SKATE_LEVELS[level].timing` if a band or `k` changes, and update ADR-65's table.
 
 ### For the stretch from step 12 (written at the halfway pause, 2026-11-09)

@@ -2,9 +2,9 @@
 // the numbers the budget is about. Counts what the renderer will see: one draw
 // call per primitive per node instance, triangles from the index count.
 import { readFileSync } from 'node:fs';
-import { ImageUtils, NodeIO, Primitive, TextureInfo, getBounds, type Node } from '@gltf-transform/core';
+import { ImageUtils, NodeIO, Primitive, TextureInfo, getBounds, type Node, type Root } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { KHR_DF_TRANSFER_SRGB, read as readKtx2 } from 'ktx-parse';
+import { KHR_DF_TRANSFER_SRGB, KHR_SUPERCOMPRESSION_ZSTD, read as readKtx2 } from 'ktx-parse';
 import { MeshoptDecoder } from 'meshoptimizer';
 import type { AssetStats, DeckTextureStat, TextureStat } from './budget';
 
@@ -15,6 +15,46 @@ const MIPMAP_FILTERS = new Set<number>([
   F.NEAREST_MIPMAP_LINEAR!,
   F.LINEAR_MIPMAP_LINEAR!,
 ]);
+
+/**
+ * The bind pose's bounds of a skinned mesh (the rider, ADR-85). glTF ignores
+ * a skinned mesh node's own transform, so quantization (meshopt) puts the
+ * positions' scale and offset into the inverse bind matrices instead: a
+ * joint's world matrix times its inverse bind matrix is that transform, and
+ * it takes the stored positions to the bind pose. Null with no skin.
+ */
+function skinnedBounds(root: Root): { min: [number, number, number]; max: [number, number, number] } | null {
+  const node = root.listNodes().find((n) => n.getSkin() && n.getMesh());
+  const skin = node?.getSkin();
+  const joint = skin?.listJoints()[0];
+  const ibm = skin?.getInverseBindMatrices();
+  if (!node || !joint || !ibm) return null;
+  const w = joint.getWorldMatrix();
+  const i = ibm.getElement(0, []);
+  // Column-major 4 x 4 product w * i.
+  const t = Array.from({ length: 16 }, (_, k) => {
+    const col = Math.floor(k / 4);
+    const row = k % 4;
+    let sum = 0;
+    for (let n = 0; n < 4; n++) sum += w[n * 4 + row]! * i[col * 4 + n]!;
+    return sum;
+  });
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const prim of node.getMesh()!.listPrimitives()) {
+    const pos = prim.getAttribute('POSITION')!;
+    const el: number[] = [];
+    for (let v = 0; v < pos.getCount(); v++) {
+      pos.getElement(v, el);
+      for (let a = 0; a < 3; a++) {
+        const x = t[a]! * el[0]! + t[4 + a]! * el[1]! + t[8 + a]! * el[2]! + t[12 + a]!;
+        min[a] = Math.min(min[a]!, x);
+        max[a] = Math.max(max[a]!, x);
+      }
+    }
+  }
+  return { min: min as [number, number, number], max: max as [number, number, number] };
+}
 
 export async function inspectGlb(path: string): Promise<AssetStats> {
   await MeshoptDecoder.ready;
@@ -72,10 +112,11 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
       mipmapped: mipmapped.get(t.getName()) ?? false,
       mimeType,
       levels: ktx2 ? ktx2.levels.length : 1,
+      zstd: ktx2?.supercompressionScheme === KHR_SUPERCOMPRESSION_ZSTD,
     };
   });
 
-  const b = getBounds(scene);
+  const b = skinnedBounds(root) ?? getBounds(scene);
   return {
     fileBytes: bytes.byteLength,
     drawCalls,
@@ -85,6 +126,7 @@ export async function inspectGlb(path: string): Promise<AssetStats> {
     extensionsUsed: root.listExtensionsUsed().map((e) => e.extensionName),
     extensionsRequired: root.listExtensionsRequired().map((e) => e.extensionName),
     nodeNames,
+    joints: root.listSkins().map((sk) => sk.listJoints().map((j) => j.getName())),
     bounds: { min: [b.min[0], b.min[1], b.min[2]], max: [b.max[0], b.max[1], b.max[2]] },
   };
 }
@@ -95,8 +137,9 @@ export function inspectDeckTexture(path: string): DeckTextureStat {
   try {
     const k = readKtx2(new Uint8Array(bytes));
     const srgb = k.dataFormatDescriptor[0]?.transferFunction === KHR_DF_TRANSFER_SRGB;
-    return { bytes: bytes.byteLength, width: k.pixelWidth, height: k.pixelHeight, levels: k.levels.length, srgb };
+    const zstd = k.supercompressionScheme === KHR_SUPERCOMPRESSION_ZSTD;
+    return { bytes: bytes.byteLength, width: k.pixelWidth, height: k.pixelHeight, levels: k.levels.length, srgb, zstd };
   } catch {
-    return { bytes: bytes.byteLength, width: null, height: null, levels: 0, srgb: false };
+    return { bytes: bytes.byteLength, width: null, height: null, levels: 0, srgb: false, zstd: false };
   }
 }

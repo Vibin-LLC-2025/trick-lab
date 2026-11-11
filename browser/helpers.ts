@@ -15,7 +15,9 @@ export const HASH: Record<Screen, string> = { home: '', lab: '#/lab', skate: '#/
  * The draw-call caps (strict: under 60 on High, under 40 on Medium, under 20
  * on Low, ADR-62) and the expected worst case per tier with every switch on
  * (PLAN-PLAY-POLISH-REACH, "Performance targets"). The expected number moves
- * only with a step that adds or removes a draw, in that step's commit.
+ * only with a step that adds or removes a draw, in that step's commit. The
+ * slider guides (ADR-82) added one on High and Medium; ADR-84 removed them
+ * again (measured 2026-11-11), and keeps the motion cues off the game screen.
  */
 export const GATE: Record<Tier, number> = { high: 60, medium: 40, low: 20 };
 export const LEDGER: Record<Tier, number> = { high: 36, medium: 21, low: 12 };
@@ -44,8 +46,17 @@ interface Store {
   /** The game (a game's landing, ADR-68). */
   skate: { first: 'you' | 'computer' | null; phase: string };
   startSkate: () => void;
+  quitSkate: () => void;
+  /** The game's camera (ADR-72) and the clear part of the stage it frames in (ADR-86). */
+  setGameView: (v: 'free' | 'film' | 'side' | 'above') => void;
+  stageClear: { left: number; top: number; right: number; bottom: number } | null;
+  /** The notice over the stage (ADR-80): the coin flip, or a go's result, waiting for Continue. */
+  skateNotice: { kind: string } | null;
+  continueSkate: () => void;
   callSkateTrick: (id: string) => void;
   setInput: (key: 'pop' | 'flick' | 'scoop', value: number) => void;
+  /** The playback speed (a stop of SPEEDS), which a game runs at GAME_PACE of (ADR-78). */
+  setRate: (rate: number) => void;
   roll: 'still' | 'push' | 'slow';
   landing: 'none' | 'plays' | 'over';
   /** The instant replay (ADR-72). */
@@ -56,6 +67,21 @@ interface Store {
   setDeck: (deck: string) => void;
 }
 export type DebugWindow = Window & Debug & { gc?: () => void };
+
+/**
+ * The playback speed the checks play a game at: 2x, the fastest stop. A game
+ * runs at 0.4 of the playback speed (GAME_PACE, ADR-78), and one frame moves
+ * it on by at most 0.1 s (MAX_STALL, flightClock.ts). Without a GPU a frame
+ * on High takes 0.25 s here and longer on CI, so at 1x a go (the flight, the
+ * roll-out, the landing's motion and the instant replay) draws about 63
+ * frames and outlasted the checks' guards on CI; at 2x it draws about 42
+ * (measured 2026-11-11), about what a go drew before ADR-78. Nothing a check
+ * asserts depends on the speed: the grades come from the inputs, and the
+ * draws, the frames after rest and the memory are the same at any speed.
+ * The replay keeps its own slow rate (ADR-72). The speed is not saved, so a
+ * reload goes back to 1x; a tier change keeps it.
+ */
+export const GAME_CHECK_RATE = 2;
 
 /** Prefs in localStorage before the app starts (keys without the `trick-lab.` prefix). */
 export type Prefs = Record<string, string>;
@@ -196,20 +222,24 @@ export async function popAndLand(page: Page, windowMs = 0) {
 }
 
 /**
- * One go of a game of SKATE on the game screen (exact pops, the computer
+ * One go of a game of SKATE on the game screen, at GAME_CHECK_RATE (exact pops, the computer
  * waiting for a key: the prefs the ledger check opens with), by a real Space
  * press, then everything coming to rest: the roll, the landing's motion and
  * the instant replay (ADR-67, ADR-68, ADR-72). A game that is over, or not
- * started, is started first. The student's sets land and bail in turn
+ * started, is started first, and the notice waiting from the coin flip or
+ * the last go is continued past (ADR-80). The student's sets land and bail in turn
  * (`n` even lands) and their copies always bail, so a run of goes has clean
  * landings, bails, replays and the computer's own goes. Returns the go's grade.
  */
 export async function gameGo(page: Page, n: number) {
-  const before = await page.evaluate((n) => {
+  const before = await page.evaluate(([n, rate]) => {
     const st = (window as unknown as DebugWindow).__trickLabStore;
     type Game = { phase: string; used: string[]; call: { flips: number; halfShoves: number } | null };
     const game = () => st.getState().skate as unknown as Game;
+    st.getState().setRate(rate);
     if (game().phase === 'off' || game().phase === 'over') st.getState().startSkate();
+    // Past the coin flip or the last go's notice (ADR-80), as Continue does.
+    if (st.getState().skateNotice) st.getState().continueSkate();
     const g = game();
     if (g.phase === 'you-set' || g.phase === 'you-copy') {
       const good = g.phase === 'you-set' && n % 2 === 0;
@@ -221,7 +251,7 @@ export async function gameGo(page: Page, n: number) {
       st.getState().setInput('scoop', 0.9 * call.halfShoves * k);
     }
     return (st.getState() as unknown as { flightId: number }).flightId;
-  }, n);
+  }, [n, GAME_CHECK_RATE] as const);
   await page.keyboard.press('Space');
   await page.waitForFunction(
     (before) => {

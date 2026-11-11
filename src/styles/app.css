@@ -202,7 +202,8 @@ a {
    cards over it, a heads-up display: the turn card top left, the letters and
    the last trick top right, the tray (sliders, Pop, the timing bar) along the
    bottom. Between games and at the end, how to play and the result sit where
-   the turn card does, so the board is never covered. The layer itself takes
+   the turn card does, so the board is never covered (the notices of 11.4,
+   ADR-80, are the exception: they wait over it). The layer itself takes
    no pointer events, so the stage still turns under the gaps. Opaque cards:
    text never sits on the 3D picture. Below 960px the panels stack under the
    stage as before. */
@@ -215,8 +216,8 @@ a {
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "turn . score"
-      "turn . last"
-      "tray tray tray";
+      "inputs . last"
+      "inputs bar pop";
     gap: var(--space-2);
     padding: var(--space-3);
     overflow: visible;
@@ -225,7 +226,7 @@ a {
     pointer-events: none;
   }
 
-  :is(.hud__turn, .hud__score, .hud__last, .hud__tray > .panel) {
+  :is(.hud__turn, .hud__score, .hud__last, .hud__inputs > .panel, .hud__pop) {
     margin-top: 0;
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-lg);
@@ -233,7 +234,7 @@ a {
     pointer-events: auto;
   }
 
-  :is(.hud__score, .hud__last, .hud__tray > .panel, .turn--setup) {
+  :is(.hud__score, .hud__last, .hud__inputs > .panel, .hud__pop, .turn--setup) {
     background: var(--color-surface);
   }
 
@@ -247,6 +248,7 @@ a {
 
   .hud__score {
     grid-area: score;
+    align-self: start;
   }
 
   .hud__last {
@@ -254,23 +256,29 @@ a {
     align-self: start;
   }
 
+  /* The tray is only a wrapper (ADR-86): its three parts are cards of the
+     grid. The sliders bottom left, under the turn card and as wide; the
+     timing bar's strip along the bottom between the cards; Pop bottom right,
+     under the last trick. The bottom of the stage keeps one slim row. */
   .hud__tray {
-    grid-area: tray;
-    justify-self: center;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    align-items: end;
-    gap: var(--space-2);
-    width: min(100%, 920px);
+    display: contents;
   }
 
-  .hud__tray .inputs {
-    flex-direction: row;
-    gap: var(--space-4);
+  .hud__inputs {
+    grid-area: inputs;
+    align-self: end;
+    min-height: 0;
   }
 
-  .hud__tray .field {
-    flex: 1;
+  .hud__dock > .timing {
+    grid-area: bar;
+    align-self: end;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
+  }
+
+  .hud__pop {
+    grid-area: pop;
+    align-self: end;
   }
 
   .app[data-screen="skate"] .turn-chip {
@@ -281,6 +289,63 @@ a {
 /* The tray is only a wrapper where the panels stack. */
 @media (max-width: 960px) {
   .hud__tray {
+    display: contents;
+  }
+
+  /* The dock (ADR-86, DESIGN.md 11.2): the timing bar's strip and Pop,
+     pinned to the bottom of the window on the game screen, so a phone's
+     player never scrolls to pop. The stage is pinned at the top, so the dock
+     never covers the board. The page keeps room for it at its foot, and
+     focus scrolls clear of it. */
+  .app[data-screen="skate"] .hud__dock {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(9.5rem, 38%);
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--color-line-strong);
+    background: var(--color-bg);
+    box-shadow: 0 -2px 10px rgb(0 0 0 / 0.2);
+  }
+
+  .app[data-screen="skate"] .hud__dock > .hud__pop {
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .app[data-screen="skate"] .hud__dock .skate__pop {
+    width: 100%;
+    height: 100%;
+    min-height: var(--control-h-lg);
+  }
+
+  .app[data-screen="skate"] .app__play {
+    padding-bottom: calc(var(--dock-h) + var(--space-3));
+  }
+
+  :root {
+    --dock-h: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  :root:has(.app[data-screen="skate"] .hud__dock) {
+    scroll-padding-bottom: calc(var(--dock-h) + var(--space-4));
+  }
+
+  .app[data-screen="skate"] .app__play * {
+    scroll-margin-bottom: calc(var(--dock-h) + var(--space-4));
+  }
+}
+
+/* On a wide screen the dock is only a wrapper: the strip and Pop are cards of the HUD grid. */
+@media (min-width: 961px) {
+  .hud__dock {
     display: contents;
   }
 }
@@ -952,6 +1017,66 @@ a {
   grid-area: range;
 }
 
+/* The slider's track and, in a game, its landing zone (ADR-83, DESIGN.md
+   11.6). Markup: <div class="field__track">
+     <span class="field__zone" aria-hidden="true" style="--zone-from: 0.81; --zone-to: 0.86"></span>
+     <span class="field__zone field__zone--clean" aria-hidden="true" style="--zone-from: 0.83; --zone-to: 0.84"></span>
+     <input class="field__range" ...></div>
+   The component sets only where each stretch starts and ends along the
+   slider, 0 to 1; the thumb's centre runs from half a thumb in from each end,
+   so the band is laid on that run and a stop inside it puts the thumb's
+   centre over it. A band on the track itself (ADR-86), behind the thumb and
+   taller than it, so the thumb never hides it and sits inside it when the
+   stop lands: the landing zone is the landed green's tint inside a 2 px green
+   outline, the clean part a solid green bar inside that; the zone at least
+   20 px wide and 12 px taller than the thumb, the clean part at least 10 px,
+   so a stretch one stop wide still shows round the thumb. Until ADR-86 it was a 7 px strip under the track
+   that the thumb mostly covered. Decorative: the slider's spoken value says
+   "in the landing zone" or "clean". */
+.field__track {
+  grid-area: range;
+  position: relative;
+}
+
+/* Over the zone. */
+.field__track > .field__range {
+  position: relative;
+}
+
+.field__zone {
+  --zone-run: calc(100% - var(--range-thumb));
+  --zone-min: 20px;
+  --zone-h: calc(var(--range-thumb) + 12px);
+  --zone-w: max(var(--zone-min), calc(var(--zone-run) * (var(--zone-to) - var(--zone-from))));
+  position: absolute;
+  top: calc(var(--range-hit) / 2 - var(--zone-h) / 2);
+  left: calc(var(--range-thumb) / 2 + var(--zone-run) * (var(--zone-from) + var(--zone-to)) / 2 - var(--zone-w) / 2);
+  width: var(--zone-w);
+  height: var(--zone-h);
+  border-radius: var(--radius-sm);
+  background: var(--color-ok-bg);
+  box-shadow: inset 0 0 0 2px var(--color-ok);
+  pointer-events: none;
+}
+
+.field__zone--clean {
+  --zone-min: 10px;
+  --zone-h: var(--range-thumb);
+  background: var(--color-ok);
+  box-shadow: none;
+}
+
+/* The forecast under the game's sliders (ADR-83): one line of plain text, in
+   the body colour, so it reads as the thing to check before a pop. */
+.field__forecast {
+  min-height: calc(var(--text-sm) * var(--leading-snug));
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
 /* Signed rates (flick and scoop, ADR-30, 2026-11-04) are centred on 0, the
    side is the direction: a tick marks the centre of the track (the thumb
    covers it at 0), and Firefox's fill from the minimum is dropped, since a
@@ -1235,20 +1360,6 @@ a {
   transform: translate(10px, -50%);
 }
 
-/* Optional state text after a toggle's label, e.g. a speed. */
-.toggle__state {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-.toggle--on .toggle__state,
-.toggle[aria-pressed="true"] .toggle__state {
-  color: var(--color-accent);
-  font-weight: var(--weight-bold);
-}
-
 /* ---------- Timeline and Speed ----------
    Markup: <div class="timeline">
      <label class="timeline__label" for="timeline">Timeline <span>42% of flight</span></label>
@@ -1340,6 +1451,13 @@ a {
   color: var(--color-text);
 }
 
+/* The game's start card (ADR-86): its two groups' legends ("Computer", "How you
+   pop") on one line each and as wide as each other, so both rows of options line up. */
+.turn--setup .segmented__legend {
+  width: 6.6em;
+  white-space: nowrap;
+}
+
 .segmented__options {
   display: flex;
   gap: 2px;
@@ -1410,6 +1528,15 @@ a {
   font-size: var(--text-xs);
   line-height: var(--leading-snug);
   color: var(--color-muted);
+}
+
+/* The game's free camera (ADR-81, DESIGN.md 11.2): its hint, with Reset view at the end of the line. */
+.skate__camera-free {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
 }
 
 .segmented + .segmented {
@@ -2007,15 +2134,14 @@ a {
   gap: var(--space-1) var(--space-3);
 }
 
-/* The timing bar under Pop (ADR-65, DESIGN.md 11.1). Markup:
-     <div class="skate__bar" aria-hidden="true" style="--band-from: 58.33%; --band-width: 16.67%; --at: 0.71">
+/* The timing bar's track (ADR-65, DESIGN.md 11.1), inside .timing over the stage since ADR-83. Markup:
+     <div class="skate__bar" style="--band-from: 58.33%; --band-width: 16.67%; --at: 0.71">
        <span class="skate__bar-band"></span>
        <span class="skate__bar-marker skate__bar-marker--run"></span>
      </div>
-     <p class="panel__note">...</p>
    The component sets only the three custom properties: where the level's
    band starts, how wide it is, and where the resting marker is (0 to 1).
-   Decorative: the note says it in words. The band is the landed green with
+   Decorative: the announcements say it in words. The band is the landed green with
    solid edges, so it is never colour alone against the track; the marker is
    the text colour, the strongest contrast there is. */
 .skate__bar {
@@ -2077,6 +2203,83 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .skate__bar-marker--run {
     animation-duration: var(--skate-bar-sweep) !important;
+  }
+}
+
+/* The timing bar (ADR-83, ADR-86, DESIGN.md 11.1): a slim strip joined to
+   the top of the tray, the whole game long. Markup:
+     <div class="timing timing--idle|run|in|off" aria-hidden="true">
+       <p class="timing__head">[<span class="timing__who">Your release</span>]<span class="timing__verdict">Pop! in the green band</span></p>
+       <div class="skate__bar" style="...">...</div></div>
+   One row: the words on the left, the bar filling the rest. A solid panel,
+   so its words meet the contrast figures over any picture. Its left edge
+   says the state: the line colour at rest (the band alone, no marker), the
+   accent while the bar runs, after a release green in the band and the text
+   colour off it, so colour is never the only cue (the verdict says it). */
+.timing {
+  display: grid;
+  grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-left: 5px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  pointer-events: none;
+}
+
+.timing--run {
+  border-left-color: var(--color-accent);
+}
+
+.timing--in {
+  border-left-color: var(--color-ok);
+}
+
+.timing--off {
+  border-left-color: var(--color-text);
+}
+
+.timing__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.timing__who {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.timing__verdict {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+.timing--idle .timing__verdict {
+  color: var(--color-muted);
+}
+
+.timing .skate__bar {
+  height: 24px;
+}
+
+.timing .skate__bar-marker::before {
+  left: -3px;
+  width: 6px;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+/* A phone: the words over the bar, each the full width. */
+@media (max-width: 480px) {
+  .timing {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
   }
 }
 
@@ -2366,6 +2569,16 @@ a {
   text-align: center;
 }
 
+/* In a game on a wide screen the whole rider stands in the middle of the stage
+   (ADR-85), so the stickers land on the ground under the board, above the
+   timing strip, where they cover neither the rider nor the board (ADR-86). */
+@media (min-width: 961px) {
+  .app[data-screen="skate"] .celebration {
+    top: auto;
+    bottom: 9cqh;
+  }
+}
+
 .celebration__shout,
 .celebration__trick {
   font-family: var(--font-display);
@@ -2421,6 +2634,292 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .celebration__shout,
   .celebration__trick {
+    animation: none;
+  }
+}
+
+/* ---------- The game's notices (ADR-80, DESIGN.md 11.4) ----------
+   Markup: <section class="notice notice--you|computer" aria-labelledby="skate-notice-kicker" [data-calm]>
+     <div class="notice__panel [notice__panel--made|--missed]"><p class="notice__kicker">Coin flip</p>
+       <div class="notice__coin" aria-hidden="true"><span class="notice__face notice__face--you">You</span>
+         <span class="notice__face notice__face--back notice__face--computer">CPU</span></div>
+       <p class="notice__news">...</p> <p class="notice__letter">...</p>
+       <div class="notice__next"><h2 class="notice__title">Your turn</h2>
+         <p class="notice__task"><span class="notice__label">Your set</span><span class="notice__trick">Call a trick</span></p></div>
+       <button class="btn btn--primary notice__continue">Continue <kbd>Enter</kbd></button></div></section>
+   Over the whole stage and the game's cards, until Continue. The dimming
+   behind is decoration; every word is on the opaque panel, so the contrast
+   figures hold over any picture. Fades in; the panel drops in; the coin
+   spins and lands. Calm (reduced motion): all of it still. */
+.notice {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 0.42);
+  animation: notice-in var(--dur-slow) var(--ease-out) both;
+}
+
+.notice__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(100%, 420px);
+  /* The stage is a size container: the panel never outgrows it, and scrolls inside itself if it must. */
+  max-height: calc(100cqh - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border: 1px solid var(--color-line-strong);
+  border-top: 6px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  animation: notice-drop 420ms var(--ease-out) both;
+}
+
+/* Made in green, missed in red: the top edge and the news; the words say it too. */
+.notice__panel--made {
+  border-top-color: var(--color-ok);
+}
+
+.notice__panel--missed {
+  border-top-color: var(--color-bad);
+}
+
+.notice__kicker {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* The coin: two faces back to back, spinning on its edge and landing on who sets first. */
+.notice__coin {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  transform-style: preserve-3d;
+  animation: notice-coin 1100ms var(--ease-out) both;
+}
+
+.notice__face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 4px solid var(--color-sticker-edge);
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal);
+  font-synthesis: none;
+  font-size: var(--text-xl);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.3);
+  backface-visibility: hidden;
+}
+
+/* You on the deck's orange (brand-fg on brand 5.45), the computer on near-black (sticker-edge on brand-fg 19.06 light, 16.20 dark). */
+.notice__face--you {
+  background: var(--color-brand);
+  color: var(--color-brand-fg);
+}
+
+.notice__face--computer {
+  background: var(--color-brand-fg);
+  color: var(--color-sticker-edge);
+}
+
+.notice__face--back {
+  transform: rotateY(180deg);
+}
+
+.notice__news {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.notice__panel--made .notice__news {
+  color: var(--color-ok);
+}
+
+.notice__panel--missed .notice__news {
+  color: var(--color-bad);
+}
+
+/* The coin's result shows once the coin has landed. */
+.notice__news--coin {
+  animation: notice-in var(--dur-base) ease-out 1000ms both;
+}
+
+.notice__letter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.notice__letters {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.notice__next {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.notice__title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.notice--you .notice__title {
+  color: var(--color-accent);
+}
+
+.notice__task {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+
+.notice__label {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.notice__trick {
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal);
+  font-synthesis: none;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.notice__continue {
+  min-width: 160px;
+  min-height: var(--control-h-lg);
+}
+
+/* The fade between turns: the stage's colour over the fresh scene, fading
+   to nothing (DESIGN.md 11.4). No pointer events, so the camera still turns. */
+.stage-wipe {
+  position: absolute;
+  inset: 0;
+  background: var(--scene-bg);
+  pointer-events: none;
+  animation: stage-wipe var(--dur-slow) ease-out both;
+}
+
+@keyframes stage-wipe {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* A short stage (a phone, where the panels stack under it): the same notice, tighter. */
+@container (max-height: 420px) {
+  .notice {
+    padding: var(--space-2);
+  }
+
+  .notice__panel {
+    max-height: calc(100cqh - 2 * var(--space-2));
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .notice__coin {
+    width: 56px;
+    height: 56px;
+  }
+
+  .notice__face {
+    border-width: 3px;
+    font-size: var(--text-md);
+  }
+
+  .notice__news {
+    font-size: var(--text-md);
+  }
+
+  .notice__next {
+    padding-top: var(--space-2);
+  }
+}
+
+/* A very short stage (a phone held upright, about 190 px): only what matters
+   now, the result, whose turn and Continue; the coin and the kicker go, and
+   the words still say who sets first. */
+@container (max-height: 300px) {
+  .notice__kicker,
+  .notice__coin {
+    display: none;
+  }
+
+  .notice__panel {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border-top-width: 4px;
+  }
+
+  .notice__next {
+    gap: 0;
+    padding-top: var(--space-1);
+  }
+
+  .notice__trick {
+    font-size: var(--text-lg);
+  }
+}
+
+@keyframes notice-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes notice-drop {
+  0% { opacity: 0; transform: translateY(-16px) scale(0.96); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes notice-coin {
+  0% { transform: translateY(0) rotateY(0deg); }
+  45% { transform: translateY(-28px) rotateY(1080deg); }
+  100% { transform: translateY(0) rotateY(1800deg); }
+}
+
+.notice[data-calm],
+.notice[data-calm] :is(.notice__panel, .notice__coin, .notice__news--coin) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-wipe {
+    display: none;
+  }
+
+  .notice,
+  .notice :is(.notice__panel, .notice__coin, .notice__news--coin) {
     animation: none;
   }
 }

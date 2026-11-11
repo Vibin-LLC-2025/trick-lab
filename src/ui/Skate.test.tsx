@@ -15,6 +15,22 @@ const turnHeading = () => screen.getByRole('heading', { level: 2, name: /turn$/ 
 /** Stands in for FlightDriver, which is inside the stubbed canvas: the board reached progress 1. */
 const landNow = () => act(() => useTrickStore.getState().land());
 const types = () => useTrickStore.getState().events.map((e) => e.type);
+/** Stands in for FlightDriver too: the go comes to rest (the board stops, the landing and any replay play out), so its notice is up (ADR-80). */
+const restNow = () =>
+  act(() => {
+    const s = useTrickStore.getState();
+    s.rollRested();
+    useTrickStore.getState().landingDone();
+    useTrickStore.getState().endReplay();
+  });
+/** The notice over the stage (ADR-80). */
+const notice = () => document.querySelector<HTMLElement>('.notice');
+const continueButton = () => within(notice()!).getByRole('button', { name: /^Continue/ });
+/** The go comes to rest and its notice is continued past: the next go starts on a clear stage. */
+const nextGo = () => {
+  restNow();
+  fireEvent.click(continueButton());
+};
 
 async function setup(opts: Parameters<typeof userEvent.setup>[0] = {}) {
   const user = userEvent.setup(opts);
@@ -23,8 +39,11 @@ async function setup(opts: Parameters<typeof userEvent.setup>[0] = {}) {
   return user;
 }
 
+/** Starts a game by keyboard, and continues past the coin flip (ADR-80), where focus has gone. */
 async function start(user: ReturnType<typeof userEvent.setup>) {
   within(game()).getByRole('button', { name: 'Start game' }).focus();
+  await user.keyboard('{Enter}');
+  expect(document.activeElement).toBe(continueButton());
   await user.keyboard('{Enter}');
 }
 
@@ -59,7 +78,19 @@ describe('game screen (ADR-46)', () => {
     expect(within(game()).getByRole('radio', { name: 'Hard' })).toBeChecked();
     expect(within(game()).getByText(/goes for every trick, doubles included/)).toBeInTheDocument();
 
-    await start(user);
+    within(game()).getByRole('button', { name: 'Start game' }).focus();
+    await user.keyboard('{Enter}');
+    // The coin flip waits over the stage (ADR-80): who sets first, and whose turn it is, with focus on Continue.
+    const coin = screen.getByRole('region', { name: 'Coin flip' });
+    expect(coin).toHaveTextContent('Your turn');
+    expect(within(coin).getByText('You set first')).toBeInTheDocument();
+    expect(within(coin).getByText('Call a trick')).toBeInTheDocument();
+    expect(document.activeElement).toBe(continueButton());
+    expect(continueButton()).toHaveAccessibleDescription('Your turn');
+    // Space on Continue is the button's own press: it continues, and pops nothing.
+    await user.keyboard(' ');
+    expect(notice()).toBeNull();
+    expect(useTrickStore.getState().flight).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Your turn' }));
     // Hard's rule is said as the game starts (ADR-63).
     expect(announcer()).toHaveTextContent(
@@ -110,11 +141,22 @@ describe('game screen (ADR-46)', () => {
     expect(within(game()).getByText('Toward heelflip (slider to the left), for one full flip.')).toBeInTheDocument();
     expect(within(game()).getByText('Computer: Heelflip landed clean')).toBeInTheDocument();
     expect(announcer()).toHaveTextContent("The computer landed a heelflip. Your turn: copy the computer's heelflip");
-    // Focus never moved during the turns.
+    // Focus never moved while the board was moving; once it is at rest the go's notice takes it (ADR-80).
+    expect(document.activeElement).toBe(turnHeading());
+    restNow();
+    const after = screen.getByRole('region', { name: "Computer's go" });
+    expect(after).toHaveTextContent('Your turn');
+    expect(within(after).getByText('The computer landed a heelflip.')).toBeInTheDocument();
+    expect(within(after).getByText("Copy the computer's")).toBeInTheDocument();
+    expect(document.activeElement).toBe(continueButton());
+    // Pop while the notice is up is its Continue, and pops nothing.
+    const pop = within(game()).getByRole('button', { name: 'Pop' });
+    fireEvent.click(pop);
+    expect(notice()).toBeNull();
+    expect(useTrickStore.getState().flightBy).toBe('computer');
     expect(document.activeElement).toBe(turnHeading());
 
     // The student pops a plain ollie: the wrong trick, so the first letter.
-    const pop = within(game()).getByRole('button', { name: 'Pop' });
     pop.focus();
     await user.keyboard('{Enter}');
     landNow();
@@ -124,6 +166,16 @@ describe('game screen (ADR-46)', () => {
     // The setter keeps setting: the computer is up again, with its next call, on the same button.
     expect(turnHeading()).toHaveTextContent("Computer's turn");
     expect(within(game()).getByRole('button', { name: "Computer's go" })).toBe(pop);
+    // The notice says the letter, as a sticker and in words.
+    restNow();
+    expect(within(notice()!).getByText('You get a letter')).toBeInTheDocument();
+    expect(within(notice()!).getByText('S', { selector: '.visually-hidden' })).toBeInTheDocument();
+    // Enter on Continue clears the stage for the next go: the board back on the pad, the result kept for the card.
+    await user.keyboard('{Enter}');
+    expect(useTrickStore.getState().flight).toBeNull();
+    expect(useTrickStore.getState().status).toBe('idle');
+    expect(within(game()).getByText('You: Ollie landed clean')).toBeInTheDocument();
+    expect(document.getElementById('scene-description')).toHaveTextContent('Skateboard resting flat on a concrete pad');
   });
 
   it('the computer goes on its own after a short wait, and waits while a dialog is open or auto is off', async () => {
@@ -134,6 +186,11 @@ describe('game screen (ADR-46)', () => {
     // synchronous: user-event's async wrapper waits on a real setTimeout that faked timers never fire.
     vi.useFakeTimers();
     fireEvent.click(within(game()).getByRole('button', { name: 'Start game' }));
+    // The computer's wait waits for the coin flip's Continue (ADR-80).
+    expect(document.querySelector('.turn__timer')).toBeNull();
+    act(() => vi.advanceTimersByTime(COMPUTER_DELAY_MS * 2));
+    expect(useTrickStore.getState().flight).toBeNull();
+    fireEvent.click(continueButton());
     expect(within(game()).getByText('Goes in a moment.')).toBeInTheDocument();
     expect(document.querySelector('.turn__timer')).toHaveAttribute('aria-hidden', 'true');
 
@@ -151,11 +208,13 @@ describe('game screen (ADR-46)', () => {
     expect(useTrickStore.getState().flightBy).toBe('computer');
     expect(useTrickStore.getState().status).toBe('playing');
     landNow();
+    nextGo();
 
     // The student copies; the computer is up again. Switched off, it waits for its button.
     act(() => useTrickStore.getState().setInput('flick', -1.9));
     fireEvent.click(within(game()).getByRole('button', { name: 'Pop' }));
     landNow();
+    nextGo();
     expect(turnHeading()).toHaveTextContent("Computer's turn");
     fireEvent.click(within(game()).getByRole('button', { name: 'Computer goes on its own' }));
     expect(useTrickStore.getState().skateAuto).toBe(false);
@@ -188,10 +247,12 @@ describe('game screen (ADR-46)', () => {
     landNow();
     expect(within(game()).getByText('You landed your kickflip!')).toBeInTheDocument();
     expect(within(game()).getByText('Copying your')).toBeInTheDocument();
+    nextGo();
 
     // The computer copies it (it hits its aim), so the student sets again: the kickflip is spent.
     await user.click(within(game()).getByRole('button', { name: "Computer's go" }));
     landNow();
+    nextGo();
     const again = within(game()).getByRole('combobox', { name: 'Call your trick' });
     expect(within(again).getByRole('option', { name: 'Kickflip (already set)' })).toBeDisabled();
     expect(within(again).getByRole('option', { name: 'Heelflip' })).toBeEnabled();
@@ -338,19 +399,27 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     });
   }
 
-  it('chooses one of three angles by keyboard while a game is on, saved and announced', async () => {
+  it('is free by default, with Reset view; the three fixed angles are a keypress away, saved and announced', async () => {
     const user = await setup();
     await start(user);
     const camera = within(game()).getByRole('group', { name: 'Camera' });
-    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['film', 'side', 'above']);
-    const film = within(camera).getByRole('radio', { name: 'Filmer' });
-    expect(film).toBeChecked();
-    film.focus();
-    await user.keyboard('{ArrowRight}');
+    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'film', 'side', 'above']);
+    const free = within(camera).getByRole('radio', { name: 'Free' });
+    expect(free).toBeChecked();
+    // Free says how to turn it, and Reset view brings it home (ADR-81).
+    expect(camera).toHaveAccessibleDescription('Drag the view to turn it; scroll or pinch to zoom.');
+    const nonce = useTrickStore.getState().viewResetNonce;
+    await user.click(within(camera).getByRole('button', { name: 'Reset view' }));
+    expect(useTrickStore.getState().viewResetNonce).toBe(nonce + 1);
+    expect(announcer()).toHaveTextContent('Camera view reset.');
+    free.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
     expect(within(camera).getByRole('radio', { name: 'Side' })).toBeChecked();
     expect(useTrickStore.getState().gameView).toBe('side');
-    expect(localStorage.getItem('trick-lab.game-camera')).toBe('side');
+    expect(localStorage.getItem('trick-lab.game-view')).toBe('side');
     expect(announcer()).toHaveTextContent('Camera: side on, low.');
+    // A fixed angle has nothing to drag or reset.
+    expect(within(camera).queryByRole('button', { name: 'Reset view' })).toBeNull();
     expect(types()).not.toContain('camera.changed');
   });
 
@@ -365,8 +434,8 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     expect(useTrickStore.getState().replay).toBe('none');
     const go = within(game()).getByRole('button', { name: "Computer's go" });
     expect(go).toBe(skip);
-    expect(go).toHaveFocus();
-    // The computer's go waited: nothing popped.
+    // The go is at rest, so its notice is up and has taken focus (ADR-80); the computer's go waited: nothing popped.
+    expect(continueButton()).toHaveFocus();
     expect(useTrickStore.getState().flightBy).toBe('you');
   });
 
