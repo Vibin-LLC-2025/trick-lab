@@ -621,6 +621,8 @@ async (page) => {
     const go = async () => {
       const before = await p.evaluate(() => {
         const st = window.__trickLabStore;
+        // Past the notice over the stage (the coin flip, each go's result, ADR-80): a Space press there only continues.
+        st.getState().continueSkate();
         const g = st.getState().skate;
         if (g.phase === 'off' || g.phase === 'over') return null;
         if (g.phase === 'you-set' || g.phase === 'you-copy') {

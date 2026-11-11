@@ -278,7 +278,7 @@ export interface UiSlice {
   deckBefore: PlayerDeck;
   /** Shoes on the board. Persisted under trick-lab.feet, default on. Not logged. */
   feetVisible: boolean;
-  /** The rider's legs above the shoes (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs; without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
+  /** The rider (the "Rider" switch, ADR-85): the whole body in a game and on the welcome screen, its legs above the shoes in the lab and on Low (ADR-37), drawn only while the feet are. Persisted under trick-lab.legs (the key kept, so no saved choice is lost); without a saved choice, on with High and Medium and off on Low, following the level (ADR-70). Not logged, not exported. */
   legsVisible: boolean;
   /** Foot trails: the route of each shoe through the trick, with arrowheads (DESIGN.md 8.5). Persisted under trick-lab.foot-trails, default off. Not logged. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   footPathsVisible: boolean;
@@ -311,7 +311,7 @@ export interface UiSlice {
   toggleInstantReplay: () => void;
   setQuality: (quality: Quality) => void;
   toggleFeet: () => void;
-  /** Shows or hides the legs, persisted and announced. */
+  /** Shows or hides the rider, persisted and announced ("Rider shown."). */
   toggleLegs: () => void;
   /** Shows or hides the foot trails. User-facing name is "foot trails"; renaming the identifier is a follow-up. */
   toggleFootPaths: () => void;

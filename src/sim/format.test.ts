@@ -226,6 +226,15 @@ describe('the legs in the scene description', () => {
     expect(describeScene({ ...base, legsVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
     expect(describeScene({ ...base, feetVisible: false, status: 'idle', progress: 0, flight: null })).not.toMatch(/Legs|Knees/);
   });
+
+  it('adds what the whole body does after the legs when the rider shows (ADR-85), and nothing about it otherwise', () => {
+    const idle = describeScene({ ...base, riderShown: true, status: 'idle', progress: 0, flight: null });
+    expect(idle).toContain('Legs crouched, knees bent, ready to pop. The rider crouches over the board, arms low, eyes on the board.');
+    expect(describeScene({ ...base, riderShown: true, status: 'playing', progress: 0.4, flight: landed })).toContain('Arms out for balance, the rider watches the board below.');
+    expect(describeScene({ ...base, riderShown: true, status: 'done', progress: 1, flight: landed })).toContain('The rider rides it out, body folded and arms low.');
+    expect(describeScene({ ...base, status: 'idle', progress: 0, flight: null })).not.toContain('The rider');
+    expect(describeScene({ ...base, riderShown: true, legsVisible: false, status: 'idle', progress: 0, flight: null })).not.toContain('The rider');
+  });
 });
 
 describe('the last trick in the scene description (audit fix, 2026-11-04)', () => {

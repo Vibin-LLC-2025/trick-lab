@@ -552,23 +552,23 @@ describe('motion blur switch', () => {
 
 // ADR-37 (2026-11-05): the legs, a view preference next to Feet.
 describe('legs', () => {
-  const button = () => screen.getByRole('button', { name: 'Show legs' });
+  const button = () => screen.getByRole('button', { name: 'Show rider' });
 
   it('is on by default above Low (ADR-70), hides and shows the legs in the description, persisted and announced, never logged', async () => {
     const user = await setup();
     expect(useTrickStore.getState().quality).not.toBe('low');
     expect(button()).toHaveAttribute('aria-pressed', 'true');
-    expect(button()).toHaveTextContent('Legs');
+    expect(button()).toHaveTextContent('Rider');
     expect(description()).toHaveTextContent('Legs crouched, knees bent, ready to pop.');
     await user.click(button());
     expect(button()).toHaveAttribute('aria-pressed', 'false');
     expect(useTrickStore.getState().legsVisible).toBe(false);
     expect(localStorage.getItem('trick-lab.legs')).toBe('off');
-    expect(announcer()).toHaveTextContent('Legs hidden.');
+    expect(announcer()).toHaveTextContent('Rider hidden.');
     expect(description()).not.toHaveTextContent('Legs crouched');
     await user.click(button());
     expect(localStorage.getItem('trick-lab.legs')).toBe('on');
-    expect(announcer()).toHaveTextContent('Legs shown.');
+    expect(announcer()).toHaveTextContent('Rider shown.');
     expect(useTrickStore.getState().events).toEqual([]);
   });
 
@@ -579,14 +579,14 @@ describe('legs', () => {
     expect(button()).toHaveFocus();
     await user.keyboard(' ');
     expect(button()).toHaveAttribute('aria-pressed', 'false');
-    expect(announcer()).toHaveTextContent('Legs hidden.');
+    expect(announcer()).toHaveTextContent('Rider hidden.');
     expect(useTrickStore.getState().status).toBe('idle');
   });
 
   it('has no switch while the feet are hidden, and keeps its setting for when they come back', async () => {
     const user = await setup();
     await user.click(screen.getByRole('button', { name: 'Show feet' }));
-    expect(screen.queryByRole('button', { name: 'Show legs' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show rider' })).toBeNull();
     expect(description()).not.toHaveTextContent('Legs');
     expect(description()).not.toHaveTextContent('Knees');
     await user.click(screen.getByRole('button', { name: 'Show feet' }));

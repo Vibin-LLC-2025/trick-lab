@@ -45,6 +45,9 @@ export function lazyChunks(v: Visit): string[] {
   const chunks = ['src/scene/TrickScene.tsx', 'src/scene/nodeRenderer.ts', 'src/scene/BoardModel.tsx', 'src/scene/GroundModel.tsx'];
   // The shoe model on High with the feet shown (shoesFromModel); the primitive shoe otherwise.
   if (v.tier === 'high' && v.feet) chunks.push('src/scene/ShoesModel.tsx');
+  // The whole rider (ADR-85) on the welcome screen's preview, with the feet
+  // shown and the Rider switch at its default (on for Medium and High).
+  if (v.feet) chunks.push('src/scene/RiderModel.tsx');
   return chunks;
 }
 
@@ -60,7 +63,7 @@ export const TRANSCODER: readonly string[] = [
 
 /** The public files a visit fetches at run time. */
 export function publicItems(v: Visit): Item[] {
-  const items: Item[] = modelFilesFor(v.tier, v.feet).map((f) => ({ public: f }));
+  const items: Item[] = modelFilesFor(v.tier, v.feet, v.tier !== 'low').map((f) => ({ public: f }));
   items.push({ public: stillFile(v.theme) });
   return items;
 }
@@ -76,6 +79,10 @@ const KB = 1024;
  * rounded up to the KB, except the main script and its stylesheet, loosened
  * on 2026-11-10 (ADR-79) from 106 and 8 KB so the game's interface can grow.
  * A file not listed here fails the check: a new file needs a budget of its own.
+ * The rider (ADR-85, 2026-11-11) adds its chunk and its GLB, each measured
+ * plus about 5 percent; a second model chunk importing gltf.ts made Vite
+ * split it out of BoardModel's chunk into a shared one (`_gltf`), so
+ * BoardModel's 49 KB became 1 KB and `_gltf` 29 KB: moved, not added.
  */
 export const FILE_BUDGETS: Record<string, number> = {
   'index.html (the page)': 2 * KB,
@@ -86,15 +93,18 @@ export const FILE_BUDGETS: Record<string, number> = {
   _shoeSpec: 2 * KB,
   'src/scene/TrickScene.tsx': 83 * KB,
   'src/scene/nodeRenderer.ts': 185 * KB,
-  'src/scene/BoardModel.tsx': 49 * KB,
+  'src/scene/BoardModel.tsx': 1 * KB,
+  _gltf: 29 * KB,
   'src/scene/GroundModel.tsx': 1 * KB,
   'src/scene/ShoesModel.tsx': 1 * KB,
+  'src/scene/RiderModel.tsx': 1 * KB,
   [TRANSCODER[0]!]: 17 * KB,
   [TRANSCODER[1]!]: 255 * KB,
   'models/board-high.glb': 470 * KB,
   'models/board.glb': 140 * KB,
   'models/ground.glb': 148 * KB,
   'models/shoes.glb': 176 * KB,
+  'models/rider.glb': 51 * KB,
   'stills/welcome-dark.webp': 27 * KB,
   'stills/welcome-light.webp': 28 * KB,
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTrickStore, GAME_PACE, playRate } from '.';
+import { createTrickStore, GAME_PACE, playRate, riderShown } from '.';
 import { DEFAULT_SLOW } from './speed';
 import { buildExport, exportFilename } from './export';
 
@@ -438,11 +438,11 @@ describe('quality and feet (ui slice)', () => {
     store.getState().toggleLegs();
     expect(store.getState().legsVisible).toBe(false);
     expect(localStorage.getItem('trick-lab.legs')).toBe('off');
-    expect(said(store)).toBe('Legs hidden.');
+    expect(said(store)).toBe('Rider hidden.');
     store.getState().toggleLegs();
     expect(store.getState().legsVisible).toBe(true);
     expect(localStorage.getItem('trick-lab.legs')).toBe('on');
-    expect(said(store)).toBe('Legs shown.');
+    expect(said(store)).toBe('Rider shown.');
     expect(store.getState().events).toEqual([]);
     // A saved choice wins on every level.
     localStorage.setItem('trick-lab.quality', 'low');
@@ -453,6 +453,32 @@ describe('quality and feet (ui slice)', () => {
     // Anything else is no choice.
     localStorage.setItem('trick-lab.legs', 'nonsense');
     expect(makeStore().getState().legsVisible).toBe(true);
+    localStorage.clear();
+  });
+
+  it('shows the whole rider on the game and welcome screens on High and Medium with the feet and the switch on, never in the lab or on Low (ADR-85)', () => {
+    localStorage.clear();
+    const store = makeStore();
+    const s = () => store.getState();
+    for (const quality of ['high', 'medium', 'low'] as const) {
+      s().setQuality(quality);
+      for (const screen of ['home', 'skate', 'lab'] as const) {
+        s().setScreen(screen);
+        expect(riderShown(s()), `${quality} ${screen}`).toBe(quality !== 'low' && screen !== 'lab');
+      }
+    }
+    s().setQuality('high');
+    s().setScreen('skate');
+    if (s().legsVisible) s().toggleLegs();
+    expect(riderShown(s())).toBe(false);
+    s().toggleLegs();
+    expect(riderShown(s())).toBe(true);
+    s().toggleFeet();
+    expect(riderShown(s())).toBe(false);
+    // The board's model failing drops the scene to Low's look: the legs, not the rider.
+    s().toggleFeet();
+    store.setState({ boardAssetFailed: true });
+    expect(riderShown(s())).toBe(false);
     localStorage.clear();
   });
 

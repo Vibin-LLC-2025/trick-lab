@@ -170,14 +170,19 @@ export const ART = {
    * top of a 0.6 m pop) from the farthest allowed camera is 5.3 m on most
    * stages, and the orbit's zoom-out stops where it would pass 5.5 m (the
    * detail view on the narrowest stage, `orbitMaxDistance`), so the board,
-   * the feet and the trails are never fogged. `far` 15 m: from the
+   * the feet and the trails are never fogged. 6.0 since the whole rider
+   * (ADR-85, 2026-11-11): framing the body at the top of a 0.6 m pop puts
+   * Free and Filmer's farthest point (a hand out wide on the toe side) 5.6
+   * m from the camera on every stage the layout makes, so the rider is
+   * never fogged either; on a narrower stage the fit stops at the fog
+   * (`distanceFor` in SceneCamera.tsx) and the arms may crop. `far` 15 m: from the
    * lowest orbit (maxPolarAngle 1.25 rad, whose frame reaches the horizon)
    * and from the welcome camera, the nearest visible point of the plane's
    * edge is at least 19 m away on any stage from 0.5:1 to 50:1, so the edge
    * is never seen. Tested in artDirection.test.ts and sky.test.ts. Colour
    * per theme is the clear colour, nothing else.
    */
-  fog: { color: SCENE_BG, near: 5.5, far: 15 },
+  fog: { color: SCENE_BG, near: 6, far: 15 },
   /**
    * The ground (ground pass, 2026-11-04, ADR-31). The GLB (Medium and High)
    * and the untextured plane (Low, and the fallback while it streams or if
@@ -235,10 +240,27 @@ export const ART = {
      * Below 1 m: the board's spin circle (|z| to 0.42) and the soles, which
      * reach |x| 0.595 at the highest pops. Above: only the knees, |x| to
      * 0.354 and z from -0.388 to -0.075 (the rider faces -Z), up to 1.343 m.
+     * The fit wherever the legs show (the lab, Low).
      */
     casters: [
       { min: v(-0.6, 0, -0.43), max: v(0.6, 1.0, 0.43) },
       { min: v(-0.37, 1.0, -0.4), max: v(0.37, 1.36, 0) },
+    ],
+    /**
+     * The fit wherever the whole rider shows (ADR-85, 2026-11-11, store
+     * riderShown): the board and soles as above, and the body, swept in
+     * cameraFit.test.ts over every preset at three pops and the timing bar's
+     * corners (4.2 rev/s) in both stances, each bone a capsule as thick as the
+     * mesh. Below REST_Y + 0.9 m: |x| to 0.80 (the hands), z from -0.72;
+     * above: |x| to 0.93 (a bail's arms out wide at a 0.6 m pop), z from
+     * -0.77 to 0.40, the beanie up to 2.20 m above the deck. The frustum is
+     * larger than the legs' (1.74 x 3.05 m and 4.28 m deep, a texel of
+     * 1.49 mm where the legs' is 0.87), still one 2048
+     * map: measured in PERF-BUDGET.md.
+     */
+    riderCasters: [
+      { min: v(-0.8, 0, -0.72), max: v(0.8, REST_Y + 0.9, 0.43) },
+      { min: v(-0.94, REST_Y + 0.9, -0.77), max: v(0.94, REST_Y + 2.21, 0.4) },
     ],
     /** Margin around the fitted frustum on each side, metres (covers the PCF kernel). */
     pad: 0.03,
@@ -371,6 +393,28 @@ export const ART = {
      */
     fit: { margin: 0.06, reach: OUTLINE.noseTip + 0.01, bottom: 0, top: REST_Y + 0.6 + 0.13 },
     /**
+     * The whole rider's outline (ADR-85, 2026-11-11), for the views that film
+     * the rider (`filmsRider`): the head's column up to the beanie at the top
+     * of a 0.6 m pop, the highest the sliders and the timing bar allow (2.08
+     * m above the deck centre at rest, swept over every input in
+     * body.test.ts), plus `headroom`; the arms' band out to the hands at their
+     * widest (0.94 m along the board) and highest (1.68 m). Above and the
+     * replay's low close shot keep the board's own box and may crop the body.
+     */
+    rider: {
+      head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.78, back: 0.2 },
+    },
+    filmsRider: ['free', 'film', 'side', 'showcase'] as readonly string[],
+    /**
+     * Where the views that film the whole rider look (ADR-85): 1.0 m up, the
+     * rider's middle at the top of an average pop, each view's target and
+     * camera lifted together so its direction is unchanged. From the deck's
+     * 0.32 m the fit had to stand so far back to reach the head that the
+     * body passed the fog's start; the welcome view's 0.45 m did too.
+     */
+    riderLook: 1.0,
+    /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
      * persisted (`cameraView` in the ui slice). Only each `position`'s
      * direction from its `target` matters: the ADR-18 fit sets the distance,
@@ -404,7 +448,9 @@ export const ART = {
        * once. The orbit is off on the welcome screen. Sky pass (2026-11-09,
        * ADR-52): 8 degrees above the horizon (was 28) with the target 0.45 m
        * up (was 0.28), so the horizon, the sky and its city sit in the top
-       * quarter of the frame and the street reads as a place.
+       * quarter of the frame and the street reads as a place. With the
+       * whole rider (ADR-85) it looks at `riderLook` instead, the 8 degrees
+       * keeping the horizon where it is.
        */
       showcase: {
         position: v(
@@ -427,6 +473,11 @@ export const ART = {
        * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
        * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
        *   (its own field of view, `fov` below), close to the board.
+       * With the whole rider on screen (ADR-85, 2026-11-11), `free`, `film`
+       * and `side` look at `riderLook`, not the deck at 0.32 m, and fit the
+       * rider's outline (`rider` above): the whole body at the top of a 0.6 m
+       * pop with headroom, the board low in the frame. `above` and `replay`
+       * keep the board's box and may crop the body.
        */
       /**
        * `free` (ADR-81, 2026-11-10), the game's default: where the free
@@ -791,6 +842,24 @@ export const ART = {
    * feet. High's shoe model and Medium's primitive; Low stays as it is.
    */
   computer: { shoe: '#5fd0c5' },
+  /**
+   * The rider (ADR-85, DESIGN.md 8.8): the whole body's colours, one per
+   * region of the mesh (src/asset/riderSpec.ts RIDER_REGIONS, in that order:
+   * hoodie, its ribbed cuffs and hem, the pocket's seam, the drawstrings, the
+   * trousers, the cuff's fold, the sock, the mittens, the skin, the beanie and
+   * its rolled brim, the hair under it), sRGB. Two outfits on one mesh, so whose go it is reads
+   * at a glance from any camera: the player in the deck's burnt orange with
+   * the charcoal twill trousers the legs have worn since ADR-70; the computer
+   * in its deck's teal (Circuit, ADR-71) with sand trousers and a mustard
+   * beanie, and a different skin tone, a different person. `roughness` and
+   * `cloth` (the twill's strength, as ADR-70's) are the material's.
+   */
+  rider: {
+    player: ['#c8562a', '#a8461f', '#7f3315', '#efe9df', '#3b3e44', '#2b2d32', '#2f3035', '#2a2c31', '#c99a7a', '#2d3138', '#24272d', '#3a2a20'],
+    computer: ['#2b8a83', '#226f6a', '#18534f', '#efe9df', '#6b6252', '#524b3f', '#2f3035', '#2a2c31', '#8a5d43', '#d9a63a', '#b88a2a', '#1b1716'],
+    roughness: 0.9,
+    cloth: 0.55,
+  },
   /**
    * The instant replay (step 17, ADR-72): after the student's made set or
    * copy, the flight once more at `rate` of its own speed from the replay

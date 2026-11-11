@@ -760,3 +760,37 @@ What the plan cost and bought, in numbers:
 - **Memory stays flat** over the long-run test with games in it (step 20).
 
 Keyboard only, through every screen (2026-11-10, Chromium, by script): on the welcome screen, the game screen before and in a game, and the lab, every visible control is reached by Tab (8, 8, 16 and 70 of them), each with a visible focus ring and in view; Enter on the first choice opens the game with focus on its heading; Start game puts focus on the turn's heading; the leave dialog keeps Tab inside itself, Escape closes it and focus returns to "Quit game"; in the lab the number keys, Space, `r` and `?` work, the shortcuts dialog opens on Close and returns focus where it was; the live region speaks. A screen reader spot check is the owner's, from the list in the plan.
+
+## The whole rider (2026-11-11, ADR-85)
+
+Measured 2026-11-11 with `scripts/measure/measure.js` (`?tiers=high,medium,low&nets=full&visits=cold&gos=40`), Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, the switch at its default (the rider on, on High and Medium), dark theme, the build served by `serve.ts`. The display ran at 100 Hz. "Before" is step 23's "after" column above (2026-11-10, the same script on the same machine); a fresh build of the base could not be made here, and the commits between (ADR-80 to ADR-82) did not touch the 3D view's cost. The measurement's whole game had stopped at the first notice since ADR-80 (a Space press there only continues); `measure.js` now continues it before each go, so the game rows are back.
+
+**Loading** (cold, full speed, the frame where every model is on screen; the rider is one of them on High and Medium):
+
+| Tier | Before | After | Models, before | after |
+| --- | --- | --- | --- | --- |
+| high | 1.08 s | 1.05 s | 754.9 KB | 803.2 KB |
+| medium | 1.25 s | 1.01 s | 274.0 KB | 322.3 KB |
+| low | 0.46 s | 0.46 s | 0 KB | 0 KB |
+
+**Draw calls**, unchanged on every tier and screen: the rider's one draw replaces the legs' one, and on High its shadow pass replaces the shanks'.
+
+| Tier | Welcome | Lab | Game at rest | Every switch on (most) |
+| --- | --- | --- | --- | --- |
+| high | 32 (32) | 33 (33) | 35 (35) | 34 (34) |
+| medium | 17 (17) | 18 (18) | 20 (20) | 19 (19) |
+| low | 9 (9) | 10 (10) | 10 (10) | 12 (12) |
+
+Triangles on the welcome screen and in the game: High 200,860 and 201,121, Medium 37,368 and 37,629 (the rider's 18,500 in place of the legs' about 2,000).
+
+**A whole game** (after its first go; 95th percentile, of the target):
+
+| Tier | GPU, before | after | The app's work, before | after | Longest frame interval, after | Intervals over 20 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | 1.51 ms | 1.31 ms of under 4 | 1.5 ms | 2.0 ms of under 4 | 10.4 ms | 0 |
+| medium | 1.18 ms | 1.05 ms of under 3 | 1.2 ms | 1.6 ms of under 4 | 10.4 ms | 0 |
+| low | 0.65 ms | 0.26 ms of under 2 | 0.6 ms | 0.4 ms of under 4 | 10.5 ms | 0 |
+
+**The welcome preview** (High, always drawing): GPU 0.59 / 0.79 / 0.92 ms, frame work 0.8 / 1.5 / 4 ms (median / 95th percentile / longest). **The lab** (unchanged, the legs): High GPU 0.79 / 2.36 / 2.49 ms (before 1.05 / 1.18 / 1.44), Medium 0.72 / 0.85 / 0.85 ms.
+
+What the rider cost: about 48 KB more models on High and Medium, nothing in draw calls, and about half a millisecond more of the app's own work per frame through a game at the 95th percentile (the skinning of 17 bones and the pose model), well inside 4 ms. The graphics card's time through a game did not rise: the rider's one skinned draw and its shadow are cheaper than the dithered legs' were, and the camera standing farther back puts fewer pixels of the board's detailed materials on screen. High's lab 95th percentile GPU read 2.36 ms in this run against 1.18 before, with the lab unchanged by this step: a few frames in four tricks, inside the 4 ms target; the game's 8,224 frames on High show no such tail. Every target passes on every tier.

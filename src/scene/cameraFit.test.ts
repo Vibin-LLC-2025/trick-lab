@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import { FOOT, newFeetPose, writeFeetPose } from '../sim/feet';
 import { computeFlight, writePose } from '../sim/flight';
-import { newLegsPose, writeLegsPose } from '../sim/legs';
+import { BODY, bonePoint, newBodyPose, RIDER_BONES, writeBodyPose } from '../sim/body';
+import { LEG, newLegsPose, writeLegsPose } from '../sim/legs';
 import { PRESETS } from '../sim/tricks';
 import { ART } from './artDirection';
 import { boxCorners, fitDistance, framingPoints, orbitMaxDistance, projectToGround, shadowFrustum } from './cameraFit';
@@ -238,5 +239,85 @@ describe('the High shadow camera (ADR-38)', () => {
     expect(Math.max(F.right - F.left, F.top - F.bottom) / S.size).toBeLessThan(0.001);
     expect(S.normalBias).toBeGreaterThanOrEqual(0.001);
     expect(S.normalBias).toBeLessThanOrEqual(0.003);
+  });
+
+  describe('round the whole rider (ADR-85), while it shows', () => {
+    const RF = shadowFrustum(L.position, L.target, S.riderCasters, S.pad);
+    /** Each bone as a capsule as thick as the mesh round it (src/asset/riderSpec.ts): length, radius. */
+    const CAPSULE: Record<(typeof RIDER_BONES)[number], [number, number]> = {
+      pelvis: [BODY.pelvis, 0.2],
+      spine: [BODY.spine, 0.2],
+      chest: [BODY.chest, 0.2],
+      neck: [BODY.neck, 0.06],
+      head: [BODY.head, 0.11],
+      clavicleL: [BODY.clavicle.length, 0.08],
+      clavicleR: [BODY.clavicle.length, 0.08],
+      upperArmL: [BODY.upperArm, 0.065],
+      upperArmR: [BODY.upperArm, 0.065],
+      forearmL: [BODY.forearm, 0.06],
+      forearmR: [BODY.forearm, 0.06],
+      handL: [BODY.hand, 0.05],
+      handR: [BODY.hand, 0.05],
+      thighL: [LEG.thigh, 0.09],
+      thighR: [LEG.thigh, 0.09],
+      shinL: [LEG.shank, 0.065],
+      shinR: [LEG.shank, 0.065],
+    };
+    /** The body's points over every preset at three pops and the timing bar's corners (4.2 rev/s, bar.ts), both stances. */
+    function bodyPoints() {
+      const pts: Vector3[] = [];
+      const feet = newFeetPose();
+      const legs = newLegsPose();
+      const body = newBodyPose();
+      const p = { x: 0, y: 0, z: 0 };
+      const restY = ART.board.restY;
+      const cases = [
+        ...PRESETS.flatMap((pr) => [0.15, 0.35, 0.6].map((pop) => ({ ...pr.inputs, pop }))),
+        ...[0.15, 0.6].flatMap((pop) => [-4.2, 4.2].flatMap((flick) => [-4.2, 0, 4.2].map((scoop) => ({ pop, flick, scoop })))),
+      ];
+      for (const inputs of cases) {
+        const flight = computeFlight(inputs);
+        for (const stance of ['goofy', 'regular'] as const) {
+          for (let i = 0; i <= 50; i++) {
+            const u = i / 50;
+            const f = writeFeetPose(feet, inputs, flight, u, stance);
+            const l = writeLegsPose(legs, f, flight, u, inputs, stance);
+            const b = writeBodyPose(body, l, f, flight, u, inputs, stance);
+            RIDER_BONES.forEach((name, k) => {
+              const [length, r] = CAPSULE[name];
+              for (let t = 0; t <= 4; t++) {
+                bonePoint(p, b.bones[k]!, 0, (length * t) / 4, 0);
+                for (const [sx, sz] of AROUND) pts.push(new Vector3(p.x + sx * r, restY + p.y, p.z + sz * r));
+                pts.push(new Vector3(p.x, restY + p.y + r, p.z));
+              }
+            });
+          }
+        }
+      }
+      return pts;
+    }
+
+    it('holds every board, sole, shank and body point, and is not loose: the top is the beanie at the highest pop', () => {
+      const inside = (p: Vector3, b: (typeof S.riderCasters)[number]) =>
+        p.x >= b.min[0] && p.x <= b.max[0] && p.y >= b.min[1] - 1e-9 && p.y <= b.max[1] && p.z >= b.min[2] && p.z <= b.max[2];
+      let top = 0;
+      const out: string[] = [];
+      for (const p of [...casterPoints(), ...bodyPoints()]) {
+        if (!S.riderCasters.some((b) => inside(p, b))) out.push(`${p.x.toFixed(3)} ${p.y.toFixed(3)} ${p.z.toFixed(3)}`);
+        top = Math.max(top, p.y);
+      }
+      expect(out.slice(0, 5)).toEqual([]);
+      expect(top).toBeGreaterThan(Math.max(...S.riderCasters.map((b) => b.max[1])) - 0.02);
+    });
+
+    it('contains the legs fit, and keeps a texel of the map under 1.6 mm (the legs fit: 0.87)', () => {
+      expect(RF.left).toBeLessThanOrEqual(F.left);
+      expect(RF.right).toBeGreaterThanOrEqual(F.right);
+      expect(RF.bottom).toBeLessThanOrEqual(F.bottom);
+      expect(RF.top).toBeGreaterThanOrEqual(F.top);
+      expect(Math.max(RF.right - RF.left, RF.top - RF.bottom) / S.size).toBeLessThan(0.0016);
+      // Measured 2026-11-11: 1.74 x 3.05 m, 4.28 m deep, a texel of 1.49 mm.
+      expect(RF.far - RF.near).toBeLessThan(4.5);
+    });
   });
 });

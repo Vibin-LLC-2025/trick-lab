@@ -539,7 +539,7 @@ Mirror tricks (2026-11-04, ADR-30): the cues follow the signed inputs with no ne
 
 Written by the implementation agent (opus) for the legs, pending the design agent's own pass; `ART.legs` in artDirection.ts is sourced from here. (8.6 is the Stance control, so the legs take the next free number.)
 
-The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Shown by default on High and Medium since 2026-11-10, hidden on Low, following the level until the student chooses (ADR-70). Hidden by default from 2026-11-09 (ADR-48: the owner chose shoes only); the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.".
+The rider's lower legs come out of the shoe collars and the thighs dissolve toward the hips: there is no torso, so a leg never ends in a cut. Shown by default on High and Medium since 2026-11-10, hidden on Low, following the level until the student chooses (ADR-70). Hidden by default from 2026-11-09 (ADR-48: the owner chose shoes only); the View panel's "Show legs" switch (a `.toggle`, visible label "Legs", after Feet) hides them and is not shown while the feet are hidden. Announcements: "Legs shown.", "Legs hidden.". Since ADR-85 (2026-11-11) the switch is labelled "Rider" and says "Rider shown." and "Rider hidden.", and outside the lab on High and Medium it shows the whole rider (8.10).
 
 | Part | Shape | Colour (sRGB) |
 | --- | --- | --- |
@@ -554,6 +554,31 @@ One roughness for both cloths, 0.95; 16 radial segments, 4 per cap. Lengths are 
 ### 8.9 Camera control (2026-11-05, ADR-38)
 
 Written by the implementation agent (opus), pending the design agent's own pass. The segmented control from 8.6 with two options and the group name "Camera", in the View panel above Stance. Rider is the default; the choice is persisted under `trick-lab.camera-view`, never logged, not cleared by Reset and not in the export. No keyboard shortcut. Same markup as 8.6 with `name="camera"`, values `rider` and `detail`, labels "Rider" and "Detail", and the hint `#camera-hint`: "Rider: looking down from above your heels. Detail: low and to the side, to see the deck, trucks and soles." No new CSS. Announcements: "Rider's view: looking down from above the heels." and "Detail view: low three-quarter view from the heel side.". Choosing an option moves the camera at once (no easing); "Reset view" returns to the checked preset.
+
+### 8.10 The rider (2026-11-11, ADR-85)
+
+Written by the implementation agent (opus); `ART.rider` in artDirection.ts is sourced from here. The legs became a person: on the game screen and the welcome screen's preview, on High and Medium, with the feet and the switch on, the whole rider stands on the shoes. About 1.75 m with a real body's proportions (Drillis and Contini, as the legs); the surface is stylized, matte cloth and flat colour, so it reads as a figure and never as a person's likeness. The lab keeps the fading legs of 8.8 (its camera looks down from above the heels, where a body would hide the board), and Low keeps its legs too.
+
+The View panel's switch is now "Rider" (`name` "Show rider", the same `trick-lab.legs` key and `legsVisible`), shown while the feet are; announcements "Rider shown." and "Rider hidden.". In the lab it still shows or hides the legs.
+
+| Region | Shape | Player (sRGB) | Computer (sRGB) |
+| --- | --- | --- | --- |
+| Hoodie | Superellipse body, kangaroo pocket, the hood rolled round the collar and lying on the back, sleeves past the wrist | `#c8562a` burnt orange (the player's decks) | `#2b8a83` teal (Circuit, ADR-71) |
+| Rib (hem, cuffs) | A ribbed band at the hem and each sleeve's end | `#a8461f` | `#226f6a` |
+| Seam | The pocket's edge | `#7f3315` | `#18534f` |
+| Drawstrings | Two cords from the collar's front | `#efe9df` | `#efe9df` |
+| Trousers | Loose, from the seat through the knee to the cuff; ADR-70's twill, bunching and turned-up cuff | `#3b3e44` charcoal (the legs' since ADR-70) | `#6b6252` sand |
+| Fold | The cuff's fold line and lower edge | `#2b2d32` | `#524b3f` |
+| Sock | Inside the shoe | `#2f3035` | `#2f3035` |
+| Mittens | Mitten hands with a thumb, curled toward the palm | `#2a2c31` | `#2a2c31` |
+| Skin | The neck and a smooth, faceless head (no eyes, nose or mouth) | `#c99a7a` | `#8a5d43` |
+| Beanie | Over the crown with a slouch at the back | `#2d3138` | `#d9a63a` mustard |
+| Brim | Its rolled brim | `#24272d` | `#b88a2a` |
+| Hair | Short, at the nape and over the ears, under the beanie | `#3a2a20` | `#1b1716` |
+
+Whose go it is reads at a glance from any camera: the hoodie and the beanie carry the colour, and the computer's rider is a different person (skin, hair, trousers), not a recolour of the student's. One material (roughness 0.9, the twill at 0.55 on the cloth; skin shades smooth), one draw call, and on High it casts its whole shadow. `#scene-description` adds one sentence after the legs' while the rider shows: "The rider crouches over the board, arms low, eyes on the board." (at rest), "The rider rises with the pop, arms swinging up.", "Arms out for balance, the rider watches the board below.", "Arms come down as the rider folds to catch the board." and "The rider rides it out, body folded and arms low."; a bail: "Arms out, the rider steps down beside the board." and "The rider stands up beside the board, arms out wide." (`describeBody`, src/sim/body.ts).
+
+Framing (`ART.camera.rider`, `riderLook`): while the rider shows, Free, Filmer, Side and the welcome preview look at the rider's middle (1.0 m) and fit the whole body at the top of a 0.6 m pop with headroom; the board sits in the lower third. At 1440 x 900 (a stage of 1422 x 830) the board at rest is 197 px long from Free and Filmer and 220 px from Side, where framing the board alone made it 449, 476 and 527 px: the price of the whole body and a 0.6 m pop in one frame. Above keeps 423 px. Above and the replay frame the board and may crop the body. At 1440 x 900 the beanie stays clear of the cards over the stage.
 
 ## 9. UI redesign (2026-11-04)
 

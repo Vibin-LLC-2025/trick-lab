@@ -7,6 +7,8 @@ import { boardTriangles, buildBoard, triangleCount } from '../../src/asset/board
 import { buildGround } from '../../src/asset/ground';
 import { PLANE } from '../../src/asset/groundSpec';
 import { buildShoe, shoeTriangles } from '../../src/asset/shoe';
+import { buildRider } from '../../src/asset/rider';
+import { RIDER_BONES } from '../../src/sim/body';
 import { SHOE } from '../../src/asset/shoeSpec';
 import { DECK_BUDGET, DECK_FILES } from '../../src/asset/deckSpec';
 import { ASSET_FILES, BUDGET, BUDGETS, OUTLINE, REST_Y, type AssetKey } from '../../src/asset/spec';
@@ -184,6 +186,22 @@ describe('the committed GLBs', () => {
     expect(stats.textures.map((t) => t.name)).toEqual(['color', 'normal', 'roughness']);
     expect(stats.textures.every((t) => t.mipmapped)).toBe(true);
     expect(stats.extensionsUsed).toContain('KHR_texture_transform');
+  });
+
+  it('rider.glb meets the rider budget, matches the source and carries the 17 bones in skinning order (ADR-85)', async () => {
+    const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.rider));
+    expect(failing(stats, 'rider')).toEqual([]);
+    expect(stats.triangles).toBe(sum(buildRider().triangles));
+    expect(stats.drawCalls).toBe(1);
+    expect(stats.textures).toHaveLength(0);
+    expect(stats.joints).toEqual([[...RIDER_BONES]]);
+  });
+
+  it('fails a rider with its bones out of order, a missing joint or the wrong height', async () => {
+    const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.rider));
+    expect(failing({ ...stats, joints: [[...RIDER_BONES].reverse()] }, 'rider')).toEqual(['Joint order']);
+    expect(failing({ ...stats, joints: [RIDER_BONES.slice(1)] }, 'rider')).toEqual(['Skin joints', 'Joint order']);
+    expect(failing({ ...stats, bounds: { ...stats.bounds, max: [stats.bounds.max[0], 1.9, stats.bounds.max[2]] } }, 'rider')).toEqual(['Top (max y)']);
   });
 
   it.each(Object.keys(ASSET_FILES) as AssetKey[])('%s is built deterministically and the committed file is byte for byte that build', async (key) => {

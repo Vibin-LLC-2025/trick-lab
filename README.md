@@ -23,7 +23,7 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 - **A pop you have to time.** In a game the sliders say what you are going for. Press Get ready and a large timing bar runs over the stage; press Pop! in the green band and the board does exactly that; early spins less, late spins more. The computer times the same bar. With sound on you can do it by ear (tick, tick, pop), and "Exact" is one choice away for anyone who would rather not.
 - **Records that stay.** The welcome screen lists every trick with what you have done with it on this device (not yet, landed, clean), and the game remembers your wins and losses against each level. Nothing leaves the device, and "Clear records" asks first.
 - **Real trick recognition.** 15 named tricks across the kickflip and heelflip families and both shove-it directions, from a kickflip to a double tre. Seven presets, seven objectives, scored as you go.
-- **A rider, not a floating board.** The shoes (and the legs, if you turn them on) follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails.
+- **A rider, not a floating board.** The shoes follow the inputs, so the front foot flicks, the back foot scoops, both feet catch the board and land on the bolts, or bail when the trick fails. In the game and on the welcome screen a whole rider stands on them (on High and Medium): crouching, swinging the arms up with the pop, balancing in the air, folding to catch, and stepping off when it bails, in a hoodie and a beanie, the computer in its own colours. The lab keeps just the legs, so the board stays in view from above.
 - **Accessible first.** Every action has a keyboard shortcut and a DOM control, a live region describes each pop and outcome in plain language, and reduced motion turns playback into a scrubbable timeline.
 - **Looks and sounds the part.** A street under a real sky with a faint city, a low sun and long shadows; ambient occlusion, motion blur, a glow and a grade on High; a flat, designed look on Low. A bold headline face, the deck's orange, sticker SKATE letters that stamp in, a celebration on a landed trick, and sound (off until you turn it on): recorded pops, catches, landings and bails, and a rolling sound that ticks over the cracks in the concrete.
 - **Built for slow hardware too.** Three quality tiers, picked for the device and stepped down by themselves if tricks run choppy: High and Medium draw with the WebGPU renderer, Low with WebGL in under 20 draw calls for a Chromebook. On a touch screen every control is thumb-sized. Models stream as KTX2-compressed glTF, a still of the scene covers the stage while they load, and the renderer draws nothing while idle.
@@ -67,7 +67,7 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | `npm run verify` | Typecheck, lint, tests, the asset budget check, then a production build and the download budget check (CI runs this) |
 | `npm run test:browser` | The browser checks, against the build `verify` made: every screen on every quality level, the draw-call caps, the frames a landing draws, phone and tablet sizes with touch, and a long-run memory test that plays games (Playwright, Chromium only; CI runs them after `verify`) |
 | `npm run build` / `npm run preview` | Production build to `dist/`, then serve it |
-| `npm run assets` | Rebuild the five GLBs and the deck textures in `public/models` from `src/asset/` (they are committed, so this is optional) |
+| `npm run assets` | Rebuild the six GLBs and the deck textures in `public/models` from `src/asset/` (they are committed, so this is optional) |
 | `npm run sounds` | Rebuild the recorded sounds in `public/sounds` from the public-domain recordings in `assets/source/sounds` (needs ffmpeg; they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
@@ -83,14 +83,14 @@ The trick names follow the sign of each input (ADR-30): flick positive is the ki
 ## Architecture
 
 ```
-src/sim/     pure physics (flight.ts), feet (feet.ts) and legs (legs.ts), recognition, presets, objectives (tricks.ts), text (format.ts), the game of SKATE (skate.ts)
+src/sim/     pure physics (flight.ts), feet (feet.ts), legs (legs.ts) and the rider's body (body.ts), recognition, presets, objectives (tricks.ts), text (format.ts), the game of SKATE (skate.ts)
 src/store/   one Zustand store: inputs, playback, assessment, ui, skate slices; export.ts
-src/asset/   pure board, shoe and ground geometry and textures (deck outline, kicks, concave, cast trucks, wheel lathe, grip noise), every number in spec.ts, shoeSpec.ts and groundSpec.ts
-src/scene/   R3F: TrickScene (Canvas), Pad, Board (BoardModel GLB or BoardPrimitive), Feet, Legs, FootPaths, FlightDriver, SceneCamera, SceneEnvironment, PerfProbe, the sky, the fog, artDirection, resources; nodeRenderer.ts and effects.ts (the WebGPU renderer and its post-processing)
+src/asset/   pure board, shoe, ground and rider geometry and textures (deck outline, kicks, concave, cast trucks, wheel lathe, grip noise), every number in spec.ts, shoeSpec.ts and groundSpec.ts
+src/scene/   R3F: TrickScene (Canvas), Pad, Board (BoardModel GLB or BoardPrimitive), Feet, Legs, Rider (RiderModel, the skinned GLB), FootPaths, FlightDriver, SceneCamera, SceneEnvironment, PerfProbe, the sky, the fog, artDirection, resources; nodeRenderer.ts and effects.ts (the WebGPU renderer and its post-processing)
 src/audio/   the recorded and synthesized sounds and their Web Audio player
 src/ui/      DOM: the welcome screen, the game of SKATE, presets, sliders, playback, telemetry, objectives, event log, announcer, dialogs, the loading picture, the celebration
 scripts/     build-board.ts (npm run assets), check-assets.ts (npm run assets:check), lib/ (build, inspect, budget, webp), measure/ (the repeatable measurement), still/ (the loading pictures)
-public/models/            the generated, committed GLBs: board.glb (Medium), board-high.glb and shoes.glb (High), ground.glb (the concrete ground, Medium and High)
+public/models/            the generated, committed GLBs: board.glb (Medium), board-high.glb and shoes.glb (High), ground.glb (the concrete ground, Medium and High), rider.glb (the whole rider, Medium and High)
 public/stills/  the loading pictures (three's KTX2 transcoder is emitted into the build by Vite, served from this site)
 ```
 
@@ -106,6 +106,9 @@ The ground is built the same way (2026-11-04, ADR-31): `src/asset/groundTextures
 | `board-high.glb` | High | 596.2 KB (2.5 MB) | 7 (8) | 47,488 (120,000) | 6 (6 at 2048 px) |
 | `shoes.glb` | High | 209.0 KB (600 KB) | 3 (3) | 16,715 (30,000) | 2 (2 at 1024 px) |
 | `ground.glb` | Medium and High | 143.4 KB (500 KB) | 1 (1) | 2 (64) | 3 (3 at 1024 px) |
+| `rider.glb` | Medium and High, the game and the welcome screen | 98.5 KB (150 KB) | 1 (1) | 18,500 (20,000) | none (none) |
+
+The rider is built the same way (2026-11-11, ADR-85): one skinned mesh over 17 bones lofted round the bind pose in `src/asset/rider.ts`, its colours painted per region at run time, so the player and the computer share the download. `src/sim/body.ts` poses it from the legs' pelvis up, pure and allocation-free.
 
 - **The sim is pure.** No React, no three. Every number on screen comes from `computeFlight` and `recognize`, which are unit tested.
 - **Store actions own the event log.** `applyPreset`, `setInput`, `popTrick`, `land` (with the game's scoring), `commitScrub`, `resetSession` and the game's `startSkate` and `quitSkate` are the only writers; components select and call.

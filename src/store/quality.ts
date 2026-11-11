@@ -21,6 +21,15 @@ export const capQuality = (q: Quality, cap: unknown): Quality => (isQuality(cap)
 export const effectiveQuality = (s: Pick<TrickState, 'quality' | 'boardAssetFailed'>): Quality =>
   s.boardAssetFailed ? 'low' : s.quality;
 
+/**
+ * Whether the whole rider is on screen (ADR-85): on the game and welcome
+ * screens, on Medium and High, with the feet and the Rider switch on. The
+ * lab keeps the fading legs (its camera looks down from above the heels),
+ * and Low is frozen (ADR-62).
+ */
+export const riderShown = (s: Pick<TrickState, 'quality' | 'boardAssetFailed' | 'screen' | 'feetVisible' | 'legsVisible'>): boolean =>
+  s.screen !== 'lab' && effectiveQuality(s) !== 'low' && s.feetVisible && s.legsVisible;
+
 /** What the browser offers; every field is optional because every one is. */
 export interface DeviceHints {
   /** navigator.deviceMemory, GB, Chromium only. */

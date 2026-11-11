@@ -93,6 +93,50 @@ export function framingPoints(flight: { reach: number; bottom: number; top: numb
   return pts;
 }
 
+/**
+ * The farthest the camera may stand from `target`, looking along `from`'s
+ * direction, before any of `points` is farther than `fogNear` from it (ADR-85):
+ * for each point the distance d where |target + d u - p| = fogNear, solved
+ * exactly, the least of them. Infinity if no point would ever reach it.
+ */
+export function fogDistance({ from, target, points, fogNear }: { from: Vec3; target: Vec3; points: readonly Vec3[]; fogNear: number }): number {
+  const ux = from[0] - target[0];
+  const uy = from[1] - target[1];
+  const uz = from[2] - target[2];
+  const len = Math.hypot(ux, uy, uz) || 1;
+  let best = Infinity;
+  for (const p of points) {
+    const wx = target[0] - p[0];
+    const wy = target[1] - p[1];
+    const wz = target[2] - p[2];
+    const b = (ux * wx + uy * wy + uz * wz) / len;
+    const disc = b * b - (wx * wx + wy * wy + wz * wz) + fogNear * fogNear;
+    if (disc < 0) return 0;
+    best = Math.min(best, -b + Math.sqrt(disc));
+  }
+  return best;
+}
+
+/** The rider's outline for the framing (ADR-85): the head's column and the arms' band, metres in the world. */
+export interface RiderFrame {
+  /** The head's column: half width about x 0 and its top (the beanie at the top of the highest pop, plus headroom). */
+  head: { reach: number; top: number; front: number; back: number };
+  /** The arms' band: as far as a hand reaches along the board, up to `top`, from `front` (toward the toe side, -Z) to `back`. */
+  arms: { reach: number; top: number; front: number; back: number };
+}
+
+/**
+ * What a view that films the whole rider keeps in frame (ADR-85): the
+ * board's flight box (framingPoints) and the rider's outline round it, the
+ * head's column above and the arms' band either side, as boxes' corners.
+ */
+export function riderFramingPoints(flight: { reach: number; bottom: number; top: number }, rider: RiderFrame): Vec3[] {
+  const pts = framingPoints(flight);
+  for (const b of [rider.head, rider.arms])
+    for (const x of [-b.reach, b.reach]) for (const z of [b.front, b.back]) for (const y of [flight.top, b.top]) pts.push([x, y, z]);
+  return pts;
+}
+
 /** An axis-aligned box by its min and max corners. */
 export interface Box3 {
   min: Vec3;

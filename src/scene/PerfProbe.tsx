@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { addAfterEffect, addEffect, useFrame, useThree } from '@react-three/fiber';
-import { useTrickStore } from '../store';
+import { riderShown, useTrickStore } from '../store';
 import { flightPace, noteFramesStoreChange, recordFrame } from './flightPace';
 import { allShown } from './modelCache';
 import { modelsFor } from './modelUrls';
@@ -49,7 +49,7 @@ export function PerfProbe() {
       const startup = {
         stageReady: s.stageReady,
         effectsWanted: effectsFor(s) !== null && isNodeRenderer(gl),
-        modelsShown: () => allShown(modelsFor(sceneTier(s), s.feetVisible)),
+        modelsShown: () => allShown(modelsFor(sceneTier(s), s.feetVisible, riderShown(s))),
       };
       if (isReady(r, startup)) {
         r.ready = true;

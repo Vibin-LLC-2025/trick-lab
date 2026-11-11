@@ -15,6 +15,7 @@ import {
   type Stance,
 } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
+import { describeBody } from './body';
 import { describeLegs } from './legs';
 import { restSide, type RestSide } from './settle';
 import { landingZones } from './zones';
@@ -417,6 +418,8 @@ export function describeScene(s: {
   feetVisible?: boolean;
   /** Shown when left out, and only with the feet (ADR-37). */
   legsVisible?: boolean;
+  /** The whole rider on screen (ADR-85, store riderShown): a sentence for the body after the legs'. Not when left out. */
+  riderShown?: boolean;
   /** Goofy when left out (ADR-25). */
   stance?: Stance;
   /** Who popped the flight on screen (the game of SKATE, ADR-43); the student when left out. */
@@ -445,7 +448,8 @@ export function describeScene(s: {
             : 'Skateboard resting flat on a concrete pad, grip side up.';
   const rolling = s.roll === 'push' ? ' Rolling along the concrete, nose first.' : s.roll === 'slow' ? ' Rolling to a stop.' : '';
   const feet = s.feetVisible === false ? '' : ` ${describeFeetInFlight(s) || describeFeet(s.flight?.inputs ?? s)}`;
-  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(s.status === 'idle' ? 0 : s.progress, s.flight)}`;
+  const at = s.status === 'idle' ? 0 : s.progress;
+  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight)}${s.riderShown ? ` ${describeBody(at, s.flight)}` : ''}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
   const cpu = s.flightBy === 'computer';

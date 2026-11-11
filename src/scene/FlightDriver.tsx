@@ -3,9 +3,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Matrix4, MathUtils, Vector3, type Bone, type BufferAttribute, type Group, type InstancedBufferAttribute, type InstancedMesh, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
+import { newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, playRate, previewAnimates, replayMoves, rollMoves, useTrickStore } from '../store';
+import { landingMoves, playRate, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
@@ -16,6 +17,9 @@ import { MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './f
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
+import { Rider } from './Rider';
+import type { RiderRig } from './RiderModel';
+import { applyBody } from './riderPose';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { dustShown } from './sceneTier';
@@ -119,6 +123,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const feet = useRef<FeetPose>(newFeetPose());
   const legs = useRef<LegRig>(null);
   const legsPose = useRef<LegsPose>(newLegsPose());
+  const rider = useRef<RiderRig>(null);
+  const bodyPose = useRef<BodyPose>(newBodyPose());
   const clock = useRef(newFlightClock());
   const show = useRef(newShowcaseClock());
   // The landing's move (ADR-68): one pair of groups round the board, one round the rider.
@@ -136,6 +142,8 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const lab = useTrickStore((s) => s.screen === 'lab');
   const feetVisible = useTrickStore((s) => s.feetVisible);
   const legsVisible = useTrickStore((s) => s.legsVisible);
+  // The whole rider on the game and welcome screens (ADR-85); the lab keeps the fading legs.
+  const wholeRider = useTrickStore(riderShown);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
   // The shadow footprints' material for the renderer in use (ADR-50).
@@ -289,13 +297,18 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
       // The legs (ADR-37) reach the shoes just posed; mounted only with the feet.
+      // The whole rider (ADR-85) stands on the same legs, posed from the pelvis up.
       const rig = legs.current;
-      if (rig) {
+      const whole = rider.current;
+      if (rig || whole) {
         const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance);
-        applySegment(rig.frontThigh, l.front.thigh);
-        applySegment(rig.frontShank, l.front.shank);
-        applySegment(rig.backThigh, l.back.thigh);
-        applySegment(rig.backShank, l.back.shank);
+        if (rig) {
+          applySegment(rig.frontThigh, l.front.thigh);
+          applySegment(rig.frontShank, l.front.shank);
+          applySegment(rig.backThigh, l.back.thigh);
+          applySegment(rig.backShank, l.back.shank);
+        }
+        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, flight, progress, inputs, s.stance));
       }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
@@ -362,7 +375,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={riderOuter}>
         <group ref={riderInner}>
           {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
-          {feetVisible && legsVisible && <Legs rig={legs} shadows={shadows} />}
+          {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
           {footPathsVisible && !home && <FootPaths />}
         </group>
       </group>

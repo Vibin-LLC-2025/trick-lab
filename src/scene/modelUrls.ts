@@ -3,7 +3,7 @@
 // BoardModel chunk so Board.tsx can pick a URL without loading the GLTF loader.
 // Which files a tier shows is modelFiles.ts (pure, read by the scripts too).
 import { deckFile, MODEL_DECK, type DeckId } from '../asset/deckSpec';
-import { BOARD_GLB, BOARD_HIGH_GLB, GROUND_GLB, SHOES_GLB, SPOT_GLB, type DetailLevel } from '../asset/spec';
+import { BOARD_GLB, BOARD_HIGH_GLB, GROUND_GLB, RIDER_GLB, SHOES_GLB, SPOT_GLB, type DetailLevel } from '../asset/spec';
 import type { Quality } from '../store';
 import { boardFileFor, modelFilesFor, modelFilesUnusedBy } from './modelFiles';
 
@@ -15,6 +15,8 @@ export const SHOES_URL = url(SHOES_GLB);
 export const GROUND_URL = url(GROUND_GLB);
 /** The skate spot (ADR-69): the game screen only, on Medium and High, so not in modelsFor (no first visit fetches it). */
 export const SPOT_URL = url(SPOT_GLB);
+/** The rider (ADR-85): Medium and High, on the game and welcome screens. */
+export const RIDER_URL = url(RIDER_GLB);
 
 /** A deck's texture for a board level (ADR-71); null for today's, which is inside the model. */
 export const deckUrl = (deck: DeckId, level: DetailLevel): string | null => (deck === MODEL_DECK ? null : url(deckFile(deck, level)));
@@ -27,7 +29,7 @@ export const boardUrlFor = (quality: Exclude<Quality, 'low'>) => url(boardFileFo
  * ground, then the shoes (High, and only while the feet are shown).
  * TrickScene starts these downloading as soon as it loads. Low shows none.
  */
-export const modelsFor = (quality: Quality, feetVisible: boolean): string[] => modelFilesFor(quality, feetVisible).map(url);
+export const modelsFor = (quality: Quality, feetVisible: boolean, rider = false): string[] => modelFilesFor(quality, feetVisible, rider).map(url);
 
 /** The GLBs a tier never shows, whatever the feet: freed when the student moves down to it (ADR-48). */
 export const modelsUnusedBy = (quality: Quality): string[] => modelFilesUnusedBy(quality).map(url);

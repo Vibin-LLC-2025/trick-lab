@@ -167,8 +167,8 @@ export function ViewPanel() {
     >
       <div className="view-panel__toggles">
         <Toggle label="Feet" name="Show feet" pressed={feetVisible} onClick={toggleFeet} />
-        {/* The legs stand in the shoes (ADR-37): no feet, nothing to show, so no switch. */}
-        {feetVisible && <Toggle label="Legs" name="Show legs" pressed={legsVisible} onClick={toggleLegs} />}
+        {/* The rider stands in the shoes (ADR-37, ADR-85): no feet, nothing to show, so no switch. Its legs here in the lab, the whole rider in a game. */}
+        {feetVisible && <Toggle label="Rider" name="Show rider" pressed={legsVisible} onClick={toggleLegs} />}
         <Toggle label="Foot trails" name="Show foot trails" pressed={footPathsVisible} onClick={toggleFootPaths} />
         <Toggle label="Motion cues" name="Show motion cues" pressed={motionCuesVisible} onClick={toggleMotionCues} />
         {blurTier && <Toggle label="Motion blur" name="Motion blur" pressed={motionBlur} onClick={toggleMotionBlur} />}
