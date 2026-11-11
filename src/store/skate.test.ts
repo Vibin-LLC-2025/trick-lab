@@ -80,7 +80,8 @@ describe('game of SKATE', () => {
 
     store.getState().callSkateTrick('kickflip');
     expect(store.getState().skate.call?.id).toBe('kickflip');
-    expect(said(store)).toBe('You called a kickflip. Land it and the computer has to copy it.');
+    // On Normal with the timing bar the call sets the sliders too (ADR-83).
+    expect(said(store)).toBe('You called a kickflip. Land it and the computer has to copy it. Sliders set for a kickflip.');
     callAndSet(store, 'kickflip');
     const s = store.getState();
     expect(s.events.find((e) => e.type === 'trick.popped')).toMatchObject({ payload: { by: 'you', call: 'kickflip', preset: null } });
@@ -152,7 +153,8 @@ describe('game of SKATE', () => {
     expect(after.events.find((e) => e.type === 'trick.resolved')?.payload.by).toBe('computer');
     expect(after.events.at(-1)).toMatchObject({ type: 'skate.set', payload: { by: 'computer', trick: 'heelflip' } });
     expect(said(store)).toMatch(/^The computer's trick: Heelflip landed clean./);
-    expect(said(store)).toMatch(/The computer landed a heelflip\. Your turn: copy the computer's heelflip\. Set the sliders, then press Pop\.$/);
+    // The copy is the player's now, so on Normal with the timing bar its sliders are set (ADR-83); the computer's go left them alone.
+    expect(said(store)).toMatch(/The computer landed a heelflip\. Your turn: copy the computer's heelflip\. Sliders set for a heelflip\.$/);
   });
 
   it('a copy of the right trick earns its objective and the computer sets again, never a trick already set', () => {
@@ -210,7 +212,7 @@ describe('game of SKATE', () => {
     let s = store.getState();
     expect(s.skate).toMatchObject({ phase: 'you-copy', secondTry: true });
     expect(s.skate.letters.you).toBe(4);
-    expect(said(store)).toMatch(/so you get a second try\. Your turn: copy .* Last letter: this is the second try\.$/);
+    expect(said(store)).toMatch(/so you get a second try\. Your turn: copy .* Last letter: this is the second try\. Sliders set for an? [^.]+\.$/);
     // Five different sets: no trick was set twice.
     expect(new Set(s.skate.used).size).toBe(5);
 

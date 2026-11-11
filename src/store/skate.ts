@@ -9,10 +9,14 @@ import {
   coinFlip,
   computerAttempt,
   computerTurn,
+  BAR_MISS,
+  BAR_STEPS,
   lessonFor,
+  lessonSetup,
   lessonText,
   lettersText,
   newSkateGame,
+  popStyle,
   SKATE_LEVELS,
   SKATE_WORD,
   skateActive,
@@ -21,8 +25,11 @@ import {
   turnOf,
   withArticle,
   withComputerCall,
+  type SkateCall,
   type SkateGame,
 } from '../sim/skate';
+import { INPUT_NAMES, valueText } from '../sim/format';
+import { assistOn } from './forecast';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
 import { noticeUp } from './notice';
@@ -51,7 +58,7 @@ export const initialSkate = (level: SkateGame['level'] = 'normal') => ({
 });
 
 const POP_MODE_ANNOUNCEMENT: Record<PopMode, string> = {
-  timed: 'Timing bar: Pop starts the bar, and Pop again in the band releases it.',
+  timed: `Timing bar: ${BAR_STEPS} ${BAR_MISS}`,
   exact: 'Exact: Pop does exactly what the sliders say.',
 };
 
@@ -78,10 +85,30 @@ export const createSkateSlice =
     /** The walk-through's prompt last said, so each is said once as it is reached (ADR-66). */
     let lessonAt = 0;
 
+    /** How the player pops in the game as it stands (ADR-83). */
+    const style = () => popStyle(get().skate.level, get().popMode === 'timed');
+
     /** The walk-through's prompts for the state as it is, or null when it is not running or not the player's go. */
     const lesson = () => {
       const s = get();
-      return s.skateLesson ? lessonFor(s.skate, s.popMode === 'timed', s, s.pendingPop !== null) : null;
+      return s.skateLesson ? lessonFor(s.skate, style(), s, s.pendingPop !== null) : null;
+    };
+
+    /**
+     * A trick has just become the player's to do (ADR-83): on Easy and Normal
+     * with the timing bar the sliders are set to its setup, logged as the
+     * slider moves always are (one input.changed per slider that moved), and
+     * said in a few words at the end of the turn's own announcement. Nothing
+     * on Hard or in Exact, where the sliders are the player's to set.
+     */
+    const assist = (call: SkateCall): string => {
+      const s = get();
+      if (!assistOn(s)) return '';
+      const setup = lessonSetup(call);
+      const moved = (['pop', 'flick', 'scoop'] as const).filter((k) => s[k] !== setup[k]);
+      if (moved.length > 0) set({ ...setup, activePreset: null });
+      for (const k of moved) s.log('input.changed', { input: k, label: INPUT_NAMES[k], value: setup[k], valueText: valueText(k, setup[k]) });
+      return ` Sliders set for ${withArticle(call.name)}.`;
     };
     /** The walk-through's opening, for the announcement that starts the player's first go. */
     const lessonLead = () => {
@@ -129,7 +156,8 @@ export const createSkateSlice =
 
       lessonMoved: () => {
         const l = lesson();
-        if (!l) return;
+        // With the sliders set for the player the walk-through does not follow them (ADR-83).
+        if (!l || style() === 'assisted') return;
         // The setup has just been reached: say what comes next. Moving away from it again is not news.
         if (l.at === 1 && lessonAt === 0) get().announce(lessonText(l));
         lessonAt = l.at;
@@ -174,7 +202,7 @@ export const createSkateSlice =
         // The bar is the push (ADR-67).
         s.startRoll();
         // Short while the ticks play; with sound off the bar is silent, so say so and where Exact is.
-        s.announce(s.soundOn ? 'Bar running.' : 'Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
+        s.announce(s.soundOn ? 'Bar running.' : 'Bar running, with no sound: press Pop! when the marker is in the green band. Turn sound on to hear it, or choose Exact before a game.');
       },
 
       cancelPop: () => {
@@ -230,7 +258,7 @@ export const createSkateSlice =
         noticeFocused = noticeSeq;
         s.requestFocus({ kind: 'skate-notice' });
         const rule = SKATE_LEVELS[skate.level].cleanOnly ? ` ${CLEAN_ONLY_NOTE}` : '';
-        s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate)}${lessonLead()}`);
+        s.announce(`${cancelled}Game of SKATE started, ${SKATE_LEVELS[skate.level].label.toLowerCase()} level.${rule} ${flip} ${skateInstruction(skate, style())}${lessonLead()}`);
       },
 
       toggleSkateAuto: () => {
@@ -289,10 +317,11 @@ export const createSkateSlice =
         if (s.skate.call?.id === id) return;
         const skate = callTrick(s.skate, id);
         set({ skate });
-        // Not logged on its own: the student's trick.popped carries the call.
+        // Not logged on its own: the student's trick.popped carries the call. The sliders it sets are (ADR-83).
+        const sliders = assist(skate.call!);
         const l = lesson();
         if (l) lessonAt = l.at;
-        s.announce(`You called ${withArticle(skate.call!.name)}. Land it and the computer has to copy it.${l ? ` ${lessonText(l)}` : ''}`);
+        s.announce(`You called ${withArticle(skate.call!.name)}. Land it and the computer has to copy it.${sliders}${l ? ` ${lessonText(l)}` : ''}`);
       },
 
       quitSkate: () => {
@@ -341,6 +370,8 @@ export const createSkateSlice =
         const step = afterAttempt(s.skate, by, result);
         if (!step.message) return [];
         const game = withComputerCall(step.game, random);
+        // A trick to copy, or a second try at it, is the player's now: on Easy and Normal the sliders are set for it (ADR-83).
+        const sliders = game.phase === 'you-copy' && game.call ? assist(game.call) : '';
         // What this go did and whose turn is next waits over the stage once the go is at rest (ADR-80),
         // except at the game's end, where the result takes over the screen.
         const notice = game.phase === 'over' ? null : { id: ++noticeSeq, kind: 'go' as const, by, made: step.made, news: step.message, letterTo: step.letterTo };
@@ -369,7 +400,7 @@ export const createSkateSlice =
           out.push(`Letters: you ${lettersText(game.letters.you)}, computer ${lettersText(game.letters.computer)}.`);
         }
         // What happened, then what to do next (the panel shows the two apart).
-        out.push(`${skateInstruction(game)}${lessonLead()}`);
+        out.push(`${skateInstruction(game, style())}${sliders}${lessonLead()}`);
         return out;
       },
 

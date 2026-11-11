@@ -387,7 +387,8 @@ describe('the rules', () => {
     const retry = afterAttempt(hard('you-copy', { letters: { you: 4, computer: 0 } }), 'you', sketchy);
     expect(retry.letterTo).toBeNull();
     expect(retry.game.secondTry).toBe(true);
-    expect(SKATE_LEVELS.hard.hint).toContain('Only a clean landing counts');
+    expect(SKATE_LEVELS.hard.hint).toContain('only a clean landing counts');
+    expect(SKATE_LEVELS.hard.exactHint).toContain('Only a clean landing counts');
     expect(CLEAN_ONLY_NOTE).toBe('Only a clean landing counts on Hard: within 10 degrees on the flip and 8 on the shove.');
   });
 

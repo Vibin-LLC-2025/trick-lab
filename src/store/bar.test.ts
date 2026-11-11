@@ -58,7 +58,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.flight).toBeNull();
     expect(popped(s)).toHaveLength(0);
     // Sound is off by default, so the start says the bar is silent and where Exact is.
-    expect(said(s)).toBe('Bar running, with no sound: press Pop again in the band. Turn sound on to hear it, or choose Exact before a game.');
+    expect(said(s)).toBe('Bar running, with no sound: press Pop! when the marker is in the green band. Turn sound on to hear it, or choose Exact before a game.');
   });
 
   it('with sound on the start is two words, so it does not talk over the ticks', () => {
@@ -298,7 +298,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     s.getState().land();
     s.getState().quitSkate();
     s.getState().setPopMode('timed');
-    expect(said(s)).toBe('Timing bar: Pop starts the bar, and Pop again in the band releases it.');
+    expect(said(s)).toBe('Timing bar: Press Get ready, then Pop! when the marker is in the green band. Early spins less, late spins more.');
     expect(localStorage.getItem(POP_MODE_KEY)).toBe('timed');
   });
 

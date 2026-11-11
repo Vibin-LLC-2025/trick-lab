@@ -1,20 +1,26 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import { BAR, barFeedback, barWhen } from '../sim/bar';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { BAR, barWhen } from '../sim/bar';
 import { outcomeCard } from '../sim/format';
 import {
+  BAR_MISS,
+  BAR_STEPS,
   CLEAN_ONLY_NOTE,
   computerTurn,
   GUIDE_TIP,
   lessonFor,
   lettersText,
+  levelHint,
   openTricks,
+  popStyle,
   SETTABLE_GROUPS,
   SKATE_LEVEL_ORDER,
   SKATE_LEVELS,
   SKATE_WORD,
   skateActive,
   trickGuide,
+  turnOf,
   turnView,
+  type PopStyle,
   type SkateCall,
   type SkatePlayer,
 } from '../sim/skate';
@@ -169,7 +175,14 @@ function CameraChoice() {
   );
 }
 
-/** The trick guide (ADR-44): which way and how far to flick and scoop, in words, never the slider values. */
+/** How the player pops in this game (ADR-83): the sliders set for them, the bar with their own sliders, or Exact. */
+const popStyleOf = (s: TrickState): PopStyle => popStyle(s.skate.level, s.popMode === 'timed');
+
+/**
+ * The trick guide (ADR-44): which way and how far to flick and scoop, in
+ * words, never the slider values. Only where the player sets the sliders
+ * (Hard, Exact): on Easy and Normal the game sets them (ADR-83).
+ */
 function Guide({ call }: { call: SkateCall }) {
   const guide = trickGuide(call);
   const cleanOnly = useTrickStore((s) => SKATE_LEVELS[s.skate.level].cleanOnly);
@@ -197,13 +210,13 @@ function Guide({ call }: { call: SkateCall }) {
 function Lesson() {
   // Select the parts, then derive: a selector that builds a new object would re-render forever.
   const game = useTrickStore((s) => s.skate);
-  const timed = useTrickStore((s) => s.popMode === 'timed');
+  const style = useTrickStore(popStyleOf);
   const pop = useTrickStore((s) => s.pop);
   const flick = useTrickStore((s) => s.flick);
   const scoop = useTrickStore((s) => s.scoop);
   const barRunning = useTrickStore((s) => s.pendingPop !== null);
   const skip = useTrickStore((s) => s.skipLesson);
-  const lesson = lessonFor(game, timed, { pop, flick, scoop }, barRunning);
+  const lesson = lessonFor(game, style, { pop, flick, scoop }, barRunning);
   if (!lesson) return null;
   return (
     <div className="lesson">
@@ -269,8 +282,11 @@ function TurnStatus() {
   const auto = useTrickStore((s) => s.skateAuto);
   const waiting = useTrickStore(computerWaiting);
   const turn = useTrickStore(turnKey);
-  const timed = useTrickStore((s) => s.popMode === 'timed');
+  const style = useTrickStore(popStyleOf);
+  // In a first game the walk-through says the presses itself (ADR-66), so this line keeps to the rule.
+  const lesson = useTrickStore((s) => s.skateLesson);
   const inAir = status === 'playing' || status === 'paused';
+  const presses = style === 'assisted' && !lesson ? ': press Get ready, then Pop! in the green band.' : '.';
 
   if (computerTurn(game)) {
     if (inAir) return <p className="turn__status">In the air.</p>;
@@ -285,19 +301,16 @@ function TurnStatus() {
     );
   }
   if (game.phase === 'you-copy') {
+    if (style === 'assisted') return <p className="turn__status">Land it to copy it{presses}</p>;
     return (
       <p className="turn__status">
-        Set the sliders the way the guide says, then press Pop{timed ? ', and Pop again when the marker is in the band' : ''}.
+        Set the sliders the way the guide says, then press {style === 'timed' ? 'Get ready, and Pop! in the green band' : 'Pop'}.
       </p>
     );
   }
-  return (
-    <p className="turn__status">
-      {game.call
-        ? "Land it and the computer has to copy it. Miss, and it's the computer's turn to set."
-        : 'Call the trick you will try. Land it and the computer has to copy it.'}
-    </p>
-  );
+  if (!game.call) return <p className="turn__status">Call the trick you will try. Land it and the computer has to copy it.</p>;
+  if (style === 'assisted') return <p className="turn__status">Land it and the computer has to copy it{presses}</p>;
+  return <p className="turn__status">Land it and the computer has to copy it. Miss, and it&apos;s the computer&apos;s turn to set.</p>;
 }
 
 /**
@@ -310,6 +323,7 @@ function TurnCard() {
   const game = useTrickStore((s) => s.skate);
   const message = useTrickStore((s) => s.skateMessage);
   const lesson = useTrickStore((s) => s.skateLesson);
+  const assisted = useTrickStore((s) => popStyleOf(s) === 'assisted');
   const view = turnView(game);
   if (!view) return null;
   return (
@@ -326,69 +340,111 @@ function TurnCard() {
       {game.secondTry && <p className="turn__note">Last letter: second try</p>}
       <TurnStatus />
       {game.phase === 'you-set' && <CallPicker />}
-      {view.who === 'you' && lesson ? <Lesson /> : view.who === 'you' && game.call && <Guide call={game.call} />}
+      {view.who === 'you' && lesson ? <Lesson /> : view.who === 'you' && game.call && !assisted && <Guide call={game.call} />}
     </section>
   );
 }
 
-const BAR_HELP = 'Pop starts the bar. Press Pop again in the band: early spins less than you set, late spins more.';
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /**
- * The timing bar under Pop (ADR-65, DESIGN.md 11.1): the level's band, and a
- * marker that sweeps across while the bar runs, round again from the left
- * after each sweep until the second press (ADR-78), and rests where the last
- * release was, the player's or the computer's. The picture is decorative
- * (aria-hidden): the note under it says the same in words, and the bar's
- * start and the result are announced by the store. The sweep is a CSS
- * animation started by the same store change that started the bar and
- * repeated each sweep, so it trails the store's clock by a frame at most. The two custom properties
- * carry the band and the marker's place; all the styling is in app.css.
+ * The timing bar, large over the stage (ADR-65, ADR-83, DESIGN.md 11.1): low
+ * in the middle, just above the tray, on a solid panel. While the bar runs,
+ * the level's band and a marker that sweeps across, round again from the left
+ * after each sweep until the second press (ADR-78). After a release, the
+ * player's or the computer's, the marker rests where it was and a verdict in
+ * a few words says what it did, until Continue clears the stage. Nothing
+ * before the first press, in Exact, or once the stage is clear. The picture is
+ * decorative (aria-hidden): the store announces the bar's start and the
+ * release's result. The sweep is a CSS animation started by the same store
+ * change that started the bar and repeated each sweep, so it trails the
+ * store's clock by a frame at most. The custom properties carry the band and
+ * the marker's place; all the styling is in app.css.
  */
-function TimingBar() {
+export function TimingStage() {
+  const timed = useTrickStore((s) => s.popMode === 'timed' && skateActive(s.skate));
   const pending = useTrickStore((s) => s.pendingPop);
   const last = useTrickStore((s) => s.lastRelease);
+  // The go's release stays up until Continue clears the stage (ADR-80).
+  const onStage = useTrickStore((s) => s.flight !== null);
   const band = useTrickStore((s) => SKATE_LEVELS[s.skate.level].band);
+  if (!timed || (!pending && !(last && onStage))) return null;
   const part = (ms: number) => `${((ms / BAR.sweepMs) * 100).toFixed(2)}%`;
   const style = {
     '--band-from': part(BAR.centreMs - band.halfMs),
     '--band-width': part(band.halfMs * 2),
     ...(last && !pending ? { '--at': (last.ms / BAR.sweepMs).toFixed(4) } : null),
   } as CSSProperties;
-  const note = pending
-    ? 'Press Pop again when the marker is in the band.'
-    : !last
-      ? BAR_HELP
-      : last.by === 'you'
-        ? `Your release. ${barFeedback(last.ms, band)}`
-        : `The computer released ${barWhen(last.ms, band)}.`;
+  const when = !pending && last ? barWhen(last.ms, band) : null;
+  const tone = when === null ? 'run' : when === 'in the band' ? 'in' : 'off';
   return (
-    <>
-      <div className="skate__bar" aria-hidden="true" style={style}>
+    <div className={`timing timing--${tone}`} aria-hidden="true">
+      <p className="timing__head">
+        {pending || !last ? (
+          <span className="timing__verdict">Pop! in the green band</span>
+        ) : (
+          <>
+            <span className="timing__who">{last.by === 'you' ? 'Your release' : "Computer's release"}</span>
+            <span className="timing__verdict">{cap(when ?? '')}</span>
+          </>
+        )}
+      </p>
+      <div className="skate__bar" style={style}>
         <span className="skate__bar-band" />
         {/* Keyed on the bar, so each sweep starts from the left. */}
-        {pending ? <span key={pending.id} className="skate__bar-marker skate__bar-marker--run" /> : last && <span className="skate__bar-marker" />}
+        {pending ? <span key={pending.id} className="skate__bar-marker skate__bar-marker--run" /> : <span className="skate__bar-marker" />}
       </div>
-      <p className="panel__note">{note}</p>
-    </>
+    </div>
   );
 }
 
-/** The tray along the bottom of the stage (DESIGN.md 11.2): the sliders, then Pop (or the computer's go) with the timing bar unless the game is Exact. */
+/**
+ * The tray's height, as `--hud-tray-h` on the page (app.css), so the timing
+ * bar over the stage sits just above it on a wide screen, whatever the tray
+ * holds. Where the panels stack under the stage the tray has no box, and the
+ * bar sits at the stage's foot instead.
+ */
+function useTrayHeight() {
+  const tray = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = tray.current;
+    const app = el?.closest<HTMLElement>('.app');
+    if (!el || !app || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => app.style.setProperty('--hud-tray-h', `${el.offsetHeight}px`));
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      app.style.removeProperty('--hud-tray-h');
+    };
+  }, []);
+  return tray;
+}
+
+/**
+ * The tray along the bottom of the stage (DESIGN.md 11.2): the sliders with
+ * their zones and forecast (ADR-83), then Pop, or the computer's go. With the
+ * timing bar on the player's go the one button has two names, one per press:
+ * "Get ready" starts the bar, "Pop!" releases it (the bar itself is over the
+ * stage, TimingStage).
+ */
 function Controls() {
   const status = useTrickStore((s) => s.status);
   const cpu = useTrickStore((s) => computerTurn(s.skate));
   const pressPop = useTrickStore((s) => s.pressPop);
-  const timed = useTrickStore((s) => s.popMode === 'timed');
+  const mine = useTrickStore((s) => s.popMode === 'timed' && turnOf(s.skate) === 'you');
+  const running = useTrickStore((s) => s.pendingPop !== null);
   // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
   const replaying = useTrickStore(replayMoves);
-  const label = replaying ? 'Skip replay' : cpu ? "Computer's go" : 'Pop';
+  const tray = useTrayHeight();
+  const label = replaying ? 'Skip replay' : cpu ? "Computer's go" : mine ? (running ? 'Pop!' : 'Get ready') : 'Pop';
   return (
-    <div className="hud__tray">
+    <div className="hud__tray" ref={tray}>
       <Inputs />
       <section className="panel" aria-label="Pop">
         <div className="skate__controls">
           {/* aria-disabled, not disabled: the button stays focusable and explains itself. One press is one action:
-              with the timing bar the first starts it and the second releases it (the store decides, ADR-65). */}
+              with the timing bar the first starts it and the second releases it (the store decides, ADR-65), and
+              the name says which (ADR-83). */}
           <button
             type="button"
             className="btn btn--primary skate__pop"
@@ -399,7 +455,6 @@ function Controls() {
           >
             {label} <kbd aria-hidden="true">Space</kbd>
           </button>
-          {timed && <TimingBar />}
         </div>
       </section>
     </div>
@@ -439,9 +494,9 @@ const POP_MODES: readonly { mode: PopMode; label: string; hint: string }[] = [
   {
     mode: 'timed',
     label: 'Timing bar',
-    hint: 'Pop starts a bar, and Pop again in the band releases it. Early spins less than you set, late spins more. With sound on you can time it by ear.',
+    hint: `${BAR_STEPS} ${BAR_MISS} With sound on you can time it by ear.`,
   },
-  { mode: 'exact', label: 'Exact', hint: 'No bar: the board does exactly what the sliders say, every time.' },
+  { mode: 'exact', label: 'Exact', hint: 'No bar: you set the sliders yourself, and the board does exactly what they say, every time.' },
 ];
 
 /** The whole game in three lines (ADR-66: the first game's walk-through teaches the rest by doing). */
@@ -485,7 +540,7 @@ function Setup() {
           ))}
         </div>
         <p className="segmented__hint" id="skate-level-hint">
-          {SKATE_LEVELS[level].hint}
+          {levelHint(level, popMode === 'timed')}
         </p>
       </fieldset>
       <fieldset className="segmented" aria-describedby="skate-pop-hint">

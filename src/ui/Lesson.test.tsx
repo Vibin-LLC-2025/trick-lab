@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("the first game's walk-through on the game screen (ADR-66)", () => {
-  it('says so before the game, then walks the first go by keyboard: call, set the slider, and the prompt moves on', async () => {
+  it('on Normal: says so before the game, the call sets the sliders, and the walk-through is the two presses, by keyboard', async () => {
     const user = await setup();
     expect(within(game()).getByText('Your first game walks you through your first trick.')).toBeInTheDocument();
     within(game()).getByRole('button', { name: 'Start game' }).focus();
@@ -42,35 +42,53 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
     // The coin flip waits first (ADR-80); Enter on its Continue, where focus went.
     await user.keyboard('{Enter}');
 
-    expect(within(game()).getByText('First game: your first trick, in 3 steps')).toBeInTheDocument();
-    expect(steps()).toHaveLength(3);
-    expect(now()).toHaveTextContent('Call the kickflip, then set the sliders for the kickflip: Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0.');
-    expect(now()).toHaveClass('lesson__step--now');
-    expect(announcer()).toHaveTextContent(/First game, so here is your first trick in 3 steps\. Step 1 of 3: Call the kickflip/);
+    expect(within(game()).getByText('First game: your first trick, in 2 steps')).toBeInTheDocument();
+    expect(steps()).toHaveLength(2);
+    expect(now()).toHaveTextContent('Call your trick.');
+    expect(announcer()).toHaveTextContent(/First game, so here is your first trick in 2 steps\. Step 1 of 2: Call your trick\.$/);
 
     await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
-    expect(now()).toHaveTextContent('Set the sliders for the kickflip: Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0.');
-    // In place of the trick guide until the first pop.
+    // The game sets the sliders for the trick (ADR-83), and says so with the call.
+    expect(state()).toMatchObject({ pop: 0.35, flick: 1.9, scoop: 0 });
+    expect(announcer()).toHaveTextContent('You called a kickflip. Land it and the computer has to copy it. Sliders set for a kickflip. Step 1 of 2: Press Get ready.');
+    expect(steps().map((li) => li.textContent)).toEqual(['Press Get ready.', 'Press Pop! when the marker is in the green band.']);
+    // No word guide and no slider numbers on Normal: the game set them.
     expect(within(game()).queryByText('How to kickflip')).toBeNull();
+    expect(within(game()).queryByText(/Flick 1\.9/)).toBeNull();
 
-    // The Flick slider to 1.9 (jsdom does not move a range input by its arrow keys; the browser pass does).
-    fireEvent.change(within(game()).getByRole('slider', { name: /^Flick/ }), { target: { value: '1.9' } });
-    expect(state().flick).toBe(1.9);
-    expect(now()).toHaveTextContent('Press Pop, or Space, to start the bar.');
+    within(game()).getByRole('button', { name: 'Get ready' }).focus();
+    await user.keyboard('{Enter}');
+    expect(now()).toHaveTextContent('Press Pop! when the marker is in the green band.');
     expect(steps()[0]).toHaveClass('lesson__step--done');
     expect(steps()[0]).toHaveTextContent(/Done\.$/);
-    expect(announcer()).toHaveTextContent('Step 2 of 3: Press Pop, or Space, to start the bar.');
-
-    // Pop starts the bar: the third prompt.
-    within(game()).getByRole('button', { name: 'Pop' }).focus();
-    await user.keyboard('{Enter}');
-    expect(now()).toHaveTextContent('Press Pop again when the marker is in the band.');
-    // The release ends the walk-through, and the guide takes its place.
+    // The release ends the walk-through; after it the card is the trick and one line.
     await user.keyboard('{Enter}');
     expect(state().status).toBe('playing');
     expect(within(game()).queryByText(/First game: your first trick/)).toBeNull();
-    expect(within(game()).getByText('How to kickflip')).toBeInTheDocument();
+    expect(within(game()).queryByText('How to kickflip')).toBeNull();
     expect(localStorage.getItem('trick-lab.skate-taught')).toBe('yes');
+  });
+
+  it('on Hard: the walk-through gives the sliders, a slider reaching them moves it on, and the word guide follows it', async () => {
+    useTrickStore.setState({ skate: { ...state().skate, level: 'hard' } });
+    const user = await setup();
+    await user.click(within(game()).getByRole('button', { name: 'Start game' }));
+    await user.click(document.getElementById('skate-notice-continue')!);
+    expect(steps()).toHaveLength(3);
+    await user.selectOptions(within(game()).getByLabelText('Call your trick'), 'kickflip');
+    // Hard never sets the sliders (ADR-83).
+    expect(state().flick).toBe(0);
+    expect(now()).toHaveTextContent('Set the sliders for the kickflip: Pop 0.35 m, Flick 1.9 toward kickflip, Scoop 0.0.');
+    // The Flick slider to 1.9 (jsdom does not move a range input by its arrow keys; the browser pass does).
+    fireEvent.change(within(game()).getByRole('slider', { name: /^Flick/ }), { target: { value: '1.9' } });
+    expect(now()).toHaveTextContent('Press Get ready, or Space, to start the bar.');
+    expect(announcer()).toHaveTextContent('Step 2 of 3: Press Get ready, or Space, to start the bar.');
+    within(game()).getByRole('button', { name: 'Get ready' }).focus();
+    await user.keyboard('{Enter}');
+    expect(now()).toHaveTextContent('Press Pop! when the marker is in the green band.');
+    await user.keyboard('{Enter}');
+    expect(within(game()).queryByText(/First game: your first trick/)).toBeNull();
+    expect(within(game()).getByText('How to kickflip')).toBeInTheDocument();
   });
 
   it('can be skipped by its button, and the next game has none', async () => {
@@ -100,7 +118,8 @@ describe('the game over the stage (ADR-66)', () => {
     expect(within(letters).getByRole('button', { name: 'Computer goes on its own' })).toBeInTheDocument();
     const tray = document.querySelector('.hud__tray')!;
     expect(within(tray as HTMLElement).getAllByRole('slider')).toHaveLength(3);
-    expect(within(tray as HTMLElement).getByRole('button', { name: 'Pop' })).toBeInTheDocument();
-    expect(tray.querySelector('.skate__bar')).not.toBeNull();
+    expect(within(tray as HTMLElement).getByRole('button', { name: 'Get ready' })).toBeInTheDocument();
+    // One timing bar, over the stage while it runs (ADR-83), none in the tray.
+    expect(tray.querySelector('.skate__bar')).toBeNull();
   });
 });

@@ -259,10 +259,10 @@ a {
     grid-area: tray;
     justify-self: center;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 240px;
     align-items: end;
     gap: var(--space-2);
-    width: min(100%, 920px);
+    width: min(100%, 1040px);
   }
 
   .hud__tray .inputs {
@@ -975,6 +975,62 @@ a {
 
 .field__range {
   grid-area: range;
+}
+
+/* The slider's track and, in a game, its landing zone (ADR-83, DESIGN.md
+   11.6). Markup: <div class="field__track">
+     <span class="field__zone" aria-hidden="true" style="--zone-from: 0.81; --zone-to: 0.86"></span>
+     <span class="field__zone field__zone--clean" aria-hidden="true" style="--zone-from: 0.83; --zone-to: 0.84"></span>
+     <input class="field__range" ...></div>
+   The component sets only where each stretch starts and ends along the
+   slider, 0 to 1; the thumb's centre runs from half a thumb in from each end,
+   so the strip is laid on that run and a stop inside it puts the thumb's
+   centre over it. A strip just under the track, clear of the thumb, so the
+   thumb never hides it: the landing zone is the landed green's tint inside a
+   green outline, the clean part solid green; each at least 6 px wide, so a
+   clean stretch one stop wide still shows. Decorative: the slider's spoken
+   value says "in the landing zone" or "clean". */
+.field__track {
+  grid-area: range;
+  position: relative;
+}
+
+.field__track:has(.field__zone) {
+  padding-bottom: 8px;
+}
+
+/* Over the zone. */
+.field__track > .field__range {
+  position: relative;
+}
+
+.field__zone {
+  --zone-run: calc(100% - var(--range-thumb));
+  --zone-w: max(6px, calc(var(--zone-run) * (var(--zone-to) - var(--zone-from))));
+  position: absolute;
+  top: calc(var(--range-hit) / 2 + var(--range-thumb) / 2 + 1px);
+  left: calc(var(--range-thumb) / 2 + var(--zone-run) * (var(--zone-from) + var(--zone-to)) / 2 - var(--zone-w) / 2);
+  width: var(--zone-w);
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-ok-bg);
+  box-shadow: inset 0 0 0 1px var(--color-ok);
+  pointer-events: none;
+}
+
+.field__zone--clean {
+  background: var(--color-ok);
+  box-shadow: none;
+}
+
+/* The forecast under the game's sliders (ADR-83): one line of plain text, in
+   the body colour, so it reads as the thing to check before a pop. */
+.field__forecast {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
 }
 
 /* Signed rates (flick and scoop, ADR-30, 2026-11-04) are centred on 0, the
@@ -2027,15 +2083,14 @@ a {
   gap: var(--space-1) var(--space-3);
 }
 
-/* The timing bar under Pop (ADR-65, DESIGN.md 11.1). Markup:
-     <div class="skate__bar" aria-hidden="true" style="--band-from: 58.33%; --band-width: 16.67%; --at: 0.71">
+/* The timing bar's track (ADR-65, DESIGN.md 11.1), inside .timing over the stage since ADR-83. Markup:
+     <div class="skate__bar" style="--band-from: 58.33%; --band-width: 16.67%; --at: 0.71">
        <span class="skate__bar-band"></span>
        <span class="skate__bar-marker skate__bar-marker--run"></span>
      </div>
-     <p class="panel__note">...</p>
    The component sets only the three custom properties: where the level's
    band starts, how wide it is, and where the resting marker is (0 to 1).
-   Decorative: the note says it in words. The band is the landed green with
+   Decorative: the announcements say it in words. The band is the landed green with
    solid edges, so it is never colour alone against the track; the marker is
    the text colour, the strongest contrast there is. */
 .skate__bar {
@@ -2097,6 +2152,113 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .skate__bar-marker--run {
     animation-duration: var(--skate-bar-sweep) !important;
+  }
+}
+
+/* The timing bar over the stage (ADR-83, DESIGN.md 11.1). Markup:
+     <div class="timing timing--run|in|off" aria-hidden="true">
+       <p class="timing__head">[<span class="timing__who">Your release</span>]<span class="timing__verdict">Pop! in the green band</span></p>
+       <div class="skate__bar" style="...">...</div></div>
+   Low in the middle of the stage, just above the tray on a wide screen
+   (--hud-tray-h, measured by the tray) and at the stage's foot where the
+   panels stack under it. A solid panel, so its words meet the contrast
+   figures over any picture; under a notice (same layer, earlier in the page).
+   Running: the head says what to do and the panel's top edge is the accent.
+   After a release: who released and the verdict, the top edge green in the
+   band and the text colour off it, so colour is never the only cue. */
+.timing {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-3);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(calc(100% - 2 * var(--space-4)), 520px);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-top: 4px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.timing--in {
+  border-top-color: var(--color-ok);
+}
+
+.timing--off {
+  border-top-color: var(--color-text);
+}
+
+.timing__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.timing__who {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.timing__verdict {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: 1.1;
+  color: var(--color-text);
+}
+
+.timing .skate__bar {
+  height: 36px;
+}
+
+.timing .skate__bar-marker::before {
+  left: -3px;
+  width: 6px;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+@media (min-width: 961px) {
+  /* Clear of the cards on either side, and just above the tray. */
+  .app[data-screen="skate"] .timing {
+    bottom: calc(var(--hud-tray-h, 0px) + var(--space-3) + var(--space-3));
+    width: clamp(260px, calc(100% - 2 * 360px), 560px);
+  }
+}
+
+/* A short stage (a phone, where the panels stack under it): the same bar, tighter. */
+@container (max-height: 300px) {
+  .timing {
+    bottom: var(--space-2);
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2) var(--space-2);
+  }
+
+  .timing .skate__bar {
+    height: 26px;
+  }
+
+  .timing__verdict {
+    font-size: var(--text-md);
+  }
+
+  /* After the release the board is the thing to watch: the bar thins to a
+     strip under the verdict, so the landing shows above it. */
+  .timing:not(.timing--run) {
+    bottom: var(--space-1);
+  }
+
+  .timing:not(.timing--run) .skate__bar {
+    height: 10px;
+  }
+
+  .timing:not(.timing--run) .timing__verdict {
+    font-size: var(--text-sm);
   }
 }
 

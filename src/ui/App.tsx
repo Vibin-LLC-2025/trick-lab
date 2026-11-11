@@ -19,7 +19,7 @@ import { Celebration } from './Celebration';
 import { StageStill } from './StageStill';
 import { useSound } from '../hooks/useSound';
 import { ShortcutsDialog } from './ShortcutsDialog';
-import { LeaveDialog, Notice, Skate, StageWipe, TurnChip } from './Skate';
+import { LeaveDialog, Notice, Skate, StageWipe, TimingStage, TurnChip } from './Skate';
 import { Telemetry } from './Telemetry';
 import { TopBar } from './TopBar';
 import { PreviewToggle } from './Utilities';
@@ -243,6 +243,8 @@ export function App() {
           {screen === 'skate' && <TurnChip />}
           {/* The coin flip and each go's result, waiting for Continue (ADR-80); over the game's cards too. */}
           {screen === 'skate' && <StageWipe />}
+          {/* The timing bar, large and low over the stage while it runs and until the stage is cleared (ADR-83); under a notice. */}
+          {screen === 'skate' && <TimingStage />}
           {screen === 'skate' && <Notice />}
           {/* The student's landed trick, over the stage (ADR-57); never on the welcome preview. */}
           {screen !== 'home' && <Celebration />}

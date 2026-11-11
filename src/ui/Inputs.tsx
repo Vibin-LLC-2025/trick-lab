@@ -1,6 +1,8 @@
+import type { CSSProperties } from 'react';
 import { displayUnit, displayValue, INPUT_NAMES, valueText } from '../sim/format';
 import { INPUT_LIMITS, type InputKey } from '../sim/tricks';
-import { guidesShown, useTrickStore } from '../store';
+import { ZONE_WORDS, type Span, type ZoneKey } from '../sim/zones';
+import { guidesShown, sliderForecast, sliderPlace, sliderZones, useTrickStore } from '../store';
 
 const KEYS: InputKey[] = ['pop', 'flick', 'scoop'];
 
@@ -11,9 +13,38 @@ const HELP: Record<InputKey, string> = {
   scoop: 'Shove rate about the vertical axis: right for backside, left for frontside',
 };
 
+/** The forecast line under the game's sliders (ADR-83); each slider is described by it. */
+const FORECAST_ID = 'skate-forecast';
+
+/** Where a stretch of a slider sits along its track, 0 to 1, for the zone's two custom properties (app.css). */
+function spanStyle(k: ZoneKey, span: Span): CSSProperties {
+  const { min, max } = INPUT_LIMITS[k];
+  const at = (v: number) => ((v - min) / (max - min)).toFixed(4);
+  return { '--zone-from': at(span.from), '--zone-to': at(span.to) } as CSSProperties;
+}
+
+/**
+ * A slider's landing zone in a game (ADR-83, DESIGN.md 11.6): the strip under
+ * the track that lands the trick to do, and the clean part inside it.
+ * Decorative: the slider's spoken value says when it is in either.
+ */
+function ZoneBand({ k }: { k: ZoneKey }) {
+  const zone = useTrickStore((s) => sliderZones(s)?.[k] ?? null);
+  if (!zone) return null;
+  return (
+    <>
+      <span className="field__zone" aria-hidden="true" style={spanStyle(k, zone)} />
+      {zone.clean && <span className="field__zone field__zone--clean" aria-hidden="true" style={spanStyle(k, zone.clean)} />}
+    </>
+  );
+}
+
 function Field({ k }: { k: InputKey }) {
   const value = useTrickStore((s) => s[k]);
   const setInput = useTrickStore((s) => s.setInput);
+  // In a game: where the value sits against the trick's landing zone, and the forecast it is described by (ADR-83).
+  const place = useTrickStore((s) => (k === 'pop' ? null : sliderPlace(s, k)));
+  const forecast = useTrickStore((s) => sliderForecast(s) !== null);
   // The slider's arrow round the board is this colour while the guides show (ADR-82).
   const guide = useTrickStore(guidesShown);
   const { min, max, step } = INPUT_LIMITS[k];
@@ -30,18 +61,33 @@ function Field({ k }: { k: InputKey }) {
         {displayValue(k, value)}
         <span className="field__unit">{displayUnit(k, value)}</span>
       </output>
-      <input
-        id={id}
-        className="field__range"
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-valuetext={valueText(k, value)}
-        onChange={(e) => setInput(k, Number(e.currentTarget.value))}
-      />
+      <div className="field__track">
+        {k !== 'pop' && <ZoneBand k={k} />}
+        <input
+          id={id}
+          className="field__range"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-valuetext={place ? `${valueText(k, value)}, ${ZONE_WORDS[place]}` : valueText(k, value)}
+          aria-describedby={forecast ? FORECAST_ID : undefined}
+          onChange={(e) => setInput(k, Number(e.currentTarget.value))}
+        />
+      </div>
     </div>
+  );
+}
+
+/** What the sliders make if the pop is timed right (ADR-83): plain text, not a live region, never announced on its own. */
+function Forecast() {
+  const text = useTrickStore(sliderForecast);
+  if (!text) return null;
+  return (
+    <p id={FORECAST_ID} className="field__forecast">
+      {text}
+    </p>
   );
 }
 
@@ -56,6 +102,7 @@ export function Inputs() {
           <Field key={k} k={k} />
         ))}
       </div>
+      <Forecast />
     </section>
   );
 }
