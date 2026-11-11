@@ -8,7 +8,7 @@
 
 A browser 3D physics lab about rotation in projectile flight, taught through skateboard flip tricks. Set the pop height, flick rate and scoop rate, pop, and watch the board flip and spin under the rider's feet. The lab names the trick you made and tells you whether you landed it, or which way you over- or under-rotated.
 
-![The welcome screen: the title, the two choices, the deck choice and the list of tricks, beside the live preview of the board and the rider's legs under a golden-hour sky with a faint city, on High quality](docs/screenshots/welcome.png)
+![The welcome screen: the title, the two choices, the deck choice and the list of tricks, beside the live preview of the whole rider on the board under a golden-hour sky with a faint city, on High quality](docs/screenshots/welcome.png)
 
 ## Features
 
@@ -32,16 +32,16 @@ A browser 3D physics lab about rotation in projectile flight, taught through ska
 
 | | |
 | --- | --- |
-| ![The game of SKATE: your turn, a kickflip called, the timing bar running under Pop, the board rolling past the skate spot, with the turn card, the letters, the camera choice and the sliders over the stage](docs/screenshots/skate-your-turn.png) | ![The lab in the light theme: a varial flip just landed, the celebration over the stage, with Foot motion open](docs/screenshots/lab-landed-light.png) |
-| The game: whose turn and the trick, large, in slow motion | The lab: a landed varial flip, its celebration, and Foot motion open, light theme |
+| ![The game of SKATE: your turn, a kickflip called, the rider crouched for the pop as the timing bar runs along the bottom of the stage, the board rolling past the skate spot, with the turn card, the letters and the camera choice above, the sliders with their green landing zones bottom left and Pop bottom right](docs/screenshots/skate-your-turn.png) | ![The lab in the light theme: a varial flip just landed, the celebration over the stage, with Foot motion open](docs/screenshots/lab-landed-light.png) |
+| The game: whose turn and the trick, the rider framed clear of the cards | The lab: a landed varial flip, its celebration, and Foot motion open, light theme |
 
 ![A 360 flip in slow motion, from the lab's detail view on High: the board pops, flips and spins a full turn under the shoes, and lands](docs/screenshots/360-flip-slow-motion.gif)
 
 A 360 flip at about a fifth of its speed, stepped through the lab's timeline.
 
-![A turn in the game of SKATE, in slow motion: the board pushes off, rolls past the kerb and the ledge, pops a 360 flip, lands clean and rolls away](docs/screenshots/skate-turn.gif)
+![A turn in the game of SKATE, in slow motion: the rider rolls past the kerb and the ledge, sinks into the crouch as the timing bar starts, pops a 360 flip with the camera rising alongside, lands clean and rolls away](docs/screenshots/skate-turn.gif)
 
-A turn in the game, in slow motion: push off, pop, land and roll away.
+A turn in the game, in slow motion: wind up, pop, land and roll away.
 
 ## Quick start
 
