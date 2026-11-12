@@ -6,6 +6,8 @@
 
 **[Try it live](https://vibin-llc-2025.github.io/trick-lab/)** · runs in any modern browser, no install
 
+**Finding your way around the code:** [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) is an index of where everything lives (the physics, the game, the 3D view, the UI, sound, the models, the checks).
+
 A browser 3D physics lab about rotation in projectile flight, taught through skateboard flip tricks. Set the pop height, flick rate and scoop rate, pop, and watch the board flip and spin under the rider's feet. The lab names the trick you made and tells you whether you landed it, or which way you over- or under-rotated.
 
 ![The welcome screen: the title, the two choices, the deck choice and the list of tricks, beside the live preview of the whole rider on the board under a golden-hour sky with a faint city, on High quality](docs/screenshots/welcome.png)
@@ -71,7 +73,7 @@ Then open the local URL Vite prints. The welcome screen offers the two ways in: 
 | `npm run sounds` | Rebuild the recorded sounds in `public/sounds` from the public-domain recordings in `assets/source/sounds` (needs ffmpeg; they are committed, so this is optional) |
 | `npm run assets:check` | Print each GLB's budget table and fail on any miss |
 
-New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) maps the repo in plain language, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-77), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+New to the code? [`docs/REPO-GUIDE.md`](docs/REPO-GUIDE.md) is an index of where everything lives, [`docs/DECISIONS.md`](docs/DECISIONS.md) records every design decision (ADR-1 to ADR-92), and [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## How it works
 
