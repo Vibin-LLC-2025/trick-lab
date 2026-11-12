@@ -154,6 +154,18 @@ describe('dust (step 19, ADR-74)', () => {
     stepDust(other, 0.1, -0.05, 0, -1, 0);
     expect(other.placed[first]).toBe(1);
     expect(other.x[first]! + 0.05).toBeGreaterThanOrEqual(D.slide.behind[0]);
+    // A crooked board is kicked along its own length, away from the feet (ADR-92): its trail is behind it that way too.
+    const crooked = newDust();
+    spawnDust(crooked, 0, 'bail', 0);
+    const [bx, bz] = [0.06, -0.08];
+    stepDust(crooked, 0.1, bx, bz, 1, 0);
+    expect(crooked.placed[first]).toBe(1);
+    const [ux, uz] = [0.6, -0.8];
+    const back = (bx - crooked.x[first]!) * ux + (bz - crooked.z[first]!) * uz;
+    const side = (crooked.x[first]! - bx) * -uz + (crooked.z[first]! - bz) * ux;
+    expect(back).toBeGreaterThanOrEqual(D.slide.behind[0] - 1e-9);
+    expect(back).toBeLessThanOrEqual(D.slide.behind[1] + 1e-9);
+    expect(Math.abs(side)).toBeLessThanOrEqual(D.slide.across + 1e-9);
     // Later puffs are born further along.
     expect(where[last]!).toBeGreaterThan(where[first]!);
     // All of it is over before the landing has played out, so its frames cover the dust.

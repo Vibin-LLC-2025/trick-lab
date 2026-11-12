@@ -10,16 +10,18 @@
 //   one side, and the rider rides it: the shoes and legs move with the board.
 // - bail: the board falls over onto the side it is nearest (wheels down, a
 //   rail, or upside down on its kicks), rolling over its own edge so its
-//   lowest point stays on the pad, and slides away from the feet: forward,
-//   and away from the side they stepped off to. The feet stay where they
-//   stepped down.
+//   lowest point stays on the pad, and is kicked away from the feet along
+//   its own length (ADR-92): the end that points away from the side they
+//   stepped off to leads, so a crooked board never sweeps under them. The
+//   feet stay where they stepped down, and come down off a board that leaves
+//   them no faster than they would fall.
 //
 // Frame: goofy, the board's rest frame (x along the board, nose +X, y up from
 // the deck centre at rest, z across, the feet bail to +Z). The scene maps it
 // for a regular rider. Pure: no React, no three, no allocation in writeSettle.
 import { contactRise, restingRoll } from './boardSection';
 import { footLift } from './boardVolume';
-import { mirrorFoot, writeFeetIntent, type FeetPose, type FootPose, type Stance } from './feet';
+import { mirrorFoot, newFeetPose, writeFeetIntent, type FeetPose, type FootPose, type Stance } from './feet';
 import { CONTACT, rollAt, yawAt, type Flight } from './flight';
 import { gradeOf, type Grade } from './landing';
 
@@ -29,9 +31,15 @@ import { gradeOf, type Grade } from './landing';
  *   swerve turns up to `swerveDeg` and back over `swerveS`, ending `sideM` to
  *   one side (the kickflip side's way for a kickflip, the other for a heelflip).
  * - bail: a fall through 90 degrees takes `fallS` (less for less, as a fall
- *   from rest goes with the square root of the angle); the slide goes
- *   `forwardM` along the nose and `sideM` away from the feet, slowing
- *   steadily to a stop over `slideS`. `step` (ADR-90): the rider catches
+ *   from rest goes with the square root of the angle); the board is kicked
+ *   along its own length, the end pointing away from the feet first
+ *   (straight on along the nose when it is within `straightDeg` of
+ *   straight): `forwardM` when it lies along the way it was going, down to
+ *   `acrossM` when it lies across it, so it stops short of the kerb behind;
+ *   and `sideM` further away from them, fastest at once and
+ *   slowing to a stop over `slideS` (ADR-92). A shoe the board leaves comes
+ *   down no faster than it would fall (`drop`: `g` m/s^2, looking back
+ *   `lookS` seconds at times `stepS` apart). `step` (ADR-90): the rider catches
  *   its balance after touching down, a short recovery step: the back foot
  *   lifts (`lift` metres at most), steps `backX` along the deck and `backZ`
  *   further out over `stepS` seconds from `delayS`, and both feet turn a
@@ -45,7 +53,10 @@ export const SETTLE = {
     minFallS: 0.12,
     slideS: 1.1,
     forwardM: 0.6,
+    acrossM: 0.4,
     sideM: 0.15,
+    straightDeg: 10,
+    drop: { g: 9.8, lookS: 0.3, stepS: 1 / 60 },
     step: { delayS: 0.06, stepS: 0.36, lift: 0.04, backX: 0, backZ: 0.07, backYaw: -12, frontYaw: -4 },
   },
 } as const;
@@ -72,14 +83,38 @@ export interface Settle {
   rise: number;
   /** Bail only: the rider's recovery step after touchdown, 0 to 1 (SETTLE.bail.step). 0 otherwise. */
   step: number;
+  /** Seconds since touchdown (Infinity for the end pose). */
+  t: number;
 }
 
-export const newSettle = (): Settle => ({ grade: 'clean', forward: 0, side: 0, yaw: 0, pitch: 0, pivotX: 0, pivotY: 0, riding: true, roll: 0, rise: 0, step: 0 });
+export const newSettle = (): Settle => ({ grade: 'clean', forward: 0, side: 0, yaw: 0, pitch: 0, pivotX: 0, pivotY: 0, riding: true, roll: 0, rise: 0, step: 0, t: 0 });
 
 /** The rear axle, the pivot of a sketchy landing's rock: the back wheels stay on the pad. */
 const REAR_AXLE = { x: -CONTACT.wheel.x, y: CONTACT.wheel.y } as const;
 
 const clamp01 = (u: number) => (u < 0 ? 0 : u > 1 ? 1 : u);
+const D2R = Math.PI / 180;
+
+/**
+ * The way a bailed board is kicked, a unit vector [x, z] in the goofy frame:
+ * along its own length (its nose points (cos yaw, -sin yaw)), the end that
+ * points away from the feet (-Z) leading; within SETTLE.bail.straightDeg of
+ * straight, on along the way it was going (+X). Into `out`.
+ */
+export function slideWay(out: [number, number], flight: Flight): [number, number] {
+  const yaw = yawAt(flight, 1) * D2R;
+  let x = Math.cos(yaw);
+  let z = -Math.sin(yaw);
+  const nearlyStraight = Math.abs(z) < Math.sin(SETTLE.bail.straightDeg * D2R);
+  if (nearlyStraight ? x < 0 : z > 0) {
+    x = -x;
+    z = -z;
+  }
+  out[0] = x + 0;
+  out[1] = z + 0;
+  return out;
+}
+const way: [number, number] = [0, 0];
 
 /** How long a bailing board takes to fall from the flight's end roll onto its resting side. */
 export function fallSeconds(flight: Flight): number {
@@ -115,6 +150,7 @@ export function writeSettle(out: Settle, flight: Flight, t: number): Settle {
   out.roll = rollAt(flight, 1);
   out.rise = 0;
   out.step = 0;
+  out.t = time;
   if (g === 'sketchy') {
     const S = SETTLE.sketchy;
     const rock = clamp01(time / S.rockS);
@@ -133,19 +169,24 @@ export function writeSettle(out: Settle, flight: Flight, t: number): Settle {
     const f = fall === 0 ? 1 : clamp01(time / fall);
     out.roll = from + (to - from) * f * f;
     out.rise = contactRise(out.roll);
-    // A steady slow-down to a stop: the distance is 1 - (1 - s)^2 of the way.
+    // Kicked away: fastest at once, slowing to a stop; the distance is 1 - (1 - s)^3 of the way.
     const s = clamp01(time / B.slideS);
-    const slid = 1 - (1 - s) * (1 - s);
-    out.forward = B.forwardM * slid;
+    const slid = 1 - (1 - s) * (1 - s) * (1 - s);
+    slideWay(way, flight);
+    const kick = B.forwardM + (B.acrossM - B.forwardM) * Math.abs(way[1]);
+    out.forward = kick * way[0] * slid + 0;
+    out.side = (kick * way[1] - B.sideM) * slid + 0;
     out.step = clamp01((time - B.step.delayS) / B.step.stepS);
-    out.side = -B.sideM * slid + 0;
   }
   return out;
 }
 
-/** Reused by writeBailFeet (no allocation): the board's pose, and a foot in the sliding board's frame. */
+/** Reused by writeBailFeet (no allocation): the board's pose, a foot in the sliding board's frame, the landing and the feet a moment ago. */
 const bailBoard = { y: 0, roll: 0, yaw: 0, pitch: 0 };
 const moved: FootPose = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0 };
+const before = newSettle();
+const stepped = newFeetPose();
+const lifts: [number, number] = [0, 0];
 
 /** How far foot `f` must rise to clear the board of a bail where `s` has it (the slide taken off the foot instead). */
 function liftOff(f: FootPose, edge: 1 | -1, s: Settle): number {
@@ -158,29 +199,92 @@ function liftOff(f: FootPose, edge: 1 | -1, s: Settle): number {
   return footLift(moved, edge, bailBoard, 1);
 }
 
+/** The recovery step (ADR-90) at `step` (0 to 1), onto feet the model stepped down: smooth in and out, the back foot up and over, the front one turning where it stands. */
+function writeStep(out: FeetPose, step: number) {
+  const S = SETTLE.bail.step;
+  const k = step * step * (3 - 2 * step);
+  out.back.x += S.backX * k;
+  out.back.z += S.backZ * k;
+  out.back.y += S.lift * Math.sin(Math.PI * step);
+  out.back.yaw += S.backYaw * k;
+  out.front.yaw += S.frontYaw * k;
+}
+
+const copyFoot = (to: FootPose, from: FootPose) => {
+  to.x = from.x;
+  to.y = from.y;
+  to.z = from.z;
+  to.yaw = from.yaw;
+  to.pitch = from.pitch;
+  to.roll = from.roll;
+};
+
+/** How far the board of landing `s` lifts each shoe of `feet` (stepped down, `aim`, plus the step `s` has), into `lifts`. */
+function boardLifts(aim: FeetPose, flight: Flight, s: Settle) {
+  copyFoot(stepped.front, aim.front);
+  copyFoot(stepped.back, aim.back);
+  writeStep(stepped, s.step);
+  bailBoard.y = s.rise;
+  bailBoard.roll = s.roll;
+  bailBoard.yaw = yawAt(flight, 1);
+  lifts[0] = liftOff(stepped.front, 1, s);
+  lifts[1] = liftOff(stepped.back, -1, s);
+}
+
+/**
+ * The board's lift of each shoe at fixed times since touchdown, every
+ * SETTLE.bail.drop.stepS, for one flight: a cache of boardLifts, so a frame
+ * works out only the times it has not seen. The numbers are the same
+ * whenever they are worked out; only the work is saved.
+ */
+const GRID = { flight: null as Flight | null, inputs: null as Flight['inputs'] | null, front: new Float64Array(160), back: new Float64Array(160) };
+
+function gridLifts(aim: FeetPose, inputs: Flight['inputs'], flight: Flight, j: number) {
+  if (GRID.flight !== flight || GRID.inputs !== inputs) {
+    GRID.flight = flight;
+    GRID.inputs = inputs;
+    GRID.front.fill(NaN);
+    GRID.back.fill(NaN);
+  }
+  if (Number.isNaN(GRID.front[j]!)) {
+    boardLifts(aim, flight, writeSettle(before, flight, j * SETTLE.bail.drop.stepS));
+    GRID.front[j] = lifts[0];
+    GRID.back[j] = lifts[1];
+  }
+  lifts[0] = GRID.front[j]!;
+  lifts[1] = GRID.back[j]!;
+}
+
 /**
  * The feet of a bail while the board falls and slides (ADR-68): where the
  * model steps them down (writeFeetIntent at the landing), cleared against
  * the board where the landing has it now, as the flight's clearance does
- * (ADR-29). A board that lay under a shoe slides out and the shoe comes down
- * to the pad; one that slides under a shoe lifts it, never passes through
- * it. `s` is this landing at this time (writeSettle). Allocation-free.
+ * (ADR-29). A board that slides under a shoe lifts it, never passes through
+ * it; one that leaves a shoe lets it come down to the pad no faster than it
+ * would fall (ADR-92): the shoe is as high as the board lifted it at any
+ * moment in the last SETTLE.bail.drop.lookS seconds, less how far it would
+ * have fallen since. `s` is this landing at this time (writeSettle).
+ * Allocation-free.
  */
 export function writeBailFeet(out: FeetPose, inputs: Flight['inputs'], flight: Flight, s: Settle, stance: Stance = 'goofy'): FeetPose {
   writeFeetIntent(out, inputs, flight, 1, 'goofy');
-  // The recovery step (ADR-90): smooth in and out, the back foot up and over, the front one turning where it stands.
-  const S = SETTLE.bail.step;
-  const k = s.step * s.step * (3 - 2 * s.step);
-  out.back.x += S.backX * k;
-  out.back.z += S.backZ * k;
-  out.back.y += S.lift * Math.sin(Math.PI * s.step);
-  out.back.yaw += S.backYaw * k;
-  out.front.yaw += S.frontYaw * k;
-  bailBoard.y = s.rise;
-  bailBoard.roll = s.roll;
-  bailBoard.yaw = yawAt(flight, 1);
-  out.front.y += liftOff(out.front, 1, s);
-  out.back.y += liftOff(out.back, -1, s);
+  boardLifts(out, flight, s);
+  let front = lifts[0];
+  let back = lifts[1];
+  const D = SETTLE.bail.drop;
+  if (Number.isFinite(s.t)) {
+    const last = Math.min(Math.floor(s.t / D.stepS), GRID.front.length - 1);
+    for (let j = Math.max(0, Math.ceil((s.t - D.lookS) / D.stepS)); j <= last; j++) {
+      gridLifts(out, inputs, flight, j);
+      const ago = s.t - j * D.stepS;
+      const fallen = 0.5 * D.g * ago * ago;
+      if (lifts[0] - fallen > front) front = lifts[0] - fallen;
+      if (lifts[1] - fallen > back) back = lifts[1] - fallen;
+    }
+  }
+  writeStep(out, s.step);
+  out.front.y += front;
+  out.back.y += back;
   if (stance === 'regular') {
     mirrorFoot(out.front);
     mirrorFoot(out.back);

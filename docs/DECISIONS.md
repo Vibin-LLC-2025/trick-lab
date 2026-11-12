@@ -868,7 +868,7 @@ Easy and Normal are within 5 points everywhere. Three rows on Hard are not, and 
 | Sketchy rock | 5 degrees nose up, onto the back wheels, 0.5 s |
 | Sketchy swerve | up to 7 degrees and back, 1.0 s, ending 5 cm to the side |
 | Bail fall | 0.4 s for a quarter turn, from rest |
-| Bail slide | 0.6 m forward, 15 cm away from the feet, 1.1 s to a stop |
+| Bail slide | 0.6 m forward, 15 cm away from the feet, 1.1 s to a stop (since ADR-92: along the board's own length, away from the feet) |
 | Clean | no motion of its own: the roll's 1.3 s slow-down |
 
 **Draw calls.** None added: the moves are four groups.
@@ -1297,3 +1297,17 @@ Every box is inside the clear part across its width too, and none overlaps a car
 **Not done here.** A face, fingers and a new pose for the air would each be a step of its own; the loading pictures in `public/stills/` still show the old outfit until they are rebuilt (scripts/still, with the global playwright-cli).
 
 **Tests.** `rider.test.ts` (every region used but the gloves); the rest of the rider's tests, the camera's framing and every body test pass unchanged.
+
+## ADR-92: A bailed board is kicked away along its own length (2026-11-11)
+
+**Context.** After ADR-90 the feet stepped off well, but for up to a second after touchdown a shoe often stood on the bailed board: lifted up to 23 cm onto a rail or the grip. Over a grid of 294 bails (pops 0.15 to 0.5 m, every flick and scoop), 37 percent of the frames of the landing had a shoe lifted by the board. Almost all were crooked boards: a shove that was off leaves the board turned across the way it was going, and ADR-68 slid every bailed board straight on along the world's X, so its tail swept under the front foot. Separately, when the board left a shoe, the shoe dropped to the pad in a frame or two (up to 18 cm in one frame).
+
+**Decision.** In `src/sim/settle.ts` (`SETTLE.bail`, `slideWay`, `writeBailFeet`):
+- **Along its own length, away from the feet.** A bailed board slides the way it points, as wheels or a rail would carry it, with the end that points away from the side the feet stepped off to (-Z) leading. A board within 10 degrees of straight (`straightDeg`) goes on forward as before.
+- **Kicked, not pushed.** The slide is fastest at once and slows to a stop over the same 1.1 s (the distance goes as 1 - (1 - s)^3, from 1 - (1 - s)^2), as a board kicked out from under the feet does.
+- **Shorter across the way.** 0.6 m along its length when it lies along the way it was going, down to 0.4 m (`acrossM`) when it lies across it, plus the 15 cm away from the feet as before. A board lying across reaches 0.96 m toward the spot; the kerb's face is at 1.05 m. A full 0.6 m took it 10 cm into the kerb.
+- **A shoe comes down no faster than it would fall.** A shoe the board leaves is as high as the board lifted it at any moment in the last 0.3 s, less how far it would have fallen since under gravity (`drop`). The lifts are worked out at fixed times 1/60 s apart, once per flight and kept, so a frame works out only the newest one: about 40 microseconds a frame for both feet on this Mac.
+
+**What changed.** Over the same grid: no shoe stands on the board after 0.25 s (it stood there for up to 1.2 s), and the fastest drop is 3.5 cm in a frame, a fall from 0.3 s up. What is left: at touchdown the flight leaves a shoe on the board in some bails (the feet model's step, ADR-90), and that shoe now falls off it in the first quarter second. The dust behind a sliding board (ADR-74) trails behind it the way it now slides. The scene's words ("slides away from the feet") still hold. Clean and sketchy landings do not move.
+
+**Tests.** `settle.test.ts`: the resting slide is along the board's length with the right length; the way is never toward the feet; no shoe is under the board after 0.25 s and a shoe drops no faster than a fall, both stances, over the whole grid; the board stops 5 cm short of the kerb. `dust.test.ts`: a crooked board's trail is behind it.

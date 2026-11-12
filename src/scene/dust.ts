@@ -135,16 +135,20 @@ export function spawnDust(d: Dust, yaw: number, grade: Grade, distance: number) 
 
 /**
  * Moves the dust on by `dt` seconds. `boardX` and `boardZ` are where the
- * landing has slid the board to (0, 0 unless it is a bail) and `nose` the way
- * it slides along the world's X: a slide puff is born at the board's trailing
- * end where that is then, so the trail comes out from behind the deck instead
- * of hiding under it. `distance` is the roll's distance now. Returns whether
+ * landing has slid the board to (0, 0 unless it is a bail), along a straight
+ * line from where it landed (ADR-92), so the way it slides is the way to
+ * there; `nose` is that way along the world's X before it has moved. A slide
+ * puff is born at the board's trailing end where that is then, so the trail
+ * comes out from behind the deck instead of hiding under it. `distance` is the roll's distance now. Returns whether
  * any dust is still in the air.
  */
 export function stepDust(d: Dust, dt: number, boardX: number, boardZ: number, nose: 1 | -1, distance: number): boolean {
   if (!d.live) return false;
   d.t += dt;
   const SL = D.slide;
+  const slid = Math.hypot(boardX, boardZ);
+  const wx = slid > 1e-6 ? boardX / slid : nose;
+  const wz = slid > 1e-6 ? boardZ / slid : 0;
   let alive = false;
   for (let i = 0; i < DUST_PUFFS; i++) {
     const slide = i >= TOUCHDOWN_PUFFS;
@@ -152,8 +156,9 @@ export function stepDust(d: Dust, dt: number, boardX: number, boardZ: number, no
     if (!d.placed[i] && d.t >= d.born[i]!) {
       // Behind the board the way it slides, across its width, drifting a little to either side.
       const back = SL.behind[0] + (SL.behind[1] - SL.behind[0]) * dustNoise(i, 1);
-      d.x[i] = boardX - nose * back;
-      d.z[i] = boardZ + (dustNoise(i, 2) - 0.5) * 2 * SL.across;
+      const across = (dustNoise(i, 2) - 0.5) * 2 * SL.across;
+      d.x[i] = boardX - wx * back - wz * across;
+      d.z[i] = boardZ - wz * back + wx * across;
       d.vx[i] = (dustNoise(i, 3) - 0.5) * SL.spread;
       d.vz[i] = (dustNoise(i, 6) - 0.5) * SL.spread;
       d.at[i] = distance;
