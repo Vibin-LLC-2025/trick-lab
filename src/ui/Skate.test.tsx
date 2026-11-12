@@ -280,6 +280,34 @@ describe('game screen (ADR-46)', () => {
     expect(useTrickStore.getState().flight).not.toBeNull();
   });
 
+  it('Space still pops after a slider is moved: a slider has no use for it (ADR-88)', async () => {
+    const user = await setup();
+    await start(user);
+    await pickTrick(user, 'Kickflip');
+    const flick = within(game()).getByRole('slider', { name: /^Flick/ });
+    flick.focus();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().flight).not.toBeNull();
+  });
+
+  it('Settings opens from the top bar and closes on Escape, focus back on its button, or on a press outside (ADR-89)', async () => {
+    const user = await setup();
+    await start(user);
+    const button = screen.getByRole('button', { name: 'Settings' });
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    const slow = within(screen.getByRole('group', { name: 'Settings' })).getByRole('button', { name: 'Slow motion' });
+    slow.focus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('group', { name: 'Settings' })).toBeNull();
+    expect(document.activeElement).toBe(button);
+    await user.click(button);
+    expect(screen.getByRole('group', { name: 'Settings' })).toBeInTheDocument();
+    await user.click(turnHeading());
+    expect(screen.queryByRole('group', { name: 'Settings' })).toBeNull();
+  });
+
   it('Slow motion is a switch on the game screen as well as the s key', async () => {
     const user = await setup();
     await start(user);

@@ -326,27 +326,35 @@ a {
    While the bar runs the dock's border is the accent, so the eye goes to it. */
 .hud__dock {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(9.5rem, 30%);
+  grid-template-columns: minmax(0, 1fr) 9.5em minmax(9.5rem, 30%);
   grid-template-rows: auto auto;
   align-items: center;
   gap: var(--space-2) var(--space-3);
 }
 
-/* The forecast and the bar's verdict share the top line; the bar runs the
-   full width under them. The timing strip spans both lines on the dock's own
-   grid (subgrid), so it stays one box (the camera's bottom cover). */
+/* The forecast across the top, two lines kept for it whatever it says (and
+   never more: the longest wraps to two and is cut with an ellipsis; its
+   whole text is the sliders' description), so the dock is one height all
+   game and the camera never refits (ADR-86). The bar under it, and the
+   verdict in a fixed slot at its right, beside Pop. */
 .hud__dock > .field__forecast {
-  grid-column: 1;
+  grid-column: 1 / 3;
   grid-row: 1;
+  display: -webkit-box;
+  min-height: calc(2em * var(--leading-snug));
   margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .hud__dock > .timing {
   grid-column: 1 / 3;
-  grid-row: 1 / 3;
+  grid-row: 2;
   display: grid;
   grid-template-columns: subgrid;
-  grid-template-rows: subgrid;
+  align-items: center;
 }
 
 .hud__dock > .hud__pop {
@@ -374,7 +382,7 @@ a {
    verdict's colour, and Pop's key hint dropped (there is no Space to press). */
 @media (max-width: 600px) {
   .hud__dock {
-    grid-template-columns: minmax(0, 1fr) auto minmax(7.5rem, 34%);
+    grid-template-columns: minmax(0, 1fr) 6.5em minmax(7.5rem, 34%);
     gap: var(--space-1) var(--space-2);
   }
 
@@ -383,8 +391,13 @@ a {
   }
 
   .hud__dock .timing__who,
+  .hud__dock .timing--idle .timing__verdict,
   .hud__dock .skate__pop kbd {
     display: none;
+  }
+
+  .hud__dock .timing__verdict {
+    font-size: var(--text-xs);
   }
 
   .hud__dock .skate__pop {
@@ -2413,16 +2426,16 @@ a {
   grid-column: 2;
   grid-row: 1;
   display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  white-space: nowrap;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  text-align: right;
   line-height: 1.2;
 }
 
 .timing .skate__bar {
-  grid-column: 1 / -1;
-  grid-row: 2;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .timing__who {
