@@ -69,13 +69,6 @@ export const leavesFreeForReplay = (from: string, to: string) => from === 'free'
 /** True when this change of view is the free camera coming back from the replay with no reset asked for: give the orbit back. */
 export const returnsFromReplay = (from: string, to: string, resetAsked: boolean) => from === 'replay' && to === 'free' && !resetAsked;
 
-/** Gives a perspective camera a field of view (the replay's wide lens, ADR-72), and its projection with it; no change, no work. */
-export function setFov(camera: { fov?: number; updateProjectionMatrix?: () => void }, fov: number) {
-  if (camera.fov === undefined || camera.fov === fov) return;
-  camera.fov = fov;
-  camera.updateProjectionMatrix?.();
-}
-
 /** The clear part of the stage (store/stage.ts), as fractions from its top left. */
 interface ClearRect {
   left: number;
