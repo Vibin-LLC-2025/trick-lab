@@ -902,8 +902,11 @@ export const ART = {
    * The rider (ADR-85, DESIGN.md 8.8): the whole body's colours, one per
    * region of the mesh (src/asset/riderSpec.ts RIDER_REGIONS, in that order:
    * hoodie, its ribbed cuffs and hem, the pocket's seam, the drawstrings, the
-   * trousers, the cuff's fold, the sock, the mittens, the skin, the beanie and
-   * its rolled brim, the hair under it), sRGB. Two outfits on one mesh, so whose go it is reads
+   * trousers, the cuff's fold, the sock, the mittens (unused since ADR-91:
+   * the hands are skin), the skin, the beanie and its rolled brim, the hair
+   * under it), sRGB. Since ADR-91 a little deeper and less saturated than
+   * the decks, as dyed cotton is, so the rider reads as cloth, not as the
+   * UI's orange. Two outfits on one mesh, so whose go it is reads
    * at a glance from any camera: the player in the deck's burnt orange with
    * the charcoal twill trousers the legs have worn since ADR-70; the computer
    * in its deck's teal (Circuit, ADR-71) with sand trousers and a mustard
@@ -911,8 +914,8 @@ export const ART = {
    * `cloth` (the twill's strength, as ADR-70's) are the material's.
    */
   rider: {
-    player: ['#c8562a', '#a8461f', '#7f3315', '#efe9df', '#3b3e44', '#2b2d32', '#2f3035', '#2a2c31', '#c99a7a', '#2d3138', '#24272d', '#3a2a20'],
-    computer: ['#2b8a83', '#226f6a', '#18534f', '#efe9df', '#6b6252', '#524b3f', '#2f3035', '#2a2c31', '#8a5d43', '#d9a63a', '#b88a2a', '#1b1716'],
+    player: ['#a94d2b', '#8c3e21', '#6a2e17', '#e6dfd3', '#3b3e44', '#2b2d32', '#2f3035', '#2a2c31', '#c99a7a', '#2d3138', '#24272d', '#3a2a20'],
+    computer: ['#2a7c76', '#21645f', '#174a46', '#e6dfd3', '#6b6252', '#524b3f', '#2f3035', '#2a2c31', '#8a5d43', '#c99a3a', '#a87f2a', '#1b1716'],
     roughness: 0.9,
     cloth: 0.55,
   },

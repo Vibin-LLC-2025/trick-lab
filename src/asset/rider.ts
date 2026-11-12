@@ -522,17 +522,18 @@ function rightSleeve(bind: BodyPose): Vtx[][] {
 function rightMitten(bind: BodyPose): Vtx[][][] {
   const hand = bind.bones[BONE.handR]!;
   const M = MITTEN;
-  const U = RIDER_UV.glove;
   const profile = [
     { y: M.from, x: 0, z: 0 },
-    { y: M.from + 0.004, x: 0.012, z: 0.022 },
-    { y: -0.02, x: 0.017, z: 0.032 },
-    { y: 0.01, x: 0.019, z: 0.037 },
+    { y: M.from + 0.004, x: M.wrist.thick * 0.8, z: M.wrist.width * 0.8 },
+    { y: -0.02, x: M.wrist.thick, z: M.wrist.width },
+    { y: 0.01, x: M.wrist.thick * 1.02, z: M.wrist.width * 1.2 },
     { y: 0.05, x: M.thick, z: M.width },
     { y: 0.1, x: M.thick, z: M.width * 1.02 },
-    { y: 0.13, x: M.thick * 0.92, z: M.width * 0.92 },
-    { y: 0.152, x: M.thick * 0.68, z: M.width * 0.64 },
-    { y: 0.165, x: M.thick * 0.36, z: M.width * 0.33 },
+    // The fingers end blunt, not in a point (ADR-91): nearly full width to the knuckles of the tips, then rounded off.
+    { y: 0.13, x: M.thick * 0.95, z: M.width * 0.96 },
+    { y: 0.152, x: M.thick * 0.85, z: M.width * 0.86 },
+    { y: 0.163, x: M.thick * 0.62, z: M.width * 0.66 },
+    { y: 0.168, x: M.thick * 0.3, z: M.width * 0.36 },
     { y: M.to, x: 0, z: 0 },
   ];
   const ys = samples(
@@ -551,7 +552,8 @@ function rightMitten(bind: BodyPose): Vtx[][][] {
     const cx = -M.curl * clamp01(y / M.to) ** 2;
     return Array.from({ length: RIDER_MESH.hand + 1 }, (_, j) => {
       const th = (2 * Math.PI * j) / RIDER_MESH.hand;
-      return { p: local(hand, cx + P.x * Math.cos(th), y, P.z * Math.sin(th)), u: (j / RIDER_MESH.hand) * U.around, v: (y + 0.2) / U.tile, region: REGION.glove, w: weights(y) };
+      // Bare skin (ADR-91): no cloth, so the skin's flat coordinates and region, as the head and neck have.
+      return { p: local(hand, cx + P.x * Math.cos(th), y, P.z * Math.sin(th)), u: FLAT.u, v: FLAT.v, region: REGION.skin, w: weights(y) };
     });
   });
   // The thumb: out from the thumb's side, toward the tip and a little toward the palm.
@@ -567,7 +569,7 @@ function rightMitten(bind: BodyPose): Vtx[][][] {
     return Array.from({ length: 9 }, (_, j) => {
       const th = (2 * Math.PI * j) / 8;
       const q = add(add(c, ax, rs[i]! * 0.8 * Math.cos(th)), az, rs[i]! * Math.sin(th));
-      return { p: local(hand, q[0], q[1], q[2]), u: (j / 8) * 6, v: (t + 0.2) / U.tile, region: REGION.glove, w: weights(T.at + t) };
+      return { p: local(hand, q[0], q[1], q[2]), u: FLAT.u, v: FLAT.v, region: REGION.skin, w: weights(T.at + t) };
     });
   });
   return [body, thumb];

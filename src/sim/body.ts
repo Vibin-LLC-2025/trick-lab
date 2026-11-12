@@ -183,9 +183,9 @@ export const MOTION = {
  */
 export const RIDE = {
   lean: 16,
-  abd: 9,
-  flex: 6,
-  elbow: 16,
+  abd: 13,
+  flex: 9,
+  elbow: 26,
   wrist: 6,
   look: { x: 2.4, y: 0.3, z: -0.8 },
 } as const;

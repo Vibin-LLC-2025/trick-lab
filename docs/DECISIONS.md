@@ -1277,3 +1277,19 @@ Every box is inside the clear part across its width too, and none overlaps a car
 - Landed tricks do not move by a hair: every new term is 0 for a landing, and the pinned poses of every landed preset are unchanged. The kickflip bail's pinned rows at 0.7 and 1 were re-recorded on purpose (`feet.pinned.test.ts`).
 
 **Tests.** `feet.test.ts` (the front foot is on the pad before the back one has finished, toes down mid step and flat when planted, the open, wider stance), `settle.test.ts` (the recovery step lifts the back foot, ends it on the pad further out and turned, and leaves the front foot where it stood). The legs' continuity test (under 5 mm of hip per 0.001 of progress) holds, and every bail still clears the board.
+
+## ADR-91: A less childish rider (2026-11-11)
+
+**Context.** The owner, 2026-11-11: "The rider looks childish and unpolished compared to the rest of the game." Side by side with the board, the ground and the spot, the rider of ADR-85 read as a toy: a hoodie in the UI's own saturated orange, a puffy torso and balloon sleeves, a large hood lump on the back, and black mittens for hands; at rest its arms hung straight down.
+
+**Decision.** The cheapest levers first, every joint of the bind pose where it was (so body.ts, the skin weights and the camera's framing keep their numbers):
+- **Colour (`ART.rider`).** The player's hoodie is `#a94d2b`, the decks' orange as dyed cotton rather than the UI's (`#c8562a` before), its rib and seam deeper to match; the computer's teal and mustard muted the same way; the drawstrings off-white rather than paper white. Whose go it is still reads at a glance: rust against teal.
+- **Hands, not mittens.** The hand (`MITTEN` in riderSpec.ts, the name kept) is bare skin, painted with the skin's colour and its smooth coordinates, thinner (2.9 cm thick, 7.6 cm wide, a narrower wrist), curled toward the palm as a relaxed hand is, the fingers ending blunt. The glove region stays in `RIDER_REGIONS` unused, so the colour lists keep their order.
+- **A slimmer hoodie.** The body 7 percent narrower and shallower above the hem (the rib hem 5 percent, so it still covers the trousers' seat, which is 8 percent slimmer under the hoodie to match), the sleeves about 10 percent slimmer, the cuffs to match, and the hood on the back smaller and flatter.
+- **Looser arms when riding (`RIDE`).** 13 degrees out from the sides (9 before), 9 forward (6) and the elbows bent 26 degrees (16): loose, not hanging.
+
+`rider.glb` rebuilt by `npm run assets -- rider`: 98.4 KB (98.5), 18,556 triangles (18,500), 1 draw call, no texture.
+
+**Not done here.** A face, fingers and a new pose for the air would each be a step of its own; the loading pictures in `public/stills/` still show the old outfit until they are rebuilt (scripts/still, with the global playwright-cli).
+
+**Tests.** `rider.test.ts` (every region used but the gloves); the rest of the rider's tests, the camera's framing and every body test pass unchanged.

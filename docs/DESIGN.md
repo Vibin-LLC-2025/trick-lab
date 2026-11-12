@@ -563,17 +563,17 @@ The View panel's switch is now "Rider" (`name` "Show rider", the same `trick-lab
 
 | Region | Shape | Player (sRGB) | Computer (sRGB) |
 | --- | --- | --- | --- |
-| Hoodie | Superellipse body, kangaroo pocket, the hood rolled round the collar and lying on the back, sleeves past the wrist | `#c8562a` burnt orange (the player's decks) | `#2b8a83` teal (Circuit, ADR-71) |
-| Rib (hem, cuffs) | A ribbed band at the hem and each sleeve's end | `#a8461f` | `#226f6a` |
-| Seam | The pocket's edge | `#7f3315` | `#18534f` |
-| Drawstrings | Two cords from the collar's front | `#efe9df` | `#efe9df` |
+| Hoodie | Superellipse body, kangaroo pocket, the hood rolled round the collar and lying on the back, sleeves past the wrist (slimmer, with a smaller hood, since ADR-91) | `#a94d2b` rust, the player's decks' orange as dyed cotton (`#c8562a` until ADR-91) | `#2a7c76` teal (Circuit, ADR-71; `#2b8a83` until ADR-91) |
+| Rib (hem, cuffs) | A ribbed band at the hem and each sleeve's end | `#8c3e21` | `#21645f` |
+| Seam | The pocket's edge | `#6a2e17` | `#174a46` |
+| Drawstrings | Two cords from the collar's front | `#e6dfd3` | `#e6dfd3` |
 | Trousers | Loose, from the seat through the knee to the cuff; ADR-70's twill, bunching and turned-up cuff | `#3b3e44` charcoal (the legs' since ADR-70) | `#6b6252` sand |
 | Fold | The cuff's fold line and lower edge | `#2b2d32` | `#524b3f` |
 | Sock | Inside the shoe | `#2f3035` | `#2f3035` |
-| Mittens | Mitten hands with a thumb, curled toward the palm | `#2a2c31` | `#2a2c31` |
-| Skin | The neck and a smooth, faceless head (no eyes, nose or mouth) | `#c99a7a` | `#8a5d43` |
-| Beanie | Over the crown with a slouch at the back | `#2d3138` | `#d9a63a` mustard |
-| Brim | Its rolled brim | `#24272d` | `#b88a2a` |
+| Hands | Bare hands with a thumb, thin and curled toward the palm as a relaxed hand is, the fingers ending blunt (black mittens until ADR-91; the region stays in the list, unused) | the skin's | the skin's |
+| Skin | The neck, the hands and a smooth, faceless head (no eyes, nose or mouth) | `#c99a7a` | `#8a5d43` |
+| Beanie | Over the crown with a slouch at the back | `#2d3138` | `#c99a3a` mustard |
+| Brim | Its rolled brim | `#24272d` | `#a87f2a` |
 | Hair | Short, at the nape and over the ears, under the beanie | `#3a2a20` | `#1b1716` |
 
 Whose go it is reads at a glance from any camera: the hoodie and the beanie carry the colour, and the computer's rider is a different person (skin, hair, trousers), not a recolour of the student's. One material (roughness 0.9, the twill at 0.55 on the cloth; skin shades smooth), one draw call, and on High it casts its whole shadow. `#scene-description` adds one sentence after the legs' while the rider shows: "The rider crouches over the board, arms low, eyes on the board." (at rest), "The rider rises with the pop, arms swinging up.", "Arms out for balance, the rider watches the board below.", "Arms come down as the rider folds to catch the board." and "The rider rides it out, body folded and arms low."; a bail: "Arms out, the rider steps down beside the board." and "The rider stands beside the board, arms coming down as it catches its balance." (`describeBody`, src/sim/body.ts; the bail's end changed with ADR-86).
