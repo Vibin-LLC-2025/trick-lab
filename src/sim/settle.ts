@@ -31,11 +31,23 @@ import { gradeOf, type Grade } from './landing';
  * - bail: a fall through 90 degrees takes `fallS` (less for less, as a fall
  *   from rest goes with the square root of the angle); the slide goes
  *   `forwardM` along the nose and `sideM` away from the feet, slowing
- *   steadily to a stop over `slideS`.
+ *   steadily to a stop over `slideS`. `step` (ADR-90): the rider catches
+ *   its balance after touching down, a short recovery step: the back foot
+ *   lifts (`lift` metres at most), steps `backX` along the deck and `backZ`
+ *   further out over `stepS` seconds from `delayS`, and both feet turn a
+ *   little more toward the nose (`backYaw`, `frontYaw` degrees), the front
+ *   one pivoting where it stands.
  */
 export const SETTLE = {
   sketchy: { rockDeg: 5, rockS: 0.5, swerveDeg: 7, swerveS: 1.0, sideM: 0.05 },
-  bail: { fallS: 0.4, minFallS: 0.12, slideS: 1.1, forwardM: 0.6, sideM: 0.15 },
+  bail: {
+    fallS: 0.4,
+    minFallS: 0.12,
+    slideS: 1.1,
+    forwardM: 0.6,
+    sideM: 0.15,
+    step: { delayS: 0.06, stepS: 0.36, lift: 0.04, backX: 0, backZ: 0.07, backYaw: -12, frontYaw: -4 },
+  },
 } as const;
 
 /**
@@ -58,9 +70,11 @@ export interface Settle {
   /** Bail only: the board's roll and its deck centre's rise above rest. The flight's end values otherwise. */
   roll: number;
   rise: number;
+  /** Bail only: the rider's recovery step after touchdown, 0 to 1 (SETTLE.bail.step). 0 otherwise. */
+  step: number;
 }
 
-export const newSettle = (): Settle => ({ grade: 'clean', forward: 0, side: 0, yaw: 0, pitch: 0, pivotX: 0, pivotY: 0, riding: true, roll: 0, rise: 0 });
+export const newSettle = (): Settle => ({ grade: 'clean', forward: 0, side: 0, yaw: 0, pitch: 0, pivotX: 0, pivotY: 0, riding: true, roll: 0, rise: 0, step: 0 });
 
 /** The rear axle, the pivot of a sketchy landing's rock: the back wheels stay on the pad. */
 const REAR_AXLE = { x: -CONTACT.wheel.x, y: CONTACT.wheel.y } as const;
@@ -100,6 +114,7 @@ export function writeSettle(out: Settle, flight: Flight, t: number): Settle {
   out.riding = g !== 'bail';
   out.roll = rollAt(flight, 1);
   out.rise = 0;
+  out.step = 0;
   if (g === 'sketchy') {
     const S = SETTLE.sketchy;
     const rock = clamp01(time / S.rockS);
@@ -122,6 +137,7 @@ export function writeSettle(out: Settle, flight: Flight, t: number): Settle {
     const s = clamp01(time / B.slideS);
     const slid = 1 - (1 - s) * (1 - s);
     out.forward = B.forwardM * slid;
+    out.step = clamp01((time - B.step.delayS) / B.step.stepS);
     out.side = -B.sideM * slid + 0;
   }
   return out;
@@ -152,6 +168,14 @@ function liftOff(f: FootPose, edge: 1 | -1, s: Settle): number {
  */
 export function writeBailFeet(out: FeetPose, inputs: Flight['inputs'], flight: Flight, s: Settle, stance: Stance = 'goofy'): FeetPose {
   writeFeetIntent(out, inputs, flight, 1, 'goofy');
+  // The recovery step (ADR-90): smooth in and out, the back foot up and over, the front one turning where it stands.
+  const S = SETTLE.bail.step;
+  const k = s.step * s.step * (3 - 2 * s.step);
+  out.back.x += S.backX * k;
+  out.back.z += S.backZ * k;
+  out.back.y += S.lift * Math.sin(Math.PI * s.step);
+  out.back.yaw += S.backYaw * k;
+  out.front.yaw += S.frontYaw * k;
   bailBoard.y = s.rise;
   bailBoard.roll = s.roll;
   bailBoard.yaw = yawAt(flight, 1);

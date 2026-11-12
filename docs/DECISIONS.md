@@ -1262,3 +1262,18 @@ Every box is inside the clear part across its width too, and none overlaps a car
 - **The turn card is quieter.** The news line is 12 px muted; the call picker (ADR-88) folds away once a trick is called.
 
 **Tests.** The UI tests open Settings through `src/test/settings.ts`; the HUD test checks the game's switches are in Settings and not on the letters card, the sliders folded on Normal and open after a press, and Pop's bottom cover. The browser checks run unchanged.
+
+## ADR-90: A bail steps off like a person (2026-11-11)
+
+**Context.** The owner, 2026-11-11: when the rider does not land a trick the feet "look super awkward and too robotic". Until now both feet left the board together at the catch's start on one smoothstep, slid in a straight line to the pad beside the heel-side rail, flat and square to the board (yaw 87 degrees, over the bolts), carried the whole way at the falling board's height, and froze there; the hips stayed over the board, so the legs ended splayed out from under the rider.
+
+**Decision.** In the feet model (`MOTION.bail`, `src/sim/feet.ts`), the legs (`HIPS.bailFollow`, `src/sim/legs.ts`) and the landing (`SETTLE.bail.step`, `src/sim/settle.ts`):
+- **Each foot on its own time.** The front foot steps from the catch's start to 0.93 of the flight, the back one from 0.06 later to the landing, so they read as two steps, not one slide.
+- **A fall, not an ease.** Each foot drops to the pad faster and faster (t^2 (2 - t)) and is still moving when it plants, instead of easing to a stop in mid air. It reaches up to 6 cm below where it would stand on the board (`ground`), so from a low pop the front foot touches down before the board; from a high one the rider comes down with it.
+- **Toes reach, then plant.** Each sole pitches up to 16 degrees toes down mid step and is flat again on the pad.
+- **The stance opens.** Each foot ends 3 cm further out along the deck than the bolts and turned toward the nose (front 68 degrees, back 76, from 87), the way a rider turns to run a bail out.
+- **The hips go a little way with the feet** (a quarter of the way from over the board to over the feet), so the legs bend under the rider. More than a quarter took the crouching head outside the camera's framing outline (`gameCamera.test.ts`); widening that outline would move every camera, which is not this change.
+- **A recovery step.** After touchdown the back foot lifts up to 4 cm and steps 7 cm further out over 0.36 s, turning 12 degrees more toward the nose, and the front foot pivots 4 degrees where it stands; the hips follow. It is placed so a sliding board never ends under a shoe (the existing settle test, both stances, every bail).
+- Landed tricks do not move by a hair: every new term is 0 for a landing, and the pinned poses of every landed preset are unchanged. The kickflip bail's pinned rows at 0.7 and 1 were re-recorded on purpose (`feet.pinned.test.ts`).
+
+**Tests.** `feet.test.ts` (the front foot is on the pad before the back one has finished, toes down mid step and flat when planted, the open, wider stance), `settle.test.ts` (the recovery step lifts the back foot, ends it on the pad further out and turned, and leaves the front foot where it stood). The legs' continuity test (under 5 mm of hip per 0.001 of progress) holds, and every bail still clears the board.

@@ -172,6 +172,23 @@ describe('landings with weight (step 13, ADR-68)', () => {
       }
   });
 
+  it('after a bail the rider takes a recovery step (ADR-90): the back foot up and out, then planted; the front foot turns where it stands', () => {
+    const inputs = BAILS[0]!;
+    const f = computeFlight(inputs);
+    const S = SETTLE.bail.step;
+    const at = (t: number) => writeBailFeet(newFeetPose(), inputs, f, writeSettle(newSettle(), f, t), 'goofy');
+    const down = at(0);
+    const mid = at(S.delayS + S.stepS / 2);
+    const done = at(Infinity);
+    // Mid step the back foot is in the air; done, it is on the pad (the board has slid clear).
+    expect(mid.back.y).toBeGreaterThan(done.back.y + S.lift * 0.5);
+    expect(done.back.y).toBeCloseTo(PAD_Y, 9);
+    expect(done.back.z).toBeCloseTo(down.back.z + S.backZ, 9);
+    expect(done.back.yaw).toBeCloseTo(down.back.yaw + S.backYaw, 9);
+    expect(done.front.x).toBeCloseTo(down.front.x, 12);
+    expect(done.front.yaw).toBeCloseTo(down.front.yaw + S.frontYaw, 9);
+  });
+
   it('every landing is over inside the computer’s wait, with the push to come after it', () => {
     for (const inputs of [...BAILS, ...SKETCHY]) expect(settleSeconds(computeFlight(inputs))).toBeLessThanOrEqual(1.3);
   });

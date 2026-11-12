@@ -66,6 +66,11 @@ export const LEG = {
  *   where the feet land on the bolts, over this window.
  * - poleToe: the knee pole is -Z (forward, toward the toe side) plus this
  *   much of the shoe's own toe direction, so a knee tracks its toes.
+ * - bailFollow (ADR-90): in a bail the pelvis goes with the feet as they step
+ *   off to the heel side, this much of the way from `z` to over the middle
+ *   of the two feet, from the bail's start to the landing, so the rider steps
+ *   off the board instead of leaving its legs splayed out from under it; and
+ *   it follows them through the recovery step after touchdown.
  */
 export const HIPS = {
   z: 0.05,
@@ -75,6 +80,7 @@ export const HIPS = {
   jump: { perPop: 1.0, extra: 0.1, peakAt: 0.55 },
   shift: { start: 0.2, end: CATCH.back },
   poleToe: 0.5,
+  bailFollow: 0.25,
 } as const;
 
 export interface Point3 {
@@ -320,7 +326,9 @@ export function writeLegsPose(
   writeStance(stanceFeet, flight ? flight.inputs : inputs);
   const middle = (stanceFeet.front.x + stanceFeet.back.x) / 2;
   const cx = sx * middle * (1 - (flight ? smooth(HIPS.shift.start, HIPS.shift.end, p) : 0));
-  const cz = HIPS.z;
+  // A bail's step off (ADR-90): the pelvis over the stepping feet; HIPS.z for every landing and before the bail.
+  const off = flight && !flight.landed ? smooth(PHASE.catch.start, 1, p) * HIPS.bailFollow : 0;
+  const cz = HIPS.z + ((feet.front.z + feet.back.z) / 2 - HIPS.z) * off;
   const half = LEG.hipWidth / 2;
   const fx = cx + sx * half;
   const bx = cx - sx * half;
