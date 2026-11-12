@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { LAB_FOLDS, useTrickStore } from '../store';
 import { App } from './App';
 import { KEY_SCRUB_SETTLE_MS } from './Playback';
+import { openSettings } from '../test/settings';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -276,6 +277,7 @@ describe('trick lab UI', () => {
 
   it('theme toggle button writes data-theme on :root and persists it', async () => {
     const user = await setup();
+    if (screen.queryByRole('button', { name: 'Settings' })) openSettings();
     const toggle = screen.getByRole('button', { name: 'Light theme' });
     await user.click(toggle);
     expect(document.documentElement.dataset.theme).toBe('light');

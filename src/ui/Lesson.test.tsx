@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { useTrickStore } from '../store';
 import { App } from './App';
 import { pickTrick } from '../test/pick';
+import { openSettings } from '../test/settings';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -105,7 +106,7 @@ describe("the first game's walk-through on the game screen (ADR-66)", () => {
 });
 
 describe('the game over the stage (ADR-66)', () => {
-  it('is a heads-up display: the turn card, the letters with the game\'s switches, the tray with the sliders and Pop, and the last trick', async () => {
+  it('is a heads-up display: the turn card, the letters, the tray with the sliders and the dock, and the game\'s switches in Settings (ADR-89)', async () => {
     useTrickStore.setState({ skateTaught: true });
     const user = await setup();
     // Between games, how to play sits where the turn card will be.
@@ -115,15 +116,20 @@ describe('the game over the stage (ADR-66)', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Your turn' }).closest('section')).toHaveClass('hud__turn');
     const letters = screen.getByRole('region', { name: 'Letters' });
     expect(letters).toHaveClass('hud__score');
-    expect(within(letters).getByRole('button', { name: 'Slow motion' })).toBeInTheDocument();
-    expect(within(letters).getByRole('button', { name: 'Computer goes on its own' })).toBeInTheDocument();
+    expect(within(letters).queryByRole('button', { name: 'Slow motion' })).toBeNull();
+    const settings = openSettings();
+    expect(within(settings).getByRole('button', { name: 'Slow motion' })).toBeInTheDocument();
+    expect(within(settings).getByRole('button', { name: 'Computer goes on its own' })).toBeInTheDocument();
     const tray = document.querySelector('.hud__tray')!;
+    // On Normal the game sets the sliders, so they are folded until opened (ADR-89).
+    expect(within(tray as HTMLElement).queryAllByRole('slider')).toHaveLength(0);
+    await user.click(within(tray as HTMLElement).getByRole('button', { name: 'Inputs' }));
     expect(within(tray as HTMLElement).getAllByRole('slider')).toHaveLength(3);
     expect(within(tray as HTMLElement).getByRole('button', { name: 'Get ready' })).toBeInTheDocument();
     // The timing bar's slim strip is part of the tray, waiting for the first press (ADR-86); the sliders and Pop say which side of the stage they cover.
     expect(tray.querySelectorAll('.skate__bar')).toHaveLength(1);
     expect(tray.querySelector('.timing')).toHaveClass('timing--idle');
     expect(tray.querySelector('.hud__inputs')).toHaveAttribute('data-covers', 'left');
-    expect(tray.querySelector('.hud__pop')).toHaveAttribute('data-covers', 'right');
+    expect(tray.querySelector('.hud__pop')).toHaveAttribute('data-covers', 'bottom');
   });
 });

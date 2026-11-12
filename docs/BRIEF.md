@@ -285,7 +285,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .foot-steps, .foot-steps__legend, .foot-steps__key, .foot-steps__swatch, .foot-steps__swatch--front, .foot-steps__swatch--back
 .foot-step, .foot-step--front, .foot-step--back, .foot-step--both, .foot-step--now, .foot-step__who, .foot-step__text
 .objectives, .objective, .objective--done, .objective__check, .objective__text
-.skate__score, .skate__row, .skate__row--up, .skate__who, .skate__letters, .skate__letter, .skate__letter--got, .skate__actions, .skate__rules, .skate__controls, .skate__pop, .skate__toggles (game of SKATE, ADR-43, ADR-46)
+.skate__score, .skate__row, .skate__row--up, .skate__who, .skate__letters, .skate__letter, .skate__letter--got, .skate__actions, .skate__rules, .skate__pop (game of SKATE, ADR-43, ADR-46)
 .turn, .turn--you, .turn--computer, .turn--setup, .turn--over, .turn--won, .turn--lost, .turn__news, .turn__who, .turn__task, .turn__label, .turn__trick, .turn__note, .turn__status, .turn__timer (the game's turn card, ADR-46)
 .turn-chip, .turn-chip--you, .turn-chip--computer, .turn-chip__who, .turn-chip__trick (whose turn, over the stage, ADR-46)
 .confirm, .confirm__title, .confirm__text, .confirm__actions (leave a game dialog, ADR-46)
@@ -294,7 +294,7 @@ the UI redesign, 2026-11-04, DESIGN.md section 9 and ADR-28):
 .skate__bar, .skate__bar-band, .skate__bar-marker, .skate__bar-marker--run (the timing bar's track, ADR-65)
 .timing, .timing--run, .timing--in, .timing--off, .timing__head, .timing__who, .timing__verdict (the timing bar over the stage, ADR-83)
 .field__track, .field__zone, .field__zone--clean, .field__forecast (a slider's track, the game's landing zones and the forecast, ADR-83)
-.hud__turn, .hud__score, .hud__last, .hud__tray (the game's cards over the stage, ADR-66)
+.hud__turn, .hud__score, .hud__tray, .hud__inputs, .hud__dock, .hud__pop (the game's cards over the stage, ADR-66, ADR-89)
 .lesson, .lesson__title, .lesson__steps, .lesson__step, .lesson__step--now, .lesson__step--done (the first game's walk-through, ADR-66)
 .app[data-screen], .app__play, .topbar, .topbar__home, .topbar__title, .topbar__actions (screens, ADR-45)
 .home, .home__eyebrow, .home__title, .home__lede, .home__choices, .home__utilities, .home__hint, .choice, .choice--primary, .choice__title, .choice__text, .preview-toggle (welcome screen, ADR-45)

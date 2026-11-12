@@ -150,6 +150,8 @@ test('the landing zones show round the thumb: taller than it and at least 20 px 
     st.getState().continueSkate();
     st.getState().callSkateTrick('kickflip');
   });
+  // On Normal the game sets the sliders, so they start folded (ADR-89): open them.
+  await page.getByRole('button', { name: 'Inputs', exact: true }).click();
   const zones = await page.evaluate(() =>
     [...document.querySelectorAll('.field__zone:not(.field__zone--clean)')].map((z) => {
       const r = z.getBoundingClientRect();

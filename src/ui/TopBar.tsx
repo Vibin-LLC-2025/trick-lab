@@ -1,5 +1,5 @@
 import { useTrickStore, type Screen } from '../store';
-import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
+import { Settings } from './Settings';
 
 const TITLE: Record<Exclude<Screen, 'home'>, string> = { skate: 'Game of SKATE', lab: 'Practice lab' };
 const OTHER: Record<Exclude<Screen, 'home'>, { screen: Screen; label: string }> = {
@@ -9,9 +9,10 @@ const OTHER: Record<Exclude<Screen, 'home'>, { screen: Screen; label: string }> 
 
 /**
  * The bar over the game and the lab (ADR-45, DESIGN.md 12): Home, the
- * screen's title (its one h1, the focus target after a screen change), the
- * shortcuts and the theme (the DOM controls for ? and t on both screens),
- * and a way across to the other mode.
+ * screen's title (its one h1, the focus target after a screen change), a way
+ * across to the other mode, and Settings (ADR-89), which holds the
+ * shortcuts, the theme and the sound (the DOM controls for ? and t on both
+ * screens) and the game's own switches.
  */
 export function TopBar({ screen }: { screen: Exclude<Screen, 'home'> }) {
   // Leaving a game in play asks first (ADR-46); from the lab it just goes.
@@ -26,14 +27,12 @@ export function TopBar({ screen }: { screen: Exclude<Screen, 'home'> }) {
         {TITLE[screen]}
       </h1>
       <div className="topbar__actions">
-        <ShortcutsButton />
-        <ThemeToggle />
-        <SoundToggle />
         <nav aria-label="Modes">
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => go(other.screen)}>
             {other.label}
           </button>
         </nav>
+        <Settings screen={screen} />
       </div>
     </header>
   );

@@ -3,6 +3,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTrickStore } from '../store';
 import { App, PREVIEW_DESCRIPTION } from './App';
+import { openSettings } from '../test/settings';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -101,6 +102,8 @@ describe('welcome screen (ADR-45)', () => {
     const user = await setup();
     for (const go of [null, 'Play a game of SKATE', 'Practice lab'] as const) {
       if (go) await user.click(screen.getByRole('button', { name: go }));
+      // On the game and the lab they are in Settings (ADR-89).
+      if (go) openSettings();
       expect(screen.getAllByRole('button', { name: 'Light theme' })).toHaveLength(1);
       const open = screen.getByRole('button', { name: /^(Keyboard shortcuts|Shortcuts)$/ });
       await user.click(open);

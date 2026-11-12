@@ -8,6 +8,7 @@ import type { SoundPlayer } from '../audio/player';
 import { useSound } from '../hooks/useSound';
 import { useTrickStore } from '../store';
 import { App } from './App';
+import { openSettings } from '../test/settings';
 
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
 
@@ -72,6 +73,8 @@ describe('the sound switch (ADR-58)', () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByTestId('scene-stub');
+    // On the game and the lab it is in Settings (ADR-89).
+    if (name !== 'home') openSettings();
     const sound = screen.getByRole('button', { name: 'Sound' });
     expect(sound).toHaveAttribute('aria-pressed', 'false');
     await user.click(sound);

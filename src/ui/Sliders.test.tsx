@@ -22,6 +22,9 @@ async function playerUp(level: 'easy' | 'normal' | 'hard') {
   within(game()).getByRole('button', { name: 'Start game' }).focus();
   await user.keyboard('{Enter}');
   await user.keyboard('{Enter}');
+  // Where the game sets the sliders they start folded (ADR-89): open them, as a player who wants to see them would.
+  const fold = within(game()).queryByRole('button', { name: 'Inputs' });
+  if (fold?.getAttribute('aria-expanded') === 'false') await user.click(fold);
   return user;
 }
 
