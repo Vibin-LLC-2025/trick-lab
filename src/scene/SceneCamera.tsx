@@ -4,6 +4,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, type PerspectiveCamera } from 'three';
 import {
   FULL_STAGE,
+  isFisheye,
+  orbitsFree,
   liveProgress,
   replayMoves,
   riderShown,
@@ -107,7 +109,7 @@ const preset = (key: ViewKey, framing: Framing) => {
   return { target: new Vector3(...V.target), home: new Vector3(...V.position), targetArray: [...V.target] as [number, number, number] };
 };
 type Preset = ReturnType<typeof preset>;
-const KEYS: readonly ViewKey[] = ['rider', 'detail', 'showcase', 'free', 'film', 'side', 'above', 'replay'];
+const KEYS: readonly ViewKey[] = ['rider', 'detail', 'showcase', 'free', 'film', 'side', 'above', 'replay', 'fisheye', 'freeFisheye'];
 const FRAMINGS: readonly Framing[] = ['board', 'flight', 'rest'];
 
 /** Each preset's target and home position as vectors, built once per framing (ADR-38, ADR-85, ADR-86). */
@@ -123,8 +125,8 @@ export function viewFor(s: Pick<TrickState, 'screen' | 'cameraView' | 'gameView'
 /** The clear part of the stage the camera frames in: the page's measurement on the game screen (ADR-86), the whole stage elsewhere. */
 export const clearFor = (s: Pick<TrickState, 'screen' | 'stageClear'>): ClearArea => (s.screen === 'skate' && s.stageClear ? s.stageClear : FULL_STAGE);
 
-/** Whether the camera rises with the flight (ADR-86): the rest framing, outside the replay (which keeps its own spot, ADR-72). */
-const rises = (view: ViewKey, framing: Framing) => framing === 'rest' && view !== 'replay';
+/** Whether the camera rises with the flight (ADR-86): the rest framing, outside the replay (which keeps its own spot, ADR-72), and the Fisheye view while motion is allowed (ADR-93). */
+const rises = (view: ViewKey, framing: Framing, calm: boolean) => (framing === 'rest' && view !== 'replay') || (isFisheye(view) && !calm);
 
 /** How far the rise has moved the camera and its target: one number per mounted camera, taken off before any placement. */
 type Applied = MutableRefObject<number>;
@@ -247,7 +249,7 @@ export function SceneCamera() {
   const clear = useTrickStore(clearFor);
   const appliedRef = useRef(0);
   const framing = framingFor(view, rider, calm);
-  const free = view === 'free';
+  const free = orbitsFree(view);
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   const distance = distanceFor(view, aspect, framing, clear);
   const P = PRESETS[framing][view];
@@ -273,13 +275,13 @@ export function SceneCamera() {
         // no limit there, or Filmer, Side and the replay were all pushed up to the lab's 18 degrees (fixed with ADR-86).
         minPolarAngle={free ? C.free.minPolarAngle : game ? 0 : C.minPolarAngle}
         // The welcome preview sits lower than a student may orbit, to show the sky (ADR-52); it never orbits.
-        maxPolarAngle={home ? C.showcaseMaxPolarAngle : free ? C.free.maxPolarAngle : game ? Math.PI : C.maxPolarAngle}
+        maxPolarAngle={home ? C.showcaseMaxPolarAngle : view === 'freeFisheye' ? C.freeFisheye.maxPolarAngle : free ? C.free.maxPolarAngle : game ? Math.PI : C.maxPolarAngle}
         // The game's free camera stays on the heel side (ADR-81); the lab turns all the way round.
         minAzimuthAngle={free ? -C.free.azimuth : -Infinity}
         maxAzimuthAngle={free ? C.free.azimuth : Infinity}
       />
       <FitAndReset distance={distance} view={view} framing={framing} clear={clear} appliedRef={appliedRef} />
-      <Rise active={rises(view, framing)} base={P.target} appliedRef={appliedRef} />
+      <Rise active={rises(view, framing, calm)} base={P.target} appliedRef={appliedRef} />
     </>
   );
 }

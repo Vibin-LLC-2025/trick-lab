@@ -8,14 +8,27 @@ import type { TrickState } from './types';
  * pinch to zoom, the default since ADR-81) or one of three fixed angles
  * (ADR-72), chosen by radio buttons.
  */
-export type GameView = 'free' | 'film' | 'side' | 'above';
-export const GAME_VIEWS: readonly GameView[] = ['free', 'film', 'side', 'above'];
-export const GAME_VIEW_LABEL: Record<GameView, string> = { free: 'Free', film: 'Filmer', side: 'Side', above: 'Above' };
+export type GameView = 'free' | 'film' | 'side' | 'above' | 'fisheye' | 'freeFisheye';
+export const GAME_VIEWS: readonly GameView[] = ['free', 'film', 'side', 'above', 'fisheye', 'freeFisheye'];
+export const GAME_VIEW_LABEL: Record<GameView, string> = {
+  free: 'Free',
+  film: 'Filmer',
+  side: 'Side',
+  above: 'Above',
+  fisheye: 'Fisheye',
+  freeFisheye: 'Free fisheye',
+};
+/** The views the student turns and zooms (ADR-81, ADR-93): Free, and Free fisheye. */
+export const orbitsFree = (view: string) => view === 'free' || view === 'freeFisheye';
+/** The views with the replay's wide lens and bend while playing (ADR-93): Fisheye, and Free fisheye. */
+export const isFisheye = (view: string) => view === 'fisheye' || view === 'freeFisheye';
 export const GAME_VIEW_ANNOUNCEMENT: Record<GameView, string> = {
   free: 'Camera: free. Drag the view to turn it round the board, and scroll or pinch to zoom. Reset view brings it back.',
   film: 'Camera: the filmer, low and to the side of the nose.',
   side: 'Camera: side on, low.',
   above: 'Camera: above and behind the heels.',
+  fisheye: 'Camera: fisheye, low and close to the board, like a skate video.',
+  freeFisheye: 'Camera: free fisheye. Drag the view to turn it round the board, and scroll or pinch to zoom. Reset view brings it back.',
 };
 const isGameView = (v: unknown): v is GameView => typeof v === 'string' && (GAME_VIEWS as readonly string[]).includes(v);
 
@@ -41,3 +54,6 @@ export type ReplayState = 'none' | 'due' | 'plays';
 
 /** Whether a replay is on screen, so frames run (rule 4) and the camera, the bend and the Pop button follow it. */
 export const replayMoves = (s: Pick<TrickState, 'replay' | 'screen'>) => s.replay === 'plays' && s.screen === 'skate';
+
+/** Whether the fisheye bend is on (ADR-72, ADR-93): while the replay plays, and on the game screen in the Fisheye view. */
+export const bendShown = (s: Pick<TrickState, 'replay' | 'screen' | 'gameView'>) => replayMoves(s) || (s.screen === 'skate' && isFisheye(s.gameView));

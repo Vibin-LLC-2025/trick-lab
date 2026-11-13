@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
+import { bendShown, landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -136,7 +136,7 @@ function PostEffects() {
   const tier = useTrickStore(effectsFor);
   const blurOn = useTrickStore(motionBlurOn);
   // The instant replay's fisheye (ADR-72): one uniform, set when it starts and ends.
-  const bendOn = useTrickStore(replayMoves);
+  const bendOn = useTrickStore(bendShown);
   const made = useRef<Effects | null>(null);
 
   useEffect(() => {
@@ -149,7 +149,7 @@ function PostEffects() {
         if (cancelled) return;
         effects = m.createEffects(gl as never, scene, camera, tier);
         effects.setMotionBlur(motionBlurOn(useTrickStore.getState()));
-        effects.setBend(replayMoves(useTrickStore.getState()));
+        effects.setBend(bendShown(useTrickStore.getState()));
         made.current = effects;
         frame.render = effects.render;
         // A startup publication of this root (rootReadiness.ts), as is giving up below.

@@ -546,6 +546,14 @@ export const ART = {
       side: look(7, 0, 0.32),
       above: look(34, -20, 0.28),
       replay: look(4, 40, 0.36),
+      /**
+       * `fisheye` (ADR-93, 2026-11-13): the replay's low, wide spot as a view
+       * to play in, with its lens and its bend; it frames the board, may
+       * crop the body, and rises with the flight like the rider's views.
+       */
+      fisheye: look(4, 40, 0.36),
+      /** `freeFisheye` (ADR-93): Fisheye's spot as the home of a free camera, turned and zoomed like `free`. */
+      freeFisheye: look(4, 40, 0.36),
     },
     /**
      * The game's free camera (ADR-81): how far it turns. Round the board
@@ -557,8 +565,14 @@ export const ART = {
      * gameCamera.test.ts at every corner.
      */
     free: { azimuth: (75 * Math.PI) / 180, minPolarAngle: (18 * Math.PI) / 180, maxPolarAngle: (81 * Math.PI) / 180 },
+    /**
+     * Free fisheye (ADR-93): the free camera's turn, but down to 3 degrees
+     * above the horizon, under its home's 4, so it can start where Fisheye
+     * stands. Tested in gameCamera.test.ts at every corner with its lens.
+     */
+    freeFisheye: { maxPolarAngle: (87 * Math.PI) / 180 },
     /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
-    fovs: { replay: 60 } as Partial<Record<string, number>>,
+    fovs: { replay: 60, fisheye: 60, freeFisheye: 60 } as Partial<Record<string, number>>,
   },
   /**
    * Rotation direction (ADR-10, made goofy by ADR-24 on 2026-11-04). The

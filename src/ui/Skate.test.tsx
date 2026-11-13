@@ -452,7 +452,7 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     const user = await setup();
     await start(user);
     const camera = within(openSettings()).getByRole('group', { name: 'Camera' });
-    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'film', 'side', 'above']);
+    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'film', 'side', 'above', 'fisheye', 'freeFisheye']);
     const free = within(camera).getByRole('radio', { name: 'Free' });
     expect(free).toBeChecked();
     // Free says how to turn it, and Reset view brings it home (ADR-81).

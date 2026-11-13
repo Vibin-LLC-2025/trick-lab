@@ -29,7 +29,7 @@ function fogAmount(d: number) {
   const t = Math.min(1, Math.max(0, (d - ART.fog.near) / (ART.fog.far - ART.fog.near)));
   return t * t * (3 - 2 * t);
 }
-const GAME = ['free', 'film', 'side', 'above', 'replay'] as const;
+const GAME = ['free', 'film', 'side', 'above', 'replay', 'fisheye', 'freeFisheye'] as const;
 const [gx, gz] = ART.ground.size;
 
 /**
@@ -228,14 +228,16 @@ function nearestPlaneEdge(cam: PerspectiveCamera) {
   return nearest;
 }
 
-describe("the game's free camera (ADR-81)", () => {
-  const F = C.free;
-  const V = C.views.free;
+describe.each(['free', 'freeFisheye'] as const)("the game's free camera, %s (ADR-81, ADR-93)", (view) => {
+  const F = { ...C.free, ...(view === 'freeFisheye' ? C.freeFisheye : {}) };
+  const V = C.views[view];
   const target = new Vector3(...V.target);
+  /** Free fisheye frames the board only (it does not film the rider); Free has all three framings. */
+  const framings: readonly Framing[] = view === 'free' ? ['board', 'flight', 'rest'] : ['board'];
   /** A camera where the orbit can put it: polar and azimuth as OrbitControls has them (azimuth 0 on +Z, the heel side), round the target in this framing. */
   function orbitCamera(polar: number, azimuth: number, distance: number, aspect: number, framing: Framing = 'board') {
-    const cam = new PerspectiveCamera(C.fov, aspect, C.near, C.far);
-    const target = new Vector3(...lookFor('free', framing).target);
+    const cam = new PerspectiveCamera(fovOf(view), aspect, C.near, C.far);
+    const target = new Vector3(...lookFor(view, framing).target);
     cam.position.setFromSphericalCoords(distance, polar, azimuth).add(target);
     cam.lookAt(target);
     cam.updateMatrixWorld();
@@ -267,15 +269,15 @@ describe("the game's free camera (ADR-81)", () => {
         })),
         ...LAYOUTS,
       ];
-      for (const framing of ['board', 'flight', 'rest'] as const)
+      for (const framing of framings)
         for (const { aspect, clear } of stages) {
           // The rest framing is the game's, whose stage is always wider than tall (1.4:1 to 2:1 measured).
           if (framing === 'rest' && aspect < 1) continue;
           const points = framePointsFor(framing);
-          const fit = distanceFor('free', aspect, framing, clear);
+          const fit = distanceFor(view, aspect, framing, clear);
           const far = orbitMaxDistance({
             fit,
-            target: lookFor('free', framing).target,
+            target: lookFor(view, framing).target,
             points,
             maxDistance: C.maxDistance,
             zoomOut: C.zoomOut,
@@ -283,7 +285,7 @@ describe("the game's free camera (ADR-81)", () => {
           });
           for (const d of [C.minDistance, fit, far]) {
             const cam = orbitCamera(polar, azimuth, d, aspect, framing);
-            setLens(cam, C.fov, clear);
+            setLens(cam, fovOf(view), clear);
             const at = `aspect ${aspect}, distance ${d.toFixed(2)}, ${framing}`;
             expect(nearestPlaneEdge(cam), at).toBeGreaterThan(ART.fog.far);
             // The rest framing (ADR-86): on the narrow column of a 1024 x 768 game the far corners pass the fog's start a little,
@@ -305,6 +307,8 @@ describe("the game's free camera (ADR-81)", () => {
     expect(returnsFromReplay('replay', 'free', true)).toBe(false);
     expect(returnsFromReplay('replay', 'film', false)).toBe(false);
     expect(returnsFromReplay('showcase', 'free', false)).toBe(false);
+    expect(leavesFreeForReplay(view, 'replay')).toBe(true);
+    expect(returnsFromReplay('replay', view, false)).toBe(true);
   });
 });
 

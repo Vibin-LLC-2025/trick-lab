@@ -65,9 +65,9 @@ export function placeCamera(
  * was asked for in between.
  */
 /** True when this change of view is the replay taking over from the free camera: keep the orbit. */
-export const leavesFreeForReplay = (from: string, to: string) => from === 'free' && to === 'replay';
+export const leavesFreeForReplay = (from: string, to: string) => (from === 'free' || from === 'freeFisheye') && to === 'replay';
 /** True when this change of view is the free camera coming back from the replay with no reset asked for: give the orbit back. */
-export const returnsFromReplay = (from: string, to: string, resetAsked: boolean) => from === 'replay' && to === 'free' && !resetAsked;
+export const returnsFromReplay = (from: string, to: string, resetAsked: boolean) => from === 'replay' && (to === 'free' || to === 'freeFisheye') && !resetAsked;
 
 /** The clear part of the stage (store/stage.ts), as fractions from its top left. */
 interface ClearRect {

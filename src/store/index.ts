@@ -18,7 +18,7 @@ export { noticeUp, type SkateNotice } from './notice';
 export { assistOn, sliderForecast, sliderPlace, sliderZones } from './forecast';
 export { COMPUTER_DELAY_MS, computerWaiting, landingMoves, rollAllowed, rollMoves, windUp, type LandingState, type RollState, type WindUp } from './roll';
 export { boardRider, DECK_KEY, shownDeck } from './deck';
-export { GAME_VIEW_LABEL, GAME_VIEWS, replayMoves, type GameView, type ReplayState } from './replay';
+export { bendShown, GAME_VIEW_LABEL, GAME_VIEWS, isFisheye, orbitsFree, replayMoves, type GameView, type ReplayState } from './replay';
 
 export type { Random } from './skate';
 export { TAUGHT_KEY } from './skate';

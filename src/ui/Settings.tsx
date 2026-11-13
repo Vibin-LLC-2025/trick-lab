@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { skateActive } from '../sim/skate';
-import { GAME_VIEW_LABEL, GAME_VIEWS, useTrickStore, type Screen } from '../store';
+import { GAME_VIEW_LABEL, GAME_VIEWS, orbitsFree, useTrickStore, type Screen } from '../store';
 import { Toggle } from './Toggle';
 import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
@@ -15,7 +15,7 @@ function CameraChoice() {
   const setGameView = useTrickStore((s) => s.setGameView);
   const resetView = useTrickStore((s) => s.resetView);
   return (
-    <fieldset className="segmented" aria-describedby={view === 'free' ? 'game-camera-hint' : undefined}>
+    <fieldset className="segmented" aria-describedby={orbitsFree(view) ? 'game-camera-hint' : undefined}>
       <legend className="segmented__legend">Camera</legend>
       <div className="segmented__options">
         {GAME_VIEWS.map((v) => (
@@ -25,7 +25,7 @@ function CameraChoice() {
           </label>
         ))}
       </div>
-      {view === 'free' && (
+      {orbitsFree(view) && (
         <div className="segmented__hint skate__camera-free">
           <span id="game-camera-hint">Drag the view to turn it; scroll or pinch to zoom.</span>
           <button type="button" className="btn btn--ghost btn--sm" onClick={resetView}>

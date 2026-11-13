@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { computerWaiting, createTrickStore, noticeUp, replayMoves } from '.';
+import { bendShown, computerWaiting, isFisheye, orbitsFree, createTrickStore, noticeUp, replayMoves } from '.';
 import { BAR } from '../sim/bar';
 import { GAME_VIEW_KEY, INSTANT_REPLAY_KEY } from './replay';
 
@@ -193,5 +193,26 @@ describe("the game's camera (ADR-72)", () => {
     expect(s.getState().announcement.message).toBe('Camera: side on, low.');
     expect(s.getState().events.filter((e) => e.type.startsWith('camera'))).toEqual([]);
     expect(makeStore().getState().gameView).toBe('side');
+  });
+});
+
+describe('the Fisheye view (ADR-93)', () => {
+  it('bends the picture in the Fisheye view and in the replay, and nowhere else', () => {
+    const base = { screen: 'skate', replay: 'none', gameView: 'film' } as const;
+    expect(bendShown(base)).toBe(false);
+    expect(bendShown({ ...base, gameView: 'fisheye' })).toBe(true);
+    expect(bendShown({ ...base, replay: 'plays' })).toBe(true);
+    expect(bendShown({ ...base, screen: 'lab', gameView: 'fisheye' })).toBe(false);
+    expect(bendShown({ ...base, screen: 'home', gameView: 'fisheye' })).toBe(false);
+  });
+});
+
+describe('Free fisheye (ADR-93)', () => {
+  it('bends like Fisheye and turns like Free', () => {
+    expect(bendShown({ screen: 'skate', replay: 'none', gameView: 'freeFisheye' })).toBe(true);
+    expect(orbitsFree('freeFisheye')).toBe(true);
+    expect(orbitsFree('fisheye')).toBe(false);
+    expect(isFisheye('freeFisheye')).toBe(true);
+    expect(isFisheye('free')).toBe(false);
   });
 });

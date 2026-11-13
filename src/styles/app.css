@@ -708,6 +708,20 @@ a {
   align-self: stretch;
 }
 
+/* The camera's six choices (ADR-93) in two rows of three under their legend,
+   so "Free fisheye" fits in the 320 px panel. */
+.settings__group > .segmented .segmented__legend {
+  float: none;
+  width: auto;
+  line-height: var(--leading-tight);
+  margin-bottom: var(--space-2);
+}
+
+.settings__group > .segmented .segmented__options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
 /* The sliders' heading as a button where they fold (ADR-89): the title's
    type, a caret that turns as it opens. */
 .inputs-panel__toggle {

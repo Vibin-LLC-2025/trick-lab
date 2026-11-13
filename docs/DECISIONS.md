@@ -1312,3 +1312,19 @@ Every box is inside the clear part across its width too, and none overlaps a car
 **What changed.** Over the same grid: no shoe stands on the board after 0.25 s (it stood there for up to 1.2 s), and the fastest drop is 3.5 cm in a frame, a fall from 0.3 s up. What is left: at touchdown the flight leaves a shoe on the board in some bails (the feet model's step, ADR-90), and that shoe now falls off it in the first quarter second. The dust behind a sliding board (ADR-74) trails behind it the way it now slides. In 110 to 130 of the 294 bails the away end points back, so the board is kicked out behind the rider, against the roll, as a rider who jumps off forward pushes it back; it stays in frame from every camera. Widening "nearly straight" to keep those going forward put shoes back on the board for up to 0.5 s, so it stays at 10 degrees. The scene's words ("slides away from the feet") still hold. Clean and sketchy landings do not move.
 
 **Tests.** `settle.test.ts`: the resting slide is along the board's length with the right length; the way is never toward the feet; no shoe is under the board after 0.25 s and a shoe drops no faster than a fall, both stances, over the whole grid; the board stops 5 cm short of the kerb. `dust.test.ts`: a crooked board's trail is behind it.
+
+## ADR-93: The Fisheye view, the replay's shot to play in (2026-11-13)
+
+**Context.** The owner found the whole rider (ADR-85, ADR-91) too fake from the game's usual angles, and liked the instant replay's low, wide, bent shot (ADR-72): it reads like a skate video. Asked for, in the owner's words on 2026-11-13: a view like the replay, as an extra choice (not the default), at normal speed, rising with the board. A better rider is separate work.
+
+**Decision.**
+- **A fifth game camera, Fisheye** (`GameView` `fisheye`, label "Fisheye", in the Settings camera group after Above). Its spot is the replay's, `look(4, 40, 0.36)` in `ART.camera.views.fisheye`, with the replay's 60 degree lens (`ART.camera.fovs.fisheye`). Free stays the default (ADR-81).
+- **The bend** is on in the Fisheye view as in the replay: `bendShown` in `store/replay.ts` (the replay plays, or the game screen with Fisheye chosen) drives `setBend`. Low has no effects composite, so no bend there, as with the replay.
+- **It frames the board** (`board` framing, like Above and the replay), so the body may crop, and **it rises with the flight** (`Rise`, ADR-86) while motion is allowed; under reduced motion it holds still and its fit keeps the whole flight in frame.
+- **It plays at the game's own pace**; the slow replay still follows each go.
+- **Free fisheye**, a sixth choice (`freeFisheye`, asked for the same day): Fisheye's spot, lens and bend as the home of a free camera, turned and zoomed like Free (ADR-81) inside the same limits, except that it goes down to 3 degrees above the horizon (`ART.camera.freeFisheye.maxPolarAngle`), under its home's 4. Reset view brings it home, and the orbit is kept across the replay as Free's is (`leavesFreeForReplay`, `returnsFromReplay`). `orbitsFree` and `isFisheye` in `store/replay.ts` say which views turn and which bend.
+- **The camera group in Settings** has six choices now: its legend above them and the options in two rows of three (DESIGN.md, Settings).
+
+**Draw calls.** None. **Frames.** None added: the bend is a uniform in the composite, and the view draws only when the game already does.
+
+**Tests.** `replay.test.ts` (`bendShown`), `gameCamera.test.ts` (Fisheye and Free fisheye with the game's angles: side, framing, fog; Free fisheye's every orbit corner with its lens, from as close as it zooms to as far, keeps the plane's edge in full fog and the flight before it), `Skate.test.tsx` (the camera group). Looked at in Chromium on High on 2026-11-13: Fisheye at rest and mid-kickflip, Free fisheye at home and turned, and the Settings panel with arrow keys.
