@@ -83,6 +83,20 @@ export type DebugWindow = Window & Debug & { gc?: () => void };
  */
 export const GAME_CHECK_RATE = 2;
 
+/**
+ * The steady clock every check runs on (`?debug&step=`, ADR-87): each frame
+ * moves the flight, the roll, the landing, the replay and the wind-up on by
+ * 0.2 s, however long it took. So a run draws the same frames on every
+ * machine, and a go in a game at GAME_CHECK_RATE draws about 21 frames (42 on
+ * the real clock without a GPU), with 3 in the air, as a 0.53 s flight in the
+ * lab has. The draws a check counts are the same as on the real clock
+ * (measured 2026-11-11, every tier and switch combination).
+ */
+export const CHECK_STEP_S = 0.2;
+
+/** The address the checks open: the debug hooks, no service worker, the steady clock, the screen. */
+export const checkUrl = (screen: Screen) => `/?debug&nosw&step=${CHECK_STEP_S}${HASH[screen]}`;
+
 /** Prefs in localStorage before the app starts (keys without the `trick-lab.` prefix). */
 export type Prefs = Record<string, string>;
 
@@ -112,7 +126,23 @@ export async function open(page: Page, tier: Tier, screen: Screen, prefs: Prefs 
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
   });
-  await page.goto(`/?debug&nosw${HASH[screen]}`);
+  // A machine as slow as CI's (BROWSER_FRAME_MS=900): every animation frame takes at least this long.
+  const frameMs = Number(process.env.BROWSER_FRAME_MS ?? 0);
+  if (frameMs > 0)
+    await page.addInitScript((ms) => {
+      const raf = window.requestAnimationFrame.bind(window);
+      let last = -1;
+      window.requestAnimationFrame = (cb) =>
+        raf((t) => {
+          if (t !== last) {
+            last = t;
+            const end = performance.now() + ms;
+            while (performance.now() < end);
+          }
+          cb(t);
+        });
+    }, frameMs);
+  await page.goto(checkUrl(screen));
   await waitReady(page);
   return errors;
 }

@@ -104,8 +104,27 @@ test('the rider at rest is inside the clear part of the stage from Free, Filmer 
   });
   const floor = { free: 200, film: 205, side: 265 } as const;
   for (const view of ['free', 'film', 'side'] as const) {
-    await page.evaluate((v) => (window as unknown as DebugWindow).__trickLabStore.getState().setGameView(v), view);
-    await page.waitForTimeout(500);
+    const before = await page.evaluate((v) => {
+      const w = window as unknown as DebugWindow;
+      const st = w.__trickLabStore.getState() as unknown as { gameView: string; setGameView: (v: string) => void };
+      // The view already on screen (Free, the default) changes nothing and draws nothing new.
+      const frames = st.gameView === v ? -1 : w.__trickLabPerf.frames;
+      st.setGameView(v);
+      return frames;
+    }, view);
+    // The view is measured once it is on screen: a frame drawn since a change
+    // and none queued. Without a GPU a frame can take over a second, so a
+    // fixed wait measured a camera halfway between two views. A timeout here
+    // means the change asked for no frame at all, which is a fault of its own.
+    await page.waitForFunction(
+      (before) => {
+        const w = window as unknown as DebugWindow;
+        const r3f = w.__trickLab.get();
+        return w.__trickLabPerf.frames > before && r3f.frameloop === 'demand' && r3f.internal.frames === 0;
+      },
+      before,
+      { timeout: 30_000, polling: 'raf' },
+    );
     const m = await measure(page);
     expect(m.measured).toBe(true);
     for (const part of ['board', 'shoes', 'head'] as const) {

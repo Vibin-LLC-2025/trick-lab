@@ -22,6 +22,28 @@ export const COMMIT_EVERY = 0.1;
  */
 export const MAX_STALL = 0.1;
 
+/**
+ * The browser checks' steady clock (ADR-87). With `?debug&step=0.2` in the
+ * address, every frame moves the flight, the roll, the landing's motion, the
+ * replay and the wind-up on by exactly that many seconds, whatever the frame
+ * took. A run then draws the same frames on every machine: a fast one and CI,
+ * whose frames without a GPU take up to a second, so the checks' guards no
+ * longer depend on the machine. 0 (no step, or no `debug`) is the real clock.
+ * Steps above a second are refused: they would skip a flight in one frame.
+ */
+export function checkStep(search: string): number {
+  const q = new URLSearchParams(search);
+  if (!q.has('debug')) return 0;
+  const step = Number(q.get('step'));
+  return Number.isFinite(step) && step > 0 && step <= 1 ? step : 0;
+}
+
+/** This page's steady step, read once from the address: 0 in every real visit. */
+export const CHECK_STEP = checkStep(typeof location === 'undefined' ? '' : location.search);
+
+/** The seconds one frame moves the clocks on: the real delta capped at MAX_STALL, or the checks' steady step. */
+export const frameStep = (delta: number, step = CHECK_STEP) => (step > 0 ? step : Math.min(Math.max(0, delta), MAX_STALL));
+
 /** What the caller must tell the store after a step. Plain numbers, so a step allocates nothing. */
 export const STEP_NONE = 0;
 export const STEP_SYNC = 1;
@@ -58,7 +80,7 @@ export function noteStoreChange(c: FlightClock, s: ClockState, prev: ClockState)
  * One frame. While a flight plays: the first frame of a run (a pop, a resume,
  * a remount) advances by 0, because the R3F clock kept running while the
  * demand loop idled; later frames advance by the real delta, capped at
- * MAX_STALL. The playhead is read and written in place, so an explicit
+ * MAX_STALL (or by the checks' steady step, `frameStep`). The playhead is read and written in place, so an explicit
  * destination an action wrote always wins. Otherwise the store's progress is
  * authoritative and the clock just follows it. Returns what to tell the
  * store; the caller does it, so the step itself has no store side effects
@@ -79,7 +101,7 @@ export function stepFlightClock(c: FlightClock, head: Playhead, s: ClockState, d
   }
   let dt = 0;
   if (c.running && c.flightId === s.flightId) {
-    dt = Math.min(Math.max(0, delta), MAX_STALL);
+    dt = frameStep(delta);
   } else {
     c.running = true;
     c.flightId = s.flightId;

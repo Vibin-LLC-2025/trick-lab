@@ -57,7 +57,9 @@ const landingCalls = (page: Page) =>
 
 for (const tier of TIERS)
   test(`every switch combination fits the ledger on ${tier}`, async ({ page }) => {
-    test.setTimeout(240_000);
+    // A guard against a hang, not a speed check: 27 settings, 12 lab tricks and 12 goes of a game, each waiting on
+    // frames that take up to a second without a GPU: over 4 minutes on High and Medium there, even on the steady clock (ADR-87).
+    test.setTimeout(480_000);
     // Exact pops in the game, so a Space press pops there as in the lab (the timing bar draws nothing in the scene).
     const errors = await open(page, tier, 'lab', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
     await expectTier(page, tier);

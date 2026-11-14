@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The long-run test runs nightly on main and on demand, not on every push (ADR-87).
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,7 +36,8 @@ jobs:
   browser:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # About 20 minutes on a GitHub runner, most of it the ledger check on High and Medium (ADR-87).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,9 +53,10 @@ jobs:
       - run: npm run test:browser -- --grep-invert @soak
 
   # The long-run test, as its own job: 55 tricks across four quality changes
-  # take minutes on a machine without a GPU, and must not hold up the quick checks.
+  # take minutes on a machine without a GPU. Nightly and on demand only (ADR-87).
   soak:
     needs: verify
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

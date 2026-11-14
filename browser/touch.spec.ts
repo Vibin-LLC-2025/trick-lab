@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { HASH, open, type Screen } from './helpers';
+import { checkUrl, open, type Screen } from './helpers';
 
 // Phones and touch (PLAN-PLAY-POLISH-REACH step 21). On a touch screen at a
 // phone's and a tablet's sizes, on every screen and in a game: the page never
@@ -36,7 +36,7 @@ for (const size of SIZES)
     test('no sideways scroll and thumb-sized controls on every screen and in a game', async ({ page }) => {
       const errors = await open(page, 'low', 'home', { 'skate-taught': 'yes', 'skate-auto': 'off' });
       for (const screen of ['home', 'lab', 'skate'] as Screen[]) {
-        await page.goto(`/?debug&nosw${HASH[screen]}`);
+        await page.goto(checkUrl(screen));
         await page.waitForTimeout(400);
         const a = await audit(page);
         expect(a.page, `${screen}: the page is as wide as the window`).toBeLessThanOrEqual(a.window);

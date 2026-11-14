@@ -13,7 +13,7 @@ import { dust, spawnDust, stepDust, writeDust } from './dust';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
 import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
-import { MAX_STALL, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
+import { frameStep, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
 import { MotionCues } from './MotionCues';
@@ -199,7 +199,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     if (replayMoves(s) && flight) {
       replaying = true;
       const R = replayClock;
-      R.t += R.running ? Math.min(Math.max(0, delta), MAX_STALL) : 0;
+      R.t += R.running ? frameStep(delta) : 0;
       R.running = true;
       progress = replayProgress(R.t, flight);
       if (progress >= 1) s.endReplay();
@@ -216,7 +216,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     } else if (s.roll === 'still') {
       if (r.speed !== 0) haltRoll(r);
     } else if (rollMoves(s)) {
-      const dt = r.running ? Math.min(Math.max(0, delta), MAX_STALL) * playRate(s) : 0;
+      const dt = r.running ? frameStep(delta) * playRate(s) : 0;
       r.running = true;
       moved = dt;
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
@@ -233,7 +233,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const L = landingClock;
       if (s.landing === 'plays') {
         if (landingMoves(s)) {
-          const dt = L.running ? Math.min(Math.max(0, delta), MAX_STALL) * playRate(s) : 0;
+          const dt = L.running ? frameStep(delta) * playRate(s) : 0;
           L.t += dt;
           L.running = true;
           moved = Math.max(moved, dt);
