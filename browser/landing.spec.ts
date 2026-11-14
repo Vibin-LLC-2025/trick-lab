@@ -22,8 +22,14 @@ for (const tier of TIERS)
   });
 
 // A game's landing (step 13, ADR-68): the board rolls on, rocks or falls and
-// slides, a made trick replays (ADR-72), then everything comes to rest, and from one second after rest no
-// frame is drawn for the next two (the plan's frame rule).
+// slides, a made trick replays (ADR-72), then everything comes to rest. Rest
+// is the store's, and the frames it leaves queued are R3F's: a store change
+// made inside a frame asks for that frame and one more. So at most two frames
+// are drawn from rest to the point where R3F reports no pending frame, and
+// from then, and at least one second after rest, none for the next two
+// seconds (the plan's frame rule). Counted by frames, not by the clock: on a
+// machine as slow as CI's a frame takes 0.9 s, and the second queued frame
+// used to fall inside a window that started one second after rest.
 for (const tier of TIERS)
   test(`a game's landing comes to rest and stops drawing on ${tier}`, async ({ page }) => {
     const errors = await open(page, tier, 'skate', { 'skate-taught': 'yes', 'pop-mode': 'exact', 'skate-auto': 'off' });
@@ -41,7 +47,7 @@ for (const tier of TIERS)
         st.getState().setInput('flick', flick);
       }, [flick, GAME_CHECK_RATE] as const);
       await page.keyboard.press('Space');
-      const grade = await page.evaluate(async () => {
+      const { grade, toIdle } = await page.evaluate(async () => {
         const w = window as unknown as DebugWindow;
         const raf = () => new Promise((r) => requestAnimationFrame(r));
         const t0 = performance.now();
@@ -56,9 +62,20 @@ for (const tier of TIERS)
           if (performance.now() - t0 > 40_000) { const s = w.__trickLabStore.getState(); throw new Error(`the landing never came to rest: ${s.status}, ${s.roll}, ${s.landing}, ${s.replay}`); }
           await raf();
         }
-        return w.__trickLabStore.getState().result!.grade;
+        const atRest = w.__trickLabPerf.frames;
+        const idle = () => {
+          const s = w.__trickLab.get();
+          return s.frameloop === 'demand' && s.internal.frames === 0;
+        };
+        const t1 = performance.now();
+        while (!idle()) {
+          if (performance.now() - t1 > 20_000) throw new Error('the frame loop never went idle after rest');
+          await raf();
+        }
+        return { grade: w.__trickLabStore.getState().result!.grade, toIdle: w.__trickLabPerf.frames - atRest };
       });
       expect(grade).toBe(flick === 2.0 ? 'sketchy' : 'bail');
+      expect(toIdle, `${tier}, flick ${flick}: frames from rest to idle`).toBeLessThanOrEqual(2);
       await page.waitForTimeout(1000);
       const before = await page.evaluate(() => (window as unknown as DebugWindow).__trickLabPerf.frames);
       await page.waitForTimeout(2000);
