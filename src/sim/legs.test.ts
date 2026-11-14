@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CATCH, newFeetPose, writeFeetPose, writeStance, type FeetPose, type Stance } from './feet';
 import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
 import {
+  ANKLE,
   describeLegs,
   HIPS,
   hipHeight,
@@ -120,13 +121,15 @@ describe('leg lengths and the IK (ADR-37)', () => {
         const step = dist(l.pelvis, prevPelvis);
         const ankle = Math.max(dist(ankles[0]!, prevAnkles[0]!), dist(ankles[1]!, prevAnkles[1]!));
         worst = Math.max(worst, step);
-        expect(step).toBeLessThanOrEqual(1.1 * ankle + Math.abs(free - prevFree) + 1e-9);
+        // The clamp only ever lowers the hips, so its step is the vertical one (the shift moves them along x on its own).
+        expect(Math.abs(l.pelvis.y - prevPelvis.y)).toBeLessThanOrEqual(1.1 * ankle + Math.abs(free - prevFree) + 1e-9);
       }
       prevPelvis = { ...l.pelvis };
       prevAnkles = ankles;
       prevFree = free;
     }
-    expect(clamped).toBeGreaterThan(0.05);
+    // 2026-11-13: 3.0 cm (from 8.0), the hips now rising less than the board (HIPS.jump), so they reach less.
+    expect(clamped).toBeGreaterThan(0.02);
     expect(worst).toBeLessThan(0.01);
     // With the clamp the leg is nearly straight, never locked.
     for (let i = 0; i <= 200; i++) {
@@ -255,14 +258,17 @@ describe('the rider crouches, jumps and absorbs (ADR-37)', () => {
         }
       }
     }
-    // Measured 2026-11-05: the lowest knee is 8.2 cm above the higher sole.
-    expect(least).toBeGreaterThan(0.05);
+    // Measured 2026-11-05: the lowest knee was 8.2 cm above the higher sole. 2026-11-13: 3.7 cm, since the knees
+    // tuck up in the air (HIPS.jump) while a flick lifts the front shoe; still clear of it.
+    expect(least).toBeGreaterThan(0.03);
   });
 
   // Measured 2026-11-05 for the eight presets of then (now the seven and
   // the kickflip with a frontside scoop) at pop 0.35: 85 to 92 degrees
   // in the crouch, 64 to 66 at the catch (the legs reach down for the board),
-  // 84 at the landing (the absorb), held after it.
+  // 84 at the landing (the absorb), held after it. 2026-11-13, with the hips
+  // rising less than the board so the knees tuck (HIPS.jump): 111 to 120 at
+  // the tuck, 92 at the catch, 102 at the landing.
   it('reaches for the catch with bent knees, then bends further to absorb the landing', () => {
     const out = newLegsPose();
     for (const inputs of landed) {
@@ -274,24 +280,28 @@ describe('the rider crouches, jumps and absorbs (ADR-37)', () => {
         pose(out, inputs, flight, 1, stance);
         const atLanding = [kneeBend(out.front), kneeBend(out.back)];
         for (let k = 0; k < 2; k++) {
-          expect(atCatch[k]).toBeGreaterThan(55);
-          expect(atCatch[k]).toBeLessThan(75);
-          expect(atLanding[k]).toBeGreaterThan(75);
-          expect(atLanding[k]).toBeLessThan(95);
-          expect(atLanding[k]! - atCatch[k]!).toBeGreaterThan(10);
+          expect(atCatch[k]).toBeGreaterThan(80);
+          expect(atCatch[k]).toBeLessThan(100);
+          expect(atLanding[k]).toBeGreaterThan(95);
+          expect(atLanding[k]).toBeLessThan(110);
+          expect(atLanding[k]! - atCatch[k]!).toBeGreaterThan(8);
         }
       }
     }
   });
 
-  it('tucks the knees in the air: more bent at the tuck peaks than at the catch', () => {
+  it('tucks the knees in the air: more bent at the tuck peaks than in the crouch or at the catch', () => {
     const out = newLegsPose();
     for (const inputs of landed) {
       const flight = computeFlight(inputs);
+      pose(out, inputs, flight, 0);
+      const crouched = Math.max(kneeBend(out.front), kneeBend(out.back));
       pose(out, inputs, flight, 0.4);
       const tucked = Math.max(kneeBend(out.front), kneeBend(out.back));
+      // Skaters pull the knees up toward the chest in the air (2026-11-13): deeper than the crouch they popped from.
+      expect(tucked).toBeGreaterThan(crouched + 15);
       pose(out, inputs, flight, CATCH.back);
-      expect(tucked).toBeGreaterThan(Math.max(kneeBend(out.front), kneeBend(out.back)) + 5);
+      expect(tucked).toBeGreaterThan(Math.max(kneeBend(out.front), kneeBend(out.back)) + 10);
     }
   });
 
@@ -345,6 +355,47 @@ describe('the riding stance (ADR-86)', () => {
   });
 });
 
+describe("the ankle's bend (2026-11-13)", () => {
+  /** How far a shin leans forward of the vertical seen from the side (Y and Z, forward is -Z), degrees. */
+  const lean = (leg: LegPose) => Math.atan2(leg.shank.dz, -leg.shank.dy) / (Math.PI / 180);
+
+  it('crouches at rest with the seat back, the shins inside the bend, and rides with the seat over the ankles', () => {
+    const out = newLegsPose();
+    for (const p of PRESETS)
+      for (const stance of STANCES) {
+        writeFeetPose(feet, p.inputs, null, 0, stance);
+        writeLegsPose(out, feet, null, 0, p.inputs, stance);
+        expect(out.sitBack).toBeGreaterThan(0.05);
+        expect(out.pelvis.z).toBeCloseTo(HIPS.z + out.sitBack, 9);
+        // Within two and a half degrees: the closed form takes the stance's spread along X as a share of each segment.
+        expect(Math.max(lean(out.front), lean(out.back))).toBeLessThan(ANKLE.lean + 2.5);
+        expect(out.clamped).toBe(0);
+        // Riding, taller, the shins are inside the bend already: no seat back.
+        writeLegsPose(out, feet, null, 0, p.inputs, stance, 0);
+        expect(out.sitBack).toBe(0);
+      }
+  });
+
+  it('keeps the shins far more upright than before through the tuck, the catch and the landing, never past ANKLE.back', () => {
+    const out = newLegsPose();
+    let most = 0;
+    for (const inputs of CASES) {
+      const flight = computeFlight(inputs);
+      for (const stance of STANCES)
+        for (let i = 0; i <= 200; i++) {
+          const u = i / 200;
+          pose(out, inputs, flight, u, stance);
+          expect(out.sitBack).toBeGreaterThanOrEqual(0);
+          expect(out.sitBack).toBeLessThanOrEqual(ANKLE.back);
+          // Past the pop (its front foot rides a nose pitched up under it): measured 2026-11-13 at 48.5 degrees at most.
+          if (u >= ANKLE.rise[1] + 0.05) most = Math.max(most, lean(out.front), lean(out.back));
+        }
+    }
+    // Was 89.6 degrees before the seat sat back (a shin nearly flat over the shoe in the tuck).
+    expect(most).toBeLessThan(52);
+  });
+});
+
 describe('legs in words (ADR-37)', () => {
   const landed = computeFlight(PRESETS[0]!.inputs);
   const bailed = computeFlight({ ...PRESETS[0]!.inputs, pop: 0.15 });
@@ -358,6 +409,9 @@ describe('legs in words (ADR-37)', () => {
     expect(describeLegs(1, landed)).toBe('Knees bent, absorbing the landing.');
     expect(describeLegs(0.9, bailed)).toBe('Legs reach down beside the board.');
     expect(describeLegs(1, bailed)).toBe('Knees bent, landing on the pad beside the board.');
+    // Once a game's landing has played out, the rider is back up (ADR-96).
+    expect(describeLegs(1, landed, false, true)).toBe('Knees a little bent, riding away.');
+    expect(describeLegs(1, bailed, false, true)).toBe('Standing on the pad beside the board.');
     for (const u of [0, 0.3, 0.7, 1]) {
       expect(describeLegs(u, landed)).not.toMatch(/foot|feet/i);
       expect(describeLegs(u, landed)).not.toContain(String.fromCharCode(0x2014));

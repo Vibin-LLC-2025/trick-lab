@@ -14,7 +14,7 @@ export { effectiveQuality, riderShown } from './quality';
 export { LAB_FOLDS, previewAnimates, previewCanPlay, screenFromHash, screenHash, SCREENS } from './ui';
 export { liveProgress, type Playhead } from './playhead';
 export { clearArea, FULL_STAGE, sameArea, type ClearArea, type Cover, type CoverSide, type PageRect } from './stage';
-export { noticeUp, type SkateNotice } from './notice';
+export { goSettling, noticeUp, replayOffered, type SkateNotice } from './notice';
 export { assistOn, sliderForecast, sliderPlace, sliderZones } from './forecast';
 export { COMPUTER_DELAY_MS, computerWaiting, landingMoves, rollAllowed, rollMoves, windUp, type LandingState, type RollState, type WindUp } from './roll';
 export { boardRider, DECK_KEY, shownDeck } from './deck';

@@ -215,7 +215,7 @@ Four more deck bottoms, each a KTX2 texture per board level in `public/models/de
 
 ## The rider (2026-11-11, ADR-85)
 
-A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh over the 17 bones of `src/sim/body.ts`, without the shoes (those stay `shoes.glb`). `npm run assets -- rider` builds it alone.
+A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh over the bones of `src/sim/body.ts` (17, 19 since ADR-98's feet), without the shoes (those stay `shoes.glb`). `npm run assets -- rider` builds it alone.
 
 | File | What it holds | Tests |
 | --- | --- | --- |
@@ -230,3 +230,11 @@ No colour and no texture in the file: the scene paints each region from `ART.rid
 `assets:check` for `rider.glb` (2026-11-11): 98.5 KB of 150 KB, 1 of 1 draw call, 18,500 of 20,000 triangles (legs 5,400, torso 4,896, sleeves 2,592, head 1,400, hood 1,120, mittens 1,032, seat 896, beanie 672, neck 252, strings 240), no texture, 17 joints in order, the top 1748.8 mm, the bottom 36.8 mm (inside the shoes), symmetric to 0.0 mm.
 
 Rebuilt 2026-11-11 for ADR-91 (a slimmer hoodie and sleeves, a smaller hood, bare hands): 98.4 KB, 18,556 triangles, still 1 draw call, no texture, 17 joints.
+
+Rebuilt 2026-11-13 for ADR-98 (the foot bones: the cuff and the sock lean on them, `HEM_FOOT`), with `rider-high.glb`: 99.7 KB, 18,556 triangles, 19 joints; the High rider 550.3 KB, 31,876 triangles, 19 joints.
+
+Rebuilt 2026-11-13 for ADR-101 (the tee's hem band no longer inverted; the jeans a 2048 x 1024 strip of the atlas): `rider-high.glb` 637.0 KB, 28,532 triangles, 19 joints, its atlas 442.7 KB of KTX2.
+
+Rebuilt 2026-11-13 for ADR-106 (the High rider's material drawn on both faces, so the gap under the lifted hem shows the tee's inside, not the wall): the same 637.0 KB, 28,532 triangles and one texture. A 1024 normal map for the clothes was tried (a second KTX2 texture, 90.2 KB) and left out: ETC1S showed blocks on the tee and the jeans.
+
+Rebuilt 2026-11-13 for ADR-99 (the polish pass: a buzz cut painted into the skin instead of hair cards, the beanie's rim smoothed over the ears, the tee's hem level, the crotch's weights shared across the middle): the High rider 494.4 KB, 28,532 triangles, its atlas 300.3 KB, 19 joints. `rider.glb` is unchanged.

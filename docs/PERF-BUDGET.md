@@ -16,7 +16,7 @@ The design target is good hardware. High is what the game is designed for, Mediu
 | New features | all | all but real shadows, motion blur and glow | none, except rolling |
 
 - **Read by the measurement** (`scripts/measure/measure.js`, "How to measure" below): the 95th percentile of the graphics time and of the app's work over the lab's timed tricks, and the longest interval between frames (gate: under 20 ms, which is 16.7 ms plus timer jitter). Its last table says pass or fail per tier.
-- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 36, Medium 21, Low 12 since step 14's skate spot, ADR-69, measured on the game screen too, through the landing: step 19's dust, ADR-74, is one draw on High and Medium while a game's landing has dust in the air, and it did not move these numbers, because the motion cues' one draw has faded out by the landing).
+- **Enforced by the browser checks** (`npm run test:browser`): the draw-call caps, and the expected worst case with every switch on (High 38, Medium 23, Low 12 since ADR-102's steel for the skate spot, one draw on High and Medium; 37 and 22 since ADR-99's occlusion denoise; 36 and 21 since step 14's skate spot, ADR-69, measured on the game screen too, through the landing: step 19's dust, ADR-74, is one draw on High and Medium while a game's landing has dust in the air, and it did not move these numbers, because the motion cues' one draw has faded out by the landing).
 - **Downloads keep their budget** (`npm run bundle:check`).
 - **Medium's target is a stand-in:** it is measured on the reference machine with Medium chosen, not on built-in graphics.
 
@@ -87,6 +87,8 @@ The options are the query of the page the session is on (tiers, networks, screen
 **From 2026-11-09 (step 6, ADR-62)** it reports the spread, not only the middle: for the render CPU time, the GPU time, the frame's whole work (`perfStats.workMs`, from R3F's before-effect to the end of the draw) and the interval between frames, the median, the 95th percentile and the longest. A last table checks each tier against the targets above (`targets` and `pass` in the JSON).
 
 **From 2026-11-10 (step 20, ADR-75)** it plays a whole game of SKATE on the game screen (`game=on`, the default; `gos=60` caps it): every go a real Space press, the student's sets landing and bailing in turn and every copy bailing, so the game ends. The first go of the visit and the rest of the game are reported apart, with the count of frame intervals over 20 and 34 ms, and the targets table has a row per tier for the game after its first go.
+
+**From 2026-11-13 (the review's P-06, A11)** it also takes `dpr` (the page's device pixel ratio; the app caps it per tier, so `dpr=1.5` measures High and `dpr=1.25` Medium at their caps; every earlier table here ran at DPR 1) and `backend` (`webgpu`, or `webgl2`, which hides `navigator.gpu` so Medium and High run on the WebGPURenderer's WebGL2 backend). Each screen's row names the renderer and the stage's size in CSS and drawn pixels. It waits for the rider's mesh (`Rider_Body`) where the rider shows. The draw-call verdict counts the most any screen and the whole game drew, not only the lab's switches. The game's first go is shown in the targets' table, not gated.
 
 Two cautions. The throttling shares the bandwidth between requests and ignores priority hints, so it shows what order buys on a bandwidth-bound link and not on a latency-bound one. GPU timer results vary between runs by more than a small change makes (one trick's median moved from 0.13 to 1.32 ms on Medium between two runs of the same build, before the script warmed the GPU up and timed four tricks); compare runs from the same session, and repeat a run before calling a difference under about 0.3 ms.
 
@@ -794,3 +796,31 @@ Triangles on the welcome screen and in the game: High 200,860 and 201,121, Mediu
 **The welcome preview** (High, always drawing): GPU 0.59 / 0.79 / 0.92 ms, frame work 0.8 / 1.5 / 4 ms (median / 95th percentile / longest). **The lab** (unchanged, the legs): High GPU 0.79 / 2.36 / 2.49 ms (before 1.05 / 1.18 / 1.44), Medium 0.72 / 0.85 / 0.85 ms.
 
 What the rider cost: about 48 KB more models on High and Medium, nothing in draw calls, and about half a millisecond more of the app's own work per frame through a game at the 95th percentile (the skinning of 17 bones and the pose model), well inside 4 ms. The graphics card's time through a game did not rise: the rider's one skinned draw and its shadow are cheaper than the dithered legs' were, and the camera standing farther back puts fewer pixels of the board's detailed materials on screen. High's lab 95th percentile GPU read 2.36 ms in this run against 1.18 before, with the lab unchanged by this step: a few frames in four tricks, inside the 4 ms target; the game's 8,224 frames on High show no such tail. Every target passes on every tier.
+
+## The rider's polish pass (2026-11-13, ADR-99)
+
+Measured 2026-11-13 with `scripts/measure/measure.js` (`?tiers=high,medium&nets=full&visits=http&gos=20&switches=none`), Chromium through `playwright-cli`, 1440 x 900, RTX 3060, feet on, the rider on, dark theme, the build served by `serve.ts`; the display ran at 120 Hz. "Before" is the whole rider's "after" above (2026-11-11). What moved the graphics time is the occlusion's denoise (one more half-size pass and one more draw call on High and Medium); the High rider lost its hair cards (3,344 triangles).
+
+| Tier | Over | GPU p95, before | after | The app's work p95, after | Longest frame interval | Draw calls, as loaded |
+| --- | --- | --- | --- | --- | --- | --- |
+| high | a whole game, after its first go (15 goes, 9,717 frames) | 1.31 ms | 1.7 ms of under 4 | 2.5 ms of under 4 | 16.7 ms | 35 in the game |
+| medium | a whole game, after its first go (19 goes, 12,481 frames) | 1.05 ms | 1.7 ms of under 3 | 1.9 ms of under 4 | 8.6 ms | 20 in the game |
+| high | the lab's tricks | 2.36 ms | 0.79 ms of under 4 | 2.1 ms of under 4 | 25 ms once; 16.6 ms in a second run of eight tricks | 34 |
+| medium | the lab's tricks | 0.85 ms | 0.59 ms of under 3 | 2 ms of under 4 | 16.7 ms | 19 |
+
+No interval over 20 ms in either game. The one 25 ms interval in High's lab came in the first run's four tricks and not in a second run of eight (`?tiers=high&screens=lab&game=off&pops=8`), where every target passed. The browser checks' expected worst case with every switch on moves to 37 on High and 22 on Medium (`LEDGER`).
+
+## At the tiers' pixel ratios, both backends (2026-11-13, the review's A11)
+
+Measured 2026-11-13 with `scripts/measure/measure.js` as corrected above (`?tiers=<tier>&nets=full&visits=cold&screens=home,lab,skate&switches=none&dpr=<cap>&backend=<backend>`), headed Chromium through `playwright-cli`, 1440 x 900 (a game stage of 1422 x 830 CSS px), RTX 3060 through ANGLE and Direct3D 11, the display at 120 Hz, nothing else using the GPU, dark theme, feet on, the rider on, each build served by `serve.ts`. "Before" is the pass's starting tree (the review's A0); "after" is this pass (the cameras, the High rider's hem and atlas, the fixes, the quieter dust, the replay's handoff). High at DPR 1.5 draws 2133 x 1245 px in the game, Medium at 1.25 draws 1778 x 1038. Each row is one complete game, its length set by the computer's luck; High on WebGL2 was run twice, since its first "before" game read far higher than every other run.
+
+| Tier, backend | GPU p95 through a game after its first go, before | after | The first go's GPU p95, before / after | The app's work p95, after | Longest interval after the first go, after | Most draw calls in the game |
+| --- | --- | --- | --- | --- | --- | --- |
+| High, WebGPU | 4.59 ms (11 goes) | 4.78 ms of under 4 (22 goes) | 5.44 / 4.33 ms | 1.9 ms | 16.7 ms | 36 |
+| High, WebGL2 | 8.52 ms, then 5.78 ms | 5.84 ms, then 5.68 ms of under 4 | 6.98 and 6.3 / 6.13 and 6.44 ms | 2.5 and 2.0 ms | 16.8 and 16.7 ms | 36 |
+| Medium, WebGPU | 3.21 ms (18 goes) | 2.88 ms of under 3 (30 goes) | 3.47 / 3.74 ms | 1.8 ms | 16.7 ms | 21 |
+| Medium, WebGL2 | 4.17 ms (11 goes) | 3.90 ms of under 3 (19 goes) | 4.82 / 4.59 ms | 1.5 ms | 9.5 ms | 21 |
+
+The lab's tricks (after): High GPU p95 1.64 ms on WebGPU and 5.02 and 4.74 ms on WebGL2 (before 1.64, then 5.28 and 4.98); Medium 0.85 ms on WebGPU and 3.59 ms on WebGL2 (before 0.85 and 3.64). Draw calls as loaded: High 33, 34 and 35 on the welcome screen, the lab and the game, Medium 18, 19 and 20, the same before and after. Downloads on a cold first visit to High's welcome screen: 609 KB of script both times, models 1,185.5 KB before and 1,328.6 KB after (the High rider's sharper atlas, ADR-101). Medium's are unchanged at 322.7 KB.
+
+**Reading.** At the tiers' own pixel ratios the graphics time through a game misses its target on High on both backends, and on Medium on its WebGL2 backend, before this pass as well as after it. The DPR 1 tables above passed because they drew 44 percent (High) or 64 percent (Medium) of the pixels. The miss is not new: this pass moved no GPU number by more than the runs' own spread (High on WebGL2 read 8.52 and 5.78 ms in two runs of the same build). The review's P-01 is confirmed; per its plan the pixel policy (a backend- and size-aware DPR) is left to a later pass, and the targets are not raised. One wider run (High, WebGPU, 1920 x 1080 at DPR 1.5, a 2853 x 1515 px stage) read 10.49 ms p95 through a game: a scale check, not a verdict.

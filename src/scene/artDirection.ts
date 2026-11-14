@@ -69,8 +69,11 @@ export const QUALITY: Record<
     powerPreference: 'high-performance' | 'low-power';
   }
 > = {
-  high: { renderer: 'webgpu', antialias: true, dpr: [1, 2], shadows: true, environment: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
-  medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: false, environment: true, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
+  // The pixel ratio's caps (2026-11-13): measured on a 2x display, High's graphics took 4.3 ms in the lab and 6.5 in
+  // a game at 2 (target 4) and Medium's 2.8 and 3.4 at 1.5 (target 3); 1.5 and 1.25 draw 56 and 69 percent of those
+  // pixels, inside the targets, and the picture stays sharp with the antialiasing on.
+  high: { renderer: 'webgpu', antialias: true, dpr: [1, 1.5], shadows: true, environment: true, anisotropy: 16, groundAnisotropy: 16, powerPreference: 'high-performance' },
+  medium: { renderer: 'webgpu', antialias: true, dpr: [1, 1.25], shadows: false, environment: true, anisotropy: 4, groundAnisotropy: 8, powerPreference: 'low-power' },
   low: { renderer: 'webgl', antialias: true, dpr: [1, 1], shadows: false, environment: false, anisotropy: 1, groundAnisotropy: 4, powerPreference: 'low-power' },
 };
 
@@ -148,7 +151,9 @@ export const ART = {
       medium: { ao: 0.5, motionBlur: false, glow: false },
       low: null,
     } as Record<Quality, { ao: number | null; motionBlur: boolean; glow: boolean } | null>,
-    ao: { radius: 0.12, thickness: 0.25, distanceExponent: 1.5, scale: 1, samples: 16, strength: 0.75 },
+    // edge: how far apart two depths may be, as a fraction of the pixel's own, and still share occlusion when it is upsampled (2026-11-13);
+    // edgeFloor: that much in metres at the least, so a pixel close to the camera still shares with its neighbours.
+    ao: { radius: 0.12, thickness: 0.25, distanceExponent: 1.5, scale: 1, samples: 16, strength: 0.75, edge: 0.03, edgeFloor: 0.005 },
     motionBlur: { shutter: 0.5, samples: 12 },
     glow: { threshold: 1.1, strength: 0.18, radius: [0.004, 0.011] as readonly [number, number], taps: 8 },
     grade: {
@@ -208,9 +213,11 @@ export const ART = {
    * boxes that hold every caster at every preset at pops up to 0.6 m in both
    * stances (tested in cameraFit.test.ts against the sim: the board's spin
    * circle and top, the soles up to 0.595 m from the centre, the shanks'
-   * knees up to 1.343 m), plus where those casters' shadows land on the pad,
-   * plus `pad`. The fitted frustum is 1.54 x 1.68 m and 1.76 m deep (near
-   * 4.70, far 6.46; texels of 0.82 mm), where the old one was 2 x 2 m and
+   * knees up to 1.352 m and 0.045 m toward the heels, the seat sat back to keep the shins inside the ankle's bend, legs.ts
+   * ANKLE, 2026-11-13; 1.227 m before that, 1.343 m before the knees tucked), plus where those casters' shadows land on the pad,
+   * plus `pad`. The fitted frustum is 1.24 x 1.78 m and 2.36 m deep (near
+   * 4.71, far 7.07; texels of 0.87 mm, 2026-11-13; 1.54 x 1.68 m, 1.76 m and
+   * 0.82 mm when first fitted), where the old one was 2 x 2 m and
    * 11 m deep (texels of 0.98 mm, and 11 times the depth per bias unit).
    * `normalBias` was 0.015 m, thicker than the 11.5 mm deck. Trialled in the
    * browser (2026-11-05, High, kickflip, telephoto crops of the rear wheels
@@ -239,28 +246,35 @@ export const ART = {
      * Every shadow caster's extent, metres, as boxes (min and max corners).
      * Below 1 m: the board's spin circle (|z| to 0.42) and the soles, which
      * reach |x| 0.595 at the highest pops. Above: only the knees, |x| to
-     * 0.354 and z from -0.388 to -0.075 (the rider faces -Z), up to 1.343 m.
+     * 0.393 and z from -0.433 to -0.166 (the rider faces -Z), up to 1.227 m
+     * (2026-11-13, the knees tucked up: from 0.354, -0.388 to -0.075 and
+     * 1.343 m).
      * The fit wherever the legs show (the lab, Low).
      */
     casters: [
       { min: v(-0.6, 0, -0.43), max: v(0.6, 1.0, 0.43) },
-      { min: v(-0.37, 1.0, -0.4), max: v(0.37, 1.36, 0) },
+      { min: v(-0.4, 1.0, -0.44), max: v(0.4, 1.36, 0.06) },
     ],
     /**
      * The fit wherever the whole rider shows (ADR-85, 2026-11-11, store
      * riderShown): the board and soles as above, and the body, swept in
      * cameraFit.test.ts over every preset at three pops and the timing bar's
      * corners (4.2 rev/s) in both stances, each bone a capsule as thick as the
-     * mesh. Below REST_Y + 0.9 m: |x| to 0.80 (the hands), z from -0.72;
-     * above: |x| to 0.93 (a bail's arms out wide at a 0.6 m pop), z from
-     * -0.77 to 0.40, the beanie up to 2.20 m above the deck. The frustum is
-     * larger than the legs' (1.74 x 3.05 m and 4.28 m deep, a texel of
-     * 1.49 mm where the legs' is 0.87), still one 2048
+     * mesh. Below REST_Y + 0.9 m: |x| to 0.71 (the hands), z from -0.76;
+     * above: |x| to 0.76 (a bail's arms out wide at a 0.6 m pop), z from
+     * -0.80 to 0.59, the beanie up to 1.91 m above the deck; below, z to 0.60 (2026-11-13: the seat sat back toward the
+     * heels, legs.ts ANKLE, from 0.39 and 0.43; 1.89 before the head was held up instead of bowed; the
+     * knees tucked and the hips lower in the air: from 0.80, -0.72, 0.93,
+     * -0.77 to 0.40 and 2.20 m). The frustum is
+     * larger than the legs' (1.85 x 2.71 m and 3.73 m deep, a texel of
+     * 1.33 mm where the legs' is 0.87, 2026-11-13; 1.74 x 3.05 m, 4.28 m and
+     * 1.49 mm on 2026-11-11), still one 2048
      * map: measured in PERF-BUDGET.md.
      */
     riderCasters: [
-      { min: v(-0.8, 0, -0.72), max: v(0.8, REST_Y + 0.9, 0.43) },
-      { min: v(-0.94, REST_Y + 0.9, -0.77), max: v(0.94, REST_Y + 2.21, 0.4) },
+      // 2026-11-13 (ADR-107): 0.86 along the board, from 0.71 and 0.76: the arms reach out along the board in the air.
+      { min: v(-0.86, 0, -0.77), max: v(0.86, REST_Y + 0.9, 0.61) },
+      { min: v(-0.86, REST_Y + 0.9, -0.8), max: v(0.86, REST_Y + 1.9, 0.59) },
     ],
     /** Margin around the fitted frustum on each side, metres (covers the PCF kernel). */
     pad: 0.03,
@@ -398,14 +412,19 @@ export const ART = {
      * of a 0.6 m pop, the highest the sliders and the timing bar allow (2.08
      * m above the deck centre at rest, swept over every input in
      * body.test.ts), plus `headroom`; the arms' band out to the hands at their
-     * widest (0.94 m along the board) and highest (1.68 m). Above and the
-     * replay's low close shot keep the board's own box and may crop the body.
+     * widest (0.94 m along the board) and highest (1.68 m). The replay's low
+     * close shot and Free fisheye keep the board's own box and may crop the body.
+     * 2026-11-13: the knees now tuck in the air (legs.ts HIPS.jump), so the
+     * crown peaks at 1.80 m and the hands reach 0.71 m out and 1.43 m up; the
+     * outline keeps its size, so every view frames the flight as before and
+     * the game's rest framing stays closer than the whole flight's (ADR-86).
+     * Only `arms.front` grew, 2 cm, for a hand reaching 0.75 m to the toe side.
      */
     rider: {
       head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
-      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.78, back: 0.2 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.8, back: 0.2 },
     },
-    filmsRider: ['free', 'film', 'side', 'showcase'] as readonly string[],
+    filmsRider: ['free', 'film', 'showcase'] as readonly string[],
     /**
      * Where the views that film the whole rider look (ADR-85): 1.0 m up, the
      * rider's middle at the top of an average pop, each view's target and
@@ -415,8 +434,8 @@ export const ART = {
      */
     riderLook: 1.0,
     /**
-     * The game's framing of the rider at rest (ADR-86, 2026-11-11), for Free,
-     * Filmer and Side while the whole rider shows and motion is allowed: the
+     * The game's framing of the rider at rest (ADR-86, 2026-11-11), for Free
+     * and Filmer while the whole rider shows and motion is allowed: the
      * board on the pad and the rider over it, with the room the body takes
      * as the pop extends it, measured against the camera's rise (`cameraRise`
      * in cameraFit.ts: the board's height, eased in and out over the first
@@ -434,9 +453,12 @@ export const ART = {
      *   the heel side (a bail's step).
      * - `arms`: the hands, 0.88 m out (a bail's) and 1.09 m up, plus the
      *   mitten; framed only while it costs little (`armsSlack`).
-     * - `head`: the beanie's crown, at most 1.53 m over the deck's centre
-     *   (the pop's extension, ahead of the rise), 0.2 to 0.47 m toward the toe
-     *   side as it gets there, plus 4 cm of headroom.
+     * - `head`: the beanie's crown, at most 1.56 m over the deck's centre
+     *   (the pop's extension, ahead of the rise), from 0.47 m toward the
+     *   toe side to 0.17 m toward the heels (a low bail's squat, the seat sat
+     *   back, legs.ts ANKLE), plus 4 cm of headroom (2026-11-13: from
+     *   1.53 m and 0.2, with the riding stance's shoulders open to the nose;
+     *   toward the heels from 0.14 m on the toe side before the seat sat back).
      * The board is the frame's bottom, the crown its top, with `margin` of
      * the clear area kept free at each edge (the clear area is already clear
      * of the cards). Framing the whole flight (ADR-85) stays for reduced
@@ -449,7 +471,7 @@ export const ART = {
         { min: v(-0.44, -0.16, -0.16), max: v(0.44, REST_Y + 0.36, 0.16) },
         { min: v(-0.7, -0.15, -0.64), max: v(0.7, REST_Y + 0.5, 0.47) },
         { min: v(-0.94, REST_Y + 0.4, -0.76), max: v(0.94, REST_Y + 1.14, 0.2) },
-        { min: v(-0.25, REST_Y + 1.0, -0.5), max: v(0.25, REST_Y + 1.53 + 0.04, -0.17) },
+        { min: v(-0.25, REST_Y + 1.0, -0.5), max: v(0.25, REST_Y + 1.56 + 0.04, 0.17) },
       ],
       riseEase: 0.2,
       bailEase: 0.15,
@@ -469,6 +491,13 @@ export const ART = {
        * sketchy landing, a bail) may go under a card, never the rest.
        */
       armsSlack: 1.1,
+      /**
+       * The balanced look's search (`balancedLook`, ADR-86): the field of view
+       * it balances the frame for (degrees; the rest framing's own, kept at 28
+       * so every rest framing stays where it was measured) and the lowest and
+       * highest target heights it tries (metres).
+       */
+      look: { fov: 28, low: 0.3, high: 1.5 },
     },
     /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
@@ -517,23 +546,22 @@ export const ART = {
         target: v(0, 0.45, 0),
       },
       /**
-       * The game's fixed angles (step 17, ADR-72, 2026-11-10), like a friend
+       * The game's views (step 17, ADR-72, 2026-11-10; Side, Above and the
+       * fixed Fisheye removed by ADR-100, 2026-11-13), like a friend
        * filming: lower and closer than the lab's, all on the heel side (+Z),
        * so the skate spot (ADR-69) stays behind the board and the legs stand
        * above it on screen. `look(elevation, azimuth, targetY)`: degrees up
        * from the horizon and round from the heel side toward +X (the goofy
        * nose; the camera never moves with the stance, ADR-25). The fit sets
        * the distance, as for the lab's presets.
-       * - `film`, the default: low three-quarter toward the nose, 12 up, 30 round.
-       * - `side`: side on and low, 7 up, the board in profile against the spot.
-       * - `above`: 34 up, 20 round toward the tail: the deck and the feet from above the heels.
+       * - `film`: low three-quarter toward the nose, 12 up, 30 round.
        * - `replay`: the instant replay's spot, 4 up and 40 round, low and wide
        *   (its own field of view, `fov` below), close to the board.
-       * With the whole rider on screen (ADR-85, 2026-11-11), `free`, `film`
-       * and `side` look at `riderLook`, not the deck at 0.32 m, and fit the
+       * With the whole rider on screen (ADR-85, 2026-11-11), `free` and
+       * `film` look at `riderLook`, not the deck at 0.32 m, and fit the
        * rider's outline (`rider` above): the whole body at the top of a 0.6 m
-       * pop with headroom, the board low in the frame. `above` and `replay`
-       * keep the board's box and may crop the body.
+       * pop with headroom, the board low in the frame. `replay` and
+       * `freeFisheye` keep the board's box and may crop the body.
        */
       /**
        * `free` (ADR-81, 2026-11-10), the game's default: where the free
@@ -543,16 +571,15 @@ export const ART = {
        */
       free: look(18, 30, 0.32),
       film: look(12, 30, 0.32),
-      side: look(7, 0, 0.32),
-      above: look(34, -20, 0.28),
       replay: look(4, 40, 0.36),
       /**
-       * `fisheye` (ADR-93, 2026-11-13): the replay's low, wide spot as a view
-       * to play in, with its lens and its bend; it frames the board, may
-       * crop the body, and rises with the flight like the rider's views.
+       * `freeFisheye` (ADR-93, 2026-11-13): the replay's low, wide spot, with
+       * its lens and its bend, as the home of a free camera, turned and zoomed
+       * like `free`. It frames the board, may crop the body (B8 of the
+       * 2026-11-13 review leaves that to the owner), and rises with the flight
+       * like the rider's views. The same spot and lens as `replay`, so
+       * returning from a replay is no cut here.
        */
-      fisheye: look(4, 40, 0.36),
-      /** `freeFisheye` (ADR-93): Fisheye's spot as the home of a free camera, turned and zoomed like `free`. */
       freeFisheye: look(4, 40, 0.36),
     },
     /**
@@ -567,12 +594,12 @@ export const ART = {
     free: { azimuth: (75 * Math.PI) / 180, minPolarAngle: (18 * Math.PI) / 180, maxPolarAngle: (81 * Math.PI) / 180 },
     /**
      * Free fisheye (ADR-93): the free camera's turn, but down to 3 degrees
-     * above the horizon, under its home's 4, so it can start where Fisheye
-     * stands. Tested in gameCamera.test.ts at every corner with its lens.
+     * above the horizon, under its home's 4, so it can start at the replay's
+     * low spot. Tested in gameCamera.test.ts at every corner with its lens.
      */
     freeFisheye: { maxPolarAngle: (87 * Math.PI) / 180 },
     /** Fields of view other than `fov`, per view: the replay's is wide, for its fisheye (ADR-72). */
-    fovs: { replay: 60, fisheye: 60, freeFisheye: 60 } as Partial<Record<string, number>>,
+    fovs: { replay: 60, freeFisheye: 60 } as Partial<Record<string, number>>,
   },
   /**
    * Rotation direction (ADR-10, made goofy by ADR-24 on 2026-11-04). The
@@ -852,7 +879,8 @@ export const ART = {
     tricks: ['kickflip', '360-flip', 'heelflip', 'varial-flip', 'frontside-pop-shove-it', 'varial-heelflip'],
     rate: 0.5,
     holdBefore: 0.7,
-    holdAfter: 1.1,
+    // 1.3 (from 1.1, 2026-11-13): the rider's recovery (0.55 s of the flight's time, 1.1 s at `rate`) and a moment riding.
+    holdAfter: 1.3,
     maxStep: 0.1,
     still: { trick: 0, progress: 0.45 },
   },
@@ -934,13 +962,36 @@ export const ART = {
     cloth: 0.55,
   },
   /**
+   * The detailed rider's tints (ADR-94, High), by region as RIDER_REGIONS
+   * (riderSpec.ts): they multiply its atlas, so white leaves the skin, the
+   * jeans and the eyes as MakeHuman painted them. The shirt (a
+   * plain light grey in the atlas) takes each rider's colour, the player's
+   * orange the procedural rider's hoodie wears, the computer's teal; the
+   * beanie its own dark grey, or the computer's ochre. The sock (the shin
+   * and ankle below the jeans, 2026-11-13) darkens the skin it is painted on
+   * to a charcoal sock (a cool tint, as the skin it multiplies is warm), so the ankle that shows between the hem and the shoe
+   * reads as a sock and never as a strip of bare skin. The hair is painted
+   * into the skin (a buzz cut under the beanie, make_rider.py, 2026-11-13).
+   */
+  riderHigh: {
+    player: ['#d0602f', '#ffffff', '#ffffff', '#ffffff', '#ffffff', '#ffffff', '#3a4560', '#ffffff', '#ffffff', '#3a3e46', '#ffffff', '#ffffff'],
+    computer: ['#3a9a92', '#ffffff', '#ffffff', '#ffffff', '#ffffff', '#ffffff', '#5a6680', '#ffffff', '#ffffff', '#c99a3a', '#ffffff', '#ffffff'],
+  },
+  /**
    * The instant replay (step 17, ADR-72): after the student's made set or
    * copy, the flight once more at `rate` of its own speed from the replay
    * view, with a fisheye `bend` on High and Medium (the effects' composite:
    * a barrel distortion, 0 for none, scaled so the corners stay inside the
-   * picture).
+   * picture). Since ADR-96 (2026-11-13) the whole go: from `pre` seconds of
+   * the flight's own time before the pop (the rider sinking from `ready` into
+   * the crouch) to the end of the landing's own motion and the rider's
+   * recovery (`landingSeconds`) plus `post` seconds, the pace rising from
+   * `rate` by `ramp` per second after touchdown up to `cap` (the game's own
+   * pace of 1 is real time), so it eases out of the slow motion as the rider
+   * stands and rides away, and ends only once he has (2026-11-13: it used to
+   * cut away 0.4 s after touchdown, mid-recovery, a jump to the standing pose).
    */
-  replay: { rate: 0.3, bend: 0.28 },
+  replay: { rate: 0.3, bend: 0.28, pre: 0.15, post: 0.12, ramp: 1.5, cap: 1, ready: 0.45 },
   /**
    * The wind-up (ADR-86, 2026-11-11), seconds: the whole rider in a game
    * sinks from the riding stance into the crouch over `sink` when the timing
@@ -966,14 +1017,20 @@ export const ART = {
    *   them, born one after another over the first `until` of the slide,
    *   between `behind[0]` and `behind[1]` behind the deck centre the way it
    *   slides (its trailing end) and within `across` to either side.
+   * 2026-11-13 (the review's A9): quieter, so a clean landing no longer
+   * leaves bright blobs over the rider's shadow: the colour toward the
+   * ground's concrete (was #d6d0c4), half the opacity (was 0.3), two puffs a
+   * wheel (was three) and a clean puff to 7 cm (was 10); a sketchy landing's
+   * and a bail's keep about their old size (1.85 and 1.7 times, were 1.3 and
+   * 1.2).
    */
   dust: {
-    color: '#d6d0c4',
-    opacity: 0.3,
+    color: '#b7b1a6',
+    opacity: 0.14,
     segments: 10,
     fadeIn: 0.12,
     sit: 0.55,
-    touchdown: { perWheel: 3, life: 0.55, radius: [0.025, 0.1] as readonly [number, number], rise: 0.05, spread: 0.22, sketchy: 1.3, bail: 1.2 },
+    touchdown: { perWheel: 2, life: 0.55, radius: [0.025, 0.07] as readonly [number, number], rise: 0.05, spread: 0.22, sketchy: 1.85, bail: 1.7 },
     slide: { puffs: 12, until: 0.55, life: 0.45, radius: [0.02, 0.085] as readonly [number, number], rise: 0.03, spread: 0.12, behind: [0.28, 0.42] as readonly [number, number], across: 0.13 },
   },
   spot: { loop: SPOT.loop, shadow: { color: '#000000', opacity: 0.42, soft: 0.22, lift: 0.002 } },

@@ -5,10 +5,11 @@ import { Toggle } from './Toggle';
 import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
 /**
- * The game's camera as a radio group (arrow keys move and choose): Free, the
- * default (ADR-81), turned by dragging the stage and zoomed by scrolling or
- * pinching, with Reset view to bring it home; or one of three fixed angles
- * (step 17, ADR-72), which need no pointer at all.
+ * The game's camera as a radio group (arrow keys move and choose), three
+ * views (ADR-100): Free, the default (ADR-81), and Free fisheye (ADR-93),
+ * turned by dragging the stage and zoomed by scrolling or pinching, with
+ * Reset view to bring them home; or Filmer, the one fixed angle (step 17,
+ * ADR-72), which needs no pointer at all.
  */
 function CameraChoice() {
   const view = useTrickStore((s) => s.gameView);

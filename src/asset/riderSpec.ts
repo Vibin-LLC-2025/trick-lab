@@ -1,5 +1,5 @@
 // The rider's body as built (step 1 of ADR-85, 2026-11-11): one skinned
-// mesh over the 17 bones of src/sim/body.ts, lofted round its bind pose by
+// mesh over the 19 bones of src/sim/body.ts, lofted round its bind pose by
 // rider.ts and written to public/models/rider.glb by `npm run assets`. No
 // colours here: each vertex carries a region (RIDER_REGIONS), which the scene
 // paints from ART.rider (scene/riderLook.ts), so the player's and the
@@ -9,6 +9,18 @@
 export const RIDER_ROOT = 'Rider';
 export const RIDER_PARTS = [{ node: 'Body', material: 'rider' }] as const;
 export const RIDER_MATERIAL = { name: 'Rider', roughness: 0.92, metalness: 0 } as const;
+
+/**
+ * The detailed rider (ADR-94, rider-high.glb): its atlas's file name (KTX2
+ * inside the GLB), its cloth and skin's roughness, and the alpha under which
+ * the hair's and the lashes' edges are cut out.
+ */
+export const RIDER_HIGH_ATLAS = 'rider-atlas.png';
+/**
+ * `doubleSided` (2026-11-13, ADR-106): both faces of the cloth are drawn, so where the tee stands off the waist the eye
+ * meets the tee's own shaded inside, not the wall behind the rider through the gap (the grey band under the hem).
+ */
+export const RIDER_HIGH_MATERIAL = { roughness: 0.8, alphaCutoff: 0.5, doubleSided: true } as const;
 
 /**
  * What each vertex is, for its colour (ART.rider, per rider): stored as the
@@ -186,3 +198,18 @@ export const MITTEN = {
   curl: 0.03,
   thumb: { at: 0.03, side: 0.03, length: 0.052, r: 0.0095 },
 } as const;
+
+/**
+ * How much of the bottom of each leg follows the foot bone (2026-11-13): the
+ * share of a vertex's shin weight moved onto its foot, rising (smoothstep)
+ * from nothing `from` metres above the ankle joint (along the shin, in the
+ * bind pose) to the full share `to` metres above it and below. The shoes
+ * stay level with the board while the shin swings far over them in the
+ * flick and the tuck, so a hem on the shin alone stood off the shoe and
+ * showed the leg inside it; on the foot it settles over the collar, as
+ * jeans do on a shoe. The jeans keep some of the shin, so the cuff bends
+ * rather than snaps; the sock goes all the way into the shoe. Both riders
+ * (rider.ts, riderFit.ts, ADR-98); Medium's tube takes the jeans' share
+ * all the way down, so its cuff and the sock under it never part.
+ */
+export const HEM_FOOT = { from: 0.14, to: 0.02, jeans: 0.85, sock: 1 } as const;

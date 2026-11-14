@@ -3,6 +3,9 @@ import { BAR, barScale } from './bar';
 import { computeFlight } from './flight';
 import {
   afterAttempt,
+  bandNote,
+  playerBand,
+  TRICK_BAND,
   aimFor,
   awaitingCall,
   callProblem,
@@ -200,6 +203,33 @@ describe('the computer', () => {
     expect(withComputerCall(copying, () => 0)).toBe(copying);
     const called = game('computer-set', { call: heelCall });
     expect(withComputerCall(called, () => 0)).toBe(called);
+  });
+});
+
+describe("the player's band per trick on Easy and Normal (ADR-105)", () => {
+  it('is the level band for the simple tricks, narrower as a trick turns more, never under Hard, and fixed on Hard', () => {
+    for (const level of ['easy', 'normal'] as const) {
+      const full = SKATE_LEVELS[level].band.halfMs;
+      expect(playerBand(level, 'kickflip').halfMs).toBe(full);
+      expect(playerBand(level, 'pop-shove-it').halfMs).toBe(full);
+      expect(playerBand(level, null).halfMs).toBe(full);
+      expect(playerBand(level, 'varial-flip').halfMs).toBeLessThan(full);
+      expect(playerBand(level, '360-flip').halfMs).toBeLessThan(playerBand(level, 'varial-flip').halfMs);
+      expect(playerBand(level, 'double-tre').halfMs).toBeLessThanOrEqual(playerBand(level, '360-flip').halfMs);
+      for (const t of SETTABLE_TRICKS) {
+        expect(playerBand(level, t.id).halfMs).toBeGreaterThanOrEqual(SKATE_LEVELS.hard.band.halfMs);
+        expect(playerBand(level, t.id).k).toBe(SKATE_LEVELS[level].band.k);
+      }
+    }
+    for (const t of SETTABLE_TRICKS) expect(playerBand('hard', t.id)).toEqual(SKATE_LEVELS.hard.band);
+    // Every settable trick is in the table, so a new trick is a choice, not a default.
+    for (const t of SETTABLE_TRICKS) expect(TRICK_BAND[t.id]).toBeDefined();
+  });
+  it('the card says how much narrower, and nothing for a trick on the whole band', () => {
+    expect(bandNote('normal', 'kickflip')).toBeNull();
+    expect(bandNote('hard', '360-flip')).toBeNull();
+    expect(bandNote('normal', '360-flip')).toBe('Harder trick: the green band is 30 percent narrower.');
+    expect(bandNote('easy', 'double-tre')).toBe('Harder trick: the green band is 45 percent narrower.');
   });
 });
 

@@ -59,6 +59,8 @@ describe('rolling in the game (step 12, ADR-67)', () => {
     // The kickflip landed, so the computer is up to copy it, and it rolls in once the board has stopped
     // and the student's instant replay has played (ADR-72).
     expect(s.getState().skate.phase).toBe('computer-copy');
+    // The rider's recovery plays out with the landing (ADR-96).
+    s.getState().landingDone();
     s.getState().rollRested();
     expect(s.getState().replay).toBe('plays');
     expect(roll(s)).toBe('still');
@@ -194,13 +196,16 @@ const SKETCHY = 2.0;
 const BAIL = 1.1;
 
 describe('landings with weight in the store (step 13, ADR-68)', () => {
-  it('a clean landing has no motion of its own; a sketchy one plays, with the board rolling on', () => {
+  it('a clean landing plays only the rider standing back up (ADR-96); a sketchy one plays, with the board rolling on', () => {
     const clean = exactUp(CLEAN);
     clean.getState().popTrick();
     clean.getState().land();
     expect(clean.getState().result!.grade).toBe('clean');
-    expect(clean.getState().landing).toBe('over');
+    // 2026-11-13 (ADR-96): the landing plays while the rider recovers; before, a clean one was over at once.
+    expect(clean.getState().landing).toBe('plays');
     expect(roll(clean)).toBe('slow');
+    clean.getState().landingDone();
+    expect(clean.getState().landing).toBe('over');
 
     const sketchy = exactUp(SKETCHY);
     sketchy.getState().popTrick();
@@ -224,10 +229,9 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().rollRested();
     expect(roll(s)).toBe('still');
     s.getState().landingDone();
-    // The student's miss is replayed first (ADR-78), and the computer waits for it.
-    expect(s.getState().replay).toBe('plays');
+    // A miss is not replayed on its own (ADR-105): its notice is up, and the computer waits for Continue.
+    expect(s.getState().replay).toBe('none');
     expect(roll(s)).toBe('still');
-    s.getState().endReplay();
     s.getState().continueSkate();
     // The computer rolls in on a fresh board: the bailed one is gone.
     expect(roll(s)).toBe('push');
@@ -322,9 +326,8 @@ describe('landings with weight in the store (step 13, ADR-68)', () => {
     s.getState().land();
     expect(describeScene(s.getState())).toMatch(/The board (falls|slides)/);
     s.getState().landingDone();
-    // The miss is replayed first (ADR-78); after it, the bailed board is back where it slid.
-    expect(s.getState().replay).toBe('plays');
-    s.getState().endReplay();
+    // A miss is not replayed on its own (ADR-105): the bailed board rests where it slid.
+    expect(s.getState().replay).toBe('none');
     expect(describeScene(s.getState())).toMatch(/The board (fell|slid)/);
     const k = exactUp(SKETCHY);
     k.getState().popTrick();

@@ -44,7 +44,9 @@ import { gradeOf, type Grade } from './landing';
  *   lifts (`lift` metres at most), steps `backX` along the deck and `backZ`
  *   further out over `stepS` seconds from `delayS`, and both feet turn a
  *   little more toward the nose (`backYaw`, `frontYaw` degrees), the front
- *   one pivoting where it stands.
+ *   one pivoting where it stands. 2026-11-13 (ADR-96): `backX` 0.13, from 0,
+ *   so the step brings the back foot in toward the front one and the rider
+ *   stands up from the bail on a natural stance, not on the board's wide one.
  */
 export const SETTLE = {
   sketchy: { rockDeg: 5, rockS: 0.5, swerveDeg: 7, swerveS: 1.0, sideM: 0.05 },
@@ -57,7 +59,7 @@ export const SETTLE = {
     sideM: 0.15,
     straightDeg: 10,
     drop: { g: 9.8, lookS: 0.3, stepS: 1 / 60 },
-    step: { delayS: 0.06, stepS: 0.36, lift: 0.04, backX: 0, backZ: 0.07, backYaw: -12, frontYaw: -4 },
+    step: { delayS: 0.06, stepS: 0.36, lift: 0.04, backX: 0.13, backZ: 0.07, backYaw: -12, frontYaw: -4 },
   },
 } as const;
 
@@ -124,12 +126,55 @@ export function fallSeconds(flight: Flight): number {
   return turn === 0 ? 0 : Math.max(B.minFallS, B.fallS * Math.sqrt(turn / 90));
 }
 
-/** How long the landing plays, seconds: 0 for a clean landing, which has nothing of its own. */
+/** How long the board's own landing plays, seconds: 0 for a clean landing, which has nothing of its own. */
 export function settleSeconds(flight: Flight): number {
   const g = gradeOf(flight.rollTotal, flight.yawTotal);
   if (g === 'clean') return 0;
   if (g === 'sketchy') return Math.max(SETTLE.sketchy.rockS, SETTLE.sketchy.swerveS);
   return Math.max(fallSeconds(flight), SETTLE.bail.slideS);
+}
+
+/**
+ * The rider's recovery after touchdown in a game (ADR-96, 2026-11-13),
+ * seconds since the wheels touched (the landing's clock, so the game's pace
+ * slows it as it slows the flight). Until then the rider held the landing's
+ * pose: squatting in the absorb after a clean landing until the next go, and
+ * after a bail standing stock still, legs apart and arms out, while the board
+ * slid away.
+ * - `landed` (clean and sketchy): the knees give `dip` metres more, at most
+ *   `dipAt` after touchdown (the drop the absorb started carries on and
+ *   slows, so the hips never stop dead), then the rider stands back up into
+ *   the riding stance between `stand` [from, to] (legs.ts HIPS.ride, body.ts
+ *   RIDE), riding away loose as it rode in.
+ * - `bail`: stepped off onto the pad, the rider stumbles, the knees `dip`
+ *   deeper at `dipAt` and the trunk and arms thrown forward and out
+ *   (body.ts MOTION.bail.stumble), then gathers itself between `stand`:
+ *   the hips up to `height` over the ankles and over the middle of the feet,
+ *   the trunk upright, the arms down, the head turned to where the board
+ *   went.
+ */
+export const RECOVER = {
+  landed: { dip: 0.03, dipAt: 0.07, stand: [0.1, 0.55] },
+  bail: { dip: 0.07, dipAt: 0.12, stand: [0.22, 0.9], height: 0.78 },
+} as const;
+
+/** How long a game's landing plays, seconds: the board's own (settleSeconds) or the rider's recovery, the longer. */
+export function landingSeconds(flight: Flight): number {
+  const R = flight.landed ? RECOVER.landed : RECOVER.bail;
+  return Math.max(settleSeconds(flight), R.stand[1]);
+}
+
+/**
+ * How far the rider has stood back up `after` seconds since touchdown, 0 at
+ * the landing's pose to 1 standing (the recovery's own smoothstep, as legs.ts
+ * and body.ts pose it). The game's camera lifts with it as it does for a rider
+ * riding along (SceneCamera's riding lift, 2026-11-13), so a recovered rider's
+ * head stays in the shot.
+ */
+export function recoveredBy(flight: Flight, after: number): number {
+  const [a, b] = (flight.landed ? RECOVER.landed : RECOVER.bail).stand;
+  const u = Math.min(1, Math.max(0, (after - a) / (b - a)));
+  return u * u * (3 - 2 * u);
 }
 
 /**

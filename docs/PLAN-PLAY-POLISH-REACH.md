@@ -413,6 +413,8 @@ As built, where it differs from the list below or adds to it:
 ## Phase D: feel
 
 ### 17. The game's camera, and instant replay
+
+History: ADR-100 (2026-11-13) removed Side and Above (and ADR-93's fixed Fisheye); the game keeps Free, Free fisheye and Filmer.
 - **A game camera:** lower and closer than the lab's, like a friend filming. Two or three fixed angles to choose from, by buttons. The lab keeps its free camera.
 - **The legs never hide the board** from any of its angles or the replay's (moved here from step 15, ADR-70): checked in six poses of a 360 flip, both stances, High and Medium. The skate spot stays behind the board (ADR-69): every angle looks from the +Z side.
 - **Instant replay.** After your made set or copy, the flight plays once more in slow motion, with a fisheye bend on High and Medium.
@@ -559,6 +561,7 @@ Each is a number or a line in one place (decision 26). Change it, run `npm run v
 | Filmer (the default) | 12 degrees up, 30 round toward the nose, aimed 0.32 m up | `film` |
 | Side | 7 degrees up, square on, aimed 0.32 m up | `side` |
 | Above | 34 degrees up, 20 round the other way, aimed 0.28 m up | `above` |
+| (History: ADR-100, 2026-11-13, removed Side and Above; the game keeps Free, Free fisheye and Filmer.) | | |
 | Which camera a new visitor gets | Filmer | `gameViewFrom` in `src/store/replay.ts` |
 | **The instant replay (step 17)** | | |
 | The replay's camera | 4 degrees up, 40 round, aimed 0.36 m up | `ART.camera.views.replay` |

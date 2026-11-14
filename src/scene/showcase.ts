@@ -41,6 +41,30 @@ export function stepShowcase(c: ShowcaseClock, delta: number) {
 /** The flight on screen. */
 export const showcaseFlight = (c: ShowcaseClock): Flight => SHOWCASE_FLIGHTS[c.index]!;
 
+/**
+ * The flight's own seconds since touchdown, in the hold after the landing
+ * (0 before): the rider's recovery (ADR-96) plays there, standing back up
+ * into the riding stance, as in a game, not frozen in the landing's squat
+ * (2026-11-13).
+ */
+export function showcaseAfter(c: ShowcaseClock): number {
+  const f = SHOWCASE_FLIGHTS[c.index]!;
+  return Math.max(0, (c.t - S.holdBefore - f.airtime / S.rate) * S.rate);
+}
+
+/** Whether the clock is in the hold before the pop, where the rider rides with no flight yet and sinks into the crouch. */
+export const showcaseLeadIn = (c: ShowcaseClock) => c.t < S.holdBefore;
+
+/** The wind-up's readiness in the hold before the pop: 0 riding as the last trick left the rider, to 1 crouched at the pop. */
+export function showcaseReady(c: ShowcaseClock): number {
+  if (c.t >= S.holdBefore) return 1;
+  const s = c.t / S.holdBefore;
+  return s * s * (3 - 2 * s);
+}
+
+/** Whether the clock has moved from its start: a paused preview holds the moment it was paused on. */
+export const showcaseMoved = (c: ShowcaseClock) => c.index > 0 || c.t > 0;
+
 /** Progress through the flight on screen: 0 while it holds on the pad, 1 while it holds at the landing. */
 export function showcaseProgress(c: ShowcaseClock): number {
   const f = SHOWCASE_FLIGHTS[c.index]!;

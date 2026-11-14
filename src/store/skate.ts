@@ -3,6 +3,7 @@ import { barLap } from '../sim/bar';
 import {
   afterAttempt,
   awaitingCall,
+  bandNote,
   callProblem,
   callTrick,
   CLEAN_ONLY_NOTE,
@@ -16,6 +17,7 @@ import {
   lessonText,
   lettersText,
   newSkateGame,
+  playerBand,
   popStyle,
   SKATE_LEVELS,
   SKATE_WORD,
@@ -32,7 +34,7 @@ import { INPUT_NAMES, valueText } from '../sim/format';
 import { assistOn } from './forecast';
 import { animates, inFlight } from './playback';
 import { readPref, savePref } from './prefs';
-import { noticeUp } from './notice';
+import { noticeUp, replayOffered } from './notice';
 import { computerWaiting } from './roll';
 import type { Clock } from './assessment';
 import type { PopMode, SkateSlice, TrickState } from './types';
@@ -108,7 +110,8 @@ export const createSkateSlice =
       const moved = (['pop', 'flick', 'scoop'] as const).filter((k) => s[k] !== setup[k]);
       if (moved.length > 0) set({ ...setup, activePreset: null });
       for (const k of moved) s.log('input.changed', { input: k, label: INPUT_NAMES[k], value: setup[k], valueText: valueText(k, setup[k]) });
-      return ` Sliders set for ${withArticle(call.name)}.`;
+      const narrower = bandNote(s.skate.level, call.id);
+      return ` Sliders set for ${withArticle(call.name)}.${narrower ? ` ${narrower}` : ''}`;
     };
     /** The walk-through's opening, for the announcement that starts the player's first go. */
     const lessonLead = () => {
@@ -132,7 +135,7 @@ export const createSkateSlice =
       if (!pending) return;
       const releaseMs = barLap(now() - pending.startedAt);
       drop();
-      get().popTimed({ intended: pending.intended, releaseMs, level: pending.level });
+      get().popTimed({ intended: pending.intended, releaseMs, level: pending.level, band: pending.band });
     };
 
     return {
@@ -198,7 +201,9 @@ export const createSkateSlice =
         }
         const id = ++popSeq;
         // The bar goes round until the second press (ADR-78): nothing is scheduled to end it.
-        set({ pendingPop: { id, startedAt: now(), intended: { pop: s.pop, flick: s.flick, scoop: s.scoop }, level: s.skate.level }, lastRelease: null });
+        // The band is the trick's (ADR-105): narrower for a harder one on Easy and Normal, fixed for this bar.
+        const band = playerBand(s.skate.level, s.skate.call?.id);
+        set({ pendingPop: { id, startedAt: now(), intended: { pop: s.pop, flick: s.flick, scoop: s.scoop }, level: s.skate.level, band }, lastRelease: null });
         // The bar is the push (ADR-67).
         s.startRoll();
         // Short while the ticks play; with sound off the bar is silent, so say so and where Exact is.
@@ -369,7 +374,7 @@ export const createSkateSlice =
         };
       },
 
-      scoreSkate: (result, by) => {
+      scoreSkate: (result, by, why = null) => {
         const s = get();
         if (!skateActive(s.skate)) return [];
         const step = afterAttempt(s.skate, by, result);
@@ -379,12 +384,15 @@ export const createSkateSlice =
         const sliders = game.phase === 'you-copy' && game.call ? assist(game.call) : '';
         // What this go did and whose turn is next waits over the stage once the go is at rest (ADR-80),
         // except at the game's end, where the result takes over the screen.
-        const notice = game.phase === 'over' ? null : { id: ++noticeSeq, kind: 'go' as const, by, made: step.made, news: step.message, letterTo: step.letterTo };
+        const notice =
+          game.phase === 'over'
+            ? null
+            : { id: ++noticeSeq, kind: 'go' as const, by, made: step.made, news: step.message, letterTo: step.letterTo, why: step.made ? null : why };
         set({ skate: game, skateMessage: step.message, skateNotice: notice });
         if (by === 'you' && step.made) s.celebrate(result.name, result.grade === 'clean');
-        // Every go of the student's, made or missed, is replayed once the board is at rest (ADR-72, ADR-78),
-        // except the one that ends the game: the result takes over the screen there.
-        if (by === 'you' && s.instantReplay && animates(s) && game.phase !== 'over') set({ replay: 'due' });
+        // A landed go of the student's is replayed once the board is at rest (ADR-72, ADR-78), except the one that ends
+        // the game: the result takes over the screen there. A miss is not (ADR-105): its notice offers "Watch replay".
+        if (by === 'you' && step.made && s.instantReplay && animates(s) && game.phase !== 'over') set({ replay: 'due' });
         if (step.set) s.log('skate.set', { by, trick: step.set.id });
         if (step.letterTo) {
           s.log('skate.letter', { player: step.letterTo, letters: letters(game.letters[step.letterTo]) });
@@ -418,6 +426,16 @@ export const createSkateSlice =
         s.requestFocus({ kind: 'skate-heading' });
         // The computer's wait starts now, and it rolls in for its go (ADR-67).
         if (computerWaiting(get())) get().startRoll();
+      },
+
+      watchReplay: () => {
+        const s = get();
+        if (!replayOffered(s)) return;
+        set({ replay: 'plays' });
+        // The notice gives way to the replay and comes back after it, taking focus again on its Continue.
+        noticeFocused = 0;
+        s.requestFocus({ kind: 'skate-heading' });
+        s.announce('Replay of your go. Space or Escape skips it.');
       },
 
       revealNotice: () => {

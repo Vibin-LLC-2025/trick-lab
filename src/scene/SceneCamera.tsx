@@ -33,23 +33,23 @@ const REST_ESSENTIAL = [BOARD_BOX, SHOES_BOX, HEAD_BOX].flatMap(boxCorners);
  * game's at 1440 x 900 (the balance hardly moves with its height).
  */
 const REST_LOOK = Object.fromEntries(
-  (['free', 'film', 'side'] as const).map((v) => [
+  (['free', 'film'] as const).map((v) => [
     v,
-    balancedLook({ from: C.views[v].position, target: C.views[v].target, fov: 28, points: REST_ESSENTIAL, margin: C.rest.margin, low: 0.3, high: 1.5 }),
+    balancedLook({ from: C.views[v].position, target: C.views[v].target, points: REST_ESSENTIAL, margin: C.rest.margin, ...C.rest.look }),
   ]),
 ) as Partial<Record<ViewKey, number>>;
 
-/** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's free camera's home (ADR-81), its three fixed angles and its replay (ADR-72). */
+/** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's three views (ADR-100: Free's home, ADR-81; Free fisheye's, ADR-93; Filmer, ADR-72) and its replay (ADR-72). */
 export type ViewKey = CameraView | 'showcase' | GameView | 'replay';
 
 /**
  * What a view keeps in frame (ADR-86):
  * - `board`: the board's whole flight (ADR-18), where the rider is not filmed;
  * - `flight`: the whole rider over the whole flight (ADR-85), the welcome
- *   screen's preview, and Free, Filmer and Side under reduced motion, where
+ *   screen's preview, and Free and Filmer under reduced motion, where
  *   the camera does not move;
  * - `rest`: the rider at rest with the room the pop takes (`ART.camera.rest`),
- *   Free, Filmer and Side in a game, the camera rising with the flight
+ *   Free and Filmer in a game, the camera rising with the flight
  *   (`cameraRise`), so the board is about twice the size.
  */
 export type Framing = 'board' | 'flight' | 'rest';
@@ -109,7 +109,7 @@ const preset = (key: ViewKey, framing: Framing) => {
   return { target: new Vector3(...V.target), home: new Vector3(...V.position), targetArray: [...V.target] as [number, number, number] };
 };
 type Preset = ReturnType<typeof preset>;
-const KEYS: readonly ViewKey[] = ['rider', 'detail', 'showcase', 'free', 'film', 'side', 'above', 'replay', 'fisheye', 'freeFisheye'];
+const KEYS: readonly ViewKey[] = ['rider', 'detail', 'showcase', 'free', 'freeFisheye', 'film', 'replay'];
 const FRAMINGS: readonly Framing[] = ['board', 'flight', 'rest'];
 
 /** Each preset's target and home position as vectors, built once per framing (ADR-38, ADR-85, ADR-86). */
@@ -125,7 +125,7 @@ export function viewFor(s: Pick<TrickState, 'screen' | 'cameraView' | 'gameView'
 /** The clear part of the stage the camera frames in: the page's measurement on the game screen (ADR-86), the whole stage elsewhere. */
 export const clearFor = (s: Pick<TrickState, 'screen' | 'stageClear'>): ClearArea => (s.screen === 'skate' && s.stageClear ? s.stageClear : FULL_STAGE);
 
-/** Whether the camera rises with the flight (ADR-86): the rest framing, outside the replay (which keeps its own spot, ADR-72), and the Fisheye view while motion is allowed (ADR-93). */
+/** Whether the camera rises with the flight (ADR-86): the rest framing, outside the replay (which keeps its own spot, ADR-72), and Free fisheye while motion is allowed (ADR-93). */
 const rises = (view: ViewKey, framing: Framing, calm: boolean) => (framing === 'rest' && view !== 'replay') || (isFisheye(view) && !calm);
 
 /** How far the rise has moved the camera and its target: one number per mounted camera, taken off before any placement. */
@@ -206,13 +206,17 @@ const lookAt = new Vector3();
  * comes down with the rider as it sinks into the crouch: the readiness
  * FlightDriver left this frame (its useFrame runs first).
  */
-function Rise({ active, base, appliedRef }: { active: boolean; base: Vector3; appliedRef: Applied }) {
+function Rise({ active, lift, base, appliedRef }: { active: boolean; lift: boolean; base: Vector3; appliedRef: Applied }) {
   useFrame((state) => {
     const camera = state.camera;
     const controls = state.controls as { target: Vector3 } | null;
     const s = useTrickStore.getState();
-    // The flight's rise, plus the riding lift while the rider stands tall before its wind-up (FlightDriver stepped it this frame).
-    const r = active ? cameraRise(s.flight, liveProgress(useTrickStore.playhead, s), C.rest.riseEase, C.rest.bailEase) + (1 - wind.ready) * C.rest.rideLift : 0;
+    // The flight's rise, plus the riding lift while the rider stands tall: before its wind-up, and standing back up after
+    // a landing (2026-11-13; FlightDriver stepped both this frame).
+    // The replay keeps its own spot but takes the riding lift of the view it hands back to (`lift`), so a rider standing
+    // up at its end is framed as the view after it frames them: no jump up as it ends (A10, 2026-11-13).
+    const ride = Math.max(1 - wind.ready, wind.stood) * C.rest.rideLift;
+    const r = active ? cameraRise(s.flight, liveProgress(useTrickStore.playhead, s), C.rest.riseEase, C.rest.bailEase) + ride : lift ? ride : 0;
     const d = r - appliedRef.current;
     if (d === 0) return;
     appliedRef.current = r;
@@ -235,8 +239,8 @@ function Rise({ active, base, appliedRef }: { active: boolean; base: Vector3; ap
  * for the rise, ADR-86). On the welcome screen (ADR-45) the camera holds the
  * preview's own preset and the orbit is off. The game's default is its free
  * camera (ADR-81): the orbit is on, kept to the heel side and between the
- * game's own heights (`ART.camera.free`); its three fixed angles (ADR-72) and
- * the replay keep the orbit off. The lab keeps its free camera. On the game
+ * game's own heights (`ART.camera.free`), and so is Free fisheye's (ADR-93);
+ * Filmer, its one fixed angle (ADR-72, ADR-100), and the replay keep the orbit off. The lab keeps its free camera. On the game
  * screen every view frames inside the clear part of the stage (ADR-86).
  */
 export function SceneCamera() {
@@ -244,6 +248,7 @@ export function SceneCamera() {
   const lab = useTrickStore((s) => s.screen === 'lab');
   const game = useTrickStore((s) => s.screen === 'skate');
   const view = useTrickStore(viewFor);
+  const gameView = useTrickStore((s) => s.gameView);
   const rider = useTrickStore(riderShown);
   const calm = useTrickStore((s) => s.reducedMotion);
   const clear = useTrickStore(clearFor);
@@ -271,8 +276,8 @@ export function SceneCamera() {
           zoomOut: C.zoomOut,
           fogNear: ART.fog.near,
         })}
-        // The game's fixed angles and the replay have the orbit off, but OrbitControls clamps the polar angle even then:
-        // no limit there, or Filmer, Side and the replay were all pushed up to the lab's 18 degrees (fixed with ADR-86).
+        // Filmer and the replay have the orbit off, but OrbitControls clamps the polar angle even then:
+        // no limit there, or both were pushed up to the lab's 18 degrees (fixed with ADR-86).
         minPolarAngle={free ? C.free.minPolarAngle : game ? 0 : C.minPolarAngle}
         // The welcome preview sits lower than a student may orbit, to show the sky (ADR-52); it never orbits.
         maxPolarAngle={home ? C.showcaseMaxPolarAngle : view === 'freeFisheye' ? C.freeFisheye.maxPolarAngle : free ? C.free.maxPolarAngle : game ? Math.PI : C.maxPolarAngle}
@@ -281,7 +286,7 @@ export function SceneCamera() {
         maxAzimuthAngle={free ? C.free.azimuth : Infinity}
       />
       <FitAndReset distance={distance} view={view} framing={framing} clear={clear} appliedRef={appliedRef} />
-      <Rise active={rises(view, framing, calm)} base={P.target} appliedRef={appliedRef} />
+      <Rise active={rises(view, framing, calm)} lift={view === 'replay' && rises(gameView, framingFor(gameView, rider, calm), calm)} base={P.target} appliedRef={appliedRef} />
     </>
   );
 }

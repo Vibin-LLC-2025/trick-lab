@@ -14,6 +14,8 @@ import {
   SETTABLE_GROUPS,
   SKATE_LEVEL_ORDER,
   SKATE_LEVELS,
+  bandNote,
+  playerBand,
   SKATE_WORD,
   skateActive,
   trickGuide,
@@ -25,7 +27,7 @@ import {
 } from '../sim/skate';
 import type { TrickId } from '../sim/tricks';
 // The computer's wait (ADR-46) is the store's, shared by the timer and the countdown bar, so the two always start together.
-import { COMPUTER_DELAY_MS, computerWaiting, noticeUp, replayMoves, useTrickStore, type PopMode, type TrickState } from '../store';
+import { COMPUTER_DELAY_MS, computerWaiting, goSettling, noticeUp, replayMoves, replayOffered, useTrickStore, type PopMode, type TrickState } from '../store';
 import { Forecast, Inputs } from './Inputs';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -304,13 +306,44 @@ function TurnStatus() {
  * and for the student the call picker and the guide. Colour and the word
  * both say whose turn it is.
  */
+/**
+ * The game as the turn card and chip show it: a go scored but still playing
+ * out (its landing, the roll, the replay) is still the go on screen, and the
+ * next turn shows with the go's notice (2026-11-13). The game itself has
+ * moved on; only the picture holds.
+ */
+function useShownGame() {
+  const live = useTrickStore((s) => s.skate);
+  const settling = useTrickStore(goSettling);
+  const [held, setHeld] = useState(live);
+  // React's way to keep what an earlier render showed: set during render, guarded, so it settles at once.
+  if (!settling && held !== live) setHeld(live);
+  return { game: settling ? held : live, settling };
+}
+
 function TurnCard() {
-  const game = useTrickStore((s) => s.skate);
+  const { game, settling } = useShownGame();
+  // The news is the go just played, so it shows as it comes.
   const message = useTrickStore((s) => s.skateMessage);
   const lesson = useTrickStore((s) => s.skateLesson);
   const assisted = useTrickStore((s) => popStyleOf(s) === 'assisted');
   const view = turnView(game);
   if (!view) return null;
+  if (settling) {
+    return (
+      <section className={`panel turn turn--${view.who} hud__turn`} aria-labelledby="skate-heading" data-covers="left">
+        {message && <p className="turn__news">{message}</p>}
+        <h2 id="skate-heading" className="turn__who" tabIndex={-1}>
+          {view.title}
+        </h2>
+        <p className="turn__task">
+          <span className="turn__label">{view.label}</span>
+          <span className="turn__trick">{view.trick ?? 'Call a trick'}</span>
+        </p>
+        <p className="turn__status">Landing&hellip;</p>
+      </section>
+    );
+  }
   return (
     <section className={`panel turn turn--${view.who} hud__turn`} aria-labelledby="skate-heading" data-covers="left">
       {message && <p className="turn__news">{message}</p>}
@@ -323,6 +356,8 @@ function TurnCard() {
         <span className="turn__trick">{view.trick ?? 'Call a trick'}</span>
       </p>
       {game.secondTry && <p className="turn__note">Last letter: second try</p>}
+      {/* A harder trick on Easy and Normal gets a narrower band (ADR-105): the card says so. */}
+      {view.who === 'you' && assisted && game.call && bandNote(game.level, game.call.id) && <p className="turn__note turn__note--band">{bandNote(game.level, game.call.id)}</p>}
       <TurnStatus />
       {game.phase === 'you-set' && <CallPicker />}
       {view.who === 'you' && lesson ? <Lesson /> : view.who === 'you' && game.call && !assisted && <Guide call={game.call} />}
@@ -354,10 +389,13 @@ export function TimingStrip() {
   const last = useTrickStore((s) => s.lastRelease);
   // The go's release stays up until Continue clears the stage (ADR-80).
   const onStage = useTrickStore((s) => s.flight !== null);
-  const band = useTrickStore((s) => SKATE_LEVELS[s.skate.level].band);
+  // The band drawn is the one the bar is judged on (ADR-105): the running bar's, the release shown's, or the trick's to come.
+  const comingMs = useTrickStore((s) => (turnOf(s.skate) === 'you' ? playerBand(s.skate.level, s.skate.call?.id) : SKATE_LEVELS[s.skate.level].band).halfMs);
+  const comingK = useTrickStore((s) => SKATE_LEVELS[s.skate.level].band.k);
   if (!timed) return null;
   const part = (ms: number) => `${((ms / BAR.sweepMs) * 100).toFixed(2)}%`;
   const shown = !pending && last && onStage ? last : null;
+  const band = pending?.band ?? shown?.band ?? { halfMs: comingMs, k: comingK };
   const style = {
     '--band-from': part(BAR.centreMs - band.halfMs),
     '--band-width': part(band.halfMs * 2),
@@ -408,8 +446,22 @@ function Controls() {
   const assisted = useTrickStore((s) => popStyleOf(s) === 'assisted');
   // While the instant replay plays the same button skips it (ADR-72), so focus never moves.
   const replaying = useTrickStore(replayMoves);
+  // A go still playing out has nothing to press for until its notice (2026-11-13): the button says so, dimmed.
+  const settling = useTrickStore(goSettling);
   // While a board is in the air the button says so (ADR-86): dimmed while it flies, and paused it only says to resume.
-  const label = replaying ? 'Skip replay' : status === 'playing' || status === 'paused' ? 'In the air' : cpu ? "Computer's go" : mine ? (running ? 'Pop!' : 'Get ready') : 'Pop';
+  const label = replaying
+    ? 'Skip replay'
+    : status === 'playing' || status === 'paused'
+      ? 'In the air'
+      : settling
+        ? 'Landing'
+        : cpu
+          ? "Computer's go"
+          : mine
+            ? running
+              ? 'Pop!'
+              : 'Get ready'
+            : 'Pop';
   return (
     // Each part says which side of the stage it covers, so the camera frames clear of it (ADR-86).
     <div className="hud__tray">
@@ -429,7 +481,7 @@ function Controls() {
             className="btn btn--primary skate__pop"
             aria-label={label}
             aria-keyshortcuts={replaying ? 'Space Escape' : 'Space'}
-            aria-disabled={status === 'playing' || undefined}
+            aria-disabled={status === 'playing' || (settling && !replaying) || undefined}
             onClick={pressPop}
           >
             {label} <kbd aria-hidden="true">Space</kbd>
@@ -591,7 +643,7 @@ export function Skate() {
 /** Whose turn it is, large, over the stage where the panels stack under it (a narrow screen, ADR-46); hidden where the turn card itself is over the stage (ADR-66). Decorative: the turn card says the same in the DOM. */
 export function TurnChip() {
   // Select the game, then derive: a selector that builds a new object would re-render forever.
-  const game = useTrickStore((s) => s.skate);
+  const { game } = useShownGame();
   const view = turnView(game);
   if (!view) return null;
   return (
@@ -621,6 +673,8 @@ export function Notice() {
   const game = useTrickStore((s) => s.skate);
   const calm = useTrickStore((s) => s.reducedMotion);
   const go = useTrickStore((s) => s.continueSkate);
+  const offered = useTrickStore(replayOffered);
+  const watch = useTrickStore((s) => s.watchReplay);
   if (!notice || !up) return null;
   const next = turnView(game);
   const coin = notice.kind === 'coin';
@@ -652,6 +706,7 @@ export function Notice() {
               {notice.by === 'you' ? 'Your go' : "Computer's go"}
             </p>
             <p className="notice__news">{notice.news}</p>
+            {notice.why && <p className="notice__why">{notice.why}</p>}
             {notice.letterTo && (
               <p className="notice__letter">
                 <span>{notice.letterTo === 'you' ? 'You get a letter' : 'The computer gets a letter'}</span>
@@ -680,9 +735,17 @@ export function Notice() {
             </p>
           </div>
         )}
-        <button id="skate-notice-continue" type="button" className="btn btn--primary notice__continue" aria-describedby="skate-notice-title" onClick={go}>
-          Continue <kbd aria-hidden="true">Enter</kbd>
-        </button>
+        <div className="notice__actions">
+          <button id="skate-notice-continue" type="button" className="btn btn--primary notice__continue" aria-describedby="skate-notice-title" onClick={go}>
+            Continue <kbd aria-hidden="true">Enter</kbd>
+          </button>
+          {/* A miss is not replayed on its own (ADR-105): the player may watch it. Focus comes back to Continue after. */}
+          {offered && (
+            <button id="skate-notice-replay" type="button" className="btn notice__replay" onClick={watch}>
+              Watch replay
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

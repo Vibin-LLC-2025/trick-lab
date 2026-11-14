@@ -94,7 +94,8 @@ export const FILE_BUDGETS: Record<string, number> = {
   [FONT]: 16 * KB,
   _artDirection: 202 * KB,
   _shoeSpec: 2 * KB,
-  'src/scene/TrickScene.tsx': 84 * KB,
+  // 85 KB since ADR-103 (2026-11-13): the lost-context watcher took it 27 bytes past 84.
+  'src/scene/TrickScene.tsx': 85 * KB,
   'src/scene/nodeRenderer.ts': 185 * KB,
   'src/scene/BoardModel.tsx': 1 * KB,
   _gltf: 29 * KB,
@@ -108,6 +109,9 @@ export const FILE_BUDGETS: Record<string, number> = {
   'models/ground.glb': 148 * KB,
   'models/shoes.glb': 176 * KB,
   'models/rider.glb': 51 * KB,
+  // The detailed rider (ADR-94), High only: MakeHuman's body and its atlas (KTX2). ADR-101 (2026-11-13) gave the
+  // jeans twice the pixels across in the same 2048 atlas: 573.4 KB compressed, from 430.3.
+  'models/rider-high.glb': 574 * KB,
   'stills/welcome-dark.webp': 27 * KB,
   'stills/welcome-light.webp': 28 * KB,
 };
@@ -117,9 +121,11 @@ export const FILE_BUDGETS: Record<string, number> = {
  * feet: step 14's "everything on a first visit" (High 1,639, Medium 1,158,
  * Low 410 KB) plus 5 percent, then loosened on 2026-11-10 (ADR-79) from
  * 1,721, 1,216 and 431 KB to leave room for the game, the graphics and how
- * the game feels.
+ * the game feels. High raised from 1,900 to 2,300 KB on 2026-11-13 (ADR-94)
+ * for its lifelike rider, which the owner chose for the machines the game is
+ * designed for: the visit came to 2,118 KB.
  */
-export const VISIT_BUDGETS: Record<Tier, number> = { high: 1900 * KB, medium: 1350 * KB, low: 500 * KB };
+export const VISIT_BUDGETS: Record<Tier, number> = { high: 2300 * KB, medium: 1350 * KB, low: 500 * KB };
 
 /** A build's manifest (dist/.vite/manifest.json): the fields the budget reads. */
 export type Manifest = Record<string, { file: string; imports?: string[]; css?: string[]; assets?: string[] }>;

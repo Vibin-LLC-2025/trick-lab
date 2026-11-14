@@ -5,6 +5,7 @@
 // with the root's number and its `ready` flag, rootReadiness.ts) and the store
 // (`__trickLabStore`). `?nosw` keeps a service worker out of every run.
 import { expect, type Page } from '@playwright/test';
+import type { GameView } from '../src/store/replay';
 
 export type Tier = 'high' | 'medium' | 'low';
 export type Screen = 'home' | 'lab' | 'skate';
@@ -18,9 +19,10 @@ export const HASH: Record<Screen, string> = { home: '', lab: '#/lab', skate: '#/
  * only with a step that adds or removes a draw, in that step's commit. The
  * slider guides (ADR-82) added one on High and Medium; ADR-84 removed them
  * again (measured 2026-11-11), and keeps the motion cues off the game screen.
+ * ADR-99's occlusion denoise adds one on High and Medium (measured 2026-11-13).
  */
 export const GATE: Record<Tier, number> = { high: 60, medium: 40, low: 20 };
-export const LEDGER: Record<Tier, number> = { high: 36, medium: 21, low: 12 };
+export const LEDGER: Record<Tier, number> = { high: 38, medium: 23, low: 12 };
 
 /** The R3F root, PerfProbe's numbers and the store, as the checks read them. */
 interface Debug {
@@ -48,7 +50,7 @@ interface Store {
   startSkate: () => void;
   quitSkate: () => void;
   /** The game's camera (ADR-72) and the clear part of the stage it frames in (ADR-86). */
-  setGameView: (v: 'free' | 'film' | 'side' | 'above') => void;
+  setGameView: (v: GameView) => void;
   stageClear: { left: number; top: number; right: number; bottom: number } | null;
   /** The notice over the stage (ADR-80): the coin flip, or a go's result, waiting for Continue. */
   skateNotice: { kind: string } | null;

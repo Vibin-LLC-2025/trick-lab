@@ -1,6 +1,7 @@
 import type { ClearArea } from './stage';
 import type { Stance } from '../sim/feet';
 import type { Flight, TrickInputs } from '../sim/flight';
+import type { Band } from '../sim/bar';
 import type { SkateGame, SkateLevel, SkatePlayer } from '../sim/skate';
 import type { InputKey, PresetId, TrickId, TrickResult } from '../sim/tricks';
 import type { DeckId, PlayerDeck } from '../asset/deckSpec';
@@ -141,6 +142,14 @@ export interface PlaybackSlice {
   /** Internal: cut short (a change of quality level, reduced motion, the 3D view failing, a quit): the end pose at once. */
   endLanding: () => void;
   /**
+   * Internal: after a change of quality level, reduced motion or the 3D view
+   * failing has cut the go's motion short, the go goes on as if it had come
+   * to rest by itself (a replay that is due, or the go's notice, which takes
+   * focus, and the computer's roll). Without it nothing was left to move the
+   * go on, and the game waited for ever (2026-11-13).
+   */
+  settleGo: () => void;
+  /**
    * The instant replay (step 17, ADR-72, store/replay.ts): due after the
    * student's made set or copy, playing once the board has come to rest.
    * Not logged; scoring, records and the step-down never see it.
@@ -170,6 +179,8 @@ export interface PendingPop {
   /** The sliders as the bar started: what the player is going for. */
   intended: TrickInputs;
   level: SkateLevel;
+  /** The band this bar is judged on: the level's, narrowed for a harder trick on Easy and Normal (ADR-105, `playerBand`). */
+  band: Band;
 }
 
 /** A release of the timing bar, as the skate slice hands it to the pop. */
@@ -178,12 +189,15 @@ export interface TimedPop {
   /** When the bar was released, ms into the sweep (on whichever lap, ADR-78). */
   releaseMs: number;
   level: SkateLevel;
+  band: Band;
 }
 
 /** The last release of the bar in this game, the player's or the computer's: where the bar's marker rests. */
 export interface LastRelease {
   by: SkatePlayer;
   ms: number;
+  /** The band it was judged on (ADR-105), so the strip's verdict and band stay those of the go shown. */
+  band: Band;
 }
 
 export interface AssessmentSlice {
@@ -401,7 +415,7 @@ export interface SkateSlice {
   /** Internal, popTrick: on the computer's turn, its try (what it set, when it released the bar, the inputs that made) and the announcement lead; null on the student's turn. */
   computerGo: () => { inputs: TrickInputs; intended: TrickInputs; releaseMs: number; lead: string; call: string } | null;
   /** Internal, the playback slice's resolve: applies the rules to a resolved flight. Logs, and returns the sentences to announce. */
-  scoreSkate: (result: TrickResult, by: SkatePlayer) => string[];
+  scoreSkate: (result: TrickResult, by: SkatePlayer, why?: string | null) => string[];
   /** Internal, resetSession: ends a game in play, logged as reset. */
   endSkateOnReset: () => void;
   /** How the player pops in a game (ADR-65). Persisted under trick-lab.pop-mode, default timed. A preference: never logged, not exported, not reset. */
@@ -445,6 +459,14 @@ export interface SkateSlice {
   continueSkate: () => void;
   /** Internal, a go has come to rest: when its notice is now on screen, focus goes to its Continue button. */
   revealNotice: () => void;
+  /**
+   * "Watch replay" on the notice of the player's missed go (ADR-105): a miss is
+   * not replayed on its own (landed tricks are). The notice gives way to the
+   * replay, focus goes to the turn's heading (Space or Escape skips it), and
+   * the notice comes back with focus on its Continue. Only with the Instant
+   * replay switch on and motion allowed (`replayOffered`).
+   */
+  watchReplay: () => void;
 }
 
 /**

@@ -14,6 +14,10 @@ export const createInputsSlice: StateCreator<TrickState, [], [], InputsSlice> = 
     const next = snapInput(key, value);
     if (get()[key] === next) return;
     set({ [key]: next, activePreset: null } as Pick<InputsSlice, InputKey | 'activePreset'>);
+    // A slider moved while the bar runs is the setup the release pops (2026-11-13): the bar used to keep the setup
+    // from Get ready, so the forecast said one trick and a release in the band made another.
+    const pending = get().pendingPop;
+    if (pending) set({ pendingPop: { ...pending, intended: { ...pending.intended, [key]: next } } });
     get().log('input.changed', { input: key, label: INPUT_NAMES[key], value: next, valueText: valueText(key, next) });
     // The first game's walk-through says its next prompt when the setup is reached (ADR-66).
     get().lessonMoved();

@@ -239,6 +239,10 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
         set({ replay: 'none' });
       }
       set({ shortcutsOpen: open });
+      // Closed: a go that came to rest behind it (its replay ended as it opened) puts its notice up and focuses its
+      // Continue (ADR-80). The dialog's own close (ShortcutsDialog) runs before App applies the focus, so the notice wins
+      // over the focus the dialog hands back (2026-11-13 review, C-07).
+      if (!open) get().revealNotice();
     },
     toggleTheme: () => {
       const theme: Theme = get().theme === 'dark' ? 'light' : 'dark';
@@ -258,6 +262,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
         get().endLanding();
         // No replay plays under reduced motion (ADR-72).
         set({ replay: 'none' });
+        // The go is at rest now: its notice comes up and takes focus.
+        get().settleGo();
       }
     },
     resetView: () => {
@@ -291,6 +297,8 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // Legs nobody chose follow the level (ADR-70).
       set({ quality, qualityAuto: false, legsVisible: readLegsVisible(quality) });
       get().announce(QUALITY_ANNOUNCEMENT[quality]);
+      // A go whose landing was cut short goes on: its replay, or its notice.
+      get().settleGo();
     },
     toggleFeet: () => {
       const feetVisible = !get().feetVisible;
@@ -344,6 +352,7 @@ export const createUiSlice: StateCreator<TrickState, [], [], UiSlice> = (set, ge
       // One announcement: the failure, then the result if a trick was in the air.
       if (inFlight(get())) get().land(SCENE_UNAVAILABLE_ANNOUNCEMENT);
       else get().announce(SCENE_UNAVAILABLE_ANNOUNCEMENT);
+      get().settleGo();
     },
     noteTrickPace: (ms) => {
       const s = get();

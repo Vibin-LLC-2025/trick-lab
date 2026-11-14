@@ -1,13 +1,13 @@
 import type { StateCreator } from 'zustand';
-import { barFeedback, barMiss, barOff, timedAttempt } from '../sim/bar';
+import { barFeedback, barMiss, barOff, barScale, timedAttempt } from '../sim/bar';
 import { computeFlight, type TrickInputs } from '../sim/flight';
-import { settleSeconds } from '../sim/settle';
-import { describeInputs, describeResult } from '../sim/format';
+import { landingSeconds } from '../sim/settle';
+import { describeAttempt, describeInputs, missWhy, type ReleaseMiss } from '../sim/format';
 import { awaitingCall, SKATE_LEVELS, skateActive } from '../sim/skate';
 import { newlyCompleted, objectiveLabel, OBJECTIVES, recognize } from '../sim/tricks';
 import { liveProgress, type Playhead } from './playhead';
 import { computerWaiting, rollAllowed } from './roll';
-import { DEFAULT_SLOW, GAME_PACE, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
+import { DEFAULT_SLOW, GAME_PACE, gameSpeed, snapSpeed, speedIndex, speedText, SPEEDS } from './speed';
 import type { PlaybackSlice, TimedPop, TrickEvent, TrickState } from './types';
 
 export const initialPlayback = () => ({
@@ -49,7 +49,7 @@ export const createPlaybackSlice =
      * pop to the landing: it opens the result's announcement, so a timed pop
      * says two things in all, the bar's start and the result.
      */
-    let release: { flightId: number; text: string; inBand: boolean } | null = null;
+    let release: { flightId: number; text: string; inBand: boolean; miss: ReleaseMiss } | null = null;
 
     /** Resolves the current flight: logs, scores objectives, announces. */
     const resolve = (lead: string[]) => {
@@ -62,9 +62,9 @@ export const createPlaybackSlice =
       set({ status: 'done', progress: 1, result, scrubFrom: null });
       head.progress = 1;
       // In a game the landing has weight (ADR-68): a sketchy one rocks and swerves, a bail
-      // falls and slides. Shown as it ends at once where nothing may move (ADR-6).
+      // falls and slides, and the rider recovers (ADR-96). Shown as it ends at once where nothing may move (ADR-6).
       if (skateActive(s.skate) && s.screen === 'skate') {
-        set({ landing: animates(s) && settleSeconds(s.flight) > 0 ? 'plays' : 'over' });
+        set({ landing: animates(s) && landingSeconds(s.flight) > 0 ? 'plays' : 'over' });
       }
       // A rolling board rolls on and slows to a stop (ADR-67); after a bail the rider has stopped, and the board slides on alone.
       if (result.grade === 'bail') s.stopRoll();
@@ -84,7 +84,9 @@ export const createPlaybackSlice =
       });
 
       // The computer's tricks (a game of SKATE, ADR-43) are announced as its own and never complete an objective.
-      const out = [...lead, ...(timed ? [timed.text] : []), by === 'computer' ? `The computer's trick: ${describeResult(result)}` : describeResult(result)];
+      // In a game a miss is told against the trick in play, not the trick it came nearest to.
+      const told = describeAttempt(result, skateActive(s.skate) ? s.skate.call : null);
+      const out = [...lead, ...(timed ? [timed.text] : []), by === 'computer' ? `The computer's trick: ${told}` : told];
       // The timing was right and the landing was not clean: the mistake is in the setup, and the result's own words say where.
       if (timed?.inBand && result.grade !== 'clean') out.push('The timing was right, so it was the sliders.');
       const fresh = by === 'you' ? newlyCompleted(result, s.completed) : [];
@@ -101,12 +103,18 @@ export const createPlaybackSlice =
       if (by === 'you') s.noteLanding(result);
       // A landing in the lab is the student's to celebrate; in a game, only a set or copy that counts (scoreSkate).
       if (by === 'you' && result.landed && !skateActive(s.skate)) s.celebrate(result.name, result.grade === 'clean');
-      out.push(...s.scoreSkate(result, by));
+      // A miss of the player's says why on its notice, and what to change (ADR-105): the release, then the sliders.
+      const call = skateActive(s.skate) ? s.skate.call : null;
+      const why = by === 'you' && call ? missWhy(result, call, timed ? timed.miss : null, SKATE_LEVELS[s.skate.level].cleanOnly) : null;
+      out.push(...s.scoreSkate(result, by, why));
       // The automatic step-down (ADR-59): this flight's pace, judged after its result and said with it.
       const pace = s.paceSource?.(s.flightId) ?? null;
       const stepped = pace === null ? null : get().noteTrickPace(pace);
       if (stepped) out.push(stepped);
       s.announce(out.join(' '));
+      // The step-down ended the landing for the rebuilt view (ADR-59, ADR-68): the go goes on to its replay or its
+      // notice through the shared path, as a landing played out would, now that both are queued (2026-11-13 review C-01).
+      if (stepped) get().settleGo();
       // Where nothing moves (reduced motion, no 3D view) the go is at rest already: its notice is up now (ADR-80).
       get().revealNotice();
     };
@@ -144,7 +152,7 @@ export const createPlaybackSlice =
       const inputs = go
         ? tidy(go.inputs)
         : mine
-          ? tidy(timedAttempt(mine.intended, mine.releaseMs, SKATE_LEVELS[mine.level].band))
+          ? tidy(timedAttempt(mine.intended, mine.releaseMs, mine.band))
           : { pop: s.pop, flick: s.flick, scoop: s.scoop };
       // How the pop was made, for the record: exactly as set, or through the bar, with the release and what was set.
       const bar = go ? { ms: go.releaseMs, set: go.intended } : mine ? { ms: mine.releaseMs, set: mine.intended } : null;
@@ -166,7 +174,7 @@ export const createPlaybackSlice =
         result: null,
         scrubFrom: null,
         // Where the bar's marker rests: this release, or nothing after an exact pop.
-        lastRelease: go ? { by, ms: go.releaseMs } : mine ? { by, ms: mine.releaseMs } : null,
+        lastRelease: go ? { by, ms: go.releaseMs, band: SKATE_LEVELS[s.skate.level].band } : mine ? { by, ms: mine.releaseMs, band: mine.band } : null,
       });
       // In a game the student's pop carries the trick in play too: the one they called, or the one to copy.
       if (go) s.log('trick.popped', { by, ...inputs, preset: null, call: go.call, ...how });
@@ -177,8 +185,10 @@ export const createPlaybackSlice =
       s.startRoll();
       if (mine) {
         // The bar's start was announced; what the release did waits for the result (ADR-65).
-        const band = SKATE_LEVELS[mine.level].band;
-        release = { flightId, text: barFeedback(mine.releaseMs, band), inBand: barMiss(mine.releaseMs, band) === 0 };
+        const band = mine.band;
+        const missMs = barMiss(mine.releaseMs, band);
+        const percent = Math.max(1, Math.round(Math.abs(barScale(mine.releaseMs, band) - 1) * 100));
+        release = { flightId, text: barFeedback(mine.releaseMs, band), inBand: missMs === 0, miss: { missMs, percent } };
         if (!animates(s)) resolve([]);
         return;
       }
@@ -263,7 +273,7 @@ export const createPlaybackSlice =
         set({ rate });
         // In a game the speed said is the one seen: the game's pace times this one (ADR-78).
         if (s.screen === 'skate') {
-          const seen = Math.round(rate * GAME_PACE * 1000) / 1000;
+          const seen = Math.round(gameSpeed(rate) * GAME_PACE * 1000) / 1000;
           s.announce(rate === 1 ? 'Slow motion off, game speed.' : `Slow motion on, ${speedText(seen)}.`);
           return;
         }
@@ -324,6 +334,7 @@ export const createPlaybackSlice =
       endLanding: () => {
         if (get().landing === 'plays') set({ landing: 'over' });
       },
+      settleGo: () => rollIn(),
       clearStage: () => {
         const s = get();
         // Only a go at rest: never one in the air, nor a replay that still needs its flight.

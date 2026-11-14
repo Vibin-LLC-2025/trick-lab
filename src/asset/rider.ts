@@ -9,7 +9,7 @@
 import { BufferAttribute, BufferGeometry, Uint16BufferAttribute } from 'three';
 import { BODY, BONE, MIRROR_BONE, newBodyPose, writeBindPose, type BodyPose, type BoneFrame } from '../sim/body';
 import { LEG } from '../sim/legs';
-import { BEANIE, HAIR, HEAD, HOODIE, MITTEN, NECK, REGION, RIDER_MESH, RIDER_UV, SEAT, TORSO, TROUSER } from './riderSpec';
+import { BEANIE, HAIR, HEAD, HEM_FOOT, HOODIE, MITTEN, NECK, REGION, RIDER_MESH, RIDER_UV, SEAT, TORSO, TROUSER } from './riderSpec';
 
 type V3 = [number, number, number];
 /** Bone influences before they are sorted, merged and cut to four. */
@@ -308,10 +308,13 @@ function rightLeg(bind: BodyPose): Vtx[][] {
     (s) => {
       const pelvis = 1 - smooth(-0.06, 0.1, s);
       const shinW = smooth(L1 - 0.06, L1 + 0.05, s);
+      // The cuff and the sock lean on the foot, so they stay on the shoe as the shin swings over it (ADR-98).
+      const foot = shinW * HEM_FOOT.jeans * smooth(L1 + LEG.shank - HEM_FOOT.from, L1 + LEG.shank - HEM_FOOT.to, s);
       return [
         [BONE.pelvis, pelvis],
         [BONE.thighR, (1 - pelvis) * (1 - shinW)],
-        [BONE.shinR, shinW],
+        [BONE.shinR, shinW - foot],
+        [BONE.footR, foot],
       ];
     },
     (s, t) => [t * U.around, (s + 0.2) / U.tile],

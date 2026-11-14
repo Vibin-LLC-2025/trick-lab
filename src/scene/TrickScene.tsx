@@ -11,6 +11,7 @@ import { Pad } from './Pad';
 import { Spot } from './Spot';
 import { PerfProbe } from './PerfProbe';
 import { frame, perfStats } from './perfStats';
+import { watchContextLoss, type LossSource } from './contextLoss';
 import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
 import { isNodeRenderer } from './rendererKind';
 import { readinessOf } from './rootReadiness';
@@ -117,6 +118,16 @@ function onCreated(state: RootState) {
     w.__trickLabPerf = perfStats;
     w.__trickLabRoll = rollMotion;
   }
+}
+
+/**
+ * A lost graphics context or device reaches the store's fallback (contextLoss.ts, the 2026-11-13 review C-04):
+ * watched while this Canvas is mounted, never through a tier change's own teardown.
+ */
+function ContextLoss() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => watchContextLoss(gl as unknown as LossSource, () => useTrickStore.getState().setSceneUnavailable()), [gl]);
+  return null;
 }
 
 /** The WebGPURenderer path (ADR-50) is its own chunk: Low never downloads it. */
@@ -360,6 +371,7 @@ export default function TrickScene() {
       <SharedResources />
       <PostEffects />
       <PerfProbe />
+      <ContextLoss />
     </Canvas>
   );
 }

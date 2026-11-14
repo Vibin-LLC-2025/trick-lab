@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useTrickStore } from '../store';
 
 /** How long the celebration stays: the stamp, a hold, the fade (app.css). Tested. */
@@ -15,12 +15,16 @@ export const CELEBRATION_MS = 1800;
  * gone with no movement. One per landing (keyed on the nonce); one already
  * there when this mounts (a screen change) is not replayed. Decorative and
  * aria-hidden: the result's announcement already says the trick landed. No
- * pointer events, so the orbit works through it.
+ * pointer events, so the orbit works through it. In a game the stickers keep
+ * to the part of the stage the cards and the tray leave clear (the store's
+ * `stageClear`, ADR-86), given to app.css as custom properties: on a wide
+ * screen they stand just above the tray, never behind it (2026-11-13).
  */
 export function Celebration() {
   const celebration = useTrickStore((s) => s.celebration);
   const calm = useTrickStore((s) => s.reducedMotion);
   const unavailable = useTrickStore((s) => s.sceneUnavailable);
+  const clear = useTrickStore((s) => s.stageClear);
   // The landing already celebrated when this mounted, and the last one played to its end.
   const [seen] = useState(() => useTrickStore.getState().celebration?.nonce ?? 0);
   const [ended, setEnded] = useState(0);
@@ -34,8 +38,12 @@ export function Celebration() {
   }, [active, nonce]);
 
   if (!active) return null;
+  // The clear area's edges as fractions of the stage (app.css places the stickers with them); none off the game screen.
+  const style = clear
+    ? ({ '--clear-left': clear.left, '--clear-right': clear.right, '--clear-top': clear.top, '--clear-bottom': clear.bottom } as CSSProperties)
+    : undefined;
   return (
-    <div key={nonce} className="celebration" data-calm={calm || undefined} aria-hidden="true">
+    <div key={nonce} className="celebration" data-calm={calm || undefined} data-clear={clear ? '' : undefined} style={style} aria-hidden="true">
       <span className="celebration__shout">{celebration.clean ? 'Clean!' : 'Landed!'}</span>
       <span className="celebration__trick">{celebration.trick}</span>
     </div>

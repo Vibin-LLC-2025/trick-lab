@@ -8,7 +8,7 @@ import { footLift } from './boardVolume';
 import { mirrorFoot, newFeetPose, PAD_Y, writeFeetIntent, writeFeetPose, type FeetPose, type FootPose } from './feet';
 import { computeFlight, poseAt, rollAt, yawAt, type Flight } from './flight';
 import { gradeOf } from './landing';
-import { newSettle, restSide, SETTLE, settleSeconds, slideWay, writeBailFeet, writeSettle, type Settle } from './settle';
+import { landingSeconds, newSettle, RECOVER, recoveredBy, restSide, SETTLE, settleSeconds, slideWay, writeBailFeet, writeSettle, type Settle } from './settle';
 
 const D2R = Math.PI / 180;
 
@@ -277,5 +277,37 @@ describe('landings with weight (step 13, ADR-68)', () => {
 
   it('every landing is over inside the computer’s wait, with the push to come after it', () => {
     for (const inputs of [...BAILS, ...SKETCHY]) expect(settleSeconds(computeFlight(inputs))).toBeLessThanOrEqual(1.3);
+    // The rider's recovery too (ADR-96): the landing plays the longer of the two.
+    for (const inputs of [...BAILS, ...SKETCHY, { pop: 0.35, flick: 1.9, scoop: 0 }]) {
+      const f = computeFlight(inputs);
+      expect(landingSeconds(f)).toBeLessThanOrEqual(1.3);
+      expect(landingSeconds(f)).toBeGreaterThanOrEqual(settleSeconds(f));
+      expect(landingSeconds(f)).toBeGreaterThanOrEqual((f.landed ? RECOVER.landed : RECOVER.bail).stand[1]);
+    }
+  });
+
+  it('the recovery step brings the back foot in toward the front one, so the rider stands on a natural stance (ADR-96)', () => {
+    for (const inputs of BAILS) {
+      const f = computeFlight(inputs);
+      const start = writeBailFeet(newFeetPose(), inputs, f, writeSettle(newSettle(), f, 0), 'goofy');
+      const gap = start.front.x - start.back.x;
+      const end = writeBailFeet(newFeetPose(), inputs, f, writeSettle(newSettle(), f, Infinity), 'goofy');
+      expect(end.front.x - end.back.x).toBeCloseTo(gap - SETTLE.bail.step.backX, 6);
+      expect(end.front.x - end.back.x).toBeGreaterThan(0.2);
+    }
+  });
+});
+
+describe('recoveredBy (2026-11-13)', () => {
+  it('goes from 0 at the landing to 1 standing, over the recovery, landed or bailed', () => {
+    for (const inputs of [{ pop: 0.35, flick: 1.9, scoop: 0 }, { pop: 0.15, flick: 1.9, scoop: 0 }]) {
+      const flight = computeFlight(inputs);
+      const [a, b] = (flight.landed ? RECOVER.landed : RECOVER.bail).stand;
+      expect(recoveredBy(flight, 0)).toBe(0);
+      expect(recoveredBy(flight, a)).toBe(0);
+      expect(recoveredBy(flight, (a + b) / 2)).toBeCloseTo(0.5, 9);
+      expect(recoveredBy(flight, b)).toBe(1);
+      expect(recoveredBy(flight, Infinity)).toBe(1);
+    }
   });
 });

@@ -1,6 +1,6 @@
 // The rider's mesh (ADR-85): one skinned geometry round the bind pose of
 // src/sim/body.ts, symmetric, every vertex smoothly weighted to at most four
-// of the 17 bones, its regions and cloth coordinates in range.
+// of the 19 bones, its regions and cloth coordinates in range.
 import { describe, expect, it } from 'vitest';
 import { BONE, MIRROR_BONE, RIDER_BONES } from '../sim/body';
 import { LEG } from '../sim/legs';

@@ -88,6 +88,8 @@ describe("the game's notices (ADR-80)", () => {
     expect(s.getState().skateNotice).toMatchObject({ kind: 'go', by: 'you', made: true, news: 'You landed your kickflip!', letterTo: null });
     // Not yet: the board rolls on, then the replay plays (ADR-72), and focus stays put.
     expect(noticeUp(s.getState())).toBe(false);
+    // The rider's recovery plays out with the landing (ADR-96).
+    s.getState().landingDone();
     s.getState().rollRested();
     expect(s.getState().replay).toBe('plays');
     expect(noticeUp(s.getState())).toBe(false);
@@ -207,6 +209,7 @@ describe("the game's notices (ADR-80)", () => {
     s.getState().startSkate();
     s.getState().continueSkate();
     myGo(s);
+    s.getState().landingDone();
     s.getState().rollRested();
     expect(s.getState().replay).toBe('plays');
     s.getState().requestLeave('lab');

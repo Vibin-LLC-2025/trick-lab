@@ -2,10 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { open, type DebugWindow } from './helpers';
 
 // The game's framing and its HUD (ADR-86). At 1440 x 900 on High, on the
-// player's go at rest from Free, Filmer and Side: the board, both shoes and
-// the head sit inside the part of the stage the cards leave clear, under no
-// card, and the board is long on screen; the landing zones on the sliders
-// show round the thumb.
+// player's go at rest from Free and Filmer (Side removed by ADR-100): the
+// board, both shoes and the head sit inside the part of the stage the cards
+// leave clear, under no card, and the board is long on screen. Free fisheye
+// (ADR-93) frames the board and may crop the body: the board and both shoes
+// inside the clear area, its wide lens and its bend. The landing zones on the
+// sliders show round the thumb.
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -82,7 +84,7 @@ const measure = (page: Page) =>
 const inside = (b: Box, c: Box) => b.l >= c.l - 0.5 && b.r <= c.r + 0.5 && b.t >= c.t - 0.5 && b.b <= c.b + 0.5;
 const overlaps = (b: Box, c: Box) => b.r > c.l && b.l < c.r && b.b > c.t && b.t < c.b;
 
-test('the rider at rest is inside the clear part of the stage from Free, Filmer and Side, under no card, the board long (ADR-86)', async ({ page }) => {
+test('the rider at rest is inside the clear part of the stage from Free and Filmer, under no card, the board long (ADR-86)', async ({ page }) => {
   const errors = await open(page, 'high', 'skate', { 'skate-taught': 'yes', 'skate-auto': 'off', 'pop-mode': 'timed', theme: 'dark' });
   await page.evaluate(() => {
     const st = (window as unknown as DebugWindow).__trickLabStore;
@@ -102,8 +104,8 @@ test('the rider at rest is inside the clear part of the stage from Free, Filmer 
     });
     return found;
   });
-  const floor = { free: 200, film: 205, side: 265 } as const;
-  for (const view of ['free', 'film', 'side'] as const) {
+  const floor = { free: 200, film: 205 } as const;
+  for (const view of ['free', 'film'] as const) {
     const before = await page.evaluate((v) => {
       const w = window as unknown as DebugWindow;
       const st = w.__trickLabStore.getState() as unknown as { gameView: string; setGameView: (v: string) => void };
@@ -135,6 +137,45 @@ test('the rider at rest is inside the clear part of the stage from Free, Filmer 
     }
     expect(m.length, `${view}: the board's length on the page`).toBeGreaterThan(floor[view]);
   }
+  expect(errors).toEqual([]);
+});
+
+test('Free fisheye at rest: the board and both shoes inside the clear part, under no card, with the wide lens and the bend (ADR-93, ADR-100)', async ({ page }) => {
+  const errors = await open(page, 'high', 'skate', { 'skate-taught': 'yes', 'skate-auto': 'off', 'pop-mode': 'timed', theme: 'dark', 'game-view': 'freeFisheye' });
+  await page.evaluate(() => {
+    const st = (window as unknown as DebugWindow).__trickLabStore;
+    for (let i = 0; i < 40; i++) {
+      st.getState().startSkate();
+      if (st.getState().skate.phase === 'you-set') break;
+      st.getState().quitSkate();
+    }
+    st.getState().continueSkate();
+    st.getState().callSkateTrick('kickflip');
+  });
+  // At rest: a frame drawn and none queued, with the effects built (High has them).
+  await page.waitForFunction(
+    () => {
+      const w = window as unknown as DebugWindow & { __trickLabPerf: { bend: number } };
+      const r3f = w.__trickLab.get();
+      return w.__trickLabPerf.bend >= 0 && r3f.frameloop === 'demand' && r3f.internal.frames === 0;
+    },
+    null,
+    { timeout: 60_000, polling: 'raf' },
+  );
+  const m = await measure(page);
+  expect(m.measured).toBe(true);
+  for (const part of ['board', 'shoes'] as const) {
+    const b = m.boxes[part]!;
+    expect(b, `the ${part}`).toBeDefined();
+    expect(inside(b, m.clear), `the ${part} inside the clear part`).toBe(true);
+    for (const card of m.covers) expect(overlaps(b, card), `the ${part} under ${card.name}`).toBe(false);
+  }
+  const lens = await page.evaluate(() => {
+    const w = window as unknown as DebugWindow & { __trickLabPerf: { bend: number } };
+    return { fov: (w.__trickLab.get() as unknown as { camera: { fov: number } }).camera.fov, bend: w.__trickLabPerf.bend };
+  });
+  expect(lens.fov).toBe(60);
+  expect(lens.bend).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 

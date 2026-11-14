@@ -1,6 +1,6 @@
 // Step 17 (ADR-72): the game's fixed angles and the instant replay's view,
 // lens, bend and clock. Since ADR-85 (2026-11-11) the views that film the
-// rider (Free, Filmer, Side) frame the whole body; since ADR-86 (2026-11-11)
+// rider (Free and Filmer; Side removed by ADR-100) frame the whole body; since ADR-86 (2026-11-11)
 // in a game they frame the rider at rest inside the clear part of the stage
 // and rise with the flight, and frame the whole flight only under reduced
 // motion. The outlines are tested here against the body model itself.
@@ -16,7 +16,9 @@ import { ART } from './artDirection';
 import { setBoardRotation } from './boardPose';
 import { boxCorners, cameraRise, framingPoints, orbitMaxDistance } from './cameraFit';
 import { bendUv } from './effects';
-import { replayProgress } from './replayClock';
+import { landingSeconds } from '../sim/settle';
+import { stepRoll } from './roll';
+import { replayOver, replayProgress, replayReady, replayRolled, replayTime } from './replayClock';
 import { leavesFreeForReplay, returnsFromReplay, setLens } from './cameraPlacement';
 import { clearFor, distanceFor, fovOf, framePointsFor, framingFor, lookFor, viewFor, type Framing } from './SceneCamera';
 import { FULL_STAGE, type ClearArea } from '../store';
@@ -29,7 +31,7 @@ function fogAmount(d: number) {
   const t = Math.min(1, Math.max(0, (d - ART.fog.near) / (ART.fog.far - ART.fog.near)));
   return t * t * (3 - 2 * t);
 }
-const GAME = ['free', 'film', 'side', 'above', 'replay', 'fisheye', 'freeFisheye'] as const;
+const GAME = ['free', 'freeFisheye', 'film', 'replay'] as const;
 const [gx, gz] = ART.ground.size;
 
 /**
@@ -121,7 +123,7 @@ describe("the game's camera (step 17, ADR-72)", () => {
   });
 
   it.each(GAME.flatMap((v) => [0.5, 1, 16 / 10, 2.2].flatMap((a) => [true, false].map((r) => [v, a, r] as const))))(
-    '%s frames the board, its shadow and the highest pop (and on Free, Filmer and Side under reduced motion the whole rider) at aspect %s, rider shown %s',
+    '%s frames the board, its shadow and the highest pop (and on Free and Filmer under reduced motion the whole rider) at aspect %s, rider shown %s',
     (view, aspect, rider) => {
       const cam = cameraFor(view, aspect, calmFraming(view, rider));
       const points = framePointsFor(calmFraming(view, rider));
@@ -137,20 +139,20 @@ describe("the game's camera (step 17, ADR-72)", () => {
     },
   );
 
-  it("films the rider from Free, Filmer, Side and the welcome screen while it shows; Above, the replay, the lab and a hidden rider keep the board's box", () => {
-    // In a game Free, Filmer and Side frame the rider at rest (ADR-86); under reduced motion and on the welcome screen, the whole flight (ADR-85).
-    for (const v of ['free', 'film', 'side'] as const) {
+  it("films the rider from Free, Filmer and the welcome screen while it shows; Free fisheye, the replay, the lab and a hidden rider keep the board's box", () => {
+    // In a game Free and Filmer frame the rider at rest (ADR-86); under reduced motion and on the welcome screen, the whole flight (ADR-85).
+    for (const v of ['free', 'film'] as const) {
       expect(framingFor(v, true, false)).toBe('rest');
       expect(framingFor(v, true, true)).toBe('flight');
     }
     expect(framingFor('showcase', true, false)).toBe('flight');
-    for (const v of ['above', 'replay', 'rider', 'detail'] as const) for (const calm of [false, true]) expect(framingFor(v, true, calm)).toBe('board');
-    for (const v of ['free', 'film', 'side', 'showcase', 'above', 'replay', 'rider', 'detail'] as const)
+    for (const v of ['freeFisheye', 'replay', 'rider', 'detail'] as const) for (const calm of [false, true]) expect(framingFor(v, true, calm)).toBe('board');
+    for (const v of ['free', 'freeFisheye', 'film', 'showcase', 'replay', 'rider', 'detail'] as const)
       for (const calm of [false, true]) expect(framingFor(v, false, calm)).toBe('board');
     expect(framePointsFor('board')).toEqual(POINTS);
     expect(framePointsFor('flight').length).toBeGreaterThan(POINTS.length);
     for (const framing of ['flight', 'rest'] as const)
-      for (const v of framing === 'rest' ? (['free', 'film', 'side'] as const) : (['free', 'film', 'side', 'showcase'] as const)) {
+      for (const v of framing === 'rest' ? (['free', 'film'] as const) : (['free', 'film', 'showcase'] as const)) {
         if (framing === 'flight') expect(lookFor(v, framing).target[1]).toBe(C.riderLook);
         // The rest framing looks at the rider's middle, balanced per view (between the knees and the chest).
         else expect(lookFor(v, framing).target[1]).toBeGreaterThan(0.5);
@@ -159,7 +161,7 @@ describe("the game's camera (step 17, ADR-72)", () => {
         const b = new Vector3(...C.views[v].position).sub(new Vector3(...C.views[v].target));
         expect(a.distanceTo(b)).toBeLessThan(1e-12);
       }
-    for (const v of ['free', 'film', 'side', 'showcase', 'above', 'replay', 'rider', 'detail'] as const) expect(lookFor(v, 'board')).toBe(C.views[v]);
+    for (const v of ['free', 'freeFisheye', 'film', 'showcase', 'replay', 'rider', 'detail'] as const) expect(lookFor(v, 'board')).toBe(C.views[v]);
   });
 
   it.each(GAME)('%s keeps the plane edge in full fog wherever it is in the frame, for every stage shape and every layout, in every framing', (view) => {
@@ -194,17 +196,23 @@ describe("the game's camera (step 17, ADR-72)", () => {
     const base = {
       screen: 'skate' as const,
       cameraView: 'detail' as const,
-      gameView: 'side' as const,
+      gameView: 'film' as const,
       replay: 'none' as const,
     };
-    expect(viewFor(base)).toBe('side');
+    expect(viewFor(base)).toBe('film');
     expect(viewFor({ ...base, replay: 'plays' })).toBe('replay');
-    expect(viewFor({ ...base, replay: 'due' })).toBe('side');
+    expect(viewFor({ ...base, replay: 'due' })).toBe('film');
     expect(viewFor({ ...base, screen: 'lab' })).toBe('detail');
     expect(viewFor({ ...base, screen: 'lab', replay: 'plays' })).toBe('detail');
     expect(viewFor({ ...base, screen: 'home' })).toBe('showcase');
     expect(fovOf('replay')).toBeGreaterThan(C.fov);
     expect(fovOf('film')).toBe(C.fov);
+    expect(fovOf('free')).toBe(C.fov);
+    expect(fovOf('freeFisheye')).toBe(fovOf('replay'));
+    // ADR-100: only the three game views, the lab's two, the preview and the replay have presets.
+    expect(Object.keys(C.views).sort()).toEqual(['detail', 'film', 'free', 'freeFisheye', 'replay', 'rider', 'showcase']);
+    expect(Object.keys(C.fovs).sort()).toEqual(['freeFisheye', 'replay']);
+    expect([...C.filmsRider].sort()).toEqual(['film', 'free', 'showcase']);
   });
 });
 
@@ -344,14 +352,91 @@ describe('the instant replay (ADR-72)', () => {
     expect(bendUv(0.2, 0.9, 0, 1.6)).toEqual([0.2, 0.9]);
   });
 
-  it('plays the whole flight at its slow rate, from the pop to the landing', () => {
+  it('plays the whole go at its slow rate: a lead-in before the pop, the flight, the landing easing out of slow motion (ADR-96)', () => {
     const flight = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });
+    const R = ART.replay;
+    // The lead-in: the flight's own time from -pre, no flight yet, the rider sinking into the crouch.
+    expect(replayTime(0, flight)).toBeCloseTo(-R.pre, 9);
     expect(replayProgress(0, flight)).toBe(0);
-    expect(replayProgress(flight.airtime / ART.replay.rate / 2, flight)).toBeCloseTo(0.5, 9);
-    expect(replayProgress(flight.airtime / ART.replay.rate, flight)).toBe(1);
+    expect(replayReady(-R.pre)).toBeCloseTo(R.ready, 9);
+    expect(replayReady(0)).toBe(1);
+    // The flight at `rate`.
+    const pop = R.pre / R.rate;
+    expect(replayProgress(pop, flight)).toBe(0);
+    expect(replayProgress(pop + flight.airtime / R.rate / 2, flight)).toBeCloseTo(0.5, 9);
+    const touchdown = pop + flight.airtime / R.rate;
+    expect(replayProgress(touchdown, flight)).toBe(1);
+    expect(replayOver(touchdown, flight)).toBe(false);
+    // Past touchdown the pace rises from `rate` (a smooth join) to `cap` and no further.
+    const h = 1e-4;
+    const pace = (t: number) => (replayTime(t + h, flight) - replayTime(t, flight)) / h;
+    expect(pace(touchdown)).toBeCloseTo(R.rate, 3);
+    expect(pace(touchdown + 0.1)).toBeCloseTo(R.rate + R.ramp * 0.1, 3);
+    expect(pace(touchdown + 5)).toBeCloseTo(R.cap, 3);
+    let last = replayTime(touchdown, flight);
+    for (let u = 0.01; u < 3; u += 0.01) {
+      const now = replayTime(touchdown + u, flight);
+      expect((now - last) / 0.01).toBeLessThanOrEqual(R.cap + 1e-6);
+      last = now;
+    }
+    // It ends only once the landing's motion and the rider's recovery have played out (ADR-96, 2026-11-13), for a bail too.
+    const bailed = computeFlight({ pop: 0.15, flick: 1.9, scoop: 0 });
+    for (const f of [flight, bailed]) {
+      const end = f.airtime + landingSeconds(f) + R.post;
+      let t = 0;
+      while (!replayOver(t, f)) t += 0.001;
+      expect(replayTime(t, f)).toBeGreaterThanOrEqual(end);
+      expect(replayTime(t, f)).toBeLessThan(end + 0.01);
+      expect(replayTime(t - 0.01, f)).toBeLessThan(end);
+      expect(replayOver(touchdown + 10, f)).toBe(true);
+    }
     expect(replayProgress(100, flight)).toBe(1);
     // Slow motion: several times the flight's own length.
-    expect(1 / ART.replay.rate).toBeGreaterThanOrEqual(2.5);
+    expect(1 / R.rate).toBeGreaterThanOrEqual(2.5);
+    // The ground rolls as the game's did: pushed through the flight from the pop's speed (from rest too, 2026-11-13),
+    // then slowing to a stop; a bail stops it dead. Checked against the game's own roll, stepped finely.
+    const live = (speed: number, flying: number, slowing: number) => {
+      const m = { speed, distance: 0, running: true };
+      const dt = 1 / 2000;
+      for (let t = 0; t < flying - 1e-9; t += dt) stepRoll(m, true, Math.min(dt, flying - t));
+      for (let t = 0; t < slowing - 1e-9; t += dt) stepRoll(m, false, Math.min(dt, slowing - t));
+      return m.distance;
+    };
+    for (const v of [0, 1.2, ART.roll.cruise]) {
+      expect(replayRolled(flight.airtime / 2, flight, v)).toBeCloseTo(live(v, flight.airtime / 2, 0), 3);
+      expect(replayRolled(flight.airtime, flight, v)).toBeCloseTo(live(v, flight.airtime, 0), 3);
+      expect(replayRolled(flight.airtime + 0.5, flight, v)).toBeCloseTo(live(v, flight.airtime, 0.5), 3);
+      expect(replayRolled(flight.airtime + 20, flight, v)).toBeCloseTo(live(v, flight.airtime, 20), 3);
+    }
+    expect(replayRolled(flight.airtime, flight, 0)).toBeGreaterThan(0.3);
+    expect(replayRolled(-0.1, flight, 2)).toBeCloseTo(-0.2, 9);
+    const bail = computeFlight({ pop: 0.15, flick: 1.9, scoop: 0 });
+    expect(bail.landed).toBe(false);
+    expect(replayRolled(bail.airtime + 1, bail, 2)).toBeCloseTo(replayRolled(bail.airtime, bail, 2), 9);
+    // Given where the game's roll came to rest (A10, 2026-11-13, the review's C-06), the run-out ends exactly there,
+    // at the replay's end, with the ground slowing all the way: touchdown's speed kept, no jump, nothing left at the end.
+    for (const v of [0, 1.2, ART.roll.cruise]) {
+      const rest = live(v, flight.airtime, 20);
+      const end = flight.airtime + landingSeconds(flight) + R.post;
+      expect(replayRolled(end, flight, v, rest)).toBeCloseTo(rest, 9);
+      expect(replayRolled(end + 1, flight, v, rest)).toBeCloseTo(rest, 9);
+      // Up to touchdown it is the game's roll still.
+      expect(replayRolled(flight.airtime, flight, v, rest)).toBeCloseTo(live(v, flight.airtime, 0), 3);
+      const h = 1e-4;
+      const speedAt = (t: number) => (replayRolled(t + h, flight, v, rest) - replayRolled(t - h, flight, v, rest)) / (2 * h);
+      const touch = Math.min(ART.roll.cruise, v + (ART.roll.cruise / ART.roll.pushS) * flight.airtime);
+      expect(speedAt(flight.airtime + 2 * h)).toBeCloseTo(touch, 1);
+      expect(speedAt(end - 2 * h)).toBeLessThan(0.01);
+      expect(speedAt(flight.airtime + 2 * h)).toBeGreaterThan(0);
+      let last = -Infinity;
+      for (let t = flight.airtime; t <= end; t += 0.01) {
+        const d = replayRolled(t, flight, v, rest);
+        expect(d).toBeGreaterThanOrEqual(last);
+        last = d;
+      }
+    }
+    // A bail's roll, stopped dead: nothing changes.
+    expect(replayRolled(bail.airtime + 1, bail, 2, replayRolled(bail.airtime, bail, 2))).toBeCloseTo(replayRolled(bail.airtime, bail, 2), 9);
   });
 });
 
@@ -399,7 +484,9 @@ describe('the whole rider in frame (ADR-85)', () => {
     const A = C.rider.arms;
     const top = Math.max(...heads.map((h) => h.y));
     expect(top).toBeLessThanOrEqual(H.top - 0.1);
-    expect(top).toBeGreaterThan(H.top - 0.2);
+    // 2026-11-13: the knees tuck in the air (legs.ts HIPS.jump) and the crown peaks 28 cm lower than the outline was
+    // measured for; the outline keeps its size so the views frame as before (artDirection.ts `rider`). Measured: 0.42.
+    expect(top).toBeGreaterThan(H.top - 0.45);
     const mitten = 0.05;
     for (const h of hands) {
       expect(Math.abs(h.x) + mitten).toBeLessThanOrEqual(A.reach);
@@ -414,7 +501,7 @@ describe('the whole rider in frame (ADR-85)', () => {
     }
   });
 
-  it.each((['free', 'film', 'side', 'showcase'] as const).flatMap((v) => [1.1, 16 / 10, 2.2].map((a) => [v, a] as const)))(
+  it.each((['free', 'film', 'showcase'] as const).flatMap((v) => [1.1, 16 / 10, 2.2].map((a) => [v, a] as const)))(
     '%s at aspect %s, framing the whole flight (reduced motion, the welcome screen), keeps the crown in frame with headroom at the top of every 0.6 m pop, and the board readable',
     (view, aspect) => {
       const cam = cameraFor(view, aspect, 'flight');
@@ -436,7 +523,7 @@ describe('the whole rider in frame (ADR-85)', () => {
   );
 });
 
-describe('the rider never hides the board from Filmer or Side (ADR-85)', () => {
+describe('the rider never hides the board from Filmer (ADR-85)', () => {
   const restY = ART.board.restY;
   /** The body above the legs (the legs stood on the board before ADR-85), each bone a capsule as thick as the mesh round it. */
   const UPPER: [(typeof RIDER_BONES)[number], number, number][] = [
@@ -467,7 +554,7 @@ describe('the rider never hides the board from Filmer or Side (ADR-85)', () => {
     return best;
   }
 
-  it.each((['film', 'side'] as const).flatMap((v) => (['goofy', 'regular'] as const).flatMap((st) => [0.35, 0.6].map((pop) => [v, st, pop] as const))))(
+  it.each((['film'] as const).flatMap((v) => (['goofy', 'regular'] as const).flatMap((st) => [0.35, 0.6].map((pop) => [v, st, pop] as const))))(
     '%s, %s, a 360 flip at %s m: every point along the deck is in sight all the way through the trick, in a game and framing the whole flight',
     (view, stance, pop) => {
       const inputs = { ...presetById('360-flip').inputs, pop };
@@ -655,7 +742,7 @@ describe('the rider at rest, in the clear part of the stage (ADR-86)', () => {
     expect(boxCorners({ min: boxes[0]!.min, max: boxes[0]!.max })).toHaveLength(8);
   });
 
-  it.each(LAYOUTS.flatMap((L) => (['free', 'film', 'side'] as const).map((v) => [v, L.name, L] as const)))(
+  it.each(LAYOUTS.flatMap((L) => (['free', 'film'] as const).map((v) => [v, L.name, L] as const)))(
     '%s at %s: the board, both shoes and the head inside the clear area at rest and through every flight, the camera rising',
     (view, _name, L) => {
       for (const { essential } of SAMPLES) {
@@ -668,15 +755,15 @@ describe('the rider at rest, in the clear part of the stage (ADR-86)', () => {
 
   /**
    * The board's length at rest at 1440 x 900 on High (ADR-86): measured
-   * 2026-11-11 at 217, 223 and 288 px from Free, Filmer and Side, where the
-   * whole flight's framing over the whole stage gives 198, 199 and 229
-   * (ADR-85). Free and Filmer look at the board three quarters on, 30 degrees
-   * round, so it reads shorter than side on; the floors here keep a little
-   * room under what is measured.
+   * 2026-11-11 at 217 and 223 px from Free and Filmer (and 288 from Side,
+   * removed by ADR-100), where the whole flight's framing over the whole
+   * stage gives 198 and 199 (ADR-85). Free and Filmer look at the board three
+   * quarters on, 30 degrees round; the floors here keep a little room under
+   * what is measured.
    */
-  const BOARD_PX = { free: 212, film: 218, side: 282 } as const;
+  const BOARD_PX = { free: 212, film: 218 } as const;
 
-  it.each(['free', 'film', 'side'] as const)('%s at 1440 x 900: the board at rest is long on screen, longer than the whole flight framed on the whole stage', (view) => {
+  it.each(['free', 'film'] as const)('%s at 1440 x 900: the board at rest is long on screen, longer than the whole flight framed on the whole stage', (view) => {
     const L = LAYOUTS[0]!;
     const length = (cam: PerspectiveCamera) => {
       const a = onStage(cam, new Vector3(C.fit.reach - 0.01, restY, 0));

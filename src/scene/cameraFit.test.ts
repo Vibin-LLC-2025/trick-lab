@@ -262,6 +262,9 @@ describe('the High shadow camera (ADR-38)', () => {
       thighR: [LEG.thigh, 0.09],
       shinL: [LEG.shank, 0.065],
       shinR: [LEG.shank, 0.065],
+      // The feet (2026-11-13): only the jeans' cuff and the sock hang from them, round the ankle joint.
+      footL: [0.03, 0.065],
+      footR: [0.03, 0.065],
     };
     /** The body's points over every preset at three pops and the timing bar's corners (4.2 rev/s, bar.ts), both stances. */
     function bodyPoints() {
@@ -316,7 +319,7 @@ describe('the High shadow camera (ADR-38)', () => {
       expect(RF.bottom).toBeLessThanOrEqual(F.bottom);
       expect(RF.top).toBeGreaterThanOrEqual(F.top);
       expect(Math.max(RF.right - RF.left, RF.top - RF.bottom) / S.size).toBeLessThan(0.0016);
-      // Measured 2026-11-11: 1.74 x 3.05 m, 4.28 m deep, a texel of 1.49 mm.
+      // Measured 2026-11-13: 1.85 x 2.71 m, 3.73 m deep, a texel of 1.33 mm (2026-11-11: 1.74 x 3.05 m, 4.28 m, 1.49 mm).
       expect(RF.far - RF.near).toBeLessThan(4.5);
     });
   });

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CATCH } from './feet';
 import { computeFlight, PHASE } from './flight';
 import {
+  describeAttempt,
+  missWhy,
   degReadout,
   describeFeet,
   describeInputs,
@@ -114,6 +116,40 @@ describe('graded landings in words (ADR-63)', () => {
     expect(footSteps({ ...base, flight: sketchy }).at(-1)!.text).toBe('Both feet ride the board down, but come down off the bolts, toward the middle: a sketchy landing.');
     const clean = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });
     expect(footSteps({ ...base, flight: clean }).at(-1)!.text).toBe('Both feet ride the board down over the bolts and land on the grip.');
+  });
+});
+
+describe('a miss in a game, told against the trick in play (2026-11-13)', () => {
+  const kickflip = { id: 'kickflip' as const, name: 'Kickflip', flips: 1, halfShoves: 0 };
+  it('says how far short of the called trick a bail is, not the trick it came nearest to', () => {
+    const r = recognize(computeFlight({ pop: 0.35, flick: 0.7, scoop: 0 }));
+    expect(r.landed).toBe(false);
+    expect(describeResult(r)).toMatch(/^Ollie not landed: flip over-rotated/);
+    expect(describeAttempt(r, kickflip)).toMatch(/^Kickflip not landed: \d+ degrees short on the flip\. /);
+  });
+  it('is the plain result for a landing, and with no trick in play', () => {
+    const landed = recognize(computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 }));
+    expect(describeAttempt(landed, kickflip)).toBe(describeResult(landed));
+    const bail = recognize(computeFlight({ pop: 0.35, flick: 0.95, scoop: 0 }));
+    expect(describeAttempt(bail, null)).toBe(describeResult(bail));
+  });
+});
+
+describe('why a go missed, for its notice (ADR-105, the review A13)', () => {
+  const kickflip = { id: 'kickflip' as const, name: 'Kickflip', flips: 1, halfShoves: 0 };
+  const bail = recognize(computeFlight({ pop: 0.35, flick: 1.0, scoop: 0 }));
+  it('names the release and what to change, then how far the trick missed', () => {
+    expect(missWhy(bail, kickflip, { missMs: -120, percent: 14 })).toMatch(/^Early: 14 percent less spin, \d+ degrees short on the flip\. Press Pop! a little later\.$/);
+    expect(missWhy(bail, kickflip, { missMs: 80, percent: 9 })).toMatch(/^Late: 9 percent more spin, .* Press Pop! a little earlier\.$/);
+  });
+  it('says it was the sliders when the release was in the band, and only the miss for an exact pop', () => {
+    expect(missWhy(bail, kickflip, { missMs: 0, percent: 0 })).toMatch(/^In the band, so it was the sliders: \d+ degrees short on the flip\.$/);
+    expect(missWhy(bail, kickflip, null)).toMatch(/^\d+ degrees short on the flip\.$/);
+  });
+  it('says a sketchy landing does not count on Hard', () => {
+    const sketchy = recognize(computeFlight({ pop: 0.35, flick: 2.0, scoop: 0 }));
+    expect(sketchy.grade).toBe('sketchy');
+    expect(missWhy(sketchy, kickflip, null, true)).toMatch(/^Sketchy: .*, and only clean counts on Hard\.$/);
   });
 });
 

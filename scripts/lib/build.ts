@@ -21,14 +21,16 @@ import { buildGround } from '../../src/asset/ground';
 import { BAY, GROUND_MATERIAL, GROUND_NORMAL_SCALE, GROUND_PARTS, GROUND_TEXTURES, PLANE_BAYS, groundRepeat } from '../../src/asset/groundSpec';
 import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '../../src/asset/groundTextures';
 import { buildRider } from '../../src/asset/rider';
-import { RIDER_MATERIAL, RIDER_PARTS, RIDER_ROOT, RIDER_UV } from '../../src/asset/riderSpec';
-import { RIDER_BONES } from '../../src/sim/body';
+import { fitRider, RIDER_HIGH_LEAF } from '../../src/asset/riderFit';
+import { RIDER_HIGH_ATLAS, RIDER_HIGH_MATERIAL, RIDER_MATERIAL, RIDER_PARTS, RIDER_ROOT, RIDER_UV } from '../../src/asset/riderSpec';
+import { newBodyPose, RIDER_BONES, writeBindPose } from '../../src/sim/body';
+import { readRiderSource } from './riderSource';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
 import { DECKS, type FileDeck } from '../../src/asset/deckSpec';
 import { deckTexture } from '../../src/asset/deckTexture';
 import { buildSpot } from '../../src/asset/spot';
-import { SPOT_MATERIAL, SPOT_PARTS, SPOT_TEXTURES } from '../../src/asset/spotSpec';
+import { SPOT_MATERIAL, SPOT_PARTS, SPOT_STEEL_MATERIAL, SPOT_TEXTURES } from '../../src/asset/spotSpec';
 import { spotColor, spotNormal } from '../../src/asset/spotTextures';
 import { solePixels, upperPixels, upperTint } from '../../src/asset/shoeTextures';
 import {
@@ -69,11 +71,11 @@ const linearFactor = (hex: string): [number, number, number, number] => {
   return [r!, g!, b!, 1];
 };
 
-/** A texture's pixels before encoding: RGB, or one grey channel. */
+/** A texture's pixels before encoding: RGB, one grey channel, or RGBA (the detailed rider's atlas, cut out where its alpha is low, ADR-94). */
 export interface Raster {
   width: number;
   height: number;
-  channels: 1 | 3;
+  channels: 1 | 3 | 4;
   data: Uint8Array;
 }
 const rgb = (p: Pixels): Raster => ({ width: p.width, height: p.height, channels: 3, data: p.rgb });
@@ -116,8 +118,8 @@ export async function encodeKtx2(r: Raster, role: TextureRole): Promise<Uint8Arr
   const n = r.width * r.height;
   const rgba = new Uint8Array(n * 4);
   for (let i = 0; i < n; i++) {
-    for (let c = 0; c < 3; c++) rgba[i * 4 + c] = r.data[i * r.channels + (r.channels === 3 ? c : 0)]!;
-    rgba[i * 4 + 3] = 255;
+    for (let c = 0; c < 3; c++) rgba[i * 4 + c] = r.data[i * r.channels + (r.channels === 1 ? 0 : c)]!;
+    rgba[i * 4 + 3] = r.channels === 4 ? r.data[i * 4 + 3]! : 255;
   }
   return encodeToKTX2(rgba, {
     ...KTX2_OPTIONS,
@@ -189,6 +191,8 @@ interface AssetSpec {
     clearcoat?: { factor: number; roughness: number };
     /** KHR_materials_sheen (ADR-53): the suede upper's rim, a linear colour. */
     sheen?: { color: [number, number, number]; roughness: number };
+    /** Cut out where the map's alpha is under this (glTF alphaMode MASK): the detailed rider's hair and lashes (ADR-94). */
+    alphaCutoff?: number;
   }[];
   parts: { node: string; material: string; geometry: BufferGeometry }[];
   droppedTriangles: number;
@@ -391,6 +395,7 @@ async function buildGlb(spec: AssetSpec): Promise<{ glb: Uint8Array; report: Bui
   for (const M of spec.materials) {
     const m = doc.createMaterial(M.name).setBaseColorFactor(M.baseColor).setRoughnessFactor(M.roughness).setMetallicFactor(M.metalness);
     if (M.doubleSided) m.setDoubleSided(true);
+    if (M.alphaCutoff !== undefined) m.setAlphaMode('MASK').setAlphaCutoff(M.alphaCutoff);
     if (M.map) {
       m.setBaseColorTexture(textures.get(M.map)!);
       configure(m.getBaseColorTextureInfo()!, M.map);
@@ -482,14 +487,16 @@ export const buildBoardGlb = (level: DetailLevel = 'medium') => buildGlb(boardSp
 export const buildShoesGlb = () => buildGlb(shoeSpec());
 
 /**
- * The skate spot (step 14, ADR-69): one mesh of every piece, painted by its
- * vertex colour over a near-white concrete map and its normal map, each one
- * tile repeated over the group by a texture transform.
+ * The skate spot (step 14, ADR-69): two meshes since ADR-102, the concrete
+ * and the steel, each painted by its vertex colour over the same near-white
+ * map, one tile repeated over the group by a texture transform; the concrete
+ * also takes the normal map, the steel a metal's roughness and metalness.
  */
 function spotSpec(): AssetSpec {
   const T = SPOT_TEXTURES;
   const repeat: [number, number] = [T.uvSpan / T.tile, T.uvSpan / T.tile];
   const color = spotColor();
+  const geometry = buildSpot();
   return {
     rootName: 'Spot',
     extras: { units: 'metres', source: 'procedural, scripts/build-board.ts', design: 'src/asset/spotSpec.ts' },
@@ -507,8 +514,19 @@ function spotSpec(): AssetSpec {
         map: 'color',
         normalMap: { key: 'normal', scale: 1 },
       },
+      {
+        key: SPOT_PARTS[1].material,
+        name: SPOT_STEEL_MATERIAL.name,
+        baseColor: [1, 1, 1, 1],
+        roughness: SPOT_STEEL_MATERIAL.roughness,
+        metalness: SPOT_STEEL_MATERIAL.metalness,
+        map: 'color',
+      },
     ],
-    parts: SPOT_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: buildSpot() })),
+    parts: [
+      { node: SPOT_PARTS[0].node, material: SPOT_PARTS[0].material, geometry: geometry.concrete },
+      { node: SPOT_PARTS[1].node, material: SPOT_PARTS[1].material, geometry: geometry.steel },
+    ],
     droppedTriangles: 0,
   };
 }
@@ -561,6 +579,42 @@ function riderSpec(): AssetSpec {
 /** The rider GLB (public/models/rider.glb). */
 export const buildRiderGlb = () => buildGlb(riderSpec());
 
+/**
+ * The detailed rider (ADR-94), High only: MakeHuman's body from
+ * assets/source/models/rider fitted onto the same 19 bones and bind pose
+ * (src/asset/riderFit.ts), with the source's atlas as its one texture, cut
+ * out where the hair and the lashes thin. Its joints and inverse bind
+ * matrices are the procedural rider's, so the same pose drives either.
+ */
+async function riderHighSpec(): Promise<AssetSpec> {
+  const base = riderSpec();
+  const file = await readRiderSource();
+  const { geometry } = fitRider(file.source, writeBindPose(newBodyPose()), RIDER_HIGH_LEAF);
+  const { width, height, rgba } = file.atlas;
+  return {
+    ...base,
+    extras: { units: 'metres', bones: RIDER_BONES.length, source: 'MakeHuman (CC0) via assets/source/models/rider, fitted by src/asset/riderFit.ts', design: 'src/asset/riderSpec.ts' },
+    textures: [{ key: 'atlas', file: RIDER_HIGH_ATLAS, pixels: { width, height, channels: 4, data: rgba }, wrap: 'clamp' }],
+    materials: [
+      {
+        key: RIDER_PARTS[0].material,
+        name: RIDER_MATERIAL.name,
+        baseColor: [1, 1, 1, 1],
+        roughness: RIDER_HIGH_MATERIAL.roughness,
+        metalness: 0,
+        map: 'atlas',
+        alphaCutoff: RIDER_HIGH_MATERIAL.alphaCutoff,
+        doubleSided: RIDER_HIGH_MATERIAL.doubleSided,
+      },
+    ],
+    parts: RIDER_PARTS.map((p) => ({ node: p.node, material: p.material, geometry })),
+    meshopt: {},
+  };
+}
+
+/** The detailed rider GLB (public/models/rider-high.glb). */
+export const buildRiderHighGlb = async () => buildGlb(await riderHighSpec());
+
 /** The concrete ground GLB (public/models/ground.glb). */
 export const buildGroundGlb = () => buildGlb(groundSpec());
 
@@ -571,5 +625,6 @@ export function buildAsset(key: AssetKey): Promise<{ glb: Uint8Array; report: Bu
   if (key === 'ground') return buildGroundGlb();
   if (key === 'spot') return buildSpotGlb();
   if (key === 'rider') return buildRiderGlb();
+  if (key === 'riderHigh') return buildRiderHighGlb();
   return buildShoesGlb();
 }

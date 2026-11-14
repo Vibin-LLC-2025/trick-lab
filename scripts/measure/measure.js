@@ -25,6 +25,17 @@
 //   base     /                    the app's base path (/trick-lab/ for a Pages build)
 //   cpu      1                    CPU slowdown for the loads (4 is a rough Chromebook stand-in; Chromium only)
 //   warm     on | off             one unmeasured load of each tier first (below)
+//   dpr      1                    the device pixel ratio (deviceScaleFactor) of every page; the app caps it per tier
+//                                 (ART.quality: High 1.5, Medium 1.25, Low 1), so 1.5 measures High and 1.25 Medium at their caps
+//   backend  webgpu | webgl2      on Medium and High, the WebGPURenderer's native WebGPU, or its WebGL2 backend
+//                                 (navigator.gpu hidden, as a browser without WebGPU has it); Low is WebGL either way
+//
+// Since 2026-11-13 (the review's P-06): every screen's row says the renderer and
+// the stage's size in CSS and drawing-buffer pixels; the rider's mesh
+// (Rider_Body) is waited for where it shows (home and the game, Medium and
+// High, feet and legs on); the draw-call verdict counts the most a whole game
+// drew too; and the first go of the game is shown in the targets' table
+// (reported, not gated: the target is "after the first second").
 //
 // Visits (PLAN-PLAY-POLISH-REACH step 1):
 // - cold: a fresh browser context with the HTTP cache off;
@@ -127,6 +138,8 @@ async (page) => {
   const base = opts.get('base') ?? '/';
   const cpu = Number(opts.get('cpu') ?? 1);
   const warm = (opts.get('warm') ?? 'on') === 'on';
+  const dpr = Number(opts.get('dpr') ?? 1);
+  const backend = opts.get('backend') ?? 'webgpu';
   const origin = new URL(page.url()).origin;
   const HASH = { home: '', lab: '#/lab', skate: '#/skate' };
   // The GLB meshes are named after their nodes (BoardModel, ShoesModel, GroundModel).
@@ -190,7 +203,7 @@ async (page) => {
 
   /** A fresh browser context (an empty cache, no worker, no storage), or this one cleared where the session has no browser handle. */
   const freshContext = async () => {
-    if (browser) return { ctx: await browser.newContext({ viewport: { width, height } }), own: true };
+    if (browser) return { ctx: await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr }), own: true };
     const ctx = page.context();
     if (chromium) {
       const c = await ctx.newCDPSession(page);
@@ -205,6 +218,7 @@ async (page) => {
     const p = await ctx.newPage();
     await p.setViewportSize({ width, height });
     await p.addInitScript(init);
+    if (backend === 'webgl2') await p.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true }));
     let cdp = null;
     if (chromium) {
       cdp = await ctx.newCDPSession(p);
@@ -240,7 +254,9 @@ async (page) => {
       q.set('m-pop-mode', 'exact');
       q.set('m-skate-auto', 'off');
     }
-    const models = f === 'off' ? MODELS[tier].filter((n) => !n.startsWith('Shoe')) : MODELS[tier];
+    // The whole rider shows on home and the game, on Medium and High, with the feet and the legs on (riderShown).
+    const rider = screen !== 'lab' && tier !== 'low' && f === 'on' && l !== 'off' ? ['Rider_Body'] : [];
+    const models = [...(f === 'off' ? MODELS[tier].filter((n) => !n.startsWith('Shoe')) : MODELS[tier]), ...rider];
     q.set('m-models', models.join(','));
     return `${origin}${base}?${q.toString().replace(/=(&|$)/g, '$1')}${HASH[screen]}`;
   };
@@ -385,6 +401,7 @@ async (page) => {
         renderer: s.gl.isWebGPURenderer ? (s.gl.backend && s.gl.backend.isWebGPUBackend ? 'WebGPU' : 'WebGPU on WebGL2') : 'WebGL',
         frameloop: s.frameloop,
         dpr: s.viewport.dpr,
+        stage: `${Math.round(s.size.width)} x ${Math.round(s.size.height)} CSS px, ${Math.round(s.size.width * s.viewport.dpr)} x ${Math.round(s.size.height * s.viewport.dpr)} px drawn`,
         antialias: s.gl.getContextAttributes ? s.gl.getContextAttributes().antialias : null,
         geometries: s.gl.info.memory.geometries,
         textures: s.gl.info.memory.textures,
@@ -428,6 +445,7 @@ async (page) => {
           const drew = perf.frames !== seenFrame;
           seenFrame = perf.frames;
           if (drew) {
+            window.__times.calls = Math.max(window.__times.calls || 0, perf.drawCalls);
             if (typeof perf.workMs === 'number') window.__times.work.push(perf.workMs);
             if (lastDrew) window.__times.interval.push(now - lastAt);
           }
@@ -497,6 +515,7 @@ async (page) => {
       window.__times.gpu.length = 0;
       window.__times.work.length = 0;
       window.__times.interval.length = 0;
+      window.__times.calls = 0;
     });
 
   const readTimes = (p) =>
@@ -509,7 +528,7 @@ async (page) => {
         const r = (x) => Math.round(x * 100) / 100;
         return { n: s.length, median: r(at(0.5)), p95: r(at(0.95)), max: r(s[s.length - 1]) };
       };
-      return { cpu: stat(w.cpu), gpu: w.ext ? stat(w.gpu) : 'unavailable', work: stat(w.work) ?? 'unavailable', interval: stat(w.interval) };
+      return { cpu: stat(w.cpu), gpu: w.ext ? stat(w.gpu) : 'unavailable', work: stat(w.work) ?? 'unavailable', interval: stat(w.interval), calls: w.calls || 0 };
     });
 
   /**
@@ -684,6 +703,8 @@ async (page) => {
     when: new Date().toISOString(),
     engine,
     viewport: `${width} x ${height}`,
+    dpr,
+    backend,
     feet,
     legs: legs ?? 'default',
     theme,
@@ -738,7 +759,7 @@ async (page) => {
 
   // A table per section, ready for PERF-BUDGET.md.
   const md = [];
-  md.push(`Measured ${out.when.slice(0, 10)} in ${engine}, ${out.viewport}, ${out.gpu}, feet ${feet}, legs ${out.legs}, ${theme} theme${cpu > 1 ? `, loads at ${cpu}x CPU` : ''}.`);
+  md.push(`Measured ${out.when.slice(0, 10)} in ${engine}, ${out.viewport} at DPR ${dpr}, backend ${backend}, ${out.gpu}, feet ${feet}, legs ${out.legs}, ${theme} theme${cpu > 1 ? `, loads at ${cpu}x CPU` : ''}.`);
   md.push('', '| Tier | Network | Visit | UI (FCP) | Loading picture | First 3D frame | All models on screen | Picture lifts | JS | Models |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const r of out.rows)
     for (const l of r.loading) {
@@ -753,8 +774,8 @@ async (page) => {
     }
   md.push(
     '',
-    '| Tier | Screen | Renderer | Draw calls | Triangles | Frameloop | Textures | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Landing: frames to idle / after idle |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Tier | Screen | Renderer | Stage | Draw calls | Triangles | Frameloop | Textures | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Landing: frames to idle / after idle |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   );
   // Times: the lab's are over the timed tricks, the welcome screen's over its looping preview.
   for (const r of out.rows)
@@ -763,14 +784,14 @@ async (page) => {
       const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} / ${x.max} ms` : x ?? '');
       const l = t && t.landing;
       const landing = !l ? '' : l.dropped ? `dropped (${l.dropped})` : `${l.toIdle ?? 'n/a'} / ${l.afterIdle}`;
-      md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t ? ms(t.work) : ''} | ${t ? ms(t.interval) : ''} | ${landing} |`);
+      md.push(`| ${r.tier} | ${screen} | ${c.renderer} | ${c.stage} | ${c.calls} | ${c.triangles.toLocaleString('en-US')} | ${c.frameloop} | ${c.textures} | ${t ? ms(t.cpu) : ''} | ${t ? ms(t.gpu) : ''} | ${t ? ms(t.work) : ''} | ${t ? ms(t.interval) : ''} | ${landing} |`);
     }
   // A whole game (step 20): the first go of the visit, then the rest of the game.
   if (out.rows.some((r) => r.screens.skate && r.screens.skate.game)) {
     md.push(
       '',
-      '| Tier | Part of the game | Frames | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Intervals over 20 ms / over 34 ms |',
-      '| --- | --- | --- | --- | --- | --- | --- | --- |',
+      '| Tier | Part of the game | Frames | Most draw calls | Render CPU, median / p95 / longest | GPU, median / p95 / longest | Frame work, median / p95 / longest | Frame interval, median / p95 / longest | Intervals over 20 ms / over 34 ms |',
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     );
     const ms = (x) => (x && typeof x === 'object' ? `${x.median} / ${x.p95} / ${x.max} ms` : x ?? '');
     for (const r of out.rows) {
@@ -778,7 +799,7 @@ async (page) => {
       if (!g) continue;
       const what = `${g.gos} goes (${g.grades.clean} clean, ${g.grades.sketchy} sketchy, ${g.grades.bail} bails, ${g.replays} replays), ${g.phase === 'over' ? 'played to the end' : 'stopped at the limit'}`;
       for (const [name, t] of [['the first go', g.first], [`the rest: ${what}`, g.rest]])
-        md.push(`| ${r.tier} | ${name} | ${t.interval ? t.interval.n : 0} | ${ms(t.cpu)} | ${ms(t.gpu)} | ${ms(t.work)} | ${ms(t.interval)} | ${t.over20} / ${t.over34} |`);
+        md.push(`| ${r.tier} | ${name} | ${t.interval ? t.interval.n : 0} | ${t.calls} | ${ms(t.cpu)} | ${ms(t.gpu)} | ${ms(t.work)} | ${ms(t.interval)} | ${t.over20} / ${t.over34} |`);
     }
   }
   if (switches === 'all') {
@@ -801,9 +822,15 @@ async (page) => {
     const t = r.screens.lab && r.screens.lab.trick;
     if (!T || !t) continue;
     const check = (x, key, limit) => (x && typeof x === 'object' ? { value: x[key], limit, pass: x[key] < limit } : { value: null, limit, pass: null });
-    const most = switches === 'all' ? Math.max(...Object.values(r.switches)) : r.screens.lab.calls;
     // A whole game, where one was played: its frames after the first go (the target's "after the first second").
-    const g = r.screens.skate && r.screens.skate.game ? r.screens.skate.game.rest : null;
+    const whole = r.screens.skate && r.screens.skate.game ? r.screens.skate.game : null;
+    const g = whole ? whole.rest : null;
+    // The most draw calls seen: every switch combination (or the lab as loaded), every screen, and the whole game.
+    const most = Math.max(
+      switches === 'all' ? Math.max(...Object.values(r.switches)) : r.screens.lab.calls,
+      ...Object.values(r.screens).map((c) => c.calls),
+      whole ? Math.max(whole.first.calls, whole.rest.calls) : 0,
+    );
     out.targets.push({
       tier: r.tier,
       gpu: check(t.gpu, 'p95', T.gpu),
@@ -811,6 +838,8 @@ async (page) => {
       longest: check(t.interval, 'max', T.interval),
       calls: { value: most, limit: T.calls, pass: most < T.calls },
       game: g ? { gpu: check(g.gpu, 'p95', T.gpu), work: check(g.work, 'p95', T.work), longest: check(g.interval, 'max', T.interval) } : null,
+      // Shown, not gated (the target is after the first second): what a first pop costs.
+      first: whole ? { gpu: check(whole.first.gpu, 'p95', T.gpu), work: check(whole.first.work, 'p95', T.work), longest: check(whole.first.interval, 'max', T.interval) } : null,
     });
   }
   const checksOf = (t) => [t.gpu, t.work, t.longest, t.calls, ...(t.game ? [t.game.gpu, t.game.work, t.game.longest] : [])];
@@ -819,7 +848,7 @@ async (page) => {
     const cell = (c, unit) => (c.pass === null ? `not measured (under ${c.limit}${unit})` : `${c.value}${unit} of under ${c.limit}${unit}: ${c.pass ? 'pass' : 'FAIL'}`);
     md.push(
       '',
-      `| Tier | Over | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, ${switches === 'all' ? 'every switch on' : 'as loaded'} | Targets |`,
+      `| Tier | Over | Graphics time per frame, p95 | The app's own work per frame, p95 | Longest frame interval | Draw calls, the most (${switches === 'all' ? 'every switch combination, ' : ''}every screen, the whole game) | Targets |`,
       '| --- | --- | --- | --- | --- | --- | --- |',
     );
     for (const t of out.targets) {
@@ -829,6 +858,7 @@ async (page) => {
         const okGame = [t.game.gpu, t.game.work, t.game.longest].every((c) => c.pass !== false);
         md.push(`| ${t.tier} | a whole game, after its first go | ${cell(t.game.gpu, ' ms')} | ${cell(t.game.work, ' ms')} | ${cell(t.game.longest, ' ms')} | | ${okGame ? 'pass' : 'FAIL'} |`);
       }
+      if (t.first) md.push(`| ${t.tier} | the game's first go (shown, not gated) | ${cell(t.first.gpu, ' ms')} | ${cell(t.first.work, ' ms')} | ${cell(t.first.longest, ' ms')} | | shown |`);
     }
   }
   out.markdown = md.join('\n');

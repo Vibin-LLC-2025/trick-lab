@@ -400,8 +400,13 @@ a {
     font-size: var(--text-xs);
   }
 
+  /* Two-word names ("Computer's go", "Skip replay") wrap onto two lines rather than run off the screen (2026-11-13). */
   .hud__dock .skate__pop {
     font-size: var(--text-md);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.1;
+    padding-inline: var(--space-1);
   }
 }
 
@@ -708,8 +713,8 @@ a {
   align-self: stretch;
 }
 
-/* The camera's six choices (ADR-93) in two rows of three under their legend,
-   so "Free fisheye" fits in the 320 px panel. */
+/* The camera's three choices (ADR-100) in one row of three under their
+   legend, so "Free fisheye" fits in the 320 px panel (it wraps to two lines). */
 .settings__group > .segmented .segmented__legend {
   float: none;
   width: auto;
@@ -2286,6 +2291,16 @@ a {
   font-weight: var(--weight-bold);
 }
 
+/* A harder trick's narrower band (ADR-105): the same pill, outlined in the text colour rather than filled red, since it is a fact, not a warning. */
+.turn__note--band {
+  /* Two lines on the 320 px card: a rounded box rather than a pill. */
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
 .turn__status {
   font-size: var(--text-sm);
   line-height: var(--leading-snug);
@@ -2784,12 +2799,28 @@ a {
 }
 
 /* In a game on a wide screen the whole rider stands in the middle of the stage
-   (ADR-85), so the stickers land on the ground under the board, above the
-   timing strip, where they cover neither the rider nor the board (ADR-86). */
+   (ADR-85), so the stickers land on the ground under the board, where they
+   cover neither the rider nor the board (ADR-86). Since 2026-11-13 they keep
+   to the part of the stage the cards and the tray leave clear (`data-clear`,
+   the store's stageClear as --clear-* fractions): centred across it and a
+   gap above the tray's top, so the tray never hides them; on any stage at
+   least 360 px tall, a tablet's too, where at the top they covered the
+   rider's head. A phone's short stage keeps them at the top, where the
+   ground under the board has no room for them. Without a measurement, on a
+   wide screen, 9 % of the stage's height from the bottom, as before. */
 @media (min-width: 961px) {
   .app[data-screen="skate"] .celebration {
     top: auto;
     bottom: 9cqh;
+  }
+}
+
+@container (min-height: 360px) {
+  .app[data-screen="skate"] .celebration[data-clear] {
+    top: auto;
+    bottom: calc((1 - var(--clear-bottom)) * 100% + var(--space-2));
+    left: calc((var(--clear-left) + var(--clear-right)) * 50%);
+    max-width: calc((var(--clear-right) - var(--clear-left)) * 100% - 2 * var(--space-3));
   }
 }
 
@@ -2966,6 +2997,27 @@ a {
 
 .notice__panel--missed .notice__news {
   color: var(--color-bad);
+}
+
+/* Why a miss missed and what to change (ADR-105): plain text under the news, on the same solid panel. */
+.notice__why {
+  margin: 0;
+  max-width: 34ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--color-text);
+}
+
+/* Continue, and on a miss of the player's "Watch replay" beside it (ADR-105). Continue stays first and primary. */
+.notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.notice__replay {
+  min-height: var(--control-h-lg);
 }
 
 /* The coin's result shows once the coin has landed. */

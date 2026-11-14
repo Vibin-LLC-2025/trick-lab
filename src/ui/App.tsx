@@ -223,6 +223,7 @@ export function App() {
   useStageClear();
   const screen = useTrickStore((s) => s.screen);
   const canPause = useTrickStore(previewCanPlay);
+  const noticeShown = useTrickStore(noticeUp);
 
   return (
     <>
@@ -241,7 +242,9 @@ export function App() {
           </main>
         )}
         {screen === 'skate' && (
-          <main className="app__play" aria-label="Game">
+          // While a notice waits over the stage the game's controls under it are inert (2026-11-13): Tab and a
+          // screen reader reach the notice and the top bar only, never a dimmed Pop the notice covers.
+          <main className="app__play" aria-label="Game" inert={noticeShown || undefined}>
             <Skate />
           </main>
         )}

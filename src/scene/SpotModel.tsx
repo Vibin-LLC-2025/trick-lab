@@ -9,9 +9,9 @@ import { useModel } from './gltf';
 import { SPOT_URL } from './modelUrls';
 
 /**
- * The skate spot from spot.glb (step 14, ADR-69): one mesh, one material
- * (vertex-colour paint over a concrete map and its normal map), one draw
- * call. Its own lazy chunk, fetched when the game screen first shows on
+ * The skate spot from spot.glb (step 14, ADR-69): two meshes since ADR-102,
+ * the concrete (vertex-colour paint over a concrete map and its normal map)
+ * and the steel (the rail and the ledge's angle), one draw call each. Its own lazy chunk, fetched when the game screen first shows on
  * Medium or High, so no first visit downloads it. Same cache rules as
  * GroundModel: `dispose={null}`, nothing disposed here.
  */
@@ -24,21 +24,26 @@ export function SpotModel({ receiveShadow }: { receiveShadow: boolean }) {
     applyAnisotropy(materials, anisotropy);
     invalidate();
   }, [invalidate, materials, anisotropy]);
-  const node = SPOT_PARTS[0].node;
-  const m = nodes[node] as Mesh | undefined;
-  if (!m) throw new Error(`spot.glb has no node "${node}"; run npm run assets`);
+  const meshes = SPOT_PARTS.map(({ node }) => {
+    const m = nodes[node] as Mesh | undefined;
+    if (!m) throw new Error(`spot.glb has no node "${node}"; run npm run assets`);
+    return m;
+  });
   return (
     <group dispose={null}>
-      <mesh
-        name={node}
-        geometry={m.geometry}
-        material={m.material}
-        position={m.position}
-        quaternion={m.quaternion}
-        scale={m.scale}
-        receiveShadow={receiveShadow}
-        frustumCulled={false}
-      />
+      {meshes.map((m) => (
+        <mesh
+          key={m.name}
+          name={m.name}
+          geometry={m.geometry}
+          material={m.material}
+          position={m.position}
+          quaternion={m.quaternion}
+          scale={m.scale}
+          receiveShadow={receiveShadow}
+          frustumCulled={false}
+        />
+      ))}
     </group>
   );
 }

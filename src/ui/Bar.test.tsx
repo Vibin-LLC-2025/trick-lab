@@ -158,6 +158,8 @@ describe('the timing bar on the game screen (ADR-65, ADR-83)', () => {
     expect(state().flightBy).toBe('you');
     expect(announcer()).toHaveTextContent('One moment: the board is still coming to rest.');
     act(() => {
+      // The landing plays out with the rider's recovery (ADR-96), the board stops, the replay ends.
+      state().landingDone();
       state().rollRested();
       state().endReplay();
     });

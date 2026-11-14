@@ -18,11 +18,22 @@ import type { TrickState } from './types';
  */
 export const GAME_PACE = 0.4;
 
-/** The speed things move at now: the playback speed, times the game's pace on the game screen. */
-export const playRate = (s: Pick<TrickState, 'rate' | 'screen'>) => (s.screen === 'skate' ? s.rate * GAME_PACE : s.rate);
-
 /** The slow speed `s` switches to until the student picks another one. */
 export const DEFAULT_SLOW = 0.25;
+
+/**
+ * The slowest the game screen goes (2026-11-13): the lab's finest stops are
+ * for watching the feet, and carried into a game they made it look stuck (a
+ * lab speed of 0.05 played a game at 0.02 of real time, a kickflip 27 s in
+ * the air, with nothing on the game screen saying so). The lab keeps them.
+ */
+export const GAME_SLOWEST = DEFAULT_SLOW;
+
+/** The playback speed as the game screen plays it, before its pace: never slower than GAME_SLOWEST. */
+export const gameSpeed = (rate: number) => Math.max(rate, GAME_SLOWEST);
+
+/** The speed things move at now: the playback speed, times the game's pace on the game screen. */
+export const playRate = (s: Pick<TrickState, 'rate' | 'screen'>) => (s.screen === 'skate' ? gameSpeed(s.rate) * GAME_PACE : s.rate);
 
 /** Index of the stop nearest to a rate. */
 export function speedIndex(rate: number): number {

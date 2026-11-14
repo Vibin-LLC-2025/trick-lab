@@ -12,6 +12,7 @@
 // poles (which follow the toes) and the IK need nothing more.
 import { CATCH, DECK_TOP, LAND_Y, PAD_Y, writeStance, newFeetPose, type FeetPose, type FootPose, type Stance } from './feet';
 import { PHASE, type Flight, type TrickInputs } from './flight';
+import { RECOVER } from './settle';
 
 /**
  * Segment lengths for a rider of about 1.75 m (H), metres. Sources:
@@ -57,10 +58,20 @@ export const LEG = {
  *   degrees, an estimate from how skaters ride: loose, ready, not locked).
  *   The readiness (0 riding, 1 crouched) blends `ride` to `crouch`.
  * - absorb: hip joints above the landed ankles at progress 1 (the landing
- *   bend, about 80 degrees), held after it.
+ *   bend, about 106 degrees, 2026-11-13: deeper than the catch, which the
+ *   legs reach down for), held after it. `bailAbsorb`: the same over the
+ *   pad for a bail, shallower (the absorb of before 2026-11-13): the rider
+ *   steps off onto the pad, one foot often still up on the board.
  * - jump: the hips' rise at their peak is `perPop` times the pop plus
  *   `extra`, at `peakAt` of the airtime, a little after the board's peak
- *   (0.5): ease-out up from the crouch, ease-in down to the absorb.
+ *   (0.5): ease-out up from the crouch, then held high through the catch
+ *   (a cubic ease-in) and down quickly into the absorb. The
+ *   hips rise less than the board (2026-11-13: `perPop` 0.55 and `extra`
+ *   0.05, from 1.0 and 0.1), so the knees tuck up toward the chest in the
+ *   air, as skaters' do, instead of standing straighter than in the crouch.
+ *   `extend`: the legs' push at the pop, the hips up this much more,
+ *   rising to `extendAt` and gone by `extendEnd` (the reach clamp holds it
+ *   to what the legs can reach while the tail is still down).
  * - shift: the pelvis moves along X from the middle of the stance (between
  *   the two feet as writeStance places them) to over the board's centre,
  *   where the feet land on the bolts, over this window.
@@ -71,17 +82,52 @@ export const LEG = {
  *   of the two feet, from the bail's start to the landing, so the rider steps
  *   off the board instead of leaving its legs splayed out from under it; and
  *   it follows them through the recovery step after touchdown.
+ * - bob (2026-11-13): riding along, the knees give and straighten a little,
+ *   the hips `height` up and down over `period` seconds of the riding clock
+ *   (body.ts RIDE.sway), fading out with the wind-up as the sway does.
  */
 export const HIPS = {
   z: 0.05,
   crouch: 0.62,
   ride: 0.79,
-  absorb: 0.62,
-  jump: { perPop: 1.0, extra: 0.1, peakAt: 0.55 },
+  absorb: 0.5,
+  bailAbsorb: 0.62,
+  jump: { perPop: 0.55, extra: 0.05, peakAt: 0.55, extend: 0.07, extendAt: 0.12, extendEnd: 0.32 },
   shift: { start: 0.2, end: CATCH.back },
   poleToe: 0.5,
   bailFollow: 0.25,
+  bob: { height: 0.012, period: 2.7 },
 } as const;
+
+/**
+ * The ankle's bend (2026-11-13). A shin may lean at most `lean` degrees
+ * forward of the vertical, seen from the side (the rider's own plane, Y and
+ * Z): about what a skater's ankle bends in a deep crouch with the heel down
+ * on a level board (dorsiflexion of 30 to 40 degrees in a squat). Before,
+ * the hips sat over the ankles whatever the knees did, so a crouch leaned
+ * the shins 45 to 60 degrees over the shoes and the tuck up to 90, a shin
+ * lying nearly flat over a level shoe, which no ankle does. Now, where a
+ * shin would lean further, the hips sit back toward the heels (+Z), as a
+ * skater's seat drops behind the heels in a deep crouch and the tuck, up to
+ * `back` metres: as far as the deeper-bent leg needs for its shin to lean
+ * `lean` (sitBack, a closed form, so the hips move as smoothly as the
+ * ankles and the hips' height do). Measured 2026-11-13, the most over
+ * every preset at three pops, both stances, seen from the side against the
+ * shoe: the crouch at rest from 45 to 37 degrees, the tuck from 90 to 44,
+ * the catch from 70 to 42, the landing from 82 to 48; the pop's front shin,
+ * on a nose pitched up under it, from 90 to 67.
+ * - `rise`: the ankles' height is read from the stance's at the pop and
+ *   eased to where they are over this part of the flight, so the nose
+ *   snapping up under the front foot does not pull the seat back just as
+ *   the hips drive up.
+ * - `soft`: near a straight thigh (the seat high over the knee) the closed
+ *   form's slope grows without bound; below `soft` metres it follows its
+ *   tangent instead, so a quick rise of the hips cannot fling the seat.
+ * - `edge`: the seat never goes so far back that a foot is out of reach
+ *   (the reach clamp would drop the hips); that limit is eased over its
+ *   last `edge` metres for the same reason.
+ */
+export const ANKLE = { lean: 38, back: 0.3, rise: [0, 0.15], soft: 0.35, edge: 0.15 } as const;
 
 export interface Point3 {
   x: number;
@@ -127,6 +173,8 @@ export interface LegsPose {
   back: LegPose;
   /** How far the reach clamp lowered the hips at this pose, metres (0 when it did not engage). */
   clamped: number;
+  /** How far the hips sat back toward the heels to keep the shins inside the ankles' bend (ANKLE), metres. */
+  sitBack: number;
 }
 
 const point = (): Point3 => ({ x: 0, y: 0, z: 0 });
@@ -140,7 +188,7 @@ const legPose = (): LegPose => ({
   thigh: segment(LEG.thigh),
   shank: segment(LEG.shank),
 });
-export const newLegsPose = (): LegsPose => ({ pelvis: point(), front: legPose(), back: legPose(), clamped: 0 });
+export const newLegsPose = (): LegsPose => ({ pelvis: point(), front: legPose(), back: legPose(), clamped: 0, sitBack: 0 });
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
 const smooth = (a: number, b: number, u: number) => {
@@ -162,20 +210,49 @@ export const MAX_REACH = (LEG.thigh + LEG.shank) * (1 - LEG.reachMargin);
  * Continuous, with a level top. Allocation-free. With no flight, `ready`
  * (ADR-86, 0 riding to 1 crouched, 1 when left out) blends the riding
  * stance's height into the crouch's; a flight always leaves the crouch.
+ * `t`, the riding clock in seconds, bobs the riding stance (HIPS.bob).
+ * `after`, seconds since touchdown in a game (0 elsewhere, Infinity once the
+ * landing has played out), is the recovery (settle.ts RECOVER, ADR-96): the
+ * knees give a little more, then the rider stands back up into the riding
+ * stance over the landed ankles, or after a bail up to RECOVER.bail.height
+ * over the pad's.
  */
-export function hipHeight(flight: Flight | null, u: number, ready = 1): number {
+export function hipHeight(flight: Flight | null, u: number, ready = 1, t = 0, after = 0): number {
   const crouch = ANKLE_REST + HIPS.crouch;
-  if (!flight) return ANKLE_REST + HIPS.ride + (HIPS.crouch - HIPS.ride) * clamp01(ready);
+  if (!flight) {
+    const r = clamp01(ready);
+    return ANKLE_REST + HIPS.ride + (HIPS.crouch - HIPS.ride) * r + HIPS.bob.height * (1 - r) * Math.sin((2 * Math.PI * t) / HIPS.bob.period);
+  }
   const p = clamp01(u);
   const J = HIPS.jump;
   const top = crouch + flight.peak * J.perPop + J.extra;
   if (p <= J.peakAt) {
     const s = 1 - p / J.peakAt;
-    return crouch + (top - crouch) * (1 - s * s);
+    const push = p <= J.extendAt ? smooth(0, J.extendAt, p) : 1 - smooth(J.extendAt, J.extendEnd, p);
+    return crouch + (top - crouch) * (1 - s * s) + J.extend * push;
   }
-  const land = (flight.landed ? LAND_Y.front.square : PAD_Y) + LEG.ankleHeight + HIPS.absorb;
+  const land = flight.landed ? LAND_Y.front.square + LEG.ankleHeight + HIPS.absorb : PAD_Y + LEG.ankleHeight + HIPS.bailAbsorb;
+  if (p >= 1 && after > 0) return land + recovery(flight, after, t);
+  // Held high through the catch, so the legs reach down for the board, then a quick drop into the absorb.
   const s = (p - J.peakAt) / (1 - J.peakAt);
-  return land + (top - land) * (1 - s * s);
+  return land + (top - land) * (1 - s * s * s);
+}
+
+/**
+ * The hips' move from the landing's absorb `after` seconds since touchdown
+ * (RECOVER): down by the dip, on a quarter sine so the drop slows rather than
+ * stopping dead, easing back as the rider stands; up to the riding height
+ * (bobbing as it rides, HIPS.bob) or a bail's standing one. Never a sine of an
+ * endless `after`: the end pose is every smoothstep at 1.
+ */
+function recovery(flight: Flight, after: number, t: number): number {
+  const R = flight.landed ? RECOVER.landed : RECOVER.bail;
+  const dip = after < R.dipAt ? Math.sin((Math.PI / 2) * (after / R.dipAt)) : 1 - smooth(R.dipAt, R.stand[1], after);
+  const up = smooth(R.stand[0], R.stand[1], after);
+  const rise = flight.landed
+    ? HIPS.ride - HIPS.absorb + HIPS.bob.height * Math.sin((2 * Math.PI * t) / HIPS.bob.period)
+    : RECOVER.bail.height - HIPS.bailAbsorb;
+  return rise * up - R.dip * dip;
 }
 
 /**
@@ -303,7 +380,10 @@ const stanceFeet = newFeetPose();
  * middle of the stance to the board's centre, HIPS.z, hipHeight); the reach
  * clamp, which lowers the pelvis just enough that neither hip joint is more
  * than MAX_REACH from its ankle; the knee poles; the IK. `ready` is the
- * wind-up's readiness for the pose with no flight (hipHeight, ADR-86).
+ * wind-up's readiness for the pose with no flight (hipHeight, ADR-86), `t`
+ * the riding clock (HIPS.bob), `after` the seconds since a game's
+ * touchdown (hipHeight; a bail's pelvis also moves over the middle of the
+ * feet as the rider stands, ADR-96).
  */
 export function writeLegsPose(
   out: LegsPose,
@@ -313,6 +393,8 @@ export function writeLegsPose(
   inputs: TrickInputs,
   stance: Stance = 'goofy',
   ready = 1,
+  t = 0,
+  after = 0,
 ): LegsPose {
   const regular = stance === 'regular';
   const sx = regular ? -1 : 1;
@@ -325,24 +407,101 @@ export function writeLegsPose(
   const p = flight ? clamp01(u) : 0;
   writeStance(stanceFeet, flight ? flight.inputs : inputs);
   const middle = (stanceFeet.front.x + stanceFeet.back.x) / 2;
-  const cx = sx * middle * (1 - (flight ? smooth(HIPS.shift.start, HIPS.shift.end, p) : 0));
+  let cx = sx * middle * (1 - (flight ? smooth(HIPS.shift.start, HIPS.shift.end, p) : 0));
   // A bail's step off (ADR-90): the pelvis over the stepping feet; HIPS.z for every landing and before the bail.
-  const off = flight && !flight.landed ? smooth(PHASE.catch.start, 1, p) * HIPS.bailFollow : 0;
+  let off = flight && !flight.landed ? smooth(PHASE.catch.start, 1, p) * HIPS.bailFollow : 0;
+  // Standing up from a bail (ADR-96): the rest of the way over the middle of the feet, the weight over them.
+  if (flight && !flight.landed && p >= 1 && after > 0) {
+    const up = smooth(RECOVER.bail.stand[0], RECOVER.bail.stand[1], after);
+    off += (1 - off) * up;
+    cx += ((feet.front.x + feet.back.x) / 2 - cx) * up;
+  }
   const cz = HIPS.z + ((feet.front.z + feet.back.z) / 2 - HIPS.z) * off;
   const half = LEG.hipWidth / 2;
   const fx = cx + sx * half;
   const bx = cx - sx * half;
-  const free = hipHeight(flight, p, ready);
-  const cy = Math.min(free, reachTop(fx, cz, out.front.target), reachTop(bx, cz, out.back.target));
-  out.clamped = free - cy;
+  const free = hipHeight(flight, p, ready, t, after);
+  // The hips where they are free to be, sat back toward the heels as far as the deeper-bent leg needs (ANKLE).
+  // Never so far that either foot is out of reach at that height (the reach clamp would drop the hips): it sits, not sinks.
+  // Against each ankle as it is, but its height eased in from the stance's over the rise (ANKLE.rise): the board's
+  // nose snaps up in the pop's first instants, and the hips should drive up and forward then, not back.
+  const w = flight ? smooth(ANKLE.rise[0], ANKLE.rise[1], p) : 0;
+  reference(refF, out.front.target, stanceFeet.front, regular ? -1 : 1, w);
+  reference(refB, out.back.target, stanceFeet.back, regular ? 1 : -1, w);
+  const need = Math.max(0, sitBack(fx, free, cz - refF.z, refF), sitBack(bx, free, cz - refB.z, refB));
+  const back = Math.max(0, Math.min(ANKLE.back, need, reachBack(fx, free, cz, out.front.target), reachBack(bx, free, cz, out.back.target)));
+  place(out, fx, bx, cz + back, free);
+  out.sitBack = back;
   out.pelvis.x = cx;
+  return out;
+}
+
+/** Each ankle as the sit-back reads it (reference), reused. */
+const refF = point();
+const refB = point();
+
+/**
+ * An ankle as the sit-back reads it, into `out`: where it is, its height
+ * `w` of the way from its height in the stance (`rest`, `edge` its
+ * outside-edge sign) to where it is.
+ */
+function reference(out: Point3, ankle: Point3, rest: FootPose, edge: 1 | -1, w: number) {
+  writeAnkle(out, rest, edge);
+  setPoint(out, ankle.x, out.y + (ankle.y - out.y) * w, ankle.z);
+}
+
+/**
+ * How far behind its ankle (+Z) a hip at (`hx`, `hy`) must sit for its shin
+ * to lean exactly ANKLE.lean forward of the vertical, seen from the side,
+ * less `behind`, how far behind the ankle it already is: the sit-back that
+ * leg needs (0 or less when it needs none). Seen from the side the knee is
+ * L2 up the shin at the lean from the ankle, and the hip L1 from the knee
+ * at the hip's height: z = sqrt(L1^2 - (H - L2 cos a)^2) - L2 sin a, the
+ * square root eased below ANKLE.soft. The stance's spread along X shortens
+ * each segment as seen from the side, each by its share of it.
+ */
+function sitBack(hx: number, hy: number, behind: number, ankle: Point3): number {
+  const L1 = LEG.thigh;
+  const L2 = LEG.shank;
+  const dx = (hx - ankle.x) / (L1 + L2);
+  const l1 = Math.sqrt(Math.max(0, L1 * L1 - (dx * L1) ** 2));
+  const l2 = Math.sqrt(Math.max(0, L2 * L2 - (dx * L2) ** 2));
+  const a = ANKLE.lean * D2R;
+  const rise = hy - ankle.y - l2 * Math.cos(a);
+  const r = l1 * l1 - rise * rise;
+  const s = ANKLE.soft;
+  return (r >= s * s ? Math.sqrt(r) : (r + s * s) / (2 * s)) - l2 * Math.sin(a) - behind;
+}
+
+/** The hips' height at depth `z`: as high as they are free to be, unless the legs cannot reach that far (the reach clamp). */
+function seat(fx: number, bx: number, z: number, out: LegsPose, free: number): number {
+  return Math.min(free, reachTop(fx, z, out.front.target), reachTop(bx, z, out.back.target));
+}
+
+/**
+ * How far behind `hz` (+Z) a hip at (`hx`, `hy`) can sit and still be within
+ * MAX_REACH of the ankle, so the reach clamp does not lower it: the square
+ * root eased over its last ANKLE.edge metres (sqrt(r + e^2) - e, a little
+ * short of the limit, never past it), negative when it is out of reach
+ * already.
+ */
+function reachBack(hx: number, hy: number, hz: number, ankle: Point3): number {
+  const r = MAX_REACH * MAX_REACH - (hx - ankle.x) ** 2 - (hy - ankle.y) ** 2;
+  const k = ANKLE.edge;
+  return ankle.z + Math.sqrt(Math.max(0, r + k * k)) - k - hz;
+}
+
+/** Puts the hips at depth `z` and the height they are free to take there (the reach clamp), and solves both legs. */
+function place(out: LegsPose, fx: number, bx: number, z: number, free: number) {
+  const cy = seat(fx, bx, z, out, free);
+  out.clamped = free - cy;
   out.pelvis.y = cy;
-  out.pelvis.z = cz;
-  setPoint(out.front.hip, fx, cy, cz);
-  setPoint(out.back.hip, bx, cy, cz);
+  out.pelvis.z = z;
+  setPoint(out.front.hip, fx, cy, z);
+  setPoint(out.back.hip, bx, cy, z);
   solveLeg(out.front);
   solveLeg(out.back);
-  return out;
+
 }
 
 function setPoint(o: Point3, x: number, y: number, z: number) {
@@ -363,11 +522,13 @@ export const kneeBend = (leg: LegPose) => {
  * One sentence for #scene-description (format.ts), from the same phases the
  * hips follow: crouched before the pop, tucked in the air, reaching down in
  * the catch, bent at the landing; riding along, a little bent, before a
- * game's wind-up (`riding`, ADR-86).
+ * game's wind-up (`riding`, ADR-86); and once a game's landing has played
+ * out (`recovered`, ADR-96), riding away or standing beside the board.
  */
-export function describeLegs(u: number, flight: Flight | null, riding = false): string {
+export function describeLegs(u: number, flight: Flight | null, riding = false, recovered = false): string {
   if (!flight && riding) return 'Knees a little bent, riding along.';
   if (!flight || u <= 0) return 'Legs crouched, knees bent, ready to pop.';
+  if (u >= 1 && recovered) return flight.landed ? 'Knees a little bent, riding away.' : 'Standing on the pad beside the board.';
   if (u >= 1) return flight.landed ? 'Knees bent, absorbing the landing.' : 'Knees bent, landing on the pad beside the board.';
   if (u < PHASE.catch.start) return 'Knees tucked up in the air.';
   return flight.landed ? 'Legs reach down to catch the board.' : 'Legs reach down beside the board.';
