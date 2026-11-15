@@ -62,6 +62,8 @@ Done when: Verify is green on main.
 
 Starts with a measurement, not a deletion.
 
+**Measured 2026-11-15: no-go** (PERF-BUDGET.md, "Restructure phase 1"). On a software GPU Medium on WebGL2 draws a frame in about 520 ms against Low's 40 ms, and its picture lifts 3.4 s later; on the reference GPU it misses its own 3 ms target. Per step 2, Low stays frozen, steps 3 to 6 are not done, and the phases below go ahead with three tiers.
+
 1. Run Medium on WebGPURenderer's WebGL2 backend on a software GPU and with the CPU throttled. Compare startup and frame time with Low today, using `scripts/measure/measure.js`.
 2. Go or no-go. If startup or frame time misses the targets in `docs/PERF-BUDGET.md`, stop and report. Low then stays frozen and the rest of this plan goes ahead with three tiers.
 3. If it passes: remove the Low tier, the WebGLRenderer path, the GLSL twins in `resources.ts`, the toon shading and `rendererKind.ts`'s second branch.
