@@ -166,6 +166,33 @@ export const ART = {
   },
   quality: QUALITY,
   /**
+   * Adaptive resolution (ADR-109, 2026-11-15; scene/adaptiveResolution.ts):
+   * on the game screen, on High and Medium, the pixel ratio is the tier's cap
+   * (`quality.dpr`) times a scale that steps between 1 and `floor` by `step`.
+   * The signal is the `quantile` of the last `window` GPU times (one read
+   * every `sampleEvery` drawn frames), or of the frame intervals where the
+   * renderer cannot time the GPU. It lowers a step while the signal is over
+   * `lowerAbove` of the tier's `targetMs` (ADR-62's graphics targets), and
+   * raises one when the signal, grown by the next step's pixels, would sit
+   * under `raiseBelow` of it; at least `minGapMs` apart, after `minSamples`
+   * new samples, and never while a flight or the replay plays. Without GPU
+   * timing it only lowers, while the interval's signal is over
+   * `intervalLowerOverMs` (a missed refresh at 60 Hz).
+   */
+  adaptive: {
+    targetMs: { high: 4, medium: 3 },
+    floor: 0.75,
+    step: 0.05,
+    window: 30,
+    minSamples: 20,
+    quantile: 0.9,
+    lowerAbove: 0.95,
+    raiseBelow: 0.85,
+    minGapMs: 2000,
+    intervalLowerOverMs: 20,
+    sampleEvery: 4,
+  },
+  /**
    * Linear fog to the clear colour (ground pass, 2026-11-04, ADR-31), so the
    * ground fades into the background instead of ending at an edge:
    * smoothstep(near, far, distance from the camera). By distance, not
