@@ -108,12 +108,13 @@ type Tier = (typeof QUALITY)[keyof typeof QUALITY];
 
 /**
  * A WebGPURenderer for a tier's settings, initialised (R3F needs the factory
- * to have awaited init) and with the TSL materials registered. `timestamps`
- * turns on GPU timestamp queries for scripts/measure (?debug). Throws if the
+ * to have awaited init) and with the TSL materials registered. GPU timestamp
+ * queries are on: the adaptive resolution reads them (ADR-109; before it, only
+ * under ?debug for scripts/measure), where the backend has them. Throws if the
  * renderer cannot start at all; TrickScene then falls back to WebGLRenderer.
  */
-export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier, timestamps: boolean) {
-  const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: timestamps });
+export async function createNodeRenderer(canvas: HTMLCanvasElement, Q: Tier) {
+  const renderer = new WebGPURenderer({ canvas, antialias: Q.antialias, powerPreference: Q.powerPreference, trackTimestamp: true });
   await renderer.init();
   renderer.toneMappingExposure = ART.renderer.exposure;
   setNodeMaterials({ footPath: footPathNodeMaterial(), shadow: shadowNodeMaterial(), legs: legsNodeMaterial(), dust: dustNodeMaterial() }, renderer);

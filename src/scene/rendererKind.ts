@@ -15,3 +15,23 @@ export const isNodeRenderer = (gl: unknown): boolean => (gl as RendererInfo | nu
 
 /** The last frame's draw calls on either renderer. */
 export const drawCallsOf = (gl: RendererInfo): number => (isNodeRenderer(gl) ? (gl.info.render.drawCalls ?? 0) : gl.info.render.calls);
+
+interface TimedRenderer {
+  backend?: { trackTimestamp?: boolean };
+  hasFeature?: (name: string) => boolean;
+  resolveTimestampsAsync?: (type: 'render') => Promise<number | undefined>;
+}
+
+/**
+ * Whether the renderer times the GPU (ADR-109): a WebGPURenderer made with
+ * `trackTimestamp` whose backend has timestamp queries (WebGPU's
+ * `timestamp-query`, or EXT_disjoint_timer_query_webgl2 on its WebGL2
+ * backend). Read once per Canvas; WebGLRenderer (Low) never does.
+ */
+export const timesGpu = (gl: unknown): boolean => {
+  const r = gl as TimedRenderer | null;
+  return isNodeRenderer(gl) && r?.backend?.trackTimestamp === true && r.hasFeature?.('timestamp-query') === true;
+};
+
+/** The GPU time of the last frame drawn, in ms, once its timestamp queries resolve (only where `timesGpu`). */
+export const readGpuMs = (gl: unknown) => (gl as Required<TimedRenderer>).resolveTimestampsAsync('render');
