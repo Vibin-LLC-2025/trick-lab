@@ -48,7 +48,7 @@ describe('the celebration (ADR-57)', () => {
     const user = await setup('lab');
     expect(celebration()).toBeNull();
     await landKickflip(user);
-    const c = celebration()!;
+    const c = celebration() as HTMLElement;
     expect(c.closest('.app__stage')).not.toBeNull();
     expect(c).toHaveAttribute('aria-hidden', 'true');
     expect(c).not.toHaveAttribute('data-calm');
@@ -104,6 +104,23 @@ describe('the celebration (ADR-57)', () => {
     expect(celebration()).toBeNull();
     act(() => useTrickStore.getState().celebrate('Heelflip', true));
     expect(celebration()).toHaveTextContent('Heelflip');
+  });
+
+  it("keeps to the part of the stage the game's cards and tray leave clear, never behind the tray (2026-11-13)", async () => {
+    await setup('lab');
+    // The lab measures no clear area: the stickers keep app.css's own place.
+    act(() => useTrickStore.getState().celebrate('Kickflip', true));
+    expect(celebration()).not.toHaveAttribute('data-clear');
+    expect(celebration()!.getAttribute('style')).toBeNull();
+    // A game's measured clear area (useStageClear), as a wide screen gives it: the tray along the bottom.
+    act(() => useTrickStore.getState().setStageClear({ left: 0.2388, top: 0, right: 0.8174, bottom: 0.8637 }));
+    act(() => useTrickStore.getState().celebrate('Heelflip', true));
+    const c = celebration() as HTMLElement;
+    expect(c).toHaveAttribute('data-clear');
+    expect(c.style.getPropertyValue('--clear-left')).toBe('0.2388');
+    expect(c.style.getPropertyValue('--clear-right')).toBe('0.8174');
+    expect(c.style.getPropertyValue('--clear-top')).toBe('0');
+    expect(c.style.getPropertyValue('--clear-bottom')).toBe('0.8637');
   });
 
   it('stays off when the 3D view has failed', async () => {

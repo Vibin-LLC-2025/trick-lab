@@ -43,7 +43,7 @@ function fixture(): Map<string, Uint8Array> {
     files.set(m.file, new Uint8Array(200).fill(97));
     for (const c of m.css ?? []) files.set(c, new Uint8Array(200).fill(98));
   }
-  for (const f of ['index.html', 'models/board-high.glb', 'models/board.glb', 'models/ground.glb', 'models/shoes.glb', 'models/rider.glb', 'stills/welcome-dark.webp', 'stills/welcome-light.webp'])
+  for (const f of ['index.html', 'models/board-high.glb', 'models/board.glb', 'models/ground.glb', 'models/shoes.glb', 'models/rider.glb', 'models/rider-high.glb', 'stills/welcome-dark.webp', 'stills/welcome-light.webp'])
     files.set(f, new Uint8Array(200).fill(99));
   return files;
 }
@@ -62,11 +62,12 @@ describe('the download budget (PLAN-PLAY-POLISH-REACH step 3)', () => {
     const paths = (tier: 'high' | 'medium' | 'low', feet = true, theme: 'dark' | 'light' = 'dark') =>
       sorted(inventory({ tier, theme, feet }, MANIFEST).map((f) => f.path));
     expect(paths('low')).toEqual(sorted([...COMMON, 'stills/welcome-dark.webp']));
-    // The whole rider (ADR-85) on the welcome screen's preview, Medium and High with the feet.
+    // The whole rider (ADR-85) on the welcome screen's preview, Medium and High with the feet: High's the lifelike one (ADR-94).
     const RIDER = ['assets/RiderModel-NNNN.js', 'models/rider.glb'];
+    const RIDER_HIGH = ['assets/RiderModel-NNNN.js', 'models/rider-high.glb'];
     expect(paths('medium')).toEqual(sorted([...COMMON, ...MODELS, ...RIDER, ...TRANSCODER, 'models/board.glb', 'models/ground.glb', 'stills/welcome-dark.webp']));
     expect(paths('high')).toEqual(
-      sorted([...COMMON, ...MODELS, 'assets/ShoesModel-IIII.js', ...RIDER, ...TRANSCODER, 'models/board-high.glb', 'models/ground.glb', 'models/shoes.glb', 'stills/welcome-dark.webp']),
+      sorted([...COMMON, ...MODELS, 'assets/ShoesModel-IIII.js', ...RIDER_HIGH, ...TRANSCODER, 'models/board-high.glb', 'models/ground.glb', 'models/shoes.glb', 'stills/welcome-dark.webp']),
     );
     // The feet off: no shoe chunk and no shoes on High, and no rider; the theme picks the picture.
     expect(paths('high', false, 'light')).toEqual(

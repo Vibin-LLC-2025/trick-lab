@@ -25,7 +25,7 @@
 // (-X), toes still at the toe side (-Z); everything toward the heels still
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
-import { CATCH, computeFlight, heightAt, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
+import { CATCH, computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
 import { isLanded, sketchAmount } from './landing';
 
 /**
@@ -356,8 +356,34 @@ export const MOTION = {
    * peaks are starting values (RESEARCH-FEET.md section 4 item 11).
    */
   tuck: { frontPeak: 0.4, backPeak: 0.35 },
-  /** Bail: the feet step off to the heel side (+Z) from the catch's start to the landing (was 0.62). */
-  bail: { start: PHASE.catch.start, frontZ: 0.26, backZ: 0.24 },
+  /**
+   * Bail (ADR-90): the feet step off to the heel side (+Z), each on its own
+   * time, the front foot first (`front.end`), the back one a little later
+   * (`back.start`) and down as the board lands. Each step is a human one,
+   * not a slide along a line: out of its tuck the foot drops to the pad
+   * faster and faster as it falls (`fall`), the toes reaching down (`reach`
+   * degrees, toes down) and flat again as it plants. The stance opens as the rider
+   * gets off: the feet a little wider (`spread` metres along the deck each)
+   * and turned toward the nose (`frontYaw`, `backYaw`, from yawAcross), the
+   * way a rider turns to run a bail out. A foot reaches at most `ground`
+   * metres below where it would stand on the board, so it touches the pad
+   * before the board only when the board is that low: from a high pop the
+   * rider comes down with the board. Until ADR-90 both feet went in one
+   * straight line together, flat and square to the board, on one smoothstep
+   * from the catch's start (was 0.62 until ADR-36).
+   */
+  bail: {
+    start: PHASE.catch.start,
+    frontZ: 0.26,
+    backZ: 0.24,
+    front: { end: 0.93 },
+    back: { start: PHASE.catch.start + 0.06 },
+    reach: -16,
+    spread: 0.03,
+    frontYaw: 68,
+    backYaw: 76,
+    ground: 0.06,
+  },
 } as const;
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
@@ -368,6 +394,13 @@ const smooth = (a: number, b: number, u: number) => {
 };
 /** 0 at a and b, 1 in the middle. */
 const bump = (a: number, b: number, u: number) => Math.sin(Math.PI * clamp01((u - a) / (b - a)));
+/** A fall, 0 to 1: starts at rest and speeds up, still moving at the end (t^2 (2 - t): the foot plants, it does not hover down). */
+const fall = (t: number) => t * t * (2 - t);
+/** A bailing foot's own step off the board (ADR-90), 0 to 1 over its part of the flight (MOTION.bail). */
+function bailStep(p: number, foot: 'front' | 'back'): number {
+  const B = MOTION.bail;
+  return foot === 'front' ? clamp01((p - B.start) / (B.front.end - B.start)) : clamp01((p - B.back.start) / (1 - B.back.start));
+}
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
@@ -601,14 +634,15 @@ function writeFlightFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const sn = Math.sin(t);
   rideDeck(out.front, c, sn, board.y + tuckHeight('front', i, p), board.pitch, 1);
   rideDeck(out.back, c, sn, board.y + tuckHeight('back', i, p), board.pitch, -1);
-  // A bailing board comes down on its rail or kicks (ADR-68), up to a couple
-  // of centimetres above where the parabola alone would put it; the feet step
-  // onto the pad, not onto that height, so it comes off as the bail goes on.
+  // A bailing foot reaches below the board for the pad as it steps off
+  // (ADR-90), by up to MOTION.bail.ground: so from a low pop the front foot
+  // is down before the board, and whatever the board does (a rail or a kick
+  // holds it up a couple of centimetres, ADR-68) each foot ends on the pad.
   // Level by then (pitch 0), so it is a straight drop. 0 for every landing.
   if (!flight.landed && p >= 0.5) {
-    const extra = (board.y - heightAt(flight.peak, p)) * smooth(MOTION.bail.start, 1, p);
-    out.front.y -= extra;
-    out.back.y -= extra;
+    const G = MOTION.bail.ground;
+    out.front.y -= Math.min(board.y + tuckHeight('front', i, p), G) * fall(bailStep(p, 'front'));
+    out.back.y -= Math.min(board.y + tuckHeight('back', i, p), G) * fall(bailStep(p, 'back'));
   }
   if (isLanded(flight.rollTotal, flight.yawTotal)) {
     rideCatch(out.front, flight, p, CATCH.front, 1);
@@ -688,7 +722,12 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const landed = isLanded(flight.rollTotal, flight.yawTotal);
   const gatherFront = smooth(M.gather.start, M.gather.front, p);
   const gatherBack = smooth(M.gather.start, M.gather.back, p);
-  const bail = landed ? 0 : smooth(M.bail.start, 1, p);
+  // Each foot's own step off a bail (ADR-90), 0 to 1; 0 for a landing, which leaves every number below as it was.
+  const B = M.bail;
+  const stepF = landed ? 0 : bailStep(p, 'front');
+  const stepB = landed ? 0 : bailStep(p, 'back');
+  const easeF = smooth(0, 1, stepF);
+  const easeB = smooth(0, 1, stepB);
   // On the grip over the bolts, resting on the rails (LAND_Y), of a board that ends square or half round.
   const half = landed && Math.round(Math.abs(flight.yawTarget) / 180) % 2 === 1;
   // A sketchy landing comes down off the bolts (ADR-63); 0 for a clean one, which leaves every number below as it was.
@@ -718,13 +757,13 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const fx = front.x + slide + dir.x * flick + pivot * (Math.cos(turned * D2R) - Math.cos(front.yaw * D2R));
   const fy = DECK_TOP + slide * S.lift + dir.y * flick;
   const fz = front.z + dir.z * flick - pivot * (Math.sin(turned * D2R) - Math.sin(front.yaw * D2R));
-  front.x = lerp(fx, BOLTS_X - SKETCH.front * sketch, gatherFront);
-  front.z = lerp(lerp(fz, 0, gatherFront), M.bail.frontZ, bail);
-  front.y = lerp(lerp(fy, landFront, gatherFront), PAD_Y, bail);
-  front.yaw = lerp(turned, STANCE.front.yawAcross, gatherFront);
-  front.roll = S.roll * bump(0, M.flick.end, p) * (1 - heel);
-  // Heelflip: toes up, heel down through the kick (0 for a kickflip or an ollie).
-  front.pitch = M.flick.heelPitch * heel * bump(M.flick.start, M.flick.end, p);
+  front.x = lerp(fx, BOLTS_X - SKETCH.front * sketch, gatherFront) + B.spread * easeF;
+  front.z = lerp(lerp(fz, 0, gatherFront), B.frontZ, easeF);
+  front.y = lerp(lerp(fy, landFront, gatherFront), PAD_Y, fall(stepF));
+  front.yaw = lerp(lerp(turned, STANCE.front.yawAcross, gatherFront), B.frontYaw, easeF);
+  front.roll = S.roll * bump(0, M.flick.end, p) * (1 - heel) * (1 - easeF);
+  // Heelflip: toes up, heel down through the kick (0 for a kickflip or an ollie); a bailing foot's toes reach for the pad.
+  front.pitch = M.flick.heelPitch * heel * bump(M.flick.start, M.flick.end, p) + B.reach * bump(0.15, 1, stepF);
 
   // Back foot: pop (heel up, a small press), scoop behind the heels
   // (backside) or forward in front of the toes (frontside), gather.
@@ -735,13 +774,13 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const bx = back.x + M.scoop.dir.x * scoop;
   const by = TAIL_TOP - press + M.scoop.dir.y * scoop * (1 - smooth(scoopEnd, scoopEnd + 0.1, p));
   const bz = back.z + M.scoop.dir.z * sideOf(i.scoop) * scoop;
-  back.x = lerp(bx, -BOLTS_X + SKETCH.back * sketch, gatherBack);
-  back.z = lerp(lerp(bz, 0, gatherBack), M.bail.backZ, bail);
-  back.y = lerp(lerp(by, landBack, gatherBack), PAD_Y, bail);
+  back.x = lerp(bx, -BOLTS_X + SKETCH.back * sketch, gatherBack) - B.spread * easeB;
+  back.z = lerp(lerp(bz, 0, gatherBack), B.backZ, easeB);
+  back.y = lerp(lerp(by, landBack, gatherBack), PAD_Y, fall(stepB));
   // From the stance's own tilt on the tail (writeStance), so progress 0 is the stance exactly.
-  back.pitch = lerp(back.pitch + M.pop.pitch * bump(0, M.pop.end, p), 0, gatherBack);
+  back.pitch = lerp(back.pitch + M.pop.pitch * bump(0, M.pop.end, p), 0, gatherBack) + B.reach * bump(0.15, 1, stepB);
   back.roll = lerp(back.roll, 0, gatherBack);
-  back.yaw = lerp(back.yaw, STANCE.front.yawAcross, gatherBack);
+  back.yaw = lerp(lerp(back.yaw, STANCE.front.yawAcross, gatherBack), B.backYaw, easeB);
   return out;
 }
 

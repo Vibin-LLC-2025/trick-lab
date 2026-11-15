@@ -26,9 +26,27 @@ export const SPOT = {
    * from the camera) for any camera within 4 m of the board along x.
    */
   loop: 50,
-  /** A low kerb painted red, the classic: its top front edge chamfered. */
-  kerb: { x: [-5.0, 1.0], z: [-1.3, -1.05], height: 0.15, chamfer: 0.03, color: '#7d352b' },
-  /** A flat rail on two square posts with base plates, painted near black. */
+  /**
+   * A low kerb painted red, the classic: its top front edge chamfered. Its
+   * grind edge (ADR-102, 2026-11-13): the chamfer and a `wax.depth` strip of
+   * the top behind it darkened by wax and trucks (`wax.color`), and the paint
+   * chipped on the chamfer to the concrete under it (`chip.color`, grimy) along `chips` (x from-to).
+   */
+  kerb: {
+    x: [-5.0, 1.0],
+    z: [-1.3, -1.05],
+    height: 0.15,
+    chamfer: 0.03,
+    color: '#7d352b',
+    wax: { depth: 0.035, color: '#552420' },
+    chip: { color: '#4f4842' },
+    chips: [[-4.4, -4.34], [-3.05, -3.01], [-2.16, -2.08], [-0.96, -0.92], [0.24, 0.31]],
+  },
+  /**
+   * A flat rail on two square posts with base plates, bare steel since ADR-102
+   * (2026-11-13; painted near black, `#26282b`, until then), drawn with the
+   * steel material; the bar's top faces ground bright (`polish`).
+   */
   rail: {
     x: [1.8, 4.6],
     z: -1.6,
@@ -38,12 +56,32 @@ export const SPOT = {
     posts: [2.1, 4.3],
     post: 0.04,
     plate: { size: 0.14, height: 0.008 },
-    color: '#26282b',
+    color: '#6f7377',
+    polish: '#a3a7ab',
   },
-  /** A concrete ledge, its top front edge capped by a steel angle. */
-  ledge: { x: [-3.6, 0.2], z: [-2.55, -2.0], height: 0.42, angle: 0.012, color: '#8f918d', angleColor: '#4b4e51' },
-  /** A plain concrete wall at the back, in formwork panels. */
-  wall: { x: [-5.6, 5.6], z: [-4.4, -4.1], height: 1.7, color: '#7d7f7b' },
+  /**
+   * A concrete ledge, its top front edge capped by a steel angle (steel
+   * material, its top ground bright, `anglePolish`). ADR-102: its top edges
+   * bevelled by `bevel` (the front one under the angle), and a `wax` band of
+   * the top behind the angle darkened where it is ground.
+   */
+  ledge: {
+    x: [-3.6, 0.2],
+    z: [-2.55, -2.0],
+    height: 0.42,
+    angle: 0.012,
+    color: '#8f918d',
+    angleColor: '#62666a',
+    anglePolish: '#9a9ea2',
+    bevel: 0.012,
+    wax: { depth: 0.07, color: '#757773' },
+  },
+  /**
+   * A plain concrete wall at the back, in formwork panels: ADR-102, its top
+   * edges bevelled by `bevel`, and the front cut into `panel`-wide panels by
+   * darker joints `joint` wide.
+   */
+  wall: { x: [-5.6, 5.6], z: [-4.4, -4.1], height: 1.7, color: '#7d7f7b', bevel: 0.02, panel: 1.2, joint: 0.014, jointColor: '#5d5f5b' },
 } as const;
 
 /** The pieces' footprints and heights, for the soft shadows under them (scene/resources.ts). */
@@ -80,6 +118,17 @@ export const SPOT_TEXTURES = {
   relief: 0.0012,
 } as const;
 
-export const SPOT_PARTS = [{ node: 'Spot_Concrete', material: 'concrete' }] as const;
+/**
+ * Two meshes, two materials, two draw calls (ADR-102, 2026-11-13; one until
+ * then): the concrete (kerb, ledge, wall) and the steel (the rail, its posts
+ * and plates, the ledge's angle). Both are painted by vertex colour over the
+ * same colour map; only the concrete takes the normal map.
+ */
+export const SPOT_PARTS = [
+  { node: 'Spot_Concrete', material: 'concrete' },
+  { node: 'Spot_Steel', material: 'steel' },
+] as const;
 
 export const SPOT_MATERIAL = { name: 'Spot concrete', roughness: 0.9, metalness: 0 } as const;
+/** The steel: one constant roughness and metalness (ADR-102); the polished faces are lighter paint, not a roughness map. */
+export const SPOT_STEEL_MATERIAL = { name: 'Spot steel', roughness: 0.42, metalness: 0.85 } as const;

@@ -214,6 +214,46 @@ function missOf(r: TrickResult, call: ForecastCall): string {
 }
 
 /**
+ * A result in a game of SKATE, against the trick in play (`call`): a bail
+ * says how far it missed that trick, "Kickflip not landed: 217 degrees short
+ * on the flip.", not the trick it came nearest to (2026-11-13: an early
+ * release of a kickflip was "Ollie not landed: flip over-rotated by 143
+ * degrees", the wrong way to correct). Everything else, and the lab, is
+ * describeResult.
+ */
+export function describeAttempt(r: TrickResult, call: ForecastCall | null): string {
+  if (!call || r.landed) return describeResult(r);
+  const totals = `${degWord(r.rollTotal)} of ${flipNoun(r.rollTotal)}, ${degWord(r.yawTotal)} of ${shoveNoun(r.yawTotal)}, ${seconds(r.airtime)} seconds in the air.`;
+  return `${call.name} not landed: ${missOf(r, call)}. ${totals}`;
+}
+
+/** How a release of the timing bar went, for `missWhy`: how far outside its band (signed ms, 0 inside) and the percent of spin that changed. */
+export interface ReleaseMiss {
+  missMs: number;
+  percent: number;
+}
+
+/**
+ * Why the player's go missed the trick in play, and what to change, in a
+ * line for the notice (ADR-105, the review's A13): "Early: 18 percent less
+ * spin, 62 degrees short on the flip. Press Pop! a little later.", "In the
+ * band, so it was the sliders: 25 degrees past on the flip.", "Sketchy: 19
+ * degrees short on the flip, and only clean counts on Hard.". `release` is
+ * null for an exact pop, which says only how far it missed.
+ */
+export function missWhy(r: TrickResult, call: ForecastCall, release: ReleaseMiss | null, cleanOnly = false): string {
+  const sketchyOnly = cleanOnly && r.landed && r.id === call.id && r.grade !== 'clean';
+  const what = sketchyOnly ? `sketchy: ${sketchText(r)}` : missOf(r, call);
+  if (release && release.missMs !== 0) {
+    const early = release.missMs < 0;
+    return `${early ? 'Early' : 'Late'}: ${release.percent} percent ${early ? 'less' : 'more'} spin, ${what}. Press Pop! a little ${early ? 'later' : 'earlier'}.`;
+  }
+  const tail = sketchyOnly ? ', and only clean counts on Hard' : '';
+  if (release) return `In the band, so it was the sliders: ${what}${tail}.`;
+  return `${what.charAt(0).toUpperCase()}${what.slice(1)}${tail}.`;
+}
+
+/**
  * The forecast under the game's sliders (ADR-83): what the sliders make if
  * the pop is timed right (a release in the band is exactly the sliders,
  * ADR-65), from the same flight and recognition that fly the trick. Against
@@ -453,7 +493,9 @@ export function describeScene(s: {
   const at = s.status === 'idle' ? 0 : s.progress;
   // The riding stance is the whole rider's (ADR-86); the legs alone (Low, the lab) keep the crouch. The computer's wait reads as riding.
   const riding = !!s.riderShown && s.windUp !== undefined && s.windUp !== 'crouch';
-  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight, riding)}${s.riderShown ? ` ${describeBody(at, s.flight, riding)}` : ''}`;
+  // A game's landing that has played out has the rider back up (ADR-96).
+  const recovered = s.landing === 'over' && !replay;
+  const legs = s.feetVisible === false || s.legsVisible === false ? '' : ` ${describeLegs(at, s.flight, riding, recovered)}${s.riderShown ? ` ${describeBody(at, s.flight, riding, recovered)}` : ''}`;
   const inputs = `Inputs: ${describeInputs(s)}.`;
   // A popped flight without a result is still in the air (playing or paused), even after an earlier trick.
   const cpu = s.flightBy === 'computer';

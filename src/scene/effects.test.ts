@@ -2,9 +2,10 @@
 // needs a GPU, so the picture is checked in the browser (PERF-BUDGET.md);
 // here, which tier runs what, when motion blur runs, and that the effects
 // build and free themselves for each tier that has them.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PerspectiveCamera, Scene } from 'three';
-import { MeshBasicNodeMaterial, QuadMesh } from 'three/webgpu';
+import { MeshBasicNodeMaterial, QuadMesh, RTTNode } from 'three/webgpu';
+import DenoiseNode from 'three/examples/jsm/tsl/display/DenoiseNode.js';
 import { createTrickStore } from '../store';
 import { ART } from './artDirection';
 import { blurTaps, createEffects, NDC_TO_UV } from './effects';
@@ -23,6 +24,23 @@ describe('the effects per tier', () => {
     expect(effectsFor(store.getState())).toBe(ART.post.tiers.high);
     store.getState().setBoardAssetFailed();
     expect(effectsFor(store.getState())).toBeNull();
+  });
+
+  it("frees the occlusion's denoise and its render target with the rest, once each (2026-11-13 review, C-08)", () => {
+    const denoiseFreed = vi.spyOn(DenoiseNode.prototype, 'dispose');
+    const targetFreed = vi.spyOn(RTTNode.prototype, 'dispose');
+    try {
+      for (const tier of [ART.post.tiers.high!, ART.post.tiers.medium!]) {
+        denoiseFreed.mockClear();
+        targetFreed.mockClear();
+        createEffects({} as never, new Scene(), new PerspectiveCamera(), tier).dispose();
+        expect(denoiseFreed).toHaveBeenCalledTimes(1);
+        expect(targetFreed).toHaveBeenCalledTimes(1);
+      }
+    } finally {
+      denoiseFreed.mockRestore();
+      targetFreed.mockRestore();
+    }
   });
 
   it('builds and frees the effects for each tier that has them, without a GPU', () => {

@@ -299,6 +299,22 @@ describe('flight', () => {
     expect(before.front.z).toBeLessThan(RAIL_Z / 2);
   });
 
+  it('steps off a bail like a person (ADR-90): the front foot first, toes reaching, the stance opening toward the nose', () => {
+    const flight = computeFlight({ ...kickflip, pop: 0.15 });
+    const B = MOTION.bail;
+    const aim = (u: number) => writeFeetIntent(newFeetPose(), ollie, flight, u);
+    // The front foot is on the pad before the back one has finished its step.
+    expect(aim(B.front.end).front.y).toBeCloseTo(PAD_Y, 9);
+    expect(aim(B.front.end).back.y).toBeGreaterThan(PAD_Y + 0.02);
+    // Mid step the toes reach down; planted, the sole is flat again.
+    expect(aim(B.start + (B.front.end - B.start) * 0.6).front.pitch).toBeLessThan(-8);
+    expect(Math.abs(aim(1).front.pitch)).toBeLessThan(1e-9);
+    // On the pad the feet are a little wider than the bolts and turned toward the nose.
+    expect(aim(1).front.yaw).toBe(B.frontYaw);
+    expect(aim(1).back.yaw).toBe(B.backYaw);
+    expect(aim(1).front.x - aim(1).back.x).toBeCloseTo(2 * (BOLTS_X + B.spread), 9);
+  });
+
   // 3 cm per percent (was 2.5 before the 2026-11-04 research pass): the hardest
   // scoop, 3 rev/s, is a 25 cm backward kick in the first eighth of the
   // airtime, as fast as the coaching sources describe a 360 flip scoop. Still

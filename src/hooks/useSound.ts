@@ -76,15 +76,19 @@ export function useSound(injected?: SoundPlayer) {
         });
       } else if (!s.soundOn && prev.soundOn) player.current?.stop();
       const p = player.current;
+      // One bar is one bar however often its object is remade (a slider moved while it runs makes a new one, inputs.ts):
+      // its tone and ticks start and stop on its id (2026-11-13 review, G-04).
+      const bar = s.pendingPop?.id ?? null;
+      const barBefore = prev.pendingPop?.id ?? null;
       if (p && s.soundOn) {
-        if (s.pendingPop !== prev.pendingPop) {
-          if (!s.pendingPop) p.stopBar();
+        if (bar !== barBefore) {
+          if (bar === null) p.stopBar();
           else p.bar();
         }
         const rateMoved = playRate(s) !== playRate(prev);
         if (rollSound(s) !== rollSound(prev) || (rateMoved && rollSound(s) !== 'off')) roll(p);
         if (s.status !== prev.status || s.flightId !== prev.flightId || rateMoved) catchUp(p);
-      } else if (p && s.pendingPop !== prev.pendingPop && !s.pendingPop) p.stopBar();
+      } else if (p && bar !== barBefore && bar === null) p.stopBar();
       const cue = s.soundCue;
       if (!cue || cue.nonce === heard) return;
       heard = cue.nonce;

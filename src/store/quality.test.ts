@@ -16,6 +16,12 @@ describe('pickQuality (ADR-16)', () => {
     expect(pickQuality({})).toBe('medium');
   });
 
+  it('gives built-in graphics Medium however big the machine (2026-11-13)', () => {
+    for (const renderer of ['ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11)', 'Intel(R) Iris(R) Xe Graphics', 'AMD Radeon(TM) Graphics', 'AMD Radeon(TM) Vega 8 Graphics']) {
+      expect(pickQuality({ renderer, memoryGb: 8, cores: 12 }), renderer).toBe('medium');
+    }
+  });
+
   it('gives Chromebooks, software renderers and small machines Low', () => {
     expect(pickQuality({ userAgent: 'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/120', memoryGb: 8, cores: 8 })).toBe('low');
     expect(pickQuality({ renderer: 'Google SwiftShader', memoryGb: 16, cores: 16 })).toBe('low');

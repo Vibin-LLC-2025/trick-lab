@@ -48,6 +48,25 @@ function spaceIsNative(el: Element | null) {
   );
 }
 
+/**
+ * On the game screen, where Space pops from a control anyway (ADR-88): a
+ * slider (Space does nothing on one, so after a drag the next Space is the
+ * pop), and a control that has focus from a click or a tap, not from the
+ * keyboard (the browser draws no focus ring on it), so after a click on a
+ * switch, Change trick or the sliders' fold the next Space pops instead of
+ * pressing it again. A control reached by Tab keeps Space as its own, and so
+ * does anything in a dialog. The lab keeps Space native everywhere.
+ */
+function popsFromHere(el: Element | null) {
+  if (!(el instanceof HTMLElement) || el.closest('dialog, [role="dialog"], [role="alertdialog"]')) return false;
+  if (el instanceof HTMLInputElement && el.type === 'range') return true;
+  try {
+    return !el.matches(':focus-visible');
+  } catch {
+    return false;
+  }
+}
+
 const PRESET_BY_KEY = new Map(PRESETS.map((p) => [p.key, p.id]));
 
 /**
@@ -87,7 +106,7 @@ function useGlobalShortcuts() {
       let handled = true;
       if (preset) s.applyPreset(preset);
       else if (e.key === ' ') {
-        if (spaceIsNative(target)) return;
+        if (spaceIsNative(target) && !(s.screen === 'skate' && popsFromHere(target))) return;
         // The game's Pop is the same action as its button: the timing bar's start and release, or the plain pop (ADR-65).
         if (s.screen === 'skate') s.pressPop();
         else s.popTrick();
@@ -204,6 +223,7 @@ export function App() {
   useStageClear();
   const screen = useTrickStore((s) => s.screen);
   const canPause = useTrickStore(previewCanPlay);
+  const noticeShown = useTrickStore(noticeUp);
 
   return (
     <>
@@ -222,7 +242,9 @@ export function App() {
           </main>
         )}
         {screen === 'skate' && (
-          <main className="app__play" aria-label="Game">
+          // While a notice waits over the stage the game's controls under it are inert (2026-11-13): Tab and a
+          // screen reader reach the notice and the top bar only, never a dimmed Pop the notice covers.
+          <main className="app__play" aria-label="Game" inert={noticeShown || undefined}>
             <Skate />
           </main>
         )}

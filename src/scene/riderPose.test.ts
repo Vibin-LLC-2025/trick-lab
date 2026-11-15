@@ -48,7 +48,7 @@ const skinned = (mesh: SkinnedMesh, i: number) =>
   mesh.applyBoneTransform(i, new Vector3().fromBufferAttribute(mesh.geometry.getAttribute('position'), i)).applyMatrix4(mesh.matrixWorld);
 
 describe('the rider in the scene (ADR-85)', () => {
-  it('reads the 17 bones from rider.glb in RIDER_BONES order, and names the mesh the stills capture waits for', async () => {
+  it('reads the 19 bones from rider.glb in RIDER_BONES order, and names the mesh the stills capture waits for', async () => {
     const source = await loadRider();
     expect(source.skeleton.bones.map((b) => b.name)).toEqual([...RIDER_BONES]);
     expect(makeRiderRig(source, new MeshBasicMaterial()).mesh.name).toBe(RIDER_MESH_NAME);

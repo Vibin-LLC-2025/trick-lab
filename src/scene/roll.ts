@@ -109,7 +109,7 @@ export function writeSlides(distance: number, nose: 1 | -1 = 1) {
   }
 }
 
-/** How many textures slide now (for tests and the debug readout). */
+/** How many textures slide now (for tests). */
 export const slideCount = () => count;
 
 /** Texture widths per metre for a texture repeated `repeat` times across `width` metres of ground. */

@@ -48,6 +48,8 @@ export interface BudgetRow {
 }
 
 const isPow2 = (n: number) => n > 0 && (n & (n - 1)) === 0;
+/** The detailed rider's bind-pose bounds (ADR-94), metres: its top with the beanie, its jeans' hem, and how far off centre. */
+export const RIDER_HIGH_BOUNDS = { top: [1.65, 1.8], bottom: [0.03, 0.09], off: 0.005 } as const;
 /** The ground plane's smallest side, metres (the ground brief, 2026-11-04). */
 export const GROUND_MIN_SIZE = 24;
 /**
@@ -93,18 +95,21 @@ function sizeRows(s: AssetStats, key: AssetKey): BudgetRow[] {
       { check: 'Behind the board (max z)', value: mm(s.bounds.max[2]), limit: '< -0.8 m', ok: s.bounds.max[2] < -0.8 },
     ];
   }
-  if (key === 'rider') {
+  if (key === 'rider' || key === 'riderHigh') {
     // The bind pose (src/sim/body.ts): a 1.75 m rider with the knees a little bent, centred, the ankles in the shoes.
+    // The detailed rider (ADR-94) is MakeHuman's body fitted to it: its jeans end a little higher, and it is symmetric to a few millimetres.
+    const R = key === 'rider' ? { top: [1.7, 1.8], bottom: [0.03, 0.06], off: 0.001 } : RIDER_HIGH_BOUNDS;
     const height = s.bounds.max[1];
     const off = Math.abs(s.bounds.max[0] + s.bounds.min[0]) / 2;
     const skin = s.joints?.[0] ?? [];
     const order = skin.length === RIDER_BONES.length && skin.every((j, i) => j === RIDER_BONES[i]);
+    const cm = (r: readonly number[]) => `${(r[0]! * 1000).toFixed(0)} to ${(r[1]! * 1000).toFixed(0)} mm`;
     return [
       { check: 'Skin joints', value: `${skin.length} (${s.joints?.length ?? 0} skin)`, limit: `${RIDER_BONES.length}, one skin`, ok: (s.joints?.length ?? 0) === 1 && skin.length === RIDER_BONES.length },
       { check: 'Joint order', value: order ? 'RIDER_BONES' : 'differs', limit: 'RIDER_BONES (src/sim/body.ts)', ok: order },
-      { check: 'Top (max y)', value: mm(height), limit: '1700 to 1800 mm', ok: height >= 1.7 && height <= 1.8 },
-      { check: 'Bottom, in the shoes (min y)', value: mm(s.bounds.min[1]), limit: '30 to 60 mm', ok: s.bounds.min[1] >= 0.03 && s.bounds.min[1] <= 0.06 },
-      { check: 'Symmetric (x)', value: mm(off), limit: '0.0 mm +- 1 mm', ok: off <= 0.001 },
+      { check: 'Top (max y)', value: mm(height), limit: cm(R.top), ok: height >= R.top[0]! && height <= R.top[1]! },
+      { check: 'Bottom, in the shoes (min y)', value: mm(s.bounds.min[1]), limit: cm(R.bottom), ok: s.bounds.min[1] >= R.bottom[0]! && s.bounds.min[1] <= R.bottom[1]! },
+      { check: 'Symmetric (x)', value: mm(off), limit: `0.0 mm +- ${mm(R.off)}`, ok: off <= R.off },
     ];
   }
   if (key === 'shoes') {
@@ -133,7 +138,7 @@ export function evaluateBudget(s: AssetStats, key: AssetKey = 'board'): BudgetRo
   const gpu = s.textures.reduce((n, t) => n + gpuBytes(t), 0);
   const maxSide = Math.max(0, ...s.textures.map((t) => Math.max(t.width, t.height)));
   const expectedNodes: readonly string[] =
-    key === 'rider' ? [...RIDER_PARTS.map((p) => p.node), ...RIDER_BONES] : (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : key === 'spot' ? SPOT_PARTS : PARTS).map((p) => p.node);
+    key === 'rider' || key === 'riderHigh' ? [...RIDER_PARTS.map((p) => p.node), ...RIDER_BONES] : (key === 'shoes' ? SHOE_PARTS : key === 'ground' ? GROUND_PARTS : key === 'spot' ? SPOT_PARTS : PARTS).map((p) => p.node);
   const missing = expectedNodes.filter((n) => !s.nodeNames.includes(n));
   const rows: BudgetRow[] = [
     { check: 'GLB file size', value: kb(s.fileBytes), limit: `<= ${kb(BUDGET.fileBytes)}`, ok: s.fileBytes <= BUDGET.fileBytes },

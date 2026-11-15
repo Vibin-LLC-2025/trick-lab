@@ -545,10 +545,10 @@ export const BUDGETS = {
    * wall in one mesh, loaded on Medium and High on the game screen only.
    * The plan's proposal: 300 KB, 15,000 triangles, 3 textures at 1024 px.
    */
-  spot: { drawCalls: 1, triangles: 15000, fileBytes: 300 * 1024, textures: 3, textureMaxSide: 1024 },
+  spot: { drawCalls: 2, triangles: 15000, fileBytes: 300 * 1024, textures: 3, textureMaxSide: 1024 },
   /**
    * The rider (ADR-85, 2026-11-11): the whole body as one skinned mesh over
-   * 17 bones, loaded on Medium and High for the game and the welcome screen.
+   * 19 bones (17 until ADR-98 added the feet), loaded on Medium and High for the game and the welcome screen.
    * No texture of its own: the cloth's twill normal map is made in code by
    * scene/resources.ts (ADR-70's, shared with nothing to download) and the
    * colours are painted per region from ART.rider. The brief's aim was 350 KB,
@@ -557,6 +557,14 @@ export const BUDGETS = {
    * refine the mesh, not to hide waste) and the texture limit to none.
    */
   rider: { drawCalls: 1, triangles: 20000, fileBytes: 150 * 1024, textures: 0, textureMaxSide: 1024 },
+  /**
+   * The detailed rider (ADR-94, 2026-11-13), High only: MakeHuman's body
+   * (CC0) fitted onto the same 19 bones (src/asset/riderFit.ts), one skinned
+   * mesh with one texture atlas (skin, shirt and jeans, hair, eyes, brows,
+   * the beanie's knit), cut-out where the hair and the lashes thin. The
+   * owner's aim: lifelike, on the machines the game is designed for.
+   */
+  riderHigh: { drawCalls: 1, triangles: 32000, fileBytes: 1100 * 1024, textures: 1, textureMaxSide: 2048 },
 } as const satisfies Record<string, AssetBudget>;
 
 export type AssetKey = keyof typeof BUDGETS;
@@ -579,6 +587,7 @@ export const SHOES_GLB = 'models/shoes.glb';
 export const GROUND_GLB = 'models/ground.glb';
 export const SPOT_GLB = 'models/spot.glb';
 export const RIDER_GLB = 'models/rider.glb';
+export const RIDER_HIGH_GLB = 'models/rider-high.glb';
 
-export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB, spot: SPOT_GLB, rider: RIDER_GLB };
+export const ASSET_FILES: Record<AssetKey, string> = { board: BOARD_GLB, boardHigh: BOARD_HIGH_GLB, shoes: SHOES_GLB, ground: GROUND_GLB, spot: SPOT_GLB, rider: RIDER_GLB, riderHigh: RIDER_HIGH_GLB };
 

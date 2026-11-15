@@ -1,6 +1,6 @@
 // The rider's mesh (ADR-85): one skinned geometry round the bind pose of
 // src/sim/body.ts, symmetric, every vertex smoothly weighted to at most four
-// of the 17 bones, its regions and cloth coordinates in range.
+// of the 19 bones, its regions and cloth coordinates in range.
 import { describe, expect, it } from 'vitest';
 import { BONE, MIRROR_BONE, RIDER_BONES } from '../sim/body';
 import { LEG } from '../sim/legs';
@@ -96,9 +96,9 @@ describe('the rider mesh (ADR-85)', () => {
       expect(uv.getY(v)).toBeGreaterThanOrEqual(0);
       expect(uv.getY(v)).toBeLessThanOrEqual(1);
     }
-    // Every region is used.
+    // Every region is used but the gloves: since ADR-91 the hands are bare skin (the region stays, so the colour lists keep their order).
     const used = new Set(Array.from({ length: n }, (_, v) => region.getX(v)));
-    expect([...used].sort((a, b) => a - b)).toEqual(RIDER_REGIONS.map((_, i) => i));
+    expect([...used].sort((a, b) => a - b)).toEqual(RIDER_REGIONS.map((_, i) => i).filter((i) => i !== REGION.glove));
   });
 
   it('ends each trouser leg in the cuff over the shoe collar and a dark sock inside the shoe (ADR-70)', () => {

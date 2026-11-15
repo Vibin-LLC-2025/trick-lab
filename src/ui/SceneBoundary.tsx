@@ -27,11 +27,24 @@ export class SceneBoundary extends Component<{ children: ReactNode }, { failed: 
   }
 
   render() {
-    if (!this.state.failed) return this.props.children;
-    return (
-      <div className="panel" role="note" aria-label="3D view unavailable">
-        <p className="panel__note">{SCENE_UNAVAILABLE_TEXT}</p>
-      </div>
-    );
+    if (!this.state.failed) return <SceneGone>{this.props.children}</SceneGone>;
+    return <SceneUnavailableNote />;
   }
+}
+
+function SceneUnavailableNote() {
+  return (
+    <div className="panel" role="note" aria-label="3D view unavailable">
+      <p className="panel__note">{SCENE_UNAVAILABLE_TEXT}</p>
+    </div>
+  );
+}
+
+/**
+ * The same note once the store says the view is gone for any other reason: its graphics context or device was lost
+ * (scene/contextLoss.ts, the 2026-11-13 review C-04). The dead Canvas is unmounted, so nothing waits on its frames.
+ */
+function SceneGone({ children }: { children: ReactNode }) {
+  const gone = useTrickStore((s) => s.sceneUnavailable);
+  return gone ? <SceneUnavailableNote /> : children;
 }

@@ -288,16 +288,6 @@ export function footToArc(x: number, side: Side): number {
   return lerp(SOLE_ARC[SOLE_RING_POINTS - i]!, SOLE_ARC[SOLE_RING_POINTS - i - 1]!, k);
 }
 
-/** The footprint edge (x, side) at an arc position. */
-export function arcToFoot(u: number): { x: number; side: Side } {
-  let p = 0;
-  while (p < SOLE_RING_POINTS - 1 && SOLE_ARC[p + 1]! < u) p++;
-  const k = clamp01((u - SOLE_ARC[p]!) / (SOLE_ARC[p + 1]! - SOLE_ARC[p]! || 1));
-  const i0 = p < SOLE_SIDE_POINTS ? p : SOLE_RING_POINTS - p;
-  const i1 = p + 1 < SOLE_SIDE_POINTS ? p + 1 : SOLE_RING_POINTS - p - 1;
-  return { x: lerp(RING_XS[i0]!, RING_XS[i1]!, k), side: p < SOLE_SIDE_POINTS - 1 ? 'lateral' : 'medial' };
-}
-
 const Z_MEDIAL = -FOOTPRINT.toe.medial;
 const Z_LATERAL = FOOTPRINT.toe.lateral;
 

@@ -1,5 +1,5 @@
 // The rider's body as built (step 1 of ADR-85, 2026-11-11): one skinned
-// mesh over the 17 bones of src/sim/body.ts, lofted round its bind pose by
+// mesh over the 19 bones of src/sim/body.ts, lofted round its bind pose by
 // rider.ts and written to public/models/rider.glb by `npm run assets`. No
 // colours here: each vertex carries a region (RIDER_REGIONS), which the scene
 // paints from ART.rider (scene/riderLook.ts), so the player's and the
@@ -9,6 +9,18 @@
 export const RIDER_ROOT = 'Rider';
 export const RIDER_PARTS = [{ node: 'Body', material: 'rider' }] as const;
 export const RIDER_MATERIAL = { name: 'Rider', roughness: 0.92, metalness: 0 } as const;
+
+/**
+ * The detailed rider (ADR-94, rider-high.glb): its atlas's file name (KTX2
+ * inside the GLB), its cloth and skin's roughness, and the alpha under which
+ * the hair's and the lashes' edges are cut out.
+ */
+export const RIDER_HIGH_ATLAS = 'rider-atlas.png';
+/**
+ * `doubleSided` (2026-11-13, ADR-106): both faces of the cloth are drawn, so where the tee stands off the waist the eye
+ * meets the tee's own shaded inside, not the wall behind the rider through the gap (the grey band under the hem).
+ */
+export const RIDER_HIGH_MATERIAL = { roughness: 0.8, alphaCutoff: 0.5, doubleSided: true } as const;
 
 /**
  * What each vertex is, for its colour (ART.rider, per rider): stored as the
@@ -83,9 +95,9 @@ export const SEAT: readonly { h: number; a: number; f: number; b: number; z: num
   { h: -0.185, a: 0.055, f: 0.05, b: 0.06, z: 0.01 },
   { h: -0.15, a: 0.135, f: 0.085, b: 0.105, z: 0.01 },
   { h: -0.09, a: 0.172, f: 0.1, b: 0.122, z: 0.008 },
-  { h: -0.02, a: 0.186, f: 0.104, b: 0.124, z: 0.008 },
-  { h: 0.05, a: 0.18, f: 0.104, b: 0.118, z: 0.008 },
-  { h: 0.14, a: 0.165, f: 0.104, b: 0.11, z: 0.008 },
+  { h: -0.02, a: 0.1711, f: 0.0957, b: 0.1141, z: 0.008 },
+  { h: 0.05, a: 0.1656, f: 0.0957, b: 0.1086, z: 0.008 },
+  { h: 0.14, a: 0.1518, f: 0.0957, b: 0.1012, z: 0.008 },
   { h: 0.16, a: 0, f: 0, b: 0, z: 0.008 },
 ];
 
@@ -100,23 +112,23 @@ export const SEAT: readonly { h: number; a: number; f: number; b: number; z: num
  */
 export const TORSO: readonly { h: number; a: number; f: number; b: number; z: number; n: number }[] = [
   { h: -0.03, a: 0, f: 0, b: 0, z: 0.012, n: 2.4 },
-  { h: -0.062, a: 0.15, f: 0.1, b: 0.11, z: 0.012, n: 2.4 },
-  { h: -0.072, a: 0.19, f: 0.126, b: 0.14, z: 0.012, n: 2.4 },
-  { h: -0.06, a: 0.193, f: 0.128, b: 0.142, z: 0.012, n: 2.4 },
-  { h: -0.015, a: 0.19, f: 0.126, b: 0.138, z: 0.012, n: 2.4 },
-  { h: -0.005, a: 0.192, f: 0.128, b: 0.138, z: 0.012, n: 2.4 },
-  { h: 0.08, a: 0.186, f: 0.128, b: 0.128, z: 0.01, n: 2.5 },
-  { h: 0.18, a: 0.178, f: 0.124, b: 0.118, z: 0.006, n: 2.6 },
-  { h: 0.29, a: 0.182, f: 0.13, b: 0.118, z: 0.004, n: 2.7 },
-  { h: 0.38, a: 0.19, f: 0.134, b: 0.12, z: 0.004, n: 2.8 },
-  { h: 0.44, a: 0.196, f: 0.128, b: 0.122, z: 0.006, n: 3.0 },
-  { h: 0.48, a: 0.196, f: 0.116, b: 0.116, z: 0.008, n: 3.2 },
-  { h: 0.51, a: 0.186, f: 0.102, b: 0.104, z: 0.01, n: 3.2 },
-  { h: 0.535, a: 0.158, f: 0.088, b: 0.092, z: 0.012, n: 3.0 },
-  { h: 0.555, a: 0.115, f: 0.075, b: 0.082, z: 0.012, n: 2.6 },
-  { h: 0.57, a: 0.08, f: 0.066, b: 0.072, z: 0.012, n: 2.2 },
-  { h: 0.585, a: 0.064, f: 0.062, b: 0.066, z: 0.012, n: 2 },
-  { h: 0.575, a: 0.05, f: 0.05, b: 0.05, z: 0.012, n: 2 },
+  { h: -0.062, a: 0.1425, f: 0.095, b: 0.1045, z: 0.012, n: 2.4 },
+  { h: -0.072, a: 0.1805, f: 0.1197, b: 0.133, z: 0.012, n: 2.4 },
+  { h: -0.06, a: 0.1833, f: 0.1216, b: 0.1349, z: 0.012, n: 2.4 },
+  { h: -0.015, a: 0.1767, f: 0.1172, b: 0.1283, z: 0.012, n: 2.4 },
+  { h: -0.005, a: 0.1786, f: 0.119, b: 0.1283, z: 0.012, n: 2.4 },
+  { h: 0.08, a: 0.173, f: 0.119, b: 0.119, z: 0.01, n: 2.5 },
+  { h: 0.18, a: 0.1655, f: 0.1153, b: 0.1097, z: 0.006, n: 2.6 },
+  { h: 0.29, a: 0.1693, f: 0.1209, b: 0.1097, z: 0.004, n: 2.7 },
+  { h: 0.38, a: 0.1767, f: 0.1246, b: 0.1116, z: 0.004, n: 2.8 },
+  { h: 0.44, a: 0.1823, f: 0.119, b: 0.1135, z: 0.006, n: 3.0 },
+  { h: 0.48, a: 0.1823, f: 0.1079, b: 0.1079, z: 0.008, n: 3.2 },
+  { h: 0.51, a: 0.173, f: 0.0949, b: 0.0967, z: 0.01, n: 3.2 },
+  { h: 0.535, a: 0.1469, f: 0.0818, b: 0.0856, z: 0.012, n: 3.0 },
+  { h: 0.555, a: 0.107, f: 0.0698, b: 0.0763, z: 0.012, n: 2.6 },
+  { h: 0.57, a: 0.0744, f: 0.0614, b: 0.067, z: 0.012, n: 2.2 },
+  { h: 0.585, a: 0.0595, f: 0.0577, b: 0.0614, z: 0.012, n: 2 },
+  { h: 0.575, a: 0.0465, f: 0.0465, b: 0.0465, z: 0.012, n: 2 },
   { h: 0.56, a: 0, f: 0, b: 0, z: 0.012, n: 2 },
 ];
 export const HOODIE = {
@@ -125,20 +137,20 @@ export const HOODIE = {
   /** The sleeve, from inside the shoulder (`top`, negative) past the elbow to the cuff's rib; radii along it, metres from the shoulder joint. */
   sleeve: [
     { s: -0.075, r: 0 },
-    { s: -0.07, r: 0.03 },
-    { s: -0.05, r: 0.052 },
-    { s: -0.02, r: 0.06 },
-    { s: 0.04, r: 0.062 },
-    { s: 0.16, r: 0.059 },
-    { s: 0.3, r: 0.055 },
-    { s: 0.36, r: 0.054 },
-    { s: 0.48, r: 0.051 },
-    { s: 0.535, r: 0.049 },
+    { s: -0.07, r: 0.028 },
+    { s: -0.05, r: 0.047 },
+    { s: -0.02, r: 0.054 },
+    { s: 0.04, r: 0.055 },
+    { s: 0.16, r: 0.052 },
+    { s: 0.3, r: 0.049 },
+    { s: 0.36, r: 0.048 },
+    { s: 0.48, r: 0.045 },
+    { s: 0.535, r: 0.043 },
   ],
-  cuff: { from: 0.535, to: 0.575, r: 0.043, inner: 0.03 },
+  cuff: { from: 0.535, to: 0.575, r: 0.039, inner: 0.027 },
   /** The hood lying on the back: a roll round the collar (`roll`: half axes round the neck, height, thickness at the back and the sides) and the hood's back panel (`back`: centre and half axes). */
-  roll: { rx: 0.084, rz: 0.082, h: 0.592, hBack: 0.582, back: 0.052, side: 0.03, from: 135 },
-  back: { h: 0.49, z: 0.128, a: 0.11, b: 0.08, t: 0.03 },
+  roll: { rx: 0.08, rz: 0.078, h: 0.592, hBack: 0.582, back: 0.038, side: 0.024, from: 135 },
+  back: { h: 0.5, z: 0.118, a: 0.092, b: 0.068, t: 0.02 },
   /** The drawstrings: from the collar's front at `x`, down to `h` metres above the hips, `r` thick. */
   strings: { x: 0.036, top: 0.568, h: 0.4, r: 0.0045 },
 } as const;
@@ -171,12 +183,33 @@ export const BEANIE = { hem: 0.067, brim: 0.042, gap: 0.007, roll: 0.006, slouch
 /** Short hair under the beanie: down to `nape` at the back, `side` over the ears, `front` at the brow (under the brim), standing `lift` off the skull. */
 export const HAIR = { nape: -0.025, side: 0.027, front: 0.085, lift: 0.004 } as const;
 
-/** The mitten along the hand bone from inside the cuff: half thickness (palm to back), half width, the curl toward the palm; the thumb. */
+/**
+ * The hand along the hand bone from inside the cuff (a mitten in gloves until
+ * 2026-11-11, ADR-91: now bare skin, thinner and curled as a relaxed hand
+ * is): half thickness (palm to back), half width, the wrist's half thickness
+ * and width, the fingers' curl toward the palm; the thumb.
+ */
 export const MITTEN = {
   from: -0.04,
   to: 0.17,
-  thick: 0.021,
-  width: 0.043,
-  curl: 0.012,
-  thumb: { at: 0.035, side: 0.034, length: 0.055, r: 0.013 },
+  thick: 0.0145,
+  width: 0.038,
+  wrist: { thick: 0.014, width: 0.026 },
+  curl: 0.03,
+  thumb: { at: 0.03, side: 0.03, length: 0.052, r: 0.0095 },
 } as const;
+
+/**
+ * How much of the bottom of each leg follows the foot bone (2026-11-13): the
+ * share of a vertex's shin weight moved onto its foot, rising (smoothstep)
+ * from nothing `from` metres above the ankle joint (along the shin, in the
+ * bind pose) to the full share `to` metres above it and below. The shoes
+ * stay level with the board while the shin swings far over them in the
+ * flick and the tuck, so a hem on the shin alone stood off the shoe and
+ * showed the leg inside it; on the foot it settles over the collar, as
+ * jeans do on a shoe. The jeans keep some of the shin, so the cuff bends
+ * rather than snaps; the sock goes all the way into the shoe. Both riders
+ * (rider.ts, riderFit.ts, ADR-98); Medium's tube takes the jeans' share
+ * all the way down, so its cuff and the sock under it never part.
+ */
+export const HEM_FOOT = { from: 0.14, to: 0.02, jeans: 0.85, sock: 1 } as const;

@@ -5,8 +5,8 @@ import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim
 import { writePose, type Pose } from '../sim/flight';
 import { newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
-import { newSettle, settleSeconds, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, playRate, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
+import { landingSeconds, newSettle, recoveredBy, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
+import { landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
@@ -24,10 +24,10 @@ import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { dustShown } from './sceneTier';
 import { landingClock, moveFootprint, moveTurn, noseOf, placeMove } from './landingMove';
-import { replayClock, replayProgress } from './replayClock';
+import { replayClock, replayOver, replayProgress, replayReady, replayRolled, replayTime } from './replayClock';
 import { haltRoll, resetRoll, rollMotion, rollScenery, sceneryX, stepRoll, writeSlides } from './roll';
-import { noWindUp, stepWindUp } from './windUp';
-import { newShowcaseClock, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
+import { noWindUp, stepWindUp, wind } from './windUp';
+import { newShowcaseClock, SHOWCASE_STILL, showcaseAfter, showcaseFlight, showcaseLeadIn, showcaseMoved, showcaseProgress, showcaseReady, stepShowcase } from './showcase';
 
 const S = ART.shadow;
 const CUES = ART.motionCues;
@@ -164,10 +164,16 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
         // A game's landing kicks up dust (ADR-74): placed on the next frame, at the wheels where they are then.
         if (s.landing !== 'none' && prev.landing === 'none') dust.pending = true;
         else if (s.landing === 'none' && prev.landing !== 'none') dust.pending = dust.live = false;
-        // The instant replay starts from the pop (ADR-72).
+        // The instant replay starts from its lead-in before the pop (ADR-72, ADR-96).
         if (replayMoves(s) && !replayMoves(prev)) {
           replayClock.t = 0;
           replayClock.running = false;
+        }
+        // The roll at the pop, for the replay's ground (ADR-96).
+        if (s.flightId !== prev.flightId && s.flight) {
+          replayClock.speed = rollMotion.speed;
+          replayClock.from = rollMotion.distance;
+          replayClock.windT = wind.t;
         }
       }),
     [],
@@ -179,12 +185,21 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // The flight on screen and how far through it: the preview's on the welcome screen, the store's elsewhere.
     let flight = s.flight;
     let progress: number;
+    /** The welcome preview's seconds since touchdown, its readiness, and whether it is before its pop (2026-11-13). */
+    let homeAfter = 0;
+    let homeReady = 1;
+    let homeLead = false;
     if (s.screen === 'home') {
       const sc = show.current;
-      if (previewAnimates(s)) {
-        stepShowcase(sc, delta);
+      // A paused preview holds the moment it was paused on (2026-11-13: it jumped to the still pose, which is for
+      // reduced motion, Low and a failed view), unless it was paused before it ever moved.
+      if (previewAnimates(s) || (previewCanPlay(s) && showcaseMoved(sc))) {
+        if (previewAnimates(s)) stepShowcase(sc, delta);
         flight = showcaseFlight(sc);
         progress = showcaseProgress(sc);
+        homeAfter = showcaseAfter(sc);
+        homeReady = showcaseReady(sc);
+        homeLead = showcaseLeadIn(sc);
       } else {
         flight = SHOWCASE_STILL.flight;
         progress = SHOWCASE_STILL.progress;
@@ -194,15 +209,20 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       tickFlightClock(c, head, s, delta);
       progress = c.progress;
     }
-    // The instant replay (ADR-72): the flight once more from its own clock, slowly, then the store hears it is over.
+    // The instant replay (ADR-72): the go once more from its own clock, slowly, then the store hears it is over. Since
+    // ADR-96 from a lead-in before the pop (no flight yet, the rider sinking into the crouch) to a run-out past
+    // touchdown (the landing and the rider's recovery), the ground rolling under it.
     let replaying = false;
+    /** The flight's own seconds since the pop, in a replay. */
+    let replayAt = 0;
     if (replayMoves(s) && flight) {
       replaying = true;
       const R = replayClock;
       R.t += R.running ? frameStep(delta) : 0;
       R.running = true;
+      replayAt = replayTime(R.t, flight);
       progress = replayProgress(R.t, flight);
-      if (progress >= 1) s.endReplay();
+      if (replayOver(R.t, flight)) s.endReplay();
     }
     // Rolling (ADR-67): the world moves, the board stays. Only on the game
     // screen; elsewhere the ground is back on the spot. The roll keeps the
@@ -221,15 +241,20 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       moved = dt;
       if (stepRoll(r, s.roll === 'push', dt)) s.rollRested();
     }
-    writeSlides(r.distance, noseOf(s.stance));
+    // In a replay the ground rolls as it did from the pop (ADR-96).
+    // Once the game's roll has come to rest, the replay's run-out comes to rest at the same place (A10, 2026-11-13).
+    const rolled = replaying && flight ? replayClock.from + replayRolled(replayAt, flight, replayClock.speed, s.roll === 'still' ? r.distance - replayClock.from : undefined) : r.distance;
+    writeSlides(rolled, noseOf(s.stance));
     // The skate spot rolls past with the ground, wrapped over its loop (ADR-69).
-    if (rollScenery.spot) rollScenery.spot.position.x = sceneryX(r.distance, noseOf(s.stance), ART.spot.loop);
+    if (rollScenery.spot) rollScenery.spot.position.x = sceneryX(rolled, noseOf(s.stance), ART.spot.loop);
     // The landing's motion (ADR-68): a game's sketchy landing rocks and
     // swerves with the rider on, a bail falls and slides from under the feet.
     // At the playback speed, like the roll; once over (or cut short) its end pose.
     let landed: Settle | null = null;
-    // A replay shows the flight before its landing: no landing move while it plays.
-    if (s.landing !== 'none' && s.flight && s.result && s.screen === 'skate' && !replaying) {
+    if (replaying) {
+      // A replay's run-out plays the landing again from touchdown, on the replay's clock (ADR-96).
+      if (s.flight && s.result && s.screen === 'skate' && replayAt > s.flight.airtime) landed = writeSettle(settle.current, s.flight, replayAt - s.flight.airtime);
+    } else if (s.landing !== 'none' && s.flight && s.result && s.screen === 'skate') {
       const L = landingClock;
       if (s.landing === 'plays') {
         if (landingMoves(s)) {
@@ -238,18 +263,23 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
           L.running = true;
           moved = Math.max(moved, dt);
         }
-        if (L.t >= settleSeconds(s.flight)) s.landingDone();
+        // The board's landing and the rider's recovery (ADR-96), the longer.
+        if (L.t >= landingSeconds(s.flight)) s.landingDone();
       }
       landed = writeSettle(settle.current, s.flight, s.landing === 'plays' ? L.t : Infinity);
     }
+    // The seconds since touchdown the rider recovers by (ADR-96): the landing's, Infinity once it has played out.
+    const after = landed ? landed.t : homeAfter;
+    // A replay's lead-in, and the preview's hold before its pop, show the go before the pop: no flight yet.
+    const shown = (replaying && replayAt < 0) || homeLead ? null : flight;
     // The bail's own landing, or null: the board falls and slides, the feet stay.
     const bail = landed !== null && landed.grade === 'bail' ? landed : null;
     placeMove(boardOuter.current, boardInner.current, landed, s.stance);
     placeMove(riderOuter.current, riderInner.current, landed && landed.riding ? landed : null, s.stance);
     // The preview's flight carries its own inputs; elsewhere the store state is the inputs object. No allocation either way.
-    const inputs = s.screen === 'home' && flight ? flight.inputs : s;
+    const inputs = (s.screen === 'home' || replaying) && flight ? flight.inputs : s;
 
-    const p = writePose(pose.current, flight, progress);
+    const p = writePose(pose.current, shown, progress);
     // A bailed board falls over onto its side (ADR-68): its own roll and height.
     if (bail) {
       p.roll = bail.roll;
@@ -292,11 +322,16 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     const feetShown = front.current !== null || back.current !== null;
     // The wind-up (ADR-86): the whole rider in a game rides along before its go and sinks into the crouch for the pop.
     // Stepped once a frame, here, before the camera reads it (this useFrame runs first).
-    const ready = feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
+    // A replay's lead-in has a wind-up of its own (ADR-96).
+    // The welcome preview has its own (2026-11-13), from its clock.
+    const windUp = replaying ? replayReady(replayAt) : feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
+    const ready = s.screen === 'home' ? Math.min(windUp, homeReady) : windUp;
+    // The rider standing back up after a landing: the game's camera lifts with it (2026-11-13).
+    wind.stood = shown && progress >= 1 && after > 0 ? recoveredBy(shown, after) : 0;
     if (feetShown) {
       // The store state carries pop, flick and scoop, so it is the inputs object: no allocation.
       // In a bail the board leaves the feet where they stepped down, cleared against it as it slides (ADR-68).
-      const f = bail && flight ? writeBailFeet(feet.current, flight.inputs, flight, bail, s.stance) : writeFeetPose(feet.current, inputs, flight, progress, s.stance);
+      const f = bail && flight ? writeBailFeet(feet.current, flight.inputs, flight, bail, s.stance) : writeFeetPose(feet.current, inputs, shown, progress, s.stance);
       const regular = s.stance === 'regular';
       applyFoot(front.current, f.front, regular ? -1 : 1);
       applyFoot(back.current, f.back, regular ? 1 : -1);
@@ -305,18 +340,20 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       const rig = legs.current;
       const whole = rider.current;
       if (rig || whole) {
-        const l = writeLegsPose(legsPose.current, f, flight, progress, inputs, s.stance, ready);
+        // The riding clock: a replay's own, from the go's at its pop (it ran in real seconds while the board rolled).
+        const riding = replaying ? replayClock.windT + replayAt / playRate(s) : wind.t;
+        const l = writeLegsPose(legsPose.current, f, shown, progress, inputs, s.stance, ready, riding, after);
         if (rig) {
           applySegment(rig.frontThigh, l.front.thigh);
           applySegment(rig.frontShank, l.front.shank);
           applySegment(rig.backThigh, l.back.thigh);
           applySegment(rig.backShank, l.back.shank);
         }
-        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, flight, progress, inputs, s.stance, ready));
+        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, shown, progress, inputs, s.stance, ready, riding, after));
       }
     }
     // Before a pop the paths are a plan: nothing travelled yet.
-    pathProgress.value = flight ? progress : 0;
+    pathProgress.value = shown ? progress : 0;
     // Motion cues (ADR-26) are the plan: full before the pop, gone early in
     // the flight. They stay gone at the landing (the deck has turned, so an
     // arrow riding it would point the wrong way) and come back on Reset or

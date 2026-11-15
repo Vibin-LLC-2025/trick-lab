@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { recognize } from '../sim/tricks';
 import { ART } from './artDirection';
-import { cycleSeconds, newShowcaseClock, SHOWCASE_FLIGHTS, SHOWCASE_STILL, showcaseFlight, showcaseProgress, stepShowcase } from './showcase';
+import { RECOVER } from '../sim/settle';
+import { cycleSeconds, newShowcaseClock, SHOWCASE_FLIGHTS, SHOWCASE_STILL, showcaseAfter, showcaseFlight, showcaseLeadIn, showcaseMoved, showcaseProgress, showcaseReady, stepShowcase } from './showcase';
 
 const S = ART.showcase;
 
@@ -49,5 +50,32 @@ describe('welcome screen preview (ADR-45)', () => {
     const total = SHOWCASE_FLIGHTS.reduce((sum, f) => sum + cycleSeconds(f), 0);
     for (let t = S.maxStep; t < total; t += 0.05) stepShowcase(c, 0.05);
     expect(c.index).toBe(0);
+  });
+});
+
+describe("the preview's rider between tricks (2026-11-13)", () => {
+  const S = ART.showcase;
+  it('rides with no flight before the pop, sinking into the crouch by it', () => {
+    const c = newShowcaseClock();
+    expect(showcaseMoved(c)).toBe(false);
+    expect(showcaseLeadIn(c)).toBe(true);
+    expect(showcaseReady(c)).toBe(0);
+    c.t = S.holdBefore / 2;
+    expect(showcaseReady(c)).toBeCloseTo(0.5, 9);
+    c.t = S.holdBefore;
+    expect(showcaseLeadIn(c)).toBe(false);
+    expect(showcaseReady(c)).toBe(1);
+    expect(showcaseMoved(c)).toBe(true);
+  });
+
+  it("recovers after touchdown on the flight's own clock, and the hold lasts the whole recovery", () => {
+    const c = newShowcaseClock();
+    const f = showcaseFlight(c);
+    c.t = S.holdBefore + f.airtime / S.rate;
+    expect(showcaseAfter(c)).toBeCloseTo(0, 9);
+    c.t += 0.4;
+    expect(showcaseAfter(c)).toBeCloseTo(0.4 * S.rate, 9);
+    // Every trick in the preview lands, and its rider has stood back up before the next trick's hold.
+    expect(S.holdAfter * S.rate).toBeGreaterThanOrEqual(RECOVER.landed.stand[1]);
   });
 });

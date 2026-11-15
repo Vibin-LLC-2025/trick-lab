@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createTrickStore } from '.';
+import { createTrickStore, GAME_PACE, playRate } from '.';
+import { GAME_SLOWEST } from './speed';
 import { presetById, type PresetId } from '../sim/tricks';
 
 /**
@@ -321,6 +322,18 @@ describe('game of SKATE', () => {
     expect(s).toMatchObject({ status: 'idle', progress: 0, flight: null, result: null, flightBy: 'you' });
     expect(s.rate).toBeLessThan(1);
     expect(s.skateMessage).toBe('Coin flip: the computer sets first.');
+  });
+
+  it("plays no slower than the game's slow motion, whatever slow stop the lab was left on (2026-11-13)", () => {
+    const store = makeStore([YOU_FIRST]);
+    store.getState().setRate(0.05);
+    expect(playRate(store.getState())).toBe(0.05);
+    store.getState().setScreen('skate');
+    // The speed is the student's and is kept; the game plays it at its slowest stop.
+    expect(store.getState().rate).toBe(0.05);
+    expect(playRate(store.getState())).toBeCloseTo(GAME_SLOWEST * GAME_PACE, 9);
+    store.getState().setRate(1);
+    expect(playRate(store.getState())).toBeCloseTo(GAME_PACE, 9);
   });
 
   it('leaving a game in play waits for a yes; between games it just goes', () => {

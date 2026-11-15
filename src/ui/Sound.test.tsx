@@ -8,6 +8,7 @@ import type { SoundPlayer } from '../audio/player';
 import { useSound } from '../hooks/useSound';
 import { useTrickStore } from '../store';
 import { App } from './App';
+import { openSettings } from '../test/settings';
 
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
 
@@ -72,6 +73,8 @@ describe('the sound switch (ADR-58)', () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByTestId('scene-stub');
+    // On the game and the lab it is in Settings (ADR-89).
+    if (name !== 'home') openSettings();
     const sound = screen.getByRole('button', { name: 'Sound' });
     expect(sound).toHaveAttribute('aria-pressed', 'false');
     await user.click(sound);
@@ -164,6 +167,39 @@ describe('useSound (ADR-58)', () => {
     expect(player.barStops).toBe(2);
     expect(player.played.at(-1)).toEqual(['pop', 1]);
     expect(player.bars).toBe(1);
+  });
+
+  it('keeps one bar one tone through a slider edit, and starts a new one only for a new bar (2026-11-13 review, G-04)', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.25);
+    const player = fakePlayer();
+    render(<Listener player={player} />);
+    const s = () => useTrickStore.getState();
+    act(() => {
+      s().toggleSound();
+      s().startSkate();
+      s().continueSkate();
+      s().callSkateTrick('kickflip');
+    });
+    act(() => s().pressPop());
+    expect(player.bars).toBe(1);
+    const id = s().pendingPop!.id;
+    // A slider moved while the bar runs remakes the bar's object, not the bar: no restart, no cut.
+    act(() => s().setInput('flick', 1.5));
+    expect(s().pendingPop?.id).toBe(id);
+    expect(player.bars).toBe(1);
+    expect(player.barStops).toBe(0);
+    // Dropped: cut once.
+    act(() => s().cancelPop());
+    expect(player.barStops).toBe(1);
+    // A new bar: a new tone.
+    act(() => s().pressPop());
+    expect(player.bars).toBe(2);
+    act(() => s().setInput('scoop', 0.5));
+    expect(player.bars).toBe(2);
+    // Released after an edit: cut once, and the pop is heard.
+    act(() => s().pressPop());
+    expect(player.barStops).toBe(2);
+    expect(player.played.at(-1)?.[0]).toBe('pop');
   });
 
   it('does not play a cue that came before it mounted', () => {

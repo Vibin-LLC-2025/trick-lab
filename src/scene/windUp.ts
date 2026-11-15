@@ -17,9 +17,15 @@ const SINK_AT = COMPUTER_DELAY_MS / 1000 - WIND.lead;
  * The wind-up's state, module scope (one rider, one scene): `w` 0 riding to
  * 1 crouched, linear; `wait` the seconds the computer's wait has drawn;
  * `ready` this frame's readiness, `w` smoothed (1 wherever there is no
- * wind-up: off the game screen, without the whole rider, with a flight).
+ * wind-up: off the game screen, without the whole rider, with a flight);
+ * `t` the riding clock, seconds, the rider's sway and bob (body.ts RIDE.sway,
+ * legs.ts HIPS.bob): it runs only while the roll draws frames and motion is
+ * not reduced, so a still picture holds still and the steady clock of the
+ * browser checks draws the same sway on every machine. `stood`: how far a
+ * landed rider has stood back up (settle.ts recoveredBy, 0 with none), which
+ * the camera's riding lift follows as it does the wind-up's (2026-11-13).
  */
-export const wind = { w: 1, wait: 0, ready: 1 };
+export const wind = { w: 1, wait: 0, ready: 1, t: 0, stood: 0 };
 
 /** No wind-up this frame (the lab, the welcome screen, Low, the legs alone): the crouch, as before ADR-86. */
 export function noWindUp(): number {
@@ -41,6 +47,7 @@ export function stepWindUp(s: TrickState, delta: number): number {
   const want = windUp(s);
   const dt = frameStep(delta);
   wind.wait = want === 'wait' ? wind.wait + dt : 0;
+  if (rollMoves(s) && !s.reducedMotion) wind.t += dt;
   const target = want === 'ride' || (want === 'wait' && wind.wait < SINK_AT && !s.reducedMotion) ? 0 : 1;
   if (s.flight) wind.w = 1;
   else if (target !== wind.w) {

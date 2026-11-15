@@ -3,8 +3,11 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import tokens from '../styles/tokens.css?raw';
 import { useTrickStore } from '../store';
+import { gameViewFrom } from '../store/replay';
 import { App } from './App';
 import { COMPUTER_DELAY_MS } from './Skate';
+import { pickList, pickTrick } from '../test/pick';
+import { openSettings } from '../test/settings';
 
 // WebGL does not exist in jsdom. Everything else below is the real app and the real store.
 vi.mock('../scene/TrickScene', () => ({ default: () => <div data-testid="scene-stub" /> }));
@@ -104,7 +107,7 @@ describe('game screen (ADR-46)', () => {
     // The setup's choices are gone once the game is on; only the camera's angle stays to choose (ADR-72).
     expect(within(game()).queryByRole('group', { name: 'Computer' })).toBeNull();
     expect(within(game()).queryByRole('group', { name: 'How you pop' })).toBeNull();
-    expect(within(game()).getByRole('group', { name: 'Camera' })).toBeInTheDocument();
+    expect(within(openSettings()).getByRole('group', { name: 'Camera' })).toBeInTheDocument();
     // Both players start clean; the letters read as text, and the player up is said.
     expect(within(game()).getAllByText('no letters')).toHaveLength(2);
     expect(within(game()).getByText(', up now')).toBeInTheDocument();
@@ -134,16 +137,19 @@ describe('game screen (ADR-46)', () => {
     expect(useTrickStore.getState().flightBy).toBe('computer');
     expect(within(game()).getByText('In the air.')).toBeInTheDocument();
     landNow();
-    expect(turnHeading()).toHaveTextContent('Your turn');
-    expect(within(game()).getByText("Copy the computer's")).toBeInTheDocument();
+    // While the go plays out the card is still the computer's go, with its news, and Pop has nothing to do (2026-11-13).
+    expect(turnHeading()).toHaveTextContent("Computer's turn");
     expect(within(game()).getByText('The computer landed a heelflip.')).toBeInTheDocument();
-    expect(within(game()).getByText('How to heelflip')).toBeInTheDocument();
-    expect(within(game()).getByText('Toward heelflip (slider to the left), for one full flip.')).toBeInTheDocument();
-    expect(within(game()).getByText('Computer: Heelflip landed clean')).toBeInTheDocument();
+    expect(within(game()).getByText('Landing…')).toBeInTheDocument();
+    expect(within(game()).getByRole('button', { name: 'Landing' })).toHaveAttribute('aria-disabled', 'true');
     expect(announcer()).toHaveTextContent("The computer landed a heelflip. Your turn: copy the computer's heelflip");
     // Focus never moved while the board was moving; once it is at rest the go's notice takes it (ADR-80).
     expect(document.activeElement).toBe(turnHeading());
     restNow();
+    expect(document.getElementById('skate-heading')).toHaveTextContent('Your turn');
+    expect(within(game()).getByText("Copy the computer's")).toBeInTheDocument();
+    expect(within(game()).getByText('How to heelflip')).toBeInTheDocument();
+    expect(within(game()).getByText('Toward heelflip (slider to the left), for one full flip.')).toBeInTheDocument();
     const after = screen.getByRole('region', { name: "Computer's go" });
     expect(after).toHaveTextContent('Your turn');
     expect(within(after).getByText('The computer landed a heelflip.')).toBeInTheDocument();
@@ -162,19 +168,23 @@ describe('game screen (ADR-46)', () => {
     landNow();
     expect(within(game()).getByText('S', { selector: '.visually-hidden' })).toBeInTheDocument();
     expect(within(game()).getByText('You landed an ollie, but the trick to copy was a heelflip. You got S.')).toBeInTheDocument();
-    expect(within(game()).getByText('You: Ollie landed clean')).toBeInTheDocument();
-    // The setter keeps setting: the computer is up again, with its next call, on the same button.
-    expect(turnHeading()).toHaveTextContent("Computer's turn");
-    expect(within(game()).getByRole('button', { name: "Computer's go" })).toBe(pop);
+    // Until the go comes to rest the card is still the student's, and the one button waits (2026-11-13).
+    expect(turnHeading()).toHaveTextContent('Your turn');
+    expect(within(game()).getByRole('button', { name: 'Landing' })).toBe(pop);
     // The notice says the letter, as a sticker and in words.
     restNow();
+    // The setter keeps setting: the computer is up again, with its next call, on the same button.
+    expect(document.getElementById('skate-heading')).toHaveTextContent("Computer's turn");
+    expect(within(game()).getByRole('button', { name: "Computer's go" })).toBe(pop);
     expect(within(notice()!).getByText('You get a letter')).toBeInTheDocument();
+    // The controls the notice covers are out of reach until Continue (2026-11-13).
+    expect(document.querySelector('main.app__play')).toHaveAttribute('inert');
     expect(within(notice()!).getByText('S', { selector: '.visually-hidden' })).toBeInTheDocument();
     // Enter on Continue clears the stage for the next go: the board back on the pad, the result kept for the card.
     await user.keyboard('{Enter}');
+    expect(document.querySelector('main.app__play')).not.toHaveAttribute('inert');
     expect(useTrickStore.getState().flight).toBeNull();
     expect(useTrickStore.getState().status).toBe('idle');
-    expect(within(game()).getByText('You: Ollie landed clean')).toBeInTheDocument();
     expect(document.getElementById('scene-description')).toHaveTextContent('Skateboard resting flat on a concrete pad');
   });
 
@@ -216,7 +226,7 @@ describe('game screen (ADR-46)', () => {
     landNow();
     nextGo();
     expect(turnHeading()).toHaveTextContent("Computer's turn");
-    fireEvent.click(within(game()).getByRole('button', { name: 'Computer goes on its own' }));
+    fireEvent.click(within(openSettings()).getByRole('button', { name: 'Computer goes on its own' }));
     expect(useTrickStore.getState().skateAuto).toBe(false);
     expect(announcer()).toHaveTextContent("The computer waits for you: press Computer's go or Space.");
     const popped = types().filter((t) => t === 'trick.popped').length;
@@ -228,7 +238,6 @@ describe('game screen (ADR-46)', () => {
   it('the student calls their trick from the picker before setting it; a trick already set is not offered', async () => {
     const user = await setup();
     await start(user);
-    const picker = within(game()).getByRole('combobox', { name: 'Call your trick' });
 
     // Pop without a call: refused, and said why.
     const pop = within(game()).getByRole('button', { name: 'Pop' });
@@ -237,8 +246,10 @@ describe('game screen (ADR-46)', () => {
     expect(useTrickStore.getState().flight).toBeNull();
     expect(announcer()).toHaveTextContent('Call your trick first: pick the trick you are going for, then pop.');
 
-    await user.selectOptions(picker, 'kickflip');
+    await pickTrick(user, 'Kickflip');
     expect(announcer()).toHaveTextContent('You called a kickflip. Land it and the computer has to copy it.');
+    // The list folds away once a trick is called (ADR-88).
+    expect(pickList()).toBeNull();
     expect(within(game()).getByText('Kickflip', { selector: '.turn__trick' })).toBeInTheDocument();
     expect(within(game()).getByText('How to kickflip')).toBeInTheDocument();
     act(() => useTrickStore.getState().setInput('flick', 1.9));
@@ -246,23 +257,72 @@ describe('game screen (ADR-46)', () => {
     await user.keyboard('{Enter}');
     landNow();
     expect(within(game()).getByText('You landed your kickflip!')).toBeInTheDocument();
-    expect(within(game()).getByText('Copying your')).toBeInTheDocument();
     nextGo();
+    expect(within(game()).getByText('Copying your')).toBeInTheDocument();
 
     // The computer copies it (it hits its aim), so the student sets again: the kickflip is spent.
     await user.click(within(game()).getByRole('button', { name: "Computer's go" }));
     landNow();
     nextGo();
-    const again = within(game()).getByRole('combobox', { name: 'Call your trick' });
-    expect(within(again).getByRole('option', { name: 'Kickflip (already set)' })).toBeDisabled();
-    expect(within(again).getByRole('option', { name: 'Heelflip' })).toBeEnabled();
-    expect(within(again).queryByRole('option', { name: /^Ollie/ })).toBeNull();
+    const again = pickList()!;
+    expect(within(again).getByRole('button', { name: 'Kickflip (already set)' })).toBeDisabled();
+    expect(within(again).getByRole('button', { name: 'Heelflip' })).toBeEnabled();
+    expect(within(again).queryByRole('button', { name: /^Ollie/ })).toBeNull();
+  });
+
+  it('a click on a trick leaves Space to pop: focus goes to the turn heading, not back to the picker (ADR-88)', async () => {
+    const user = await setup();
+    await start(user);
+    await pickTrick(user, 'Kickflip');
+    expect(document.activeElement).toBe(turnHeading());
+    expect(pickList()).toBeNull();
+
+    // Change trick opens the list again, keeping focus on its button; a pick folds it and focus goes back to the heading.
+    const change = within(game()).getByRole('button', { name: 'Change trick' });
+    await user.click(change);
+    expect(change).toHaveAttribute('aria-expanded', 'true');
+    expect(document.activeElement).toBe(change);
+    await user.click(within(pickList()!).getByRole('button', { name: 'Heelflip' }));
+    expect(useTrickStore.getState().skate.call?.id).toBe('heelflip');
+    expect(document.activeElement).toBe(turnHeading());
+
+    // Space pops from there: it does not open the picker again.
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().flight).not.toBeNull();
+  });
+
+  it('Space still pops after a slider is moved: a slider has no use for it (ADR-88)', async () => {
+    const user = await setup();
+    await start(user);
+    await pickTrick(user, 'Kickflip');
+    const flick = within(game()).getByRole('slider', { name: /^Flick/ });
+    flick.focus();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard(' ');
+    expect(useTrickStore.getState().flight).not.toBeNull();
+  });
+
+  it('Settings opens from the top bar and closes on Escape, focus back on its button, or on a press outside (ADR-89)', async () => {
+    const user = await setup();
+    await start(user);
+    const button = screen.getByRole('button', { name: 'Settings' });
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    const slow = within(screen.getByRole('group', { name: 'Settings' })).getByRole('button', { name: 'Slow motion' });
+    slow.focus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('group', { name: 'Settings' })).toBeNull();
+    expect(document.activeElement).toBe(button);
+    await user.click(button);
+    expect(screen.getByRole('group', { name: 'Settings' })).toBeInTheDocument();
+    await user.click(turnHeading());
+    expect(screen.queryByRole('group', { name: 'Settings' })).toBeNull();
   });
 
   it('Slow motion is a switch on the game screen as well as the s key', async () => {
     const user = await setup();
     await start(user);
-    const slow = within(game()).getByRole('button', { name: 'Slow motion' });
+    const slow = within(openSettings()).getByRole('button', { name: 'Slow motion' });
     expect(slow).toHaveAttribute('aria-pressed', 'false');
     await user.click(slow);
     expect(useTrickStore.getState().rate).toBeLessThan(1);
@@ -389,7 +449,7 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
   /** The student's kickflip, called, popped and landed; then the board comes to rest (FlightDriver's two calls). */
   async function madeSet(user: ReturnType<typeof userEvent.setup>) {
     await start(user);
-    await user.selectOptions(within(game()).getByRole('combobox', { name: 'Call your trick' }), 'kickflip');
+    await pickTrick(user, 'Kickflip');
     act(() => useTrickStore.getState().setInput('flick', 1.9));
     fireEvent.click(within(game()).getByRole('button', { name: 'Pop' }));
     landNow();
@@ -399,11 +459,12 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     });
   }
 
-  it('is free by default, with Reset view; the three fixed angles are a keypress away, saved and announced', async () => {
+  it('is free by default, with Reset view; three cameras in order (ADR-100), Filmer a keypress away, saved and announced', async () => {
     const user = await setup();
     await start(user);
-    const camera = within(game()).getByRole('group', { name: 'Camera' });
-    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'film', 'side', 'above']);
+    const camera = within(openSettings()).getByRole('group', { name: 'Camera' });
+    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'freeFisheye', 'film']);
+    expect(within(camera).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['Free', 'Free fisheye', 'Filmer']);
     const free = within(camera).getByRole('radio', { name: 'Free' });
     expect(free).toBeChecked();
     // Free says how to turn it, and Reset view brings it home (ADR-81).
@@ -414,13 +475,28 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     expect(announcer()).toHaveTextContent('Camera view reset.');
     free.focus();
     await user.keyboard('{ArrowRight}{ArrowRight}');
-    expect(within(camera).getByRole('radio', { name: 'Side' })).toBeChecked();
-    expect(useTrickStore.getState().gameView).toBe('side');
-    expect(localStorage.getItem('trick-lab.game-view')).toBe('side');
-    expect(announcer()).toHaveTextContent('Camera: side on, low.');
+    expect(within(camera).getByRole('radio', { name: 'Filmer' })).toBeChecked();
+    expect(useTrickStore.getState().gameView).toBe('film');
+    expect(localStorage.getItem('trick-lab.game-view')).toBe('film');
+    expect(announcer()).toHaveTextContent('Camera: the filmer, low and to the side of the nose.');
     // A fixed angle has nothing to drag or reset.
     expect(within(camera).queryByRole('button', { name: 'Reset view' })).toBeNull();
     expect(types()).not.toContain('camera.changed');
+  });
+
+  it.each([
+    ['side', 'Free'],
+    ['above', 'Free'],
+    ['fisheye', 'Free fisheye'],
+  ] as const)('starts on a valid camera with the removed %s saved (ADR-100): %s is checked', async (saved, label) => {
+    localStorage.setItem('trick-lab.game-view', saved);
+    // The store reads storage once when it is made; this is what it reads.
+    useTrickStore.setState({ gameView: gameViewFrom(localStorage.getItem('trick-lab.game-view')) });
+    const user = await setup();
+    await start(user);
+    const camera = within(openSettings()).getByRole('group', { name: 'Camera' });
+    expect(within(camera).getByRole('radio', { name: label })).toBeChecked();
+    expect(within(camera).getAllByRole('radio').filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
   });
 
   it('turns Pop into Skip replay while a replay plays, the same button, so focus stays on it', async () => {
@@ -449,16 +525,49 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     expect(document.getElementById('scene-description')).not.toHaveTextContent('Instant replay');
   });
 
+  it("a missed go is not replayed on its own: its notice says why, and Watch replay plays it by keyboard (ADR-105)", async () => {
+    const user = await setup();
+    await start(user);
+    await pickTrick(user, 'Kickflip');
+    // Too little flick: the kickflip is a bail, short on the flip.
+    act(() => useTrickStore.getState().setInput('flick', 1.0));
+    fireEvent.click(within(game()).getByRole('button', { name: 'Pop' }));
+    landNow();
+    act(() => {
+      useTrickStore.getState().rollRested();
+      if (useTrickStore.getState().landing === 'plays') useTrickStore.getState().landingDone();
+    });
+    expect(useTrickStore.getState().replay).toBe('none');
+    expect(continueButton()).toHaveFocus();
+    expect(within(notice()!).getByText(/short on the flip\.$/, { selector: '.notice__why' })).toBeInTheDocument();
+    // Watch replay comes after Continue in the tab order; Enter plays the replay and the notice gives way.
+    await user.tab();
+    const watch = within(notice()!).getByRole('button', { name: 'Watch replay' });
+    expect(watch).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(useTrickStore.getState().replay).toBe('plays');
+    expect(notice()).toBeNull();
+    expect(document.getElementById('skate-heading')).toHaveFocus();
+    expect(announcer()).toHaveTextContent('Replay of your go. Space or Escape skips it.');
+    // Escape skips it: the notice is back with focus on Continue.
+    await user.keyboard('{Escape}');
+    expect(useTrickStore.getState().replay).toBe('none');
+    expect(continueButton()).toHaveFocus();
+    // With the switch off, no button.
+    act(() => useTrickStore.setState({ instantReplay: false }));
+    expect(within(notice()!).queryByRole('button', { name: 'Watch replay' })).toBeNull();
+  });
+
   it('has an Instant replay switch, on by default, not offered under reduced motion', async () => {
     const user = await setup();
     await start(user);
-    const sw = within(game()).getByRole('button', { name: 'Instant replay' });
+    const sw = within(openSettings()).getByRole('button', { name: 'Instant replay' });
     expect(sw).toHaveAttribute('aria-pressed', 'true');
     await user.click(sw);
     expect(sw).toHaveAttribute('aria-pressed', 'false');
     expect(localStorage.getItem('trick-lab.instant-replay')).toBe('off');
     expect(announcer()).toHaveTextContent('Instant replay off.');
     act(() => useTrickStore.getState().setReducedMotion(true));
-    expect(within(game()).queryByRole('button', { name: 'Instant replay' })).toBeNull();
+    expect(within(openSettings()).queryByRole('button', { name: 'Instant replay' })).toBeNull();
   });
 });

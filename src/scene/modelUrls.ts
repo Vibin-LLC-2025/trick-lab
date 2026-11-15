@@ -5,7 +5,7 @@
 import { deckFile, MODEL_DECK, type DeckId } from '../asset/deckSpec';
 import { BOARD_GLB, BOARD_HIGH_GLB, GROUND_GLB, RIDER_GLB, SHOES_GLB, SPOT_GLB, type DetailLevel } from '../asset/spec';
 import type { Quality } from '../store';
-import { boardFileFor, modelFilesFor, modelFilesUnusedBy } from './modelFiles';
+import { boardFileFor, modelFilesFor, modelFilesUnusedBy, riderFileFor } from './modelFiles';
 
 const url = (file: string) => `${import.meta.env.BASE_URL}${file}`;
 
@@ -17,6 +17,8 @@ export const GROUND_URL = url(GROUND_GLB);
 export const SPOT_URL = url(SPOT_GLB);
 /** The rider (ADR-85): Medium and High, on the game and welcome screens. */
 export const RIDER_URL = url(RIDER_GLB);
+/** The rider a tier shows: the detailed one on High (ADR-94), the procedural one on Medium. */
+export const riderUrlFor = (quality: Exclude<Quality, 'low'>) => url(riderFileFor(quality));
 
 /** A deck's texture for a board level (ADR-71); null for today's, which is inside the model. */
 export const deckUrl = (deck: DeckId, level: DetailLevel): string | null => (deck === MODEL_DECK ? null : url(deckFile(deck, level)));

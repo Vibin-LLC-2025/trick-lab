@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { displayUnit, displayValue, INPUT_NAMES, valueText } from '../sim/format';
 import { INPUT_LIMITS, type InputKey } from '../sim/tricks';
 import { ZONE_WORDS, type Span, type ZoneKey } from '../sim/zones';
@@ -82,9 +82,9 @@ function Field({ k }: { k: InputKey }) {
  * live region, never announced on its own. On the game screen its line is
  * kept, empty, when there is nothing to say (the computer's go), so the tray
  * is the same height on every turn and the camera never refits between goes
- * (ADR-86).
+ * (ADR-86). In a game it sits in the dock over the timing bar (ADR-89).
  */
-function Forecast() {
+export function Forecast() {
   const text = useTrickStore(sliderForecast);
   const game = useTrickStore((s) => s.screen === 'skate');
   if (!text) return game ? <p className="field__forecast" aria-hidden="true" /> : null;
@@ -95,18 +95,35 @@ function Forecast() {
   );
 }
 
-export function Inputs() {
+/**
+ * The three sliders. `folds` (the game on Easy and Normal with the timing
+ * bar, where the trick sets them, ADR-83, ADR-89): the heading is a button
+ * that opens them, folded to start with, so the player sees the forecast and
+ * the bar first and opens the sliders only to change them. `forecast` false
+ * leaves the forecast line to the caller (the game's dock).
+ */
+export function Inputs({ folds = false, forecast = true }: { folds?: boolean; forecast?: boolean }) {
+  const [open, setOpen] = useState(!folds);
   return (
-    <section className="panel" aria-labelledby="inputs-heading">
+    <section className={`panel inputs-panel${folds && !open ? ' inputs-panel--folded' : ''}`} aria-labelledby="inputs-heading">
       <h2 id="inputs-heading" className="panel__title">
-        Inputs
+        {folds ? (
+          <button type="button" className="inputs-panel__toggle" aria-expanded={open} aria-controls={open ? "inputs-body" : undefined} onClick={() => setOpen(!open)}>
+            Inputs
+          </button>
+        ) : (
+          'Inputs'
+        )}
       </h2>
-      <div className="inputs">
-        {KEYS.map((k) => (
-          <Field key={k} k={k} />
-        ))}
-      </div>
-      <Forecast />
+      {folds && !open && <p className="panel__note">Set for your trick. Open to change them.</p>}
+      {open && (
+        <div id="inputs-body" className="inputs">
+          {KEYS.map((k) => (
+            <Field key={k} k={k} />
+          ))}
+        </div>
+      )}
+      {forecast && <Forecast />}
     </section>
   );
 }

@@ -115,6 +115,61 @@ export const SKATE_LEVELS: Record<
   },
 };
 
+/**
+ * How much of the level's band each trick gives the player on Easy and Normal
+ * (ADR-105, the review's B5): the game sets the sliders there, so timing is
+ * the whole skill, and a trick that turns more needs it tighter. 1 is the
+ * level's band; 0.7 is 30 percent narrower. The one table to tune after
+ * playtesting. Never narrower than Hard's band (`playerBand`). Hard keeps
+ * its one band for every trick: there dialing the sliders is the extra skill.
+ * The computer keeps the level's band: its timing already spreads wider as a
+ * trick turns more (`timingSpread`), which is its matching cost.
+ */
+export const TRICK_BAND: Partial<Record<TrickId, number>> = {
+  kickflip: 1,
+  heelflip: 1,
+  'pop-shove-it': 1,
+  'frontside-pop-shove-it': 1,
+  '360-shove-it': 0.85,
+  'frontside-360-shove-it': 0.85,
+  'varial-flip': 0.85,
+  'varial-heelflip': 0.85,
+  'inward-heelflip': 0.8,
+  'double-kickflip': 0.7,
+  'double-heelflip': 0.7,
+  '360-flip': 0.7,
+  'laser-flip': 0.7,
+  '360-inward-heelflip': 0.65,
+  'double-tre': 0.55,
+};
+
+/** The share of the level's band a trick gets on Easy and Normal: 1 for a trick not in `TRICK_BAND`. */
+const bandShare = (id: TrickId | null | undefined) => (id ? (TRICK_BAND[id] ?? 1) : 1);
+
+/**
+ * The player's band for a trick on a level (ADR-105): on Easy and Normal the
+ * level's band narrowed by `TRICK_BAND`, rounded to the ms, never under
+ * Hard's; on Hard, Hard's band. Miss scaling (`k`) is the level's.
+ */
+export function playerBand(level: SkateLevel, id: TrickId | null | undefined): Band {
+  const band = SKATE_LEVELS[level].band;
+  if (level === 'hard') return band;
+  const halfMs = Math.max(SKATE_LEVELS.hard.band.halfMs, Math.round(band.halfMs * bandShare(id)));
+  return halfMs === band.halfMs ? band : { ...band, halfMs };
+}
+
+/**
+ * The turn's word on the band, for the trick card (ADR-105): null when the
+ * trick gets the level's whole band; "Harder trick: the green band is 30
+ * percent narrower." otherwise.
+ */
+export function bandNote(level: SkateLevel, id: TrickId | null | undefined): string | null {
+  const full = SKATE_LEVELS[level].band.halfMs;
+  const half = playerBand(level, id).halfMs;
+  if (half >= full) return null;
+  return `Harder trick: the green band is ${Math.round((1 - half / full) * 100)} percent narrower.`;
+}
+
 /** Said wherever Hard's rule needs saying: the guide, and the start of a game. */
 export const CLEAN_ONLY_NOTE = `Only a clean landing counts on Hard: within ${CLEAN_ROLL} degrees on the flip and ${CLEAN_YAW} on the shove.`;
 

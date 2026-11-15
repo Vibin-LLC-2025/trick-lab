@@ -188,7 +188,7 @@ describe('the committed GLBs', () => {
     expect(stats.extensionsUsed).toContain('KHR_texture_transform');
   });
 
-  it('rider.glb meets the rider budget, matches the source and carries the 17 bones in skinning order (ADR-85)', async () => {
+  it('rider.glb meets the rider budget, matches the source and carries the 19 bones in skinning order (ADR-85, ADR-98)', async () => {
     const stats = await inspectGlb(resolve(PUBLIC, ASSET_FILES.rider));
     expect(failing(stats, 'rider')).toEqual([]);
     expect(stats.triangles).toBe(sum(buildRider().triangles));

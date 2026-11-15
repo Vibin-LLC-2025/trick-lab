@@ -25,6 +25,8 @@ export const perfStats = {
   triangles: 0,
   geometries: 0,
   textures: 0,
+  /** The fisheye bend in force on a tier with effects (effects.ts setBend; -1 with none built), for the browser checks (ADR-100). */
+  bend: -1,
 };
 
 /** Frames recorded per trick at most: 15 s at 60 frames a second, enough for the slowest speed's middle. */

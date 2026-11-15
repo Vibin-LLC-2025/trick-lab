@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
-import { landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
+import { bendShown, landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -11,6 +11,7 @@ import { Pad } from './Pad';
 import { Spot } from './Spot';
 import { PerfProbe } from './PerfProbe';
 import { frame, perfStats } from './perfStats';
+import { watchContextLoss, type LossSource } from './contextLoss';
 import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
 import { isNodeRenderer } from './rendererKind';
 import { readinessOf } from './rootReadiness';
@@ -119,6 +120,16 @@ function onCreated(state: RootState) {
   }
 }
 
+/**
+ * A lost graphics context or device reaches the store's fallback (contextLoss.ts, the 2026-11-13 review C-04):
+ * watched while this Canvas is mounted, never through a tier change's own teardown.
+ */
+function ContextLoss() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => watchContextLoss(gl as unknown as LossSource, () => useTrickStore.getState().setSceneUnavailable()), [gl]);
+  return null;
+}
+
 /** The WebGPURenderer path (ADR-50) is its own chunk: Low never downloads it. */
 const loadNodeRenderer = () => import('./nodeRenderer');
 
@@ -136,7 +147,7 @@ function PostEffects() {
   const tier = useTrickStore(effectsFor);
   const blurOn = useTrickStore(motionBlurOn);
   // The instant replay's fisheye (ADR-72): one uniform, set when it starts and ends.
-  const bendOn = useTrickStore(replayMoves);
+  const bendOn = useTrickStore(bendShown);
   const made = useRef<Effects | null>(null);
 
   useEffect(() => {
@@ -149,7 +160,7 @@ function PostEffects() {
         if (cancelled) return;
         effects = m.createEffects(gl as never, scene, camera, tier);
         effects.setMotionBlur(motionBlurOn(useTrickStore.getState()));
-        effects.setBend(replayMoves(useTrickStore.getState()));
+        effects.setBend(bendShown(useTrickStore.getState()));
         made.current = effects;
         frame.render = effects.render;
         // A startup publication of this root (rootReadiness.ts), as is giving up below.
@@ -360,6 +371,7 @@ export default function TrickScene() {
       <SharedResources />
       <PostEffects />
       <PerfProbe />
+      <ContextLoss />
     </Canvas>
   );
 }

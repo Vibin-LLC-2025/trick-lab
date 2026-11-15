@@ -43,6 +43,8 @@ export interface DeviceHints {
 
 const SOFTWARE_GPU = /SwiftShader|llvmpipe|softpipe|Software/i;
 const STRONG_GPU = /GeForce|RTX|GTX|Quadro|Radeon (RX|Pro|VII)|Apple (M\d|GPU)|Intel\(R\)? Arc|\bArc\b/i;
+/** Built-in graphics (Medium's job, ADR-62): a laptop's RAM and cores do not make its Intel UHD a High machine (2026-11-13). */
+const INTEGRATED_GPU = /Intel\(R\)? (UHD|HD|Iris)|Radeon(\(TM\))? (Vega|Graphics)|\bMali\b|Adreno|PowerVR/i;
 const CHROMEBOOK = /\bCrOS\b/;
 const HANDHELD = /Android|iPhone|iPad|iPod/;
 
@@ -60,6 +62,7 @@ export function pickQuality(h: DeviceHints): Quality {
   if (h.cores !== undefined && h.cores <= 2) return 'low';
   if (HANDHELD.test(ua)) return 'medium';
   if (STRONG_GPU.test(renderer)) return 'high';
+  if (INTEGRATED_GPU.test(renderer)) return 'medium';
   if (h.memoryGb !== undefined && h.memoryGb >= 8 && h.cores !== undefined && h.cores >= 8) return 'high';
   return 'medium';
 }

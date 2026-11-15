@@ -3,18 +3,22 @@
 //
 // One scene pass writes colour, normals and, on High, per-object velocity in
 // the same draw (multiple render targets), so the scene is drawn once. The
-// ambient occlusion (three's GTAO) reads that pass's depth and normals. One
+// ambient occlusion (three's GTAO) reads that pass's depth and normals, at
+// a smaller size, and is upsampled by depth so it stays off silhouettes. One
 // composite pass then does the rest: motion blur along the velocity (only
 // while a trick plays at normal speed), the occlusion, a glow round the
 // brightest highlights, tone mapping and the colour space, then the grade
 // and the vignette. That is two full-screen passes on top of the scene.
 import { MaterialBlending, UnsignedByteType, type Camera, type Object3D } from 'three';
-import { BlendMode, RenderPipeline, type WebGPURenderer } from 'three/webgpu';
+import { BlendMode, RenderPipeline, type Node, type WebGPURenderer } from 'three/webgpu';
 import {
+  abs,
   clamp,
   dot,
   float,
+  floor,
   Fn,
+  fract,
   If,
   length,
   max,
@@ -24,6 +28,8 @@ import {
   output,
   packNormalToRGB,
   pass,
+  perspectiveDepthToViewZ,
+  rtt,
   renderOutput,
   sample,
   smoothstep,
@@ -36,10 +42,14 @@ import {
   velocity,
   viewportSize,
 } from 'three/tsl';
+import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js';
 import { ao } from 'three/examples/jsm/tsl/display/GTAONode.js';
 import { ART } from './artDirection';
+import { perfStats } from './perfStats';
 
 const P = ART.post;
+/** A screen coordinate node (TSL's types lose the vector's width through floor and fract). */
+type UV = Node<'vec2'>;
 type Tier = NonNullable<(typeof P.tiers)[keyof typeof P.tiers]>;
 
 export interface Effects {
@@ -106,8 +116,10 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
 
   // The occlusion, at the tier's resolution, from the same pass.
   let occlusion: ReturnType<typeof ao> | null = null;
+  let normalAt: ReturnType<typeof sample> | null = null;
   if (tier.ao !== null) {
-    occlusion = ao(scenePass.getTextureNode('depth'), sample((at) => unpackRGBToNormal(normals.sample(at))), camera as never);
+    normalAt = sample((at) => unpackRGBToNormal(normals.sample(at)));
+    occlusion = ao(scenePass.getTextureNode('depth'), normalAt, camera as never);
     occlusion.resolutionScale = tier.ao;
     occlusion.radius.value = P.ao.radius;
     occlusion.thickness.value = P.ao.thickness;
@@ -115,7 +127,47 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
     occlusion.scale.value = P.ao.scale;
     occlusion.samples.value = P.ao.samples;
   }
-  const aoTexture = occlusion?.getTextureNode() ?? null;
+  // GTAO's raw result is noisy pixel to pixel by design (three's examples denoise it); unfiltered, the noise showed as
+  // a dotted dark line along every silhouette (2026-11-13). Denoised by depth and normal, at the occlusion's own size.
+  // Both kept to be freed with the rest (the denoise owns a noise texture, the render-to-texture its target; 2026-11-13 review, C-08).
+  const denoised = occlusion ? denoise(occlusion.getTextureNode(), scenePass.getTextureNode('depth'), normalAt!, camera as never) : null;
+  const aoTexture = denoised ? rtt(denoised, null, null, { resolutionScale: tier.ao ?? 1 }) : null;
+  // The scene camera's clip planes, for the depth the occlusion's upsampling compares (the composite's own camera is the quad's).
+  const near = uniform(0).onRenderUpdate(() => (camera as { near?: number }).near ?? 0.1);
+  const far = uniform(0).onRenderUpdate(() => (camera as { far?: number }).far ?? 100);
+  const depth = scenePass.getTextureNode('depth');
+  const viewZ = (at: UV) => perspectiveDepthToViewZ(depth.sample(at).r, near, far);
+  /**
+   * The occlusion at a pixel, upsampled from its smaller target by depth
+   * (2026-11-13): of the four occlusion texels round the pixel, each counts by
+   * its bilinear weight times how near its depth is to the pixel's, so a
+   * texel of the wall behind never darkens the edge of an arm in front. A
+   * plain bilinear read left a dotted dark line along every silhouette.
+   */
+  const occlusionAt = (at: UV) => {
+    const tex = aoTexture!;
+    const size = floor(viewportSize.mul(tier.ao ?? 1));
+    const p = at.mul(size).sub(0.5);
+    const base = floor(p) as unknown as UV;
+    const f = fract(p) as unknown as UV;
+    const z0 = viewZ(at);
+    const sum = float(0).toVar();
+    const weights = float(0).toVar();
+    for (const [dx, dy] of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+    ] as const) {
+      const t = base.add(vec2(dx, dy)).add(0.5).div(size);
+      const bilinear = (dx ? f.x : float(1).sub(f.x)).mul(dy ? f.y : float(1).sub(f.y));
+      const near = float(1).sub(smoothstep(0, abs(z0).mul(P.ao.edge).add(P.ao.edgeFloor), abs(viewZ(t).sub(z0))));
+      const w = bilinear.mul(near).add(1e-4 * (dx || dy ? 0 : 1));
+      sum.addAssign(tex.sample(t).r.mul(w));
+      weights.addAssign(w);
+    }
+    return sum.div(weights);
+  };
 
   const blur = uniform(0);
   const bend = uniform(0);
@@ -136,7 +188,7 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
         c.assign(sum);
       });
     }
-    if (aoTexture) c.rgb.mulAssign(mix(float(1), aoTexture.sample(at).r, P.ao.strength));
+    if (aoTexture) c.rgb.mulAssign(mix(float(1), occlusionAt(at), P.ao.strength));
     if (tier.glow) {
       // Two rings of taps round the pixel; only what is brighter than the threshold spreads.
       const glow = vec3(0).toVar();
@@ -172,8 +224,12 @@ export function createEffects(renderer: WebGPURenderer, scene: Object3D, camera:
     },
     setBend: (on) => {
       bend.value = on ? ART.replay.bend : 0;
+      perfStats.bend = bend.value;
     },
     dispose: () => {
+      perfStats.bend = -1;
+      aoTexture?.dispose();
+      denoised?.dispose();
       occlusion?.dispose();
       scenePass.dispose();
       pipeline.dispose();

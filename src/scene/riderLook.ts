@@ -2,7 +2,7 @@
 // computer's go its shoes' soles and laces take ART.computer.shoe. The board's
 // deck is the other half (BoardModel, deckSwap.ts). Called from effects when
 // the rider changes, never per frame.
-import { BufferAttribute, Color, type BufferGeometry } from 'three';
+import { BufferAttribute, Color, type BufferGeometry, type MeshStandardMaterial, type SkinnedMesh } from 'three';
 import { ART } from './artDirection';
 
 const COMPUTER = new Color(ART.computer.shoe);
@@ -25,6 +25,12 @@ const OUTFITS = {
   computer: ART.rider.computer.map((c) => new Color(c)),
 };
 
+/** The detailed rider's tints by region (ADR-94, ART.riderHigh): the shirt and the beanie per rider, white (the atlas as it is) elsewhere. */
+const HIGH_OUTFITS = {
+  player: ART.riderHigh.player.map((c) => new Color(c)),
+  computer: ART.riderHigh.computer.map((c) => new Color(c)),
+};
+
 /**
  * Paints the rider's mesh (ADR-85) for whose go it is: each vertex its
  * region's colour (the `_region` attribute rider.glb carries) in the
@@ -34,6 +40,29 @@ const OUTFITS = {
  * effects when the rider changes, never per frame.
  */
 export function dressRider(geometry: BufferGeometry, computer: boolean) {
+  paint(geometry, computer ? OUTFITS.computer : OUTFITS.player);
+}
+
+/** The detailed rider (ADR-94): the same painting, with its tints, which multiply its atlas. */
+export function dressRiderHigh(geometry: BufferGeometry, computer: boolean) {
+  paint(geometry, computer ? HIGH_OUTFITS.computer : HIGH_OUTFITS.player);
+}
+
+/**
+ * The detailed rider's material (ADR-94): the GLB's own (the model cache's,
+ * never disposed here), its atlas multiplied by the colours dressRiderHigh
+ * paints, so vertex colours go on. Idempotent.
+ */
+export function riderHighMaterial(mesh: SkinnedMesh): MeshStandardMaterial {
+  const m = mesh.material as MeshStandardMaterial;
+  if (!m.vertexColors) {
+    m.vertexColors = true;
+    m.needsUpdate = true;
+  }
+  return m;
+}
+
+function paint(geometry: BufferGeometry, outfit: readonly Color[]) {
   const region = geometry.getAttribute('_region');
   if (!region) return;
   let color = geometry.getAttribute('color') as BufferAttribute | undefined;
@@ -41,7 +70,6 @@ export function dressRider(geometry: BufferGeometry, computer: boolean) {
     color = new BufferAttribute(new Float32Array(region.count * 3), 3);
     geometry.setAttribute('color', color);
   }
-  const outfit = computer ? OUTFITS.computer : OUTFITS.player;
   for (let i = 0; i < region.count; i++) {
     const c = outfit[region.getX(i)] ?? outfit[0]!;
     color.setXYZ(i, c.r, c.g, c.b);

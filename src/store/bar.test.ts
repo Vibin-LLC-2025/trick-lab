@@ -47,13 +47,33 @@ function kickflipUp(queue?: number[]) {
 
 beforeEach(() => localStorage.clear());
 
+describe("a harder trick's band on Normal (ADR-105)", () => {
+  it('the bar for a 360 flip is judged on its narrower band: a release in the kickflip band but outside it misses', () => {
+    const s = makeStore();
+    s.getState().startSkate();
+    s.getState().continueSkate();
+    s.getState().callSkateTrick('360-flip');
+    s.getState().pressPop();
+    const band = s.getState().pendingPop!.band;
+    expect(band.halfMs).toBe(70);
+    // 90 ms late: inside Normal's 100 ms band, outside the 360 flip's 70.
+    s.advance(BAR.centreMs + 90);
+    s.getState().pressPop();
+    expect(s.getState().lastRelease).toEqual({ by: 'you', ms: BAR.centreMs + 90, band });
+    expect(popped(s)[0]!.payload).toMatchObject({ how: 'timed', offMs: 90 });
+    // Late outside the band: more flick than the sliders say.
+    const p = popped(s)[0]!.payload as { flick: number; setFlick: number };
+    expect(p.flick).toBeGreaterThan(p.setFlick);
+  });
+});
+
 describe('the timing bar in the store (ADR-65)', () => {
   it('is how you pop by default; the first press starts the bar and pops nothing', () => {
     const s = kickflipUp();
     expect(s.getState().popMode).toBe('timed');
     s.getState().pressPop();
     const st = s.getState();
-    expect(st.pendingPop).toEqual({ id: 1, startedAt: 5000, intended: { pop: 0.35, flick: 1.9, scoop: 0 }, level: 'normal' });
+    expect(st.pendingPop).toEqual({ id: 1, startedAt: 5000, intended: { pop: 0.35, flick: 1.9, scoop: 0 }, level: 'normal', band: SKATE_LEVELS.normal.band });
     expect(st.status).toBe('idle');
     expect(st.flight).toBeNull();
     expect(popped(s)).toHaveLength(0);
@@ -77,7 +97,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.pendingPop).toBeNull();
     expect(st.status).toBe('playing');
     expect(st.flightBy).toBe('you');
-    expect(st.lastRelease).toEqual({ by: 'you', ms: CENTRE + 40 });
+    expect(st.lastRelease).toEqual({ by: 'you', ms: CENTRE + 40, band: SKATE_LEVELS.normal.band });
     expect(popped(s)).toHaveLength(1);
     expect(popped(s)[0]!.payload).toEqual({
       by: 'you',
@@ -116,7 +136,8 @@ describe('the timing bar in the store (ADR-65)', () => {
     early.getState().pressPop();
     early.getState().land();
     expect(early.getState().result).toMatchObject({ landed: false, outcome: 'under-rotated' });
-    expect(said(early)).toMatch(/^Early: 50 percent less spin than you set\. .*not landed: flip under-rotated/);
+    // Told against the called kickflip, never the trick it came nearest to (2026-11-13).
+    expect(said(early)).toMatch(/^Early: 50 percent less spin than you set\. Kickflip not landed: \d+ degrees short on the flip\./);
     // A missed set: no letter, the computer sets next.
     expect(early.getState().skate.letters).toEqual({ you: 0, computer: 0 });
     expect(early.getState().skate.phase).toBe('computer-set');
@@ -133,14 +154,21 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(said(s)).toMatch(/^In the band: exactly what you set\. Kickflip landed, sketchy: .* The timing was right, so it was the sliders\./);
   });
 
-  it('the attempt is the sliders as the bar started: moving one during the sweep changes nothing', () => {
+  it('the attempt is the sliders at the release: one moved while the bar goes round is what pops, as the forecast says (2026-11-13)', () => {
+    // ADR-65 kept the sliders as the bar started; since the bar goes round until the second press (ADR-78) the
+    // forecast followed a moved slider while the release popped the old setup, a clean forecast and a lost set.
     const s = kickflipUp();
+    s.getState().setInput('flick', 0);
     s.getState().pressPop();
     s.advance(300);
-    s.getState().setInput('flick', -1.9);
+    s.getState().setInput('flick', 1.9);
+    expect(s.getState().pendingPop!.intended).toEqual({ pop: 0.35, flick: 1.9, scoop: 0 });
     s.advance(CENTRE - 300);
     s.getState().pressPop();
     expect(popped(s)[0]!.payload).toMatchObject({ flick: 1.9, setFlick: 1.9 });
+    s.getState().land();
+    expect(s.getState().result?.name).toBe('Kickflip');
+    expect(s.getState().result?.landed).toBe(true);
   });
 
   it('with no second press the bar goes round and never pops on its own (ADR-78)', () => {
@@ -155,7 +183,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     // A press on the third lap is read where the marker is on that lap: in the band.
     s.advance(CENTRE + 40);
     s.getState().pressPop();
-    expect(s.getState().lastRelease).toEqual({ by: 'you', ms: CENTRE + 40 });
+    expect(s.getState().lastRelease).toEqual({ by: 'you', ms: CENTRE + 40, band: SKATE_LEVELS.normal.band });
     expect(popped(s)[0]!.payload).toMatchObject({ how: 'timed', releaseMs: CENTRE + 40, offMs: 40, flick: 1.9 });
     s.getState().land();
     expect(said(s)).toMatch(/^In the band: exactly what you set\. Kickflip landed clean\./);
@@ -238,7 +266,7 @@ describe('the timing bar in the store (ADR-65)', () => {
     expect(st.pendingPop).toBeNull();
     expect(st.flightBy).toBe('computer');
     // 0.25 after the coin flip: a release dead on the centre, so exactly its aim.
-    expect(st.lastRelease).toEqual({ by: 'computer', ms: CENTRE });
+    expect(st.lastRelease).toEqual({ by: 'computer', ms: CENTRE, band: SKATE_LEVELS.normal.band });
     const p = popped(s)[0]!.payload;
     expect(p).toMatchObject({ by: 'computer', how: 'timed', releaseMs: CENTRE, offMs: 0, call: 'heelflip' });
     expect(p.flick).toBe(p.setFlick);

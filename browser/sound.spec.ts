@@ -29,6 +29,8 @@ test('turned on, every recording downloads and decodes, and the sound check play
     if (/\/sounds\/.*\.mp3$/.test(r.url()) && (await r.response())?.status() === 200) done.push(r.url().split('/').pop()!);
   });
   const errors = await open(page, 'low', 'lab');
+  // The switch is in Settings (ADR-89).
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const sound = page.getByRole('button', { name: 'Sound', exact: true });
   await sound.click();
   await expect(sound).toHaveAttribute('aria-pressed', 'true');

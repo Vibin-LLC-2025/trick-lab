@@ -215,11 +215,11 @@ Four more deck bottoms, each a KTX2 texture per board level in `public/models/de
 
 ## The rider (2026-11-11, ADR-85)
 
-A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh over the 17 bones of `src/sim/body.ts`, without the shoes (those stay `shoes.glb`). `npm run assets -- rider` builds it alone.
+A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh over the bones of `src/sim/body.ts` (17, 19 since ADR-98's feet), without the shoes (those stay `shoes.glb`). `npm run assets -- rider` builds it alone.
 
 | File | What it holds | Tests |
 | --- | --- | --- |
-| `src/asset/riderSpec.ts` | the node names, `RIDER_REGIONS` (what each vertex is, for its colour), `RIDER_UV` (the cloth coordinates' tiles and span), `RIDER_MESH` (points round each loft), and every shape: `TROUSER` (ADR-70's leg, cuff and sock, kept), `SEAT`, `TORSO`, `HOODIE` (rib, pocket, sleeves, the hood rolled on the back, the strings), `NECK`, `HEAD`, `BEANIE`, `HAIR`, `MITTEN` | `rider.test.ts` |
+| `src/asset/riderSpec.ts` | the node names, `RIDER_REGIONS` (what each vertex is, for its colour), `RIDER_UV` (the cloth coordinates' tiles and span), `RIDER_MESH` (points round each loft), and every shape: `TROUSER` (ADR-70's leg, cuff and sock, kept), `SEAT`, `TORSO`, `HOODIE` (rib, pocket, sleeves, the hood rolled on the back, the strings), `NECK`, `HEAD`, `BEANIE`, `HAIR`, `MITTEN` (the hand, bare since ADR-91) | `rider.test.ts` |
 | `src/asset/rider.ts` | `buildRider()`: lofted rings round the bind pose (`writeBindPose`), each vertex weighted to at most four bones and blended across every joint (no capsule seams), the right side built and mirrored for the left (the weights mirrored with `MIRROR_BONE`), smooth normals, a one-byte region per vertex | `rider.test.ts` (budget, weights sum to 1 and blend across each joint, symmetry, unit normals, every region used, the cuff over the shoe collar) |
 | `scripts/lib/build.ts` | `riderSpec()`: one material with no texture, the joints flat under the root at their bind frames, the inverse bind matrices from the bind frames, `JOINTS_0`, `WEIGHTS_0`, `TEXCOORD_0` and the custom `_REGION`; texture coordinates quantized to 16 bits (the twill repeats 128 times over them) | `budget.test.ts` (the committed file matches the source, its joints in `RIDER_BONES` order) |
 | `scripts/lib/inspect.ts` | the joints of each skin, and the bounds of a skinned mesh in its bind pose (joint world matrix times inverse bind, so quantization's transform is undone) | `budget.test.ts` |
@@ -228,3 +228,13 @@ A sixth asset, `public/models/rider.glb`: the whole rider as one skinned mesh ov
 No colour and no texture in the file: the scene paints each region from `ART.rider` (one outfit per rider, `scene/riderLook.ts`), so the player and the computer are one download, and the cloth's twill normal map is ADR-70's, made in code by `scene/resources.ts`. Skin sits on a flat texel of that map, so the head and neck shade smooth.
 
 `assets:check` for `rider.glb` (2026-11-11): 98.5 KB of 150 KB, 1 of 1 draw call, 18,500 of 20,000 triangles (legs 5,400, torso 4,896, sleeves 2,592, head 1,400, hood 1,120, mittens 1,032, seat 896, beanie 672, neck 252, strings 240), no texture, 17 joints in order, the top 1748.8 mm, the bottom 36.8 mm (inside the shoes), symmetric to 0.0 mm.
+
+Rebuilt 2026-11-11 for ADR-91 (a slimmer hoodie and sleeves, a smaller hood, bare hands): 98.4 KB, 18,556 triangles, still 1 draw call, no texture, 17 joints.
+
+Rebuilt 2026-11-13 for ADR-98 (the foot bones: the cuff and the sock lean on them, `HEM_FOOT`), with `rider-high.glb`: 99.7 KB, 18,556 triangles, 19 joints; the High rider 550.3 KB, 31,876 triangles, 19 joints.
+
+Rebuilt 2026-11-13 for ADR-101 (the tee's hem band no longer inverted; the jeans a 2048 x 1024 strip of the atlas): `rider-high.glb` 637.0 KB, 28,532 triangles, 19 joints, its atlas 442.7 KB of KTX2.
+
+Rebuilt 2026-11-13 for ADR-106 (the High rider's material drawn on both faces, so the gap under the lifted hem shows the tee's inside, not the wall): the same 637.0 KB, 28,532 triangles and one texture. A 1024 normal map for the clothes was tried (a second KTX2 texture, 90.2 KB) and left out: ETC1S showed blocks on the tee and the jeans.
+
+Rebuilt 2026-11-13 for ADR-99 (the polish pass: a buzz cut painted into the skin instead of hair cards, the beanie's rim smoothed over the ears, the tee's hem level, the crotch's weights shared across the middle): the High rider 494.4 KB, 28,532 triangles, its atlas 300.3 KB, 19 joints. `rider.glb` is unchanged.
