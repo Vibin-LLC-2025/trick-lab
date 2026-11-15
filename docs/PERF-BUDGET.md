@@ -824,3 +824,18 @@ Measured 2026-11-13 with `scripts/measure/measure.js` as corrected above (`?tier
 The lab's tricks (after): High GPU p95 1.64 ms on WebGPU and 5.02 and 4.74 ms on WebGL2 (before 1.64, then 5.28 and 4.98); Medium 0.85 ms on WebGPU and 3.59 ms on WebGL2 (before 0.85 and 3.64). Draw calls as loaded: High 33, 34 and 35 on the welcome screen, the lab and the game, Medium 18, 19 and 20, the same before and after. Downloads on a cold first visit to High's welcome screen: 609 KB of script both times, models 1,185.5 KB before and 1,328.6 KB after (the High rider's sharper atlas, ADR-101). Medium's are unchanged at 322.7 KB.
 
 **Reading.** At the tiers' own pixel ratios the graphics time through a game misses its target on High on both backends, and on Medium on its WebGL2 backend, before this pass as well as after it. The DPR 1 tables above passed because they drew 44 percent (High) or 64 percent (Medium) of the pixels. The miss is not new: this pass moved no GPU number by more than the runs' own spread (High on WebGL2 read 8.52 and 5.78 ms in two runs of the same build). The review's P-01 is confirmed; per its plan the pixel policy (a backend- and size-aware DPR) is left to a later pass, and the targets are not raised. One wider run (High, WebGPU, 1920 x 1080 at DPR 1.5, a 2853 x 1515 px stage) read 10.49 ms p95 through a game: a scale check, not a verdict.
+
+## Restructure phase 1: can Medium replace Low? (2026-11-15)
+
+The measurement `docs/PLAN-RESTRUCTURE.md` phase 1 asks for before anything is deleted: Medium on the WebGPURenderer's WebGL2 backend (the path a machine without WebGPU gets) against Low on the WebGLRenderer, on a software GPU and on the reference machine's GPU, every load at 4x CPU slowdown. `scripts/measure/measure.js` with `?tiers=<tier>&dpr=<cap>&nets=full,10&visits=cold&screens=home,lab,skate&switches=none&cpu=4&game=on&gos=10&backend=webgl2`, headed Chrome 157 through `playwright-cli`, 1440 x 900, dark theme, feet on, `fisheye-view` at 029cf97 built by `npm run verify` and served by `serve.ts`. The software GPU is SwiftShader (`--use-angle=swiftshader`, as the browser checks run). Each tier at its own pixel-ratio cap (Medium 1.25, Low 1). The frame times are at full CPU speed; the slowdown applies to the loads.
+
+| GPU | Tier | Picture lifts, full speed / 10 Mbps | Graphics time p95, the lab's tricks | Graphics time p95, a game after its first go | Frame interval, median, a game | Draw calls, most |
+| --- | --- | --- | --- | --- | --- | --- |
+| SwiftShader | Medium, WebGL2 | 4.37 / 5.01 s | 294.74 ms | 547.96 ms | 520 ms (about 2 frames a second) | 22 |
+| SwiftShader | Low | 0.94 / 1.26 s | 23.21 ms | 40.04 ms | 40 ms (about 25 frames a second) | 10 |
+| RTX 3060 | Medium, WebGL2 | 2.53 / 3.09 s | 4.02 ms of under 3 | 4.63 ms of under 3 | 10 ms | 22 |
+| RTX 3060 | Low | 0.96 / 1.32 s | 0.07 ms of under 2 | 0.09 ms of under 2 | 10 ms | 10 |
+
+First visit downloads: Medium 609.3 KB of script and 322.7 KB of models, Low 388.9 KB of script and no models.
+
+**Reading: no-go.** Phase 1's rule is to stop if startup or frame time misses the targets. On a software GPU, Medium draws a frame in about half a second, about 13 times slower than Low, and its picture lifts 3.4 s later; a game there is a slide show. On the real GPU, Medium on WebGL2 misses its own 3 ms target (as on 2026-11-13), while Low is far inside its 2 ms. Low stays as the frozen fallback, and the restructure goes ahead with three tiers. Low on SwiftShader also misses its frame targets, so a machine with no GPU at all gets a playable but not smooth Low; that is the case Low exists for.
