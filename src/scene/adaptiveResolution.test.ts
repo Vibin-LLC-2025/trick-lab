@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PACE } from '../store/pace';
-import { adaptiveOn, newAdaptive, noteAdaptiveSample, resetAdaptive, scaledDpr, scaleFor, stepAdaptive, windowQuantile, type AdaptiveState } from './adaptiveResolution';
+import { adaptiveOn, newAdaptive, noteAdaptiveSample, resetAdaptive, scaledDpr, scaleFor, stepAdaptive, windowQuantile, type AdaptiveConfig, type AdaptiveState } from './adaptiveResolution';
 import { ART } from './artDirection';
 
 const A = ART.adaptive;
@@ -91,10 +91,13 @@ describe('adaptive resolution (ADR-109)', () => {
     feedAndStep(st, 6, A.minGapMs);
     feedAndStep(st, 6, 2 * A.minGapMs);
     expect(st.level).toBe(2);
-    expect(feedAndStep(st, 2, 3 * A.minGapMs)).toBe(true);
-    expect(feedAndStep(st, 2, 4 * A.minGapMs)).toBe(true);
+    // No raise for `raiseHoldMs` after the last step down.
+    const back = 2 * A.minGapMs + A.raiseHoldMs;
+    expect(feedAndStep(st, 2, back - 1)).toBe(false);
+    expect(feedAndStep(st, 2, back)).toBe(true);
+    expect(feedAndStep(st, 2, back + A.minGapMs)).toBe(true);
     expect(st.scale).toBe(1);
-    expect(feedAndStep(st, 1, 5 * A.minGapMs)).toBe(false);
+    expect(feedAndStep(st, 1, back + 2 * A.minGapMs)).toBe(false);
     expect(st.scale).toBe(1);
   });
 
@@ -115,6 +118,29 @@ describe('adaptive resolution (ADR-109)', () => {
     }
     expect(changes).toBeLessThanOrEqual(1);
     expect(st.scale).toBeGreaterThanOrEqual(1 - A.step - 1e-9);
+  });
+
+  it('holds a raise back longer each time it bounces, so a cost that moves with the go does not pump', () => {
+    // Heavy goes and light goes in turn, whatever the scale: a window shows room that the next go takes back.
+    const changesWith = (cfg: AdaptiveConfig) => {
+      const st = newAdaptive(cfg);
+      resetAdaptive(st, 'high', 'gpu');
+      stepAdaptive(st, cfg, 0, 'skate', 'high', true, CHOPPY);
+      let late = 0;
+      const judgements = 400;
+      for (let go = 1; go <= judgements; go++) {
+        for (let i = 0; i < cfg.minSamples; i++) noteAdaptiveSample(st, go % 6 < 3 ? 4.5 : 2);
+        if (stepAdaptive(st, cfg, go * cfg.minGapMs, 'skate', 'high', true, CHOPPY) && go > judgements / 2) late += 1;
+      }
+      return { late, hold: st.holdMs };
+    };
+    const held = changesWith(A);
+    const unheld = changesWith({ ...A, raiseHoldMs: 0, raiseHoldMaxMs: 0 });
+    expect(held.hold).toBe(A.raiseHoldMaxMs);
+    // The second half: a few changes each time the hold runs out, against one at nearly every go without it.
+    const span = 200 * A.minGapMs;
+    expect(held.late).toBeLessThanOrEqual(6 * Math.ceil(span / A.raiseHoldMaxMs));
+    expect(unheld.late).toBeGreaterThan(4 * held.late);
   });
 
   it('leaves frames over the choppy line to the tier step-down', () => {
@@ -142,9 +168,10 @@ describe('adaptive resolution (ADR-109)', () => {
     feedAndStep(st, 2, 2 * A.minGapMs, { screen: 'lab' });
     expect(st.count).toBe(0);
     expect(st.scale).toBe(kept);
-    // Back in the game it waits the minimum time again before judging.
-    expect(feedAndStep(st, 2, 2 * A.minGapMs + 1)).toBe(false);
-    expect(feedAndStep(st, 2, 3 * A.minGapMs + 1)).toBe(true);
+    // Back in the game it waits the minimum time again before judging (and the raise's hold).
+    const back = A.minGapMs + A.raiseHoldMs;
+    expect(feedAndStep(st, 2, back, { screen: 'skate' })).toBe(false);
+    expect(feedAndStep(st, 2, back + A.minGapMs)).toBe(true);
   });
 
   it('without GPU timing, lowers on a missed refresh and never raises', () => {

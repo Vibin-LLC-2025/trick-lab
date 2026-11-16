@@ -40,6 +40,15 @@ export interface AdaptiveConfig {
   raiseBelow: number;
   /** The least time between two changes, and after it becomes active before the first. */
   minGapMs: number;
+  /**
+   * After a step down, how long no raise is made; it doubles each time a step down follows straight after a raise (a bounce),
+   * up to `raiseHoldMaxMs`. A game's cost moves with what is on screen (a go
+   * with the replay costs more than one without), so a window can show room
+   * that the next go takes back: without this High went back and forth 8
+   * times in a game even with a window of several seconds (2026-11-15).
+   */
+  raiseHoldMs: number;
+  raiseHoldMaxMs: number;
   /** Without GPU timing: lower while the frame interval's signal is over this (a missed refresh at 60 Hz); never raise. */
   intervalLowerOverMs: number;
 }
@@ -63,6 +72,11 @@ export interface AdaptiveState {
   active: boolean;
   /** When the scale last changed, or it last became active (ms, the caller's clock). */
   changedAt: number;
+  /** Whether the last change was a raise: a step down straight after one is a bounce. */
+  raised: boolean;
+  /** No raise until `shutUntil`: `holdMs` after the last step down (doubling on a bounce). */
+  shutUntil: number;
+  holdMs: number;
 }
 
 /** A controller at the full cap, judging by `source`. */
@@ -78,6 +92,9 @@ export const newAdaptive = (cfg: Pick<AdaptiveConfig, 'window'>, source: Adaptiv
   fresh: false,
   active: false,
   changedAt: 0,
+  raised: false,
+  shutUntil: 0,
+  holdMs: 0,
 });
 
 const clearWindow = (st: AdaptiveState) => {
@@ -94,6 +111,9 @@ export function resetAdaptive(st: AdaptiveState, tier: string | null, source: Ad
   st.source = source;
   st.active = false;
   st.changedAt = 0;
+  st.raised = false;
+  st.shutUntil = 0;
+  st.holdMs = 0;
   clearWindow(st);
 }
 
@@ -137,8 +157,8 @@ const scaleAt = (cfg: AdaptiveConfig, level: number) => Math.max(cfg.floor, Math
 /**
  * One step of the controller, on a frame that is being drawn anyway; true
  * when the scale changed (the caller then redraws at it). It acts only where
- * `adaptiveOn`, and changes the scale only at a `quiet` moment (no flight
- * playing, no replay) at least `minGapMs` after the last change, once the
+ * `adaptiveOn`, and changes the scale only at a `quiet` moment (PerfProbe:
+ * the loop running anyway, no flight playing, no replay) at least `minGapMs` after the last change, once the
  * window has `minSamples` taken since then. A signal over `choppyMs` is left
  * to the tier's step-down (ADR-59): it neither lowers nor raises, so a lowered
  * resolution never answers frames that slow, and the step-down still sees them.
@@ -177,12 +197,19 @@ export function stepAdaptive(
   if (st.source === 'gpu') {
     const target = cfg.targetMs[tier];
     if (signal > target * cfg.lowerAbove) level = Math.min(levels(cfg), level + 1);
-    else if (level > 0) {
+    else if (level > 0 && now >= st.shutUntil) {
       const ratio = scaleAt(cfg, level - 1) / st.scale;
       if (signal * ratio * ratio < target * cfg.raiseBelow) level -= 1;
     }
   } else if (signal > cfg.intervalLowerOverMs) level = Math.min(levels(cfg), level + 1);
   if (level === st.level) return changed;
+  if (level > st.level) {
+    // A step down holds raises off for a while, twice as long after a bounce.
+    // It never shortens on this tier: a device that bounced once is judged slower to raise from then on.
+    st.holdMs = st.raised && st.holdMs > 0 ? Math.min(cfg.raiseHoldMaxMs, st.holdMs * 2) : Math.max(st.holdMs, cfg.raiseHoldMs);
+    st.shutUntil = now + st.holdMs;
+  }
+  st.raised = level < st.level;
   st.level = level;
   st.scale = scaleAt(cfg, level);
   st.changedAt = now;

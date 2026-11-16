@@ -169,7 +169,9 @@ export function PerfProbe() {
       g.lastWasLoop = frameloop === 'always';
     }
     const tier = sceneTier(s);
-    const quiet = s.status !== 'playing' && !replayMoves(s);
+    // A change only while the loop runs anyway (the roll, the landing), so the resized canvas's frame is one of
+    // them and a scene at rest never draws for it (rule 4); never mid-flight or in the replay, where it would show.
+    const quiet = frameloop === 'always' && s.status !== 'playing' && !replayMoves(s);
     if (stepAdaptive(adaptive, A, t1, s.screen, tier, quiet, PACE.choppyMs)) {
       perfStats.scale = adaptive.scale;
       scaleChanged();

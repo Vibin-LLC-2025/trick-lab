@@ -175,20 +175,24 @@ export const ART = {
    * `lowerAbove` of the tier's `targetMs` (ADR-62's graphics targets), and
    * raises one when the signal, grown by the next step's pixels, would sit
    * under `raiseBelow` of it; at least `minGapMs` apart, after `minSamples`
-   * new samples, and never while a flight or the replay plays. Without GPU
-   * timing it only lowers, while the interval's signal is over
-   * `intervalLowerOverMs` (a missed refresh at 60 Hz).
+   * new samples, only on a frame of a running loop and never while a flight
+   * or the replay plays. Without GPU timing it only lowers, while the
+   * interval's signal is over `intervalLowerOverMs` (a missed refresh at 60 Hz).
    */
   adaptive: {
     targetMs: { high: 4, medium: 3 },
     floor: 0.75,
     step: 0.05,
-    window: 30,
-    minSamples: 20,
+    // A window of several seconds, so it holds every part of a go (the roll, the flight, the landing, the replay)
+    // and not one part's cost: with 30 samples (one second) High went back and forth 22 times in a game (2026-11-15).
+    window: 300,
+    minSamples: 150,
     quantile: 0.9,
     lowerAbove: 0.95,
     raiseBelow: 0.85,
-    minGapMs: 2000,
+    minGapMs: 5000,
+    raiseHoldMs: 30_000,
+    raiseHoldMaxMs: 240_000,
     intervalLowerOverMs: 20,
     sampleEvery: 4,
   },
