@@ -37,6 +37,11 @@
 // drew too; and the first go of the game is shown in the targets' table
 // (reported, not gated: the target is "after the first second").
 //
+// Since 2026-11-15 (ADR-109): builds whose PerfProbe reads the GPU timers
+// itself (the adaptive resolution) publish each read, and those are what is
+// recorded (every frame under ?debug, as before); the game's section also says
+// the scale the adaptive resolution settled at, its lowest and how often it moved.
+//
 // Visits (PLAN-PLAY-POLISH-REACH step 1):
 // - cold: a fresh browser context with the HTTP cache off;
 // - http: the same context, cache on, loaded once to fill the cache, then measured;
@@ -457,18 +462,27 @@ async (page) => {
       }
       if (gl.isWebGPURenderer) {
         // Timestamp queries, resolved once per frame PerfProbe drew (the resolve sums every pass of it).
-        const timed = gl.backend && gl.backend.trackTimestamp && gl.hasFeature('timestamp-query');
+        // Since ADR-109 the app resolves them itself (every frame under ?debug) and publishes each read as
+        // `gpuMs`, counted by `gpuReads`: two resolvers would split the reads, so those builds are read, not resolved.
+        const perf = window.__trickLabPerf;
+        const appReads = typeof perf.gpuReads === 'number';
+        const timed = appReads ? perf.gpuTimed : gl.backend && gl.backend.trackTimestamp && gl.hasFeature('timestamp-query');
         window.__times = { cpu: [], gpu: [], pending: [], ext: timed, ...frames };
         if (gl.__measured) return;
         gl.__measured = true;
         // A frame can be several render calls (the effects' passes, ADR-51): PerfProbe times the whole frame.
-        let seen = window.__trickLabPerf.frames;
+        let seen = perf.frames;
+        let seenReads = appReads ? perf.gpuReads : 0;
         const poll = async () => {
-          const f = window.__trickLabPerf.frames;
+          if (appReads && perf.gpuReads !== seenReads) {
+            seenReads = perf.gpuReads;
+            if (timed) window.__times.gpu.push(perf.gpuMs);
+          }
+          const f = perf.frames;
           if (f !== seen) {
             seen = f;
-            window.__times.cpu.push(window.__trickLabPerf.renderMs);
-            if (timed) {
+            window.__times.cpu.push(perf.renderMs);
+            if (timed && !appReads) {
               const ms = await gl.resolveTimestampsAsync('render');
               if (typeof ms === 'number' && ms > 0) window.__times.gpu.push(ms);
             }
@@ -674,6 +688,22 @@ async (page) => {
       await p.waitForTimeout(150);
       return true;
     };
+    // The adaptive resolution (ADR-109): the scale in force through the game, and the pixel ratio drawn at.
+    await p.evaluate(() => {
+      const perf = window.__trickLabPerf;
+      const sc = { changes: 0, min: perf.scale ?? 1, last: perf.scale ?? 1 };
+      window.__scale = sc;
+      const watch = () => {
+        const now = perf.scale ?? 1;
+        if (now !== sc.last) {
+          sc.changes += 1;
+          sc.last = now;
+          sc.min = Math.min(sc.min, now);
+        }
+        if (window.__scale === sc) requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
     await clearTimes(p);
     await go();
     const first = { ...(await readTimes(p)), ...(await longFrames(p)) };
@@ -683,7 +713,10 @@ async (page) => {
     const rest = { ...(await readTimes(p)), ...(await longFrames(p)) };
     const end = await p.evaluate(() => {
       const s = window.__trickLabStore.getState();
-      return { phase: s.skate.phase, letters: s.skate.letters, grades: window.__game.grades, replays: window.__game.replays };
+      const sc = window.__scale;
+      window.__scale = null;
+      const scale = typeof window.__trickLabPerf.scale === 'number' ? { ...sc, dpr: window.__trickLab.get().viewport.dpr } : null;
+      return { phase: s.skate.phase, letters: s.skate.letters, grades: window.__game.grades, replays: window.__game.replays, scale };
     });
     return { gos: played, first, rest, ...end };
   };
@@ -800,6 +833,14 @@ async (page) => {
       const what = `${g.gos} goes (${g.grades.clean} clean, ${g.grades.sketchy} sketchy, ${g.grades.bail} bails, ${g.replays} replays), ${g.phase === 'over' ? 'played to the end' : 'stopped at the limit'}`;
       for (const [name, t] of [['the first go', g.first], [`the rest: ${what}`, g.rest]])
         md.push(`| ${r.tier} | ${name} | ${t.interval ? t.interval.n : 0} | ${t.calls} | ${ms(t.cpu)} | ${ms(t.gpu)} | ${ms(t.work)} | ${ms(t.interval)} | ${t.over20} / ${t.over34} |`);
+    }
+    const scaled = out.rows.filter((r) => r.screens.skate && r.screens.skate.game && r.screens.skate.game.scale);
+    if (scaled.length) {
+      md.push('', 'Adaptive resolution (ADR-109), through each game:');
+      for (const r of scaled) {
+        const sc = r.screens.skate.game.scale;
+        md.push(`- ${r.tier}: settled at ${sc.last} of the cap (pixel ratio ${Math.round(sc.dpr * 1000) / 1000}), lowest ${sc.min}, ${sc.changes} changes`);
+      }
     }
   }
   if (switches === 'all') {

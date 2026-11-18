@@ -27,6 +27,13 @@ export const perfStats = {
   textures: 0,
   /** The fisheye bend in force on a tier with effects (effects.ts setBend; -1 with none built), for the browser checks (ADR-100). */
   bend: -1,
+  /** The last GPU time read (ms, every pass of one frame) and how many reads so far; scripts/measure reads them (ADR-109). */
+  gpuMs: 0,
+  gpuReads: 0,
+  /** Whether this Canvas's renderer can time the GPU (timestamp queries). */
+  gpuTimed: false,
+  /** The adaptive resolution's scale on the tier's pixel ratio in force on the game screen (1: the full cap), for the measurement. */
+  scale: 1,
 };
 
 /** Frames recorded per trick at most: 15 s at 60 frames a second, enough for the slowest speed's middle. */
@@ -40,3 +47,4 @@ export const TRICK_FRAMES_MAX = 900;
  * flightPace. Emptied when a Canvas (a tier) mounts.
  */
 export const trickFrames: TrickFrames = newTrickFrames(TRICK_FRAMES_MAX);
+

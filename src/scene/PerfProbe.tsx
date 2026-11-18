@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { addAfterEffect, addEffect, useFrame, useThree } from '@react-three/fiber';
-import { riderShown, useTrickStore } from '../store';
+import { replayMoves, riderShown, useTrickStore } from '../store';
+import { PACE } from '../store/pace';
+import { noteAdaptiveSample, resetAdaptive, stepAdaptive } from './adaptiveResolution';
+import { ART } from './artDirection';
 import { flightPace, noteFramesStoreChange, recordFrame } from './flightPace';
 import { allShown } from './modelCache';
 import { modelsFor } from './modelUrls';
 import { frame, perfStats, trickFrames } from './perfStats';
-import { drawCallsOf, isNodeRenderer } from './rendererKind';
+import { drawCallsOf, isNodeRenderer, readGpuMs, timesGpu } from './rendererKind';
+import { adaptive, scaleChanged } from './renderScale';
 import { isReady, readinessOf } from './rootReadiness';
 import { effectsFor, sceneTier } from './sceneTier';
 
@@ -30,9 +34,40 @@ import { effectsFor, sceneTier } from './sceneTier';
  * useFrame) decides when this Canvas has finished starting up
  * (rootReadiness.ts): it numbers the root on mount and sets `ready` after the
  * first frame it drew with every startup publication done.
+ *
+ * It also steps the adaptive resolution (ADR-109, adaptiveResolution.ts), on
+ * frames it draws anyway: every `ART.adaptive.sampleEvery` frames it asks the
+ * renderer for the last frame's GPU time (every frame under ?debug, for
+ * scripts/measure, which reads `gpuMs` and `gpuReads`; only every few count
+ * for the controller, so it judges the same way with or without ?debug), and
+ * where the renderer cannot time the GPU it takes the interval of frames
+ * drawn back to back instead. The read is three's async resolve, which
+ * allocates inside three on the frames that ask; nothing here does. A change
+ * of scale reaches TrickScene's pixel ratio through renderScale.ts, and the
+ * pixel ratio's change asks for one frame, so a resized canvas is never left
+ * blank.
  */
+const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+
 export function PerfProbe() {
   const get = useThree((s) => s.get);
+  const dpr = useThree((s) => s.viewport.dpr);
+  const invalidate = useThree((s) => s.invalidate);
+  // A resized canvas is cleared: the new pixel ratio is drawn once, even on demand (rule 4).
+  useEffect(() => invalidate(), [dpr, invalidate]);
+  // The GPU read in flight, and whether its result counts for the controller.
+  const gpu = useRef({ timed: false, pending: false, feed: false, wantFeed: false, drawn: 0, lastWasLoop: false });
+  const onGpu = useRef((ms: number | undefined) => {
+    const g = gpu.current;
+    g.pending = false;
+    if (typeof ms !== 'number' || !(ms > 0)) return;
+    perfStats.gpuMs = ms;
+    perfStats.gpuReads += 1;
+    if (g.feed) noteAdaptiveSample(adaptive, ms);
+  });
+  const onGpuFailed = useRef(() => {
+    gpu.current.pending = false;
+  });
   // Whether this root drew since its after-effect last ran (the loop runs it for every root's frame).
   const drew = useRef(false);
   useEffect(() => {
@@ -70,6 +105,18 @@ export function PerfProbe() {
     trickFrames.count = 0;
     trickFrames.flightId = -1;
     trickFrames.wasPlaying = false;
+    // And the adaptive resolution starts at the full cap, judging by the GPU where this renderer can time it.
+    const g = gpu.current;
+    g.timed = timesGpu(get().gl);
+    g.pending = false;
+    g.wantFeed = false;
+    g.drawn = 0;
+    g.lastWasLoop = false;
+    perfStats.gpuTimed = g.timed;
+    const was = adaptive.scale;
+    resetAdaptive(adaptive, sceneTier(useTrickStore.getState()), g.timed ? 'gpu' : 'interval');
+    perfStats.scale = 1;
+    if (was !== 1) scaleChanged();
     const { setPaceSource } = useTrickStore.getState();
     setPaceSource((flightId) => flightPace(trickFrames, flightId));
     const stopWatching = useTrickStore.subscribe((s, prev) => noteFramesStoreChange(trickFrames, s, prev));
@@ -79,12 +126,14 @@ export function PerfProbe() {
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      // A Canvas that is going (a tier change) leaves no scale behind for the next.
+      resetAdaptive(adaptive, null, 'gpu');
       setPaceSource(null);
       stopWatching();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
-  useFrame(({ gl, scene, camera }, delta) => {
+  }, [get]);
+  useFrame(({ gl, scene, camera, frameloop }, delta) => {
     const s = useTrickStore.getState();
     recordFrame(trickFrames, s.status, s.flightId, delta);
     if (isNodeRenderer(gl)) gl.info.reset();
@@ -101,6 +150,32 @@ export function PerfProbe() {
     perfStats.geometries = gl.info.memory.geometries;
     perfStats.textures = gl.info.memory.textures;
     drew.current = true;
+    // The adaptive resolution (ADR-109): its sample, then its step, on this frame that is drawn anyway.
+    const g = gpu.current;
+    g.drawn += 1;
+    const A = ART.adaptive;
+    if (g.timed) {
+      // Every `sampleEvery` frames a read is due for the controller; one still in flight puts it off a frame.
+      if (g.drawn % A.sampleEvery === 0) g.wantFeed = true;
+      if (!g.pending && (g.wantFeed || DEBUG)) {
+        g.pending = true;
+        g.feed = g.wantFeed;
+        g.wantFeed = false;
+        readGpuMs(gl).then(onGpu.current, onGpuFailed.current);
+      }
+    } else {
+      // Without GPU timing, the interval of two frames drawn back to back by a running loop.
+      if (g.lastWasLoop && frameloop === 'always' && delta * 1000 <= PACE.ignoreOverMs) noteAdaptiveSample(adaptive, delta * 1000);
+      g.lastWasLoop = frameloop === 'always';
+    }
+    const tier = sceneTier(s);
+    // A change only while the loop runs anyway (the roll, the landing), so the resized canvas's frame is one of
+    // them and a scene at rest never draws for it (rule 4); never mid-flight or in the replay, where it would show.
+    const quiet = frameloop === 'always' && s.status !== 'playing' && !replayMoves(s);
+    if (stepAdaptive(adaptive, A, t1, s.screen, tier, quiet, PACE.choppyMs)) {
+      perfStats.scale = adaptive.scale;
+      scaleChanged();
+    }
   }, 1);
   return null;
 }

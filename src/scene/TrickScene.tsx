@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { addAfterEffect, Canvas, useThree, type RootState } from '@react-three/fiber';
 import { PCFShadowMap, WebGLRenderer, type DirectionalLight } from 'three';
 import { bendShown, landingMoves, previewAnimates, replayMoves, riderShown, rollMoves, useTrickStore, type Theme } from '../store';
+import { adaptiveOn, scaledDpr, scaleFor } from './adaptiveResolution';
 import { ART } from './artDirection';
 import { shadowFrustum } from './cameraFit';
 import { FlightDriver } from './FlightDriver';
@@ -14,6 +15,7 @@ import { frame, perfStats } from './perfStats';
 import { watchContextLoss, type LossSource } from './contextLoss';
 import { applyRangeFog, rangeFogOnWebGL } from './rangeFog';
 import { isNodeRenderer } from './rendererKind';
+import { adaptive, subscribeScale } from './renderScale';
 import { readinessOf } from './rootReadiness';
 import { effectsFor, motionBlurOn, rendererFor, sceneTier } from './sceneTier';
 import { SceneEnvironment } from './SceneEnvironment';
@@ -298,7 +300,7 @@ function rendererFactory(Q: Tier) {
     if (Q.renderer === 'webgpu') {
       try {
         const m = await loadNodeRenderer();
-        return await m.createNodeRenderer(canvas as HTMLCanvasElement, Q, DEBUG);
+        return await m.createNodeRenderer(canvas as HTMLCanvasElement, Q);
       } catch (error) {
         console.warn('trick-lab: the WebGPU renderer did not start; using WebGLRenderer.', error);
       }
@@ -337,6 +339,11 @@ export default function TrickScene() {
     return () => clearTimeout(id);
   }, [quality]);
   const Q = useTrickStore(rendererFor);
+  // The adaptive resolution (ADR-109): on the game screen, on High and Medium, the cap times the controller's scale.
+  // Everywhere else, and at a scale of 1, the cap as before, so the lab and the welcome screen draw exactly as they did.
+  const adapts = useTrickStore((s) => adaptiveOn(s.screen, sceneTier(s)));
+  const scale = useSyncExternalStore(subscribeScale, () => scaleFor(adaptive, quality));
+  const dpr: number | [number, number] = adapts && scale < 1 ? scaledDpr(Q.dpr, window.devicePixelRatio, scale) : [Q.dpr[0], Q.dpr[1]];
   const C = ART.camera;
   // Medium and High: one factory per tier, which R3F calls once per Canvas (keyed on the tier).
   // Low: today's WebGLRenderer from props, as before ADR-50 (a factory delays its first frame).
@@ -347,7 +354,7 @@ export default function TrickScene() {
     <Canvas
       key={quality}
       aria-hidden="true"
-      dpr={[...Q.dpr]}
+      dpr={dpr}
       frameloop={playing ? 'always' : 'demand'}
       // PCF, not the deprecated PCFSoft (ADR-38); softness is ART.shadowMap.radius. Always an
       // object: R3F turns `false` into a PCFSoft type, which the WebGPURenderer warns about.

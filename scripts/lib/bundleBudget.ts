@@ -95,7 +95,8 @@ export const FILE_BUDGETS: Record<string, number> = {
   _artDirection: 202 * KB,
   _shoeSpec: 2 * KB,
   // 85 KB since ADR-103 (2026-11-13): the lost-context watcher took it 27 bytes past 84.
-  'src/scene/TrickScene.tsx': 85 * KB,
+  // 86 KB since ADR-109 (2026-11-15): the adaptive resolution's controller took it about 300 bytes past 85.
+  'src/scene/TrickScene.tsx': 86 * KB,
   'src/scene/nodeRenderer.ts': 185 * KB,
   'src/scene/BoardModel.tsx': 1 * KB,
   _gltf: 29 * KB,
