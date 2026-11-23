@@ -25,7 +25,7 @@
 // (-X), toes still at the toe side (-Z); everything toward the heels still
 // goes toward +Z.
 import { deckTiltDeg, footLift } from './boardVolume';
-import { CATCH, computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
+import { CATCH, catchFor, computeFlight, PHASE, writePose, type Flight, type Pose, type TrickInputs } from './flight';
 import { isLanded, sketchAmount } from './landing';
 
 /**
@@ -342,7 +342,7 @@ export const MOTION = {
    * than 0.2 before the catch starts, so the feet do not line up over a board
    * that is still upside down (was 0.35 to 0.75 for both feet).
    */
-  gather: { start: PHASE.catch.start - 0.2, front: CATCH.front, back: CATCH.back },
+  gather: { start: PHASE.catch.start - 0.2 },
   /**
    * The tuck's amplitude above the board: an ollie rides the board, flips
    * and shoves clear it (hoverHeight). Peaks 12 cm for the hardest inputs.
@@ -513,11 +513,11 @@ export function tuckShape(u: number, release: number, peak: number, catchAt: num
 }
 
 /** How far a foot is tucked up above the board at progress u, metres (ADR-36). Allocation-free. */
-export const tuckHeight = (foot: 'front' | 'back', inputs: TrickInputs, u: number) =>
+export const tuckHeight = (foot: 'front' | 'back', inputs: TrickInputs, u: number, timing = catchFor(inputs)) =>
   hoverHeight(inputs) *
   (foot === 'front'
-    ? tuckShape(u, releaseAt('front', inputs), MOTION.tuck.frontPeak, CATCH.front)
-    : tuckShape(u, releaseAt('back', inputs), MOTION.tuck.backPeak, CATCH.back));
+    ? tuckShape(u, releaseAt('front', inputs), MOTION.tuck.frontPeak, timing.front)
+    : tuckShape(u, releaseAt('back', inputs), MOTION.tuck.backPeak, timing.back));
 
 /**
  * Unit flick direction for a scoop factor (a magnitude), written into `out`
@@ -632,8 +632,9 @@ function writeFlightFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const t = board.pitch * D2R;
   const c = Math.cos(t);
   const sn = Math.sin(t);
-  rideDeck(out.front, c, sn, board.y + tuckHeight('front', i, p), board.pitch, 1);
-  rideDeck(out.back, c, sn, board.y + tuckHeight('back', i, p), board.pitch, -1);
+  const timing = flight.landed ? catchFor(i) : CATCH;
+  rideDeck(out.front, c, sn, board.y + tuckHeight('front', i, p, timing), board.pitch, 1);
+  rideDeck(out.back, c, sn, board.y + tuckHeight('back', i, p, timing), board.pitch, -1);
   // A bailing foot reaches below the board for the pad as it steps off
   // (ADR-90), by up to MOTION.bail.ground: so from a low pop the front foot
   // is down before the board, and whatever the board does (a rail or a kick
@@ -641,12 +642,12 @@ function writeFlightFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   // Level by then (pitch 0), so it is a straight drop. 0 for every landing.
   if (!flight.landed && p >= 0.5) {
     const G = MOTION.bail.ground;
-    out.front.y -= Math.min(board.y + tuckHeight('front', i, p), G) * fall(bailStep(p, 'front'));
-    out.back.y -= Math.min(board.y + tuckHeight('back', i, p), G) * fall(bailStep(p, 'back'));
+    out.front.y -= Math.min(board.y + tuckHeight('front', i, p, timing), G) * fall(bailStep(p, 'front'));
+    out.back.y -= Math.min(board.y + tuckHeight('back', i, p, timing), G) * fall(bailStep(p, 'back'));
   }
   if (isLanded(flight.rollTotal, flight.yawTotal)) {
-    rideCatch(out.front, flight, p, CATCH.front, 1);
-    rideCatch(out.back, flight, p, CATCH.back, -1);
+    rideCatch(out.front, flight, p, catchFor(i).front, 1);
+    rideCatch(out.back, flight, p, catchFor(i).back, -1);
   }
   return out;
 }
@@ -720,8 +721,9 @@ function writeDeckFeet(out: FeetPose, flight: Flight, u: number): FeetPose {
   const s = rateFactor(i.scoop);
   const M = MOTION;
   const landed = isLanded(flight.rollTotal, flight.yawTotal);
-  const gatherFront = smooth(M.gather.start, M.gather.front, p);
-  const gatherBack = smooth(M.gather.start, M.gather.back, p);
+  const timing = landed ? catchFor(i) : CATCH;
+  const gatherFront = smooth(M.gather.start, timing.front, p);
+  const gatherBack = smooth(M.gather.start, timing.back, p);
   // Each foot's own step off a bail (ADR-90), 0 to 1; 0 for a landing, which leaves every number below as it was.
   const B = M.bail;
   const stepF = landed ? 0 : bailStep(p, 'front');

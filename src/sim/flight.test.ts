@@ -120,6 +120,15 @@ describe('phased rotation (ADR-36)', () => {
     }
   });
 
+  it('finishes a straight kickflip on the back-foot catch while the shove keeps rotating', () => {
+    const kick = computeFlight({ pop: 0.35, flick: 1.9, scoop: 0 });
+    const shove = computeFlight({ pop: 0.35, flick: 0, scoop: 0.9 });
+    const first = PHASE.catch.end - 0.03;
+    expect(rollAt(kick, first)).toBe(kick.rollTarget);
+    expect(yawAt(shove, first)).not.toBe(shove.yawTarget);
+    expect(yawAt(shove, PHASE.catch.end)).toBe(shove.yawTarget);
+  });
+
   it('spins at flipRate and shoveRate between the ramp and the catch', () => {
     for (const { inputs } of PRESETS) {
       const f = computeFlight(inputs);

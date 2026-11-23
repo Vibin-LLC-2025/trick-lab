@@ -193,7 +193,7 @@ describe('the committed GLBs', () => {
     expect(failing(stats, 'rider')).toEqual([]);
     expect(stats.triangles).toBe(sum(buildRider().triangles));
     expect(stats.drawCalls).toBe(1);
-    expect(stats.textures).toHaveLength(0);
+    expect(stats.textures).toHaveLength(1);
     expect(stats.joints).toEqual([[...RIDER_BONES]]);
   });
 

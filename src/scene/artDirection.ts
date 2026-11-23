@@ -453,7 +453,7 @@ export const ART = {
      */
     rider: {
       head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
-      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.8, back: 0.2 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.8, back: 0.24 },
     },
     filmsRider: ['free', 'film', 'showcase'] as readonly string[],
     /**
@@ -849,8 +849,8 @@ export const ART = {
    * shadow map uses (groundShadow.ts: a point (x, y, z) lands on the pad at
    * (x - y dx/dy, 0, z - y dz/dy) for the light-to-scene direction d). One
    * instanced mesh, one draw call, one unit soft disc (alpha 1 inside `core`
-   * of the radius, 0 at the rim), four instances: the board's soft shadow,
-   * its contact shadow, and one footprint per shoe (the last two only while
+   * of the radius, 0 at the rim), up to five instances: the board's soft shadow,
+   * its contact shadow, the whole rider's torso and one footprint per shoe (only while
    * the feet are shown). Each instance carries its own opacity.
    * - board: an ellipse the board's size that turns with its yaw, shortens
    *   as the nose comes up and narrows on edge (as before), and with height
@@ -900,6 +900,7 @@ export const ART = {
   /**
    * The welcome screen's preview (ADR-45, 2026-11-08): preset tricks on a
    * loop, in slow motion. Each holds `holdBefore` seconds on the pad, plays
+    torso: { endRadius: 0.2, halfWidth: 0.21, opacity: 0.2, fadePerMetre: 0.3 },
    * its airtime at `rate` (0.5 is half speed), then holds `holdAfter` seconds
    * at its landing. One frame advances at most `maxStep` seconds, so a
    * background tab never skips a trick. Reduced motion, the Low tier and a

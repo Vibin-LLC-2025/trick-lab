@@ -160,7 +160,12 @@ function rail(b: Builder) {
     const [yb, zb, nyb, nzb] = ring(i + 1);
     // Each side flat, with the normal of its middle (a 10-sided bar reads round at this size).
     const ny = (nya + nyb) / 2, nz = (nza + nzb) / 2, l = Math.hypot(ny, nz);
-    b.face([[x0, ya, za], [x0, yb, zb], [x1, yb, zb], [x1, ya, za]], [0, ny / l, nz / l], ny / l > 0.6 ? polish : col);
+    const worn = ny / l > 0.6;
+    const start = x0 + 0.16 + 0.07 * nz;
+    const end = x1 - 0.24 + 0.09 * nz;
+    b.faceAlongX(x0, x1, worn ? [start, end] : [],
+      (a, b) => [[a, ya, za], [a, yb, zb], [b, yb, zb], [b, ya, za]],
+      [0, ny / l, nz / l], (x) => worn && x > start && x < end ? polish : col);
   }
   b.face(Array.from({ length: n }, (_, i) => { const [y, z] = ring(i); return [x1, y, z] as V3; }), [1, 0, 0], col);
   b.face(Array.from({ length: n }, (_, i) => { const [y, z] = ring(n - i); return [x0, y, z] as V3; }), [-1, 0, 0], col);
@@ -187,11 +192,13 @@ function ledge(concrete: Builder, steel: Builder) {
   const side = paint(L.angleColor);
   const top = paint(L.anglePolish);
   const [ax0, ax1, y0, y1, az0, az1] = [x0 + e, x1 - e, L.height - a, L.height + e, z1 - a, z1 + e];
-  steel.face([[ax0, y0, az1], [ax1, y0, az1], [ax1, y1, az1], [ax0, y1, az1]], [0, 0, 1], side);
+  const lip = 0.003;
+  steel.face([[ax0, y1 - lip, az1], [ax1, y1 - lip, az1], [ax1, y1, az1 - lip], [ax0, y1, az1 - lip]], [0, Math.SQRT1_2, Math.SQRT1_2], top);
+  steel.face([[ax0, y0, az1], [ax1, y0, az1], [ax1, y1 - lip, az1], [ax0, y1 - lip, az1]], [0, 0, 1], side);
   steel.face([[ax1, y0, az0], [ax0, y0, az0], [ax0, y1, az0], [ax1, y1, az0]], [0, 0, -1], side);
-  steel.face([[ax1, y0, az1], [ax1, y0, az0], [ax1, y1, az0], [ax1, y1, az1]], [1, 0, 0], side);
-  steel.face([[ax0, y0, az0], [ax0, y0, az1], [ax0, y1, az1], [ax0, y1, az0]], [-1, 0, 0], side);
-  steel.face([[ax0, y1, az1], [ax1, y1, az1], [ax1, y1, az0], [ax0, y1, az0]], [0, 1, 0], top);
+  steel.face([[ax1, y0, az1], [ax1, y0, az0], [ax1, y1, az0], [ax1, y1, az1 - lip], [ax1, y1 - lip, az1]], [1, 0, 0], side);
+  steel.face([[ax0, y0, az0], [ax0, y0, az1], [ax0, y1 - lip, az1], [ax0, y1, az1 - lip], [ax0, y1, az0]], [-1, 0, 0], side);
+  steel.face([[ax0, y1, az1 - lip], [ax1, y1, az1 - lip], [ax1, y1, az0], [ax0, y1, az0]], [0, 1, 0], top);
 }
 
 /** The wall: a long concrete box at the back, its top edges bevelled and its front in formwork panels. */

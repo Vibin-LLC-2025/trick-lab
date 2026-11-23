@@ -360,7 +360,7 @@ describe('foot steps (DESIGN.md 8.5)', () => {
       'Front foot drags up the grip on its outside edge toward the nose, 10 cm.',
       'Front foot flicks forward, out and up off the heel-side corner of the nose, 19 cm.',
       'Both feet lift 8 cm clear while the board turns under them.',
-      'Both feet catch the board at about 70 percent of the flight and press it flat.',
+      'Back foot catches the grip first and stops the flip. The front foot settles over the bolts.',
       'Both feet ride the board down over the bolts and land on the grip.',
     ]);
   });
@@ -370,7 +370,7 @@ describe('foot steps (DESIGN.md 8.5)', () => {
     for (const { inputs } of [...PRESETS, { inputs: { pop: 0.35, flick: 1.9, scoop: -0.9 } }]) {
       const s = steps(inputs.pop, inputs.flick, inputs.scoop);
       const lift = s.find((x) => x.text.startsWith('Both feet lift'))!;
-      const caught = s.filter((x) => x.text.startsWith('Both feet catch the board'));
+      const caught = s.filter((x) => x.text.includes('foot catches the grip first'));
       expect(caught).toHaveLength(1);
       expect(lift.end).toBe(PHASE.catch.start);
       expect(caught[0]!.start).toBe(PHASE.catch.start);
@@ -406,7 +406,7 @@ describe('foot steps (DESIGN.md 8.5)', () => {
       'Front foot slides up the grip toward the nose, 8 cm.',
       'Front foot kicks forward and out off the toe-side corner of the nose, heel last, 27 cm.',
       'Both feet lift 8 cm clear while the board turns under them.',
-      'Both feet catch the board at about 70 percent of the flight and press it flat.',
+      'Front foot catches the grip first. The back foot settles as the board finishes turning.',
       'Both feet ride the board down over the bolts and land on the grip.',
     ]);
     expect(texts(0.35, -0.4, 0)).toContain('Front foot kicks off the toe-side corner of the nose, but only 6 cm: it barely reaches the rail.');

@@ -126,9 +126,14 @@ export const PHASE = {
  * the front foot down first in a 360 flip and a shove-it), the back foot as
  * the board stops turning. Starting values, to refit from reference data.
  * Here beside PHASE (feet.ts re-exports it) so the store can time the catch's
- * sound (ADR-73) without the feet model in the first page download.
+ * sound (ADR-73) without the feet model in the first page download. catchFor
+ * reverses this order for a straight kickflip.
  */
 export const CATCH = { front: PHASE.catch.end - 0.03, back: PHASE.catch.end } as const;
+
+const KICK_CATCH = { back: CATCH.front, front: CATCH.back } as const;
+/** Back-foot catch for a straight kickflip; shove combinations keep the front-foot catch. */
+export const catchFor = (inputs: TrickInputs) => inputs.flick > 0 && inputs.scoop === 0 ? KICK_CATCH : CATCH;
 
 /** A window of progress, fractions of the airtime. */
 export interface Window {
@@ -151,7 +156,7 @@ const smooth = (a: number, b: number, u: number) => {
  * smoothstep integrates to half its window. About 1.69 for the flip, 1.54
  * for the shove.
  */
-export const spinPeak = (up: Window) => 1 / ((PHASE.catch.start + PHASE.catch.end) / 2 - (up.start + up.end) / 2);
+export const spinPeak = (up: Window, braking: Window = PHASE.catch) => 1 / ((braking.start + braking.end) / 2 - (up.start + up.end) / 2);
 
 /** The integral of a smoothstep from 0 to s (s in 0 to 1): s^3 - s^4 / 2. */
 const smoothIntegral = (s: number) => s * s * s - (s * s * s * s) / 2;
@@ -163,11 +168,10 @@ const smoothIntegral = (s: number) => s * s * s - (s * s * s * s) / 2;
  * up.start, exactly 1 from PHASE.catch.end. Closed form in three pieces, no
  * loop, allocation-free.
  */
-export function spinFraction(up: Window, u: number): number {
-  const C = PHASE.catch;
+export function spinFraction(up: Window, u: number, C: Window = PHASE.catch): number {
   if (u <= up.start) return 0;
   if (u >= C.end) return 1;
-  const W = spinPeak(up);
+  const W = spinPeak(up, C);
   const ramp = up.end - up.start;
   if (u < up.end) return W * ramp * smoothIntegral((u - up.start) / ramp);
   if (u <= C.start) return W * (ramp / 2 + (u - up.end));
@@ -183,15 +187,20 @@ export function spinFraction(up: Window, u: number): number {
  * is not corrected and ends at its total, as before ADR-36. `+ 0` keeps -0
  * out of the pose.
  */
-function spinAt(total: number, target: number, landed: boolean, up: Window, p: number): number {
-  if (p >= PHASE.catch.end) return (landed ? target : total) + 0;
-  const free = total * spinFraction(up, p);
-  return (landed ? free - (total - target) * smooth(PHASE.catch.start, PHASE.catch.end, p) : free) + 0;
+function spinAt(total: number, target: number, landed: boolean, up: Window, p: number, braking: Window = PHASE.catch): number {
+  if (p >= braking.end) return (landed ? target : total) + 0;
+  const free = total * spinFraction(up, p, braking);
+  return (landed ? free - (total - target) * smooth(braking.start, braking.end, p) : free) + 0;
 }
 
-/** Roll about the board's long axis at progress u, degrees (ADR-36). Allocation-free. */
-export const rollAt = (flight: Flight, u: number) =>
-  spinAt(flight.rollTotal, flight.rollTarget, flight.landed, PHASE.flipUp, clamp01(u));
+// Both braking windows have the same midpoint. Their integrated rates match,
+// preserving the free-running spin speed, total rotation and game verdict.
+const KICK_BRAKING = { start: PHASE.catch.start + (PHASE.catch.end - KICK_CATCH.back), end: KICK_CATCH.back };
+
+export const rollAt = (flight: Flight, u: number) => {
+  const braking = flight.landed && catchFor(flight.inputs) === KICK_CATCH ? KICK_BRAKING : PHASE.catch;
+  return spinAt(flight.rollTotal, flight.rollTarget, flight.landed, PHASE.flipUp, clamp01(u), braking);
+};
 /** Yaw about world Y at progress u, degrees (ADR-36). Allocation-free. */
 export const yawAt = (flight: Flight, u: number) =>
   spinAt(flight.yawTotal, flight.yawTarget, flight.landed, PHASE.shoveUp, clamp01(u));

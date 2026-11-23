@@ -21,7 +21,7 @@ export interface RiderSourceFile {
 }
 
 /** A PNG decoded to RGBA, top row first, through resvg (the deck drawings' rasterizer), so the build needs no image library. */
-function decodePng(png: Uint8Array, width: number, height: number, what: string) {
+export function decodePng(png: Uint8Array, width: number, height: number, what: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}"><image width="${width}" height="${height}" xlink:href="data:image/png;base64,${Buffer.from(png).toString('base64')}"/></svg>`;
   const img = new Resvg(svg, { fitTo: { mode: 'original' } }).render();
   if (img.width !== width || img.height !== height) throw new Error(`the rider ${what} decoded at ${img.width} x ${img.height}`);

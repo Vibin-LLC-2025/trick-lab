@@ -1,7 +1,6 @@
 // Plain-language text for the announcer, aria-valuetext, readouts and the
 // scene description. Pure so the store and the UI phrase things the same way.
 import {
-  CATCH,
   flickDistance,
   FOOT,
   hoverHeight,
@@ -14,7 +13,7 @@ import {
   writeStance,
   type Stance,
 } from './feet';
-import { computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
+import { catchFor, computeFlight, PHASE, type Flight, type TrickInputs } from './flight';
 import { describeBody } from './body';
 import { describeLegs } from './legs';
 import { restSide, type RestSide } from './settle';
@@ -399,9 +398,12 @@ export function footSteps(s: { flight: Flight | null; pop: number; flick: number
       : { foot: 'both', text: `Both feet lift ${cm(hover)} clear while the board turns under them.`, start: M.flick.end, end: C.start },
   );
   if (landed && !rides) {
+    const catchTimes = catchFor(i);
     steps.push({
       foot: 'both',
-      text: `Both feet catch the board at about ${Math.round(((C.start + C.end) / 2) * 100)} percent of the flight and press it flat.`,
+      text: catchTimes.back < catchTimes.front
+        ? 'Back foot catches the grip first and stops the flip. The front foot settles over the bolts.'
+        : 'Front foot catches the grip first. The back foot settles as the board finishes turning.',
       start: C.start,
       end: C.end,
     });
@@ -414,7 +416,7 @@ export function footSteps(s: { flight: Flight | null; pop: number; flick: number
           text: sketchy
             ? 'Both feet ride the board down, but come down off the bolts, toward the middle: a sketchy landing.'
             : 'Both feet ride the board down over the bolts and land on the grip.',
-          start: CATCH.back,
+          start: PHASE.catch.end,
           end: 1,
         }
       : { foot: 'both', text: 'The board does not come round in time: both feet step off to the heel side, a bail.', start: M.bail.start, end: 1 },
@@ -430,7 +432,13 @@ function describeFeetInFlight(s: { status: 'idle' | 'playing' | 'paused' | 'done
     if (!landed) return 'Feet stepped off to the heel side and landed on the pad: a bail.';
     return sketchAmount(s.flight.rollTotal, s.flight.yawTotal) > 0 ? 'Feet landed off the bolts, toward the middle: a sketchy landing.' : 'Feet landed on the bolts.';
   }
-  return landed && s.progress >= CATCH.back ? 'Feet on the board, riding it down.' : 'Feet in the air above the board.';
+  if (landed) {
+    if (s.progress >= PHASE.catch.end) return 'Feet on the board, riding it down.';
+    const contact = catchFor(s.flight.inputs);
+    if (s.progress >= contact.back) return 'Back foot on the grip, front foot coming down.';
+    if (s.progress >= contact.front) return 'Front foot on the grip, back foot coming down.';
+  }
+  return 'Feet in the air above the board.';
 }
 
 const FELL: Record<RestSide, string> = {

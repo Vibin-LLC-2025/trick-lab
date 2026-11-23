@@ -174,6 +174,8 @@ export const BIND = { thigh: 20, abd: 42, flex: 8, elbow: 22, wrist: 0 } as cons
  */
 export const MOTION = {
   knots: [0, 0.2, 0.45, PHASE.catch.end, 1],
+  armKnots: [0, 0.24, 0.51, 0.81, 1],
+  handKnots: [0, 0.27, 0.55, 0.84, 1],
   lean: [30, 14, 40, 21, 42],
   abd: [12, 50, 58, 44, 30],
   flex: [4, 16, 14, 16, 22],
@@ -593,8 +595,7 @@ function emit(out: BodyPose, regular: boolean) {
 }
 
 /** The value of one MOTION track at progress p (the keys smoothstepped), with keys 1 to 3 scaled about the crouch by `amp`. */
-function track(keys: readonly number[], p: number, amp: number, land: number): number {
-  const K = MOTION.knots;
+function track(keys: readonly number[], p: number, amp: number, land: number, K: readonly number[] = MOTION.knots): number {
   const key = (i: number) => (i === 4 ? land : i === 0 ? keys[0]! : keys[0]! + (keys[i]! - keys[0]!) * amp);
   for (let i = 0; i < K.length - 1; i++) {
     if (p <= K[i + 1]!) return lerp(key(i), key(i + 1), smooth(K[i]!, K[i + 1]!, p));
@@ -628,10 +629,10 @@ export function writeBodyParams(P: UpperParams, feet: FeetPose, flight: Flight |
   const amp = M.pop.min + (1 - M.pop.min) * clamp01((pop - 0.15) / 0.45);
   const sk = flight && flight.landed ? sketchAmount(flight.rollTotal, flight.yawTotal) : 0;
   const lean = track(M.lean, p, amp, M.lean[4]);
-  let abd = track(M.abd, p, amp, M.abd[4] + M.sketchy.abd * sk);
-  let flex = track(M.flex, p, amp, M.flex[4] + M.sketchy.flex * sk);
-  let elbow = track(M.elbow, p, amp, M.elbow[4]);
-  let wrist = track(M.wrist, p, amp, M.wrist[4]);
+  let abd = track(M.abd, p, amp, M.abd[4] + M.sketchy.abd * sk, M.armKnots);
+  let flex = track(M.flex, p, amp, M.flex[4] + M.sketchy.flex * sk, M.armKnots);
+  let elbow = track(M.elbow, p, amp, M.elbow[4], M.handKnots);
+  let wrist = track(M.wrist, p, amp, M.wrist[4], M.handKnots);
   let leanB = lean;
   if (rideBy > 0) {
     leanB = lerp(lean, RIDE.lean, rideBy);

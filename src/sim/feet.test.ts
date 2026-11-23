@@ -30,7 +30,7 @@ import {
   type Stance,
 } from './feet';
 import { CLEARANCE, footLift, glbDeckTop, halfWidth } from './boardVolume';
-import { airtimeFor, computeFlight, PHASE, poseAt, POP_RISE_BY, type Pose, type TrickInputs } from './flight';
+import { airtimeFor, catchFor, computeFlight, PHASE, poseAt, POP_RISE_BY, type Pose, type TrickInputs } from './flight';
 import { PRESETS, presetById, recognize, sketchAmount, snapInput } from './tricks';
 
 const REST: Pose = { y: 0, roll: 0, yaw: 0, pitch: 0 };
@@ -673,8 +673,8 @@ describe('flight', () => {
       expect(CATCH.front).toBeCloseTo(PHASE.catch.end - 0.03, 12);
       expect(CATCH.back).toBe(PHASE.catch.end);
       expect(MOTION.gather.start).toBeGreaterThanOrEqual(PHASE.catch.start - 0.2 - 1e-12);
-      expect(MOTION.gather.front).toBe(CATCH.front);
-      expect(MOTION.gather.back).toBe(CATCH.back);
+      expect(catchFor(kickflip).back).toBeLessThan(catchFor(kickflip).front);
+      expect(catchFor(shove).front).toBeLessThan(catchFor(shove).back);
       expect(MOTION.bail.start).toBe(PHASE.catch.start);
       // A landed sole rests on the rails of the concave (about 0.021), above the old DECK_TOP aim and under 2 cm more.
       for (const y of [LAND_Y.front.square, LAND_Y.front.half, LAND_Y.back.square, LAND_Y.back.half]) {
@@ -686,8 +686,8 @@ describe('flight', () => {
     it('tucks each foot from its release: a fast rise, a level top, and down to the board at its catch', () => {
       for (const { inputs } of CASES) {
         for (const [foot, peak, catchAt] of [
-          ['front', MOTION.tuck.frontPeak, CATCH.front],
-          ['back', MOTION.tuck.backPeak, CATCH.back],
+          ['front', MOTION.tuck.frontPeak, catchFor(inputs).front],
+          ['back', MOTION.tuck.backPeak, catchFor(inputs).back],
         ] as const) {
           const release = releaseAt(foot, inputs);
           expect(release).toBeLessThan(peak);
@@ -720,7 +720,7 @@ describe('flight', () => {
       expect(start.z).toBeCloseTo(held.z, 9);
       expect(start.z).toBeGreaterThan(RAIL_Z);
       // A kickflip has no shove, so the board's settling does not move x or the yaw: the front foot is on its bolts at its catch.
-      const front = at(kickflip, CATCH.front).front;
+      const front = at(kickflip, catchFor(kickflip).front).front;
       expect(front.x).toBeCloseTo(BOLTS_X, 9);
       expect(front.yaw).toBeCloseTo(STANCE.front.yawAcross, 9);
       // At the end of the catch the board is flat and square, and both feet stand on their bolts.
@@ -744,8 +744,8 @@ describe('flight', () => {
         const flight = computeFlight(inputs);
         expect(flight.landed).toBe(true);
         for (const [foot, edge, from] of [
-          ['front', 1, CATCH.front],
-          ['back', -1, CATCH.back],
+          ['front', 1, catchFor(inputs).front],
+          ['back', -1, catchFor(inputs).back],
         ] as const) {
           for (let k = 0; k <= 50; k++) {
             const u = from + ((1 - from) * k) / 50;

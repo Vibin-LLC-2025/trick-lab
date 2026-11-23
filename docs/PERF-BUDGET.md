@@ -852,3 +852,17 @@ Measured 2026-11-15 with `scripts/measure/measure.js` (`?tiers=<tier>&dpr=<cap>&
 Medians through the game: High 2.69 and 3.15 ms before, 2.10 and 2.16 after; Medium 3.10 and 3.00 before, 2.09 and 2.38 after. Two earlier builds of the controller, for the record: a 30-sample window judged every 2 s went back and forth 22 times in a High game (p95 4.26 ms, the same as before); a 300-sample window every 5 s, 8 times (4.06 ms). The hold on raising after a step down (ADR-109) brought that to the runs above, nearly all their changes downward.
 
 **Reading.** Adaptive resolution moves the game's graphics time the right way, by about 0.3 to 0.8 ms on High and 0.4 to 0.6 ms on Medium, with nothing else changed, but **neither tier meets its target**: High sits on its 4 ms line, Medium is still 0.7 to 0.9 ms over 3. Most of the graphics time is not in the pixels. Medium's lab (1028 x 1038 px) reads the same p95 as its game at 1778 x 1038 (3.80 and 4.30 ms before), and at the floor, 56 percent of the cap's pixels, its game saves about half a millisecond. What is left is fixed work per frame (the passes, the shadow map on High, the effects) that a lower floor would not reach; that is the next pass's question, and the owner's. The targets are not raised.
+
+## Medium occlusion and denoising (2026-11-17)
+
+Local production build, headless Chrome, RTX 3060 with ANGLE D3D11 and WebGL2. The game setup screen used the Filmer camera at 1440 x 900 and DPR 1.25. Each run rendered the same view repeatedly for 6.5 seconds at full scale. A browser-side diagnostic sampled the renderer's GPU timestamp results. The comparison bypassed just the denoise pass or both occlusion and denoising, leaving the scene MRT and grade in place. Each configuration ran twice in reversed order. Some verification work was running concurrently.
+
+| Medium configuration | Draw calls | GPU median, two runs | GPU p95, two runs |
+| --- | ---: | ---: | ---: |
+| Shipped occlusion and denoise | 21 | 2.26 / 2.28 ms | 3.07 / 3.02 ms |
+| Raw occlusion | 20 | 2.01 / 2.02 ms | 3.00 / 3.21 ms |
+| Both bypassed | 19 | 1.54 / 1.56 ms | 2.46 / 2.52 ms |
+
+The median differences put denoising at about 0.25 ms and raw occlusion plus its composite sampling at about 0.46 ms for this view. These are whole-frame differences. All six runs had a median animation-frame interval of 10 ms. Keep the Medium target at 3 ms and the current resolution floor. Hardware enumeration showed an RTX 3060 and Microsoft's software adapter. Integrated-GPU performance remains unmeasured.
+
+After the regression suites finished, the standard measurement script played one complete Medium game on the final build at DPR 1.25 on the same RTX 3060. After the first go, it recorded 7,868 frames. GPU median was 1.34 ms and p95 was **3.99 ms** against the 3 ms target. Main-thread work p95 was 2.0 ms. Frame intervals were 10.0 ms median and 10.1 ms p95, with one 20.1 ms interval over the 20 ms gate. The game peaked at 22 draw calls. Adaptive resolution reached its 0.75 floor and finished at 0.95 of the cap (DPR 1.188) after nine changes. The lab's two measured pops also missed the GPU and longest-frame targets (4.35 ms GPU p95, 29.9 ms longest interval). This single run measures current performance. It does not establish a before-and-after change.

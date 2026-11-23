@@ -29,16 +29,17 @@ export interface Footprint {
   opacity: number;
 }
 
-/** The four instances, in draw order: board soft, board contact, front foot, back foot. */
+/** The projected board, contact, shoe and torso footprints. */
 export interface GroundShadows {
   board: Footprint;
   contact: Footprint;
   front: Footprint;
   back: Footprint;
+  torso: Footprint;
 }
 
 const footprint = (): Footprint => ({ x: 0, z: 0, yaw: 0, halfLength: 0, halfWidth: 0, opacity: 0 });
-export const newGroundShadows = (): GroundShadows => ({ board: footprint(), contact: footprint(), front: footprint(), back: footprint() });
+export const newGroundShadows = (): GroundShadows => ({ board: footprint(), contact: footprint(), front: footprint(), back: footprint(), torso: footprint() });
 
 /** Where a point at height y above the pad lands on it along the key light, x then z (no allocation: two numbers). */
 export const groundX = (x: number, y: number) => x - y * LX;

@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Matrix4, MathUtils, Vector3, type Bone, type BufferAttribute, type Group, type InstancedBufferAttribute, type InstancedMesh, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
-import { newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
+import { BONE, newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { landingSeconds, newSettle, recoveredBy, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
 import { landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
@@ -12,7 +12,7 @@ import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
-import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
+import { groundX, groundZ, newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
 import { frameStep, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
@@ -44,6 +44,8 @@ const dustPosition = geo.dust.getAttribute('position') as BufferAttribute;
 const dustColor = geo.dust.getAttribute('color') as BufferAttribute;
 
 /** Reused for every ground shadow instance (no allocation). */
+const shadowHip = new Vector3();
+const shadowNeck = new Vector3();
 const footprintMatrix = new Matrix4();
 const footprintScale = new Vector3();
 
@@ -363,11 +365,29 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     mat.motionCues.visible = mat.motionCues.opacity > 0;
     // Medium and Low (ADR-38): the board's soft and contact shadows and,
     // with the feet shown, one footprint per shoe, projected along the key
-    // light. Four instances of one mesh, one draw call; written on every
+    // light, plus the mounted torso. One instanced draw, written on every
     // rendered frame, so a scrub moves them too.
     const sh = shadow.current;
     if (sh && g) {
       const gs = writeGroundShadows(ground.current, p, g.rotation.y, feetShown ? feet.current : null);
+      const whole = feetShown && rider.current;
+      if (whole) {
+        const hip = whole.bones[BONE.pelvis]!;
+        const neck = whole.bones[BONE.neck]!;
+        hip.getWorldPosition(shadowHip);
+        neck.getWorldPosition(shadowNeck);
+        const x = groundX(shadowHip.x, shadowHip.y);
+        const z = groundZ(shadowHip.z, shadowHip.y);
+        const dx = groundX(shadowNeck.x, shadowNeck.y) - x;
+        const dz = groundZ(shadowNeck.z, shadowNeck.y) - z;
+        gs.torso.x = x + dx / 2;
+        gs.torso.z = z + dz / 2;
+        gs.torso.yaw = -Math.atan2(dz, dx);
+        gs.torso.halfLength = S.torso.endRadius + Math.hypot(dx, dz) / 2;
+        gs.torso.halfWidth = S.torso.halfWidth;
+        gs.torso.opacity = S.torso.opacity / (1 + S.torso.fadePerMetre * shadowHip.y);
+        applyFootprint(sh, 4, gs.torso);
+      }
       // The landing's move carries the footprints with what casts them (ADR-68).
       if (landed) {
         const bi = boardInner.current;
@@ -389,7 +409,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       applyFootprint(sh, 2, gs.front);
       applyFootprint(sh, 3, gs.back);
       applyBoardUniforms(gs.board, gs.contact);
-      sh.count = feetShown ? SHADOW_INSTANCES : 2;
+      sh.count = whole ? SHADOW_INSTANCES : feetShown ? 4 : 2;
       sh.instanceMatrix.needsUpdate = true;
       shadowOpacity.needsUpdate = true;
     }

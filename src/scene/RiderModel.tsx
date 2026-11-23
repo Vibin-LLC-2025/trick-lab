@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useMemo, type Ref } from 'react';
 import { useThree } from '@react-three/fiber';
-import type { Bone, Material, SkinnedMesh } from 'three';
+import type { Bone, MeshStandardMaterial, SkinnedMesh } from 'three';
 import { RIDER_PARTS } from '../asset/riderSpec';
 import { boardRider, useTrickStore } from '../store';
 import { useModel } from './gltf';
@@ -44,12 +44,16 @@ export function RiderModel({ rig, shadows }: { rig: Ref<RiderRig>; shadows: bool
     // Painted before its first frame, so it never shows white.
     if (!source.geometry.getAttribute('color')) dress(source.geometry, false);
     // The detailed rider's own material (the GLB's, the model cache's): its atlas times the colours by region.
-    const material: Material = high ? riderHighMaterial(source) : mat.rider;
+    const material = high ? riderHighMaterial(source) : mat.rider.clone();
+    if (!high) material.map = (source.material as MeshStandardMaterial).map;
     const r = makeRiderRig(source, material);
-    return { ...r, rig: { bones: r.bones } satisfies RiderRig };
+    return { ...r, material, rig: { bones: r.bones } satisfies RiderRig };
   }, [source, high, dress]);
   useImperativeHandle(rig, () => built.rig, [built]);
-  useEffect(() => () => built.skeleton.dispose(), [built]);
+  useEffect(() => () => {
+    built.skeleton.dispose();
+    if (!high) built.material.dispose();
+  }, [built, high]);
   // Whose go it is (ADR-71): the computer's outfit on its go.
   useEffect(() => {
     dress(source.geometry, computer);
