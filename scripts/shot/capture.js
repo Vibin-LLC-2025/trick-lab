@@ -200,6 +200,37 @@ async (page) => {
           g.fillStyle = '#1c1e21';
           g.fillText('Pop, flick and scoop a skateboard,', x, 280 * k);
           g.fillText('then take on the computer at SKATE.', x, 318 * k);
+          // Mockups of the welcome screen's two choices (its `.choice` buttons, dark theme tokens): the game in the
+          // accent orange, the lab on the raised surface with a hairline. Pictures, not links.
+          const button = (label, left, fill, ink, line) => {
+            g.font = `${19 * k}px Bungee`;
+            const w = g.measureText(label).width + 44 * k;
+            const top = 352 * k;
+            const h = 56 * k;
+            g.save();
+            g.shadowColor = 'rgba(18, 20, 22, 0.28)';
+            g.shadowBlur = 14 * k;
+            g.shadowOffsetY = 4 * k;
+            g.beginPath();
+            g.roundRect(left, top, w, h, 8 * k);
+            g.fillStyle = fill;
+            g.fill();
+            g.restore();
+            if (line) {
+              g.beginPath();
+              g.roundRect(left + 0.5 * k, top + 0.5 * k, w - k, h - k, 8 * k);
+              g.strokeStyle = line;
+              g.lineWidth = k;
+              g.stroke();
+            }
+            g.fillStyle = ink;
+            g.textBaseline = 'middle';
+            g.fillText(label, left + 22 * k, top + h / 2 + 1 * k);
+            g.textBaseline = 'alphabetic';
+            return w;
+          };
+          const first = button('PLAY A GAME OF SKATE', x, '#ff7a4d', '#1b0c06', null);
+          button('PRACTICE IN THE LAB', x + first + 14 * k, '#272b2f', '#ebe8e1', '#4a5057');
           return c.toDataURL('image/png').split(',')[1];
         },
         [png, shot.w],
