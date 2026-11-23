@@ -188,18 +188,18 @@ async (page) => {
           g.fillStyle = '#a83612';
           g.font = `700 ${21 * k}px ${sans}`;
           g.letterSpacing = `${2.5 * k}px`;
-          g.fillText('A SKATEBOARD PHYSICS LAB', x, 238 * k);
+          g.fillText('A SKATEBOARD PHYSICS LAB', x, 104 * k);
           g.letterSpacing = '0px';
           g.font = `${112 * k}px Bungee`;
           const off = 0.06 * 112 * k;
           g.fillStyle = '#ea5a30';
-          g.fillText('TRICK LAB', x + off, 352 * k + off);
+          g.fillText('TRICK LAB', x + off, 218 * k + off);
           g.fillStyle = '#121416';
-          g.fillText('TRICK LAB', x, 352 * k);
+          g.fillText('TRICK LAB', x, 218 * k);
           g.font = `500 ${27 * k}px ${sans}`;
           g.fillStyle = '#1c1e21';
-          g.fillText('Pop, flick and scoop a skateboard,', x, 414 * k);
-          g.fillText('then take on the computer at SKATE.', x, 452 * k);
+          g.fillText('Pop, flick and scoop a skateboard,', x, 280 * k);
+          g.fillText('then take on the computer at SKATE.', x, 318 * k);
           return c.toDataURL('image/png').split(',')[1];
         },
         [png, shot.w],
