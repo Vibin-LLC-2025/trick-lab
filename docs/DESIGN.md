@@ -891,8 +891,10 @@ Numbers in `ART.sky`, `ART.lights` and `ART.renderer`.
 | Sun colour, strength | `#fff0dc`, 3.0 | `#ffd9ad`, 2.8 |
 | Hemisphere sky | `#e4e5e7` | `#e6dad2` |
 | Environment sun disc | `#fff1e0` | `#ffd2a0` |
+| Sun's glow on the haze (2026-11-22): colour, haze strength, core strength | `#fff6e6`, 0.55, 0.7 | `#ffe0b0`, 0.75, 0.9 |
 
 - **Sky dome**: vertex colours on rings at -8, 0, 1.5, 4, 8, 14, 22, 32, 45, 60, 75 and 90 degrees, 72 steps round, radius 25 m; the city's blocks on a strip just inside it.
+- **Sun's glow** (2026-11-22): the haze warms and brightens low on the horizon under the key light's azimuth (about 107 degrees round from the heel side), centred 2 degrees up: a wide haze (Gaussian, 26 degrees) round a brighter core (7 degrees), combined as light is. It is in the dome's vertex colours (no draw call, no texture), and the city's blocks under it take it too. The environment map, the fog and the clear colour keep the plain gradient, so the horizon still meets the ground without a seam everywhere else. The sun itself stays 52 degrees up, out of frame: the glow is where its light comes from, not a disc. It shows when a view looks toward the sun's side (the free camera turned round, the product shots in `scripts/shot`); the welcome preview and Filmer look the other way.
 - **City**: blocks 1.2 to 5.5 degrees wide, 0.5 to 2.6 degrees tall; 40 percent have a setback on their second half at 45 to 80 percent of the height; seed 17.
 - **Sun**: 52 degrees up, from the board's +X side and a little behind (position (3.45, 4.95, -1.09) toward (0, 0.3, 0)); PCF radius 4.
 - **Environment**: the theme's sky at 45 percent saturation, times 0.7, over the concrete below.

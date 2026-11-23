@@ -106,6 +106,21 @@ export const ART = {
     } as Record<Theme, { horizon: string; band: string; zenith: string; city: string }>,
     bandAt: 0.13,
     exponent: 1.0,
+    /**
+     * The sun's glow (2026-11-22): the haze warms and brightens low on the
+     * horizon under the key light (its azimuth, sky.ts sunAzimuth), centred
+     * `elevation` degrees up and falling off over about `width` degrees, so
+     * the sky shows where the light comes from. In the dome's vertex colours:
+     * no draw call, no texture. Not in the environment map or the fog.
+     */
+    glow: {
+      elevation: 2,
+      width: 26,
+      strength: { light: 0.55, dark: 0.75 } as Record<Theme, number>,
+      /** The brighter centre, a few degrees wide: the sun just under the horizon. */
+      core: { width: 7, strength: { light: 0.7, dark: 0.9 } as Record<Theme, number> },
+      color: { light: '#fff6e6', dark: '#ffe0b0' } as Record<Theme, string>,
+    },
     skyline: {
       seed: 17,
       width: [1.2, 5.5] as readonly [number, number],
@@ -885,6 +900,7 @@ export const ART = {
     /** Metres added to both half extents at `topHeight`, linear in height. */
     spread: 0.07,
     contact: { opacity: 0.2, scale: 0.88, height: 0.05 },
+    torso: { endRadius: 0.2, halfWidth: 0.21, opacity: 0.2, fadePerMetre: 0.3 },
     foot: {
       scale: 1.05,
       opacity: { ground: 0.3, top: 0.14 },
@@ -900,7 +916,6 @@ export const ART = {
   /**
    * The welcome screen's preview (ADR-45, 2026-11-08): preset tricks on a
    * loop, in slow motion. Each holds `holdBefore` seconds on the pad, plays
-    torso: { endRadius: 0.2, halfWidth: 0.21, opacity: 0.2, fadePerMetre: 0.3 },
    * its airtime at `rate` (0.5 is half speed), then holds `holdAfter` seconds
    * at its landing. One frame advances at most `maxStep` seconds, so a
    * background tab never skips a trick. Reduced motion, the Low tier and a
