@@ -1,7 +1,5 @@
-// The deformation probe (riderDeform.ts, ADR-101). Not acceptance: today's crotch numbers are a bad baseline
-// (docs/research/2026-11-13-rider-deform.md). These checks keep the probe honest (it measures the real source in the
-// real poses, against the fixed baseline of the source as reviewed) and keep what was fixed fixed: the tee's hem stays
-// whole in every pose, and the crotch's named edges get no worse than the baseline recorded on 2026-11-13.
+// Measure the fitted rider against the recorded bind mesh in both stances.
+// Keep the tee intact and the three reviewed crotch seam edges below 1.7x rest length.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fitSource, measure, NAMED_EDGES, probePoses, readBaseline } from './riderDeform';
 
@@ -35,7 +33,7 @@ describe('the High rider deformation probe (ADR-101)', () => {
     }
   });
 
-  it("gets the crotch's three named edges no worse than the bad baseline (3.79 at the tuck, 2026-11-13)", () => {
-    for (const { pose, stance, r } of rows.filter((x) => x.panel === 'named')) expect(r.stretchBaseline, `${pose} ${stance}`).toBeLessThan(3.8);
+  it("keeps the three crotch seam edges below 1.7 times their rest length in both stances", () => {
+    for (const { pose, stance, r } of rows.filter((x) => x.panel === 'named')) expect(r.stretchBaseline, `${pose} ${stance}`).toBeLessThan(1.7);
   });
 });

@@ -23,7 +23,8 @@ import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '
 import { buildRider } from '../../src/asset/rider';
 import { fitRider, RIDER_HIGH_LEAF } from '../../src/asset/riderFit';
 import { RIDER_HIGH_ATLAS, RIDER_HIGH_MATERIAL, RIDER_MATERIAL, RIDER_PARTS, RIDER_ROOT, RIDER_UV } from '../../src/asset/riderSpec';
-import { newBodyPose, RIDER_BONES, writeBindPose } from '../../src/sim/body';
+import { BONE, newBodyPose, RIDER_BONES, writeBindPose } from '../../src/sim/body';
+import { finishRiderClothing } from './riderClothing';
 import { decodePng, readRiderSource } from './riderSource';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
@@ -602,8 +603,15 @@ export const buildRiderGlb = () => buildGlb(riderSpec());
 async function riderHighSpec(): Promise<AssetSpec> {
   const base = riderSpec();
   const file = await readRiderSource();
-  const { geometry } = fitRider(file.source, writeBindPose(newBodyPose()), RIDER_HIGH_LEAF);
+  const bind = writeBindPose(newBodyPose());
+  const { geometry } = fitRider(file.source, bind, RIDER_HIGH_LEAF);
+  finishRiderClothing(geometry, bind.bones[BONE.thighL]!.o.y);
   const { width, height, rgba } = file.atlas;
+  // The tee tile contains baked occlusion. Lift its deepest folds before the scene adds real shadows.
+  for (let y = 0; y < height / 4; y++) for (let x = width / 2; x < width; x++) {
+    const offset = (y * width + x) * 4;
+    for (let c = 0; c < 3; c++) rgba[offset + c] = Math.round(160 + rgba[offset + c]! * (95 / 255));
+  }
   const surface = decodePng(readFileSync(resolve(ROOT, 'assets/source/models/rider/roughness.png')), 256, 256, 'roughness');
   const roughness = surface.rgba.filter((_, index) => index % 4 === 0);
   return {

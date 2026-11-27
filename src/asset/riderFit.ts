@@ -233,9 +233,9 @@ const smoothstep = (a: number, b: number, x: number) => {
  * `y` metres of the hip joints' height (none below the first, all from the
  * second, fading out over the last two). There the two thighs' weight is
  * shared between them by the side of the middle a vertex is on, eased over
- * `blend` either side, and `pelvis` of it moves onto the pelvis.
+ * `blend` either side, with a pelvis share that increases toward the waist.
  */
-export const CROTCH = { x: [0.04, 0.09], y: [-0.3, -0.2, -0.02, 0.04], blend: 0.035, pelvis: 0.35 } as const;
+export const CROTCH = { x: [0.06, 0.15], y: [-0.34, -0.20, -0.02, 0.08], blend: 0.085, pelvis: 0.23 } as const;
 
 /**
  * Evens the crotch's weights in place (CROTCH): `w` holds each vertex's
@@ -262,14 +262,90 @@ export function smoothCrotch(w: Float32Array, pos: Float32Array, region: Uint8Ar
     const o = v * B;
     const L = w[o + BONE.thighL]!;
     const R = w[o + BONE.thighR]!;
-    const thighs = L + R;
-    if (!(thighs > 0)) continue;
-    // Our right is +X (body.ts).
+    // Grade the pelvis share by height too. Adjacent source vertices along
+    // the seam vary from nearly rigid pelvis to thigh, leaving pointed folds.
+    const pelvis = w[o + BONE.pelvis]!;
+    const total = L + R + pelvis;
+    const hipShare = CROTCH.pelvis + (1 - CROTCH.pelvis) * ramp(-0.14, 0.02, y);
+    const legs = total * (1 - hipShare);
     const right = ramp(-CROTCH.blend, CROTCH.blend, x);
-    const toPelvis = thighs * CROTCH.pelvis * m;
-    w[o + BONE.thighL] = L + m * (thighs * (1 - right) - L) - toPelvis * (1 - right);
-    w[o + BONE.thighR] = R + m * (thighs * right - R) - toPelvis * right;
-    w[o + BONE.pelvis]! += toPelvis;
+    w[o + BONE.thighL] = L + m * (legs * (1 - right) - L);
+    w[o + BONE.thighR] = R + m * (legs * right - R);
+    w[o + BONE.pelvis] = pelvis + m * (total * hipShare - pelvis);
+  }
+}
+
+// Relax the pinched folds across their UV seams. Positions shared by two
+// texture islands have one cloth neighbourhood and must take the same step.
+function relaxClothing(pos: Float32Array, normals: Float32Array, weights: Float32Array, regions: Uint8Array, index: Uint32Array, hip: number) {
+  const welded = new Map<string, number>();
+  const vertices = new Map<number, { copies: number[]; neighbours: Set<number>; strength: number }>();
+  const canonical = new Uint32Array(regions.length);
+  for (let i = 0; i < regions.length; i++) {
+    const code = regions[i];
+    if (code !== JEANS_CODE && code !== SHIRT_CODE) continue;
+    const x = pos[3 * i]!, y = pos[3 * i + 1]! - hip, z = pos[3 * i + 2]!;
+    const key = [code, Math.round(x * 1e5), Math.round(y * 1e5), Math.round(z * 1e5)].join(',');
+    const id = welded.get(key) ?? i;
+    canonical[i] = id;
+    if (id === i) {
+      welded.set(key, id);
+      const seam = (1 - smoothstep(0.018, 0.07, Math.abs(x))) * smoothstep(-0.22, -0.16, y) * (1 - smoothstep(-0.09, -0.04, y));
+      const underarm = (1 - smoothstep(0.02, 0.09, Math.abs(Math.abs(x) - 0.17))) * (1 - smoothstep(0.04, 0.12, Math.abs(y - 0.39)));
+      vertices.set(id, { copies: [], neighbours: new Set(), strength: code === JEANS_CODE ? seam : underarm });
+    }
+    vertices.get(id)!.copies.push(i);
+  }
+  for (let i = 0; i < index.length; i += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = index[i + k]!, b = index[i + (k + 1) % 3]!;
+      if (regions[a] !== JEANS_CODE && regions[a] !== SHIRT_CODE) continue;
+      const u = canonical[a]!, v = canonical[b]!;
+      if (regions[a] !== regions[b] || u === v) continue;
+      vertices.get(u)!.neighbours.add(v);
+      vertices.get(v)!.neighbours.add(u);
+    }
+  }
+  const affected = [...vertices].filter(([, v]) => v.strength > 0 && v.neighbours.size > 0);
+  function relaxField(field: Float32Array, stride: number, step: number, shirtOnly: boolean) {
+    const previous = field.slice();
+    for (const [id, v] of affected) {
+      if (shirtOnly && regions[id] !== SHIRT_CODE) continue;
+      for (let axis = 0; axis < stride; axis++) {
+        let sum = 0;
+        for (const j of v.neighbours) sum += previous[stride * j + axis]!;
+        const rest = previous[stride * id + axis]!;
+        const next = rest + step * v.strength * (sum / v.neighbours.size - rest);
+        for (const j of v.copies) field[stride * j + axis] = next;
+      }
+    }
+  }
+  for (let pass = 0; pass < 8; pass++) {
+    relaxField(pos, 3, 0.6, false);
+    relaxField(weights, RIDER_BONES.length, 0.45, true);
+  }
+  // Rebuild the affected shading normals from the relaxed surface. Keep
+  // artist normals elsewhere and blend at the edge of the repaired panels.
+  const sums = new Float32Array(pos.length);
+  const at = (i: number): V3 => [pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!];
+  for (let i = 0; i < index.length; i += 3) {
+    const a = index[i]!, b = index[i + 1]!, c = index[i + 2]!;
+    if (regions[a] !== SHIRT_CODE && regions[a] !== JEANS_CODE) continue;
+    const origin = at(a);
+    const face = cross(sub(at(b), origin), sub(at(c), origin));
+    for (const j of [a, b, c]) {
+      const offset = 3 * canonical[j]!;
+      for (let k = 0; k < 3; k++) sums[offset + k]! += face[k]!;
+    }
+  }
+  for (const [id, v] of affected) {
+    const length = Math.hypot(sums[id * 3]!, sums[id * 3 + 1]!, sums[id * 3 + 2]!);
+    if (length < 1e-9) continue;
+    for (const j of v.copies) {
+      for (let k = 0; k < 3; k++) normals[j * 3 + k]! += v.strength * (sums[id * 3 + k]! / length - normals[j * 3 + k]!);
+      const n = Math.hypot(normals[j * 3]!, normals[j * 3 + 1]!, normals[j * 3 + 2]!) || 1;
+      for (let k = 0; k < 3; k++) normals[j * 3 + k]! /= n;
+    }
   }
 }
 
@@ -390,6 +466,29 @@ export function fitRider(src: RiderSource, bind: BodyPose, leaf: { head: number;
     pos[v * 3] = px;
     pos[v * 3 + 1] = py;
     pos[v * 3 + 2] = pz;
+    if (src.regions[v] === SHIRT_CODE) {
+      // The doubled-back lip of the tee has downward and inward-facing
+      // normals. Round the lighting across the fold into the outside cloth.
+      const height = py - bind.bones[BONE.thighL]!.o.y;
+      const hem = 1 - smoothstep(0.1, 0.15, height);
+      const waist = Math.hypot(px, pz) || 1;
+      nx += hem * (px / waist - nx);
+      ny *= 1 - hem;
+      nz += hem * (pz / waist - nz);
+    }
+    // Round the sleeve cuffs around the upper arm, preserving the folds
+    // at the shoulder. Project onto the shoulder-to-elbow axis in bind pose.
+    if (src.regions[v] === SHIRT_CODE && Math.abs(px) > 0.17) {
+      const arm = bind.bones[px > 0 ? BONE.upperArmR : BONE.upperArmL]!;
+      const dx = px - arm.o.x, dy = py - arm.o.y, dz = pz - arm.o.z;
+      const along = dx * arm.y.x + dy * arm.y.y + dz * arm.y.z;
+      const rx = dx - along * arm.y.x, ry = dy - along * arm.y.y, rz = dz - along * arm.y.z;
+      const radius = Math.hypot(rx, ry, rz) || 1;
+      const cuff = 0.8 * smoothstep(0.1, 0.2, along) * (1 - smoothstep(0.07, 0.105, radius));
+      nx += cuff * (rx / radius - nx);
+      ny += cuff * (ry / radius - ny);
+      nz += cuff * (rz / radius - nz);
+    }
     const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
     nrm[v * 3] = nx / nl;
     nrm[v * 3 + 1] = ny / nl;
@@ -424,6 +523,7 @@ export function fitRider(src: RiderSource, bind: BodyPose, leaf: { head: number;
   }
 
   // The crotch (2026-11-13): blended across the middle, so the seam no longer tears into a spike (smoothCrotch).
+  relaxClothing(pos, nrm, all, src.regions, src.index, bind.bones[BONE.thighL]!.o.y);
   smoothCrotch(all, pos, region, bind);
 
   for (let v = 0; v < n; v++) {
