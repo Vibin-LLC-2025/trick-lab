@@ -25,6 +25,13 @@ async function loadRider(): Promise<SkinnedMesh> {
   const bytes = new ArrayBuffer(file.byteLength);
   new Uint8Array(bytes).set(file);
   const loader = new GLTFLoader();
+  // This test exercises the shipped skin and joints in jsdom. The browser loads the KTX2 maps.
+  loader.register((parser) => ({
+    name: 'RigGeometryOnly',
+    beforeRoot: async () => {
+      for (const material of parser.json.materials) delete material.pbrMetallicRoughness.baseColorTexture;
+    },
+  }));
   loader.setMeshoptDecoder(MeshoptDecoder());
   const gltf = await new Promise<{ scene: Group }>((ok, fail) => loader.parse(bytes, '', ok as never, fail));
   const mesh = gltf.scene.getObjectByName(RIDER_PARTS[0].node) as SkinnedMesh | undefined;

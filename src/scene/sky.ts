@@ -30,6 +30,39 @@ export function skyRgb(theme: Theme, elevation: number): Rgb {
   return mixRgb(band, zenith, smooth(clamp01((e - S.bandAt) / (1 - S.bandAt))) ** S.exponent);
 }
 
+/** The sun's azimuth in degrees (0 is +Z, turning toward +X, as on the dome): the key light's, seen from its target. */
+export function sunAzimuth(): number {
+  const L = ART.lights.directional;
+  return (Math.atan2(L.position[0] - L.target[0], L.position[2] - L.target[2]) * 180) / Math.PI;
+}
+
+/**
+ * The sun's glow on the haze (ART.sky.glow, 2026-11-22): a warm brightening of
+ * the sky low on the horizon under the key light, falling off with the angle
+ * from its centre (a Gaussian `width` degrees wide) round a brighter `core`
+ * (the sun just under the horizon), so the sky shows where the light comes
+ * from. 0 to 1: how far the sky there leans toward the glow's colour, the two
+ * combined as light is (1 - (1 - haze)(1 - core)).
+ */
+export function glowAmount(theme: Theme, elevation: number, azimuth: number): number {
+  const G = S.glow;
+  const deg = Math.PI / 180;
+  const e0 = G.elevation * deg;
+  const a0 = sunAzimuth() * deg;
+  const e = Math.max(elevation, 0) * deg;
+  const a = azimuth * deg;
+  // The angle between the two directions on the sphere.
+  const cos = Math.sin(e) * Math.sin(e0) + Math.cos(e) * Math.cos(e0) * Math.cos(a - a0);
+  const angle = Math.acos(Math.min(1, Math.max(-1, cos))) / deg;
+  const haze = G.strength[theme] * Math.exp(-((angle / G.width) ** 2));
+  const core = G.core.strength[theme] * Math.exp(-((angle / G.core.width) ** 2));
+  return 1 - (1 - haze) * (1 - core);
+}
+
+/** The sky's colour at an elevation and azimuth: `skyRgb` with the sun's glow on it. */
+export const glowSkyRgb = (theme: Theme, elevation: number, azimuth: number): Rgb =>
+  mixRgb(skyRgb(theme, elevation), hexToRgb(S.glow.color[theme]) as Rgb, glowAmount(theme, elevation, azimuth));
+
 /** One block of the city on the horizon: where it starts and how wide, degrees of azimuth; its roof, and a lower setback on its second half (1 for none). */
 export interface Block {
   start: number;
@@ -59,6 +92,9 @@ export function skylineBlocks(): Block[] {
   return blocks;
 }
 
-/** The city's colour at an elevation: the sky there, leaning toward the theme's `city` tint by `skyline.strength`. Faint on purpose. */
-export const cityRgb = (theme: Theme, elevation: number): Rgb =>
-  mixRgb(skyRgb(theme, elevation), hexToRgb(S.colors[theme].city) as Rgb, S.skyline.strength);
+/**
+ * The city's colour at an elevation: the sky there, leaning toward the theme's `city` tint by `skyline.strength`. Faint on purpose.
+ * Given an azimuth, the sky behind it carries the sun's glow, so the blocks under the sun are lit with the haze.
+ */
+export const cityRgb = (theme: Theme, elevation: number, azimuth?: number): Rgb =>
+  mixRgb(azimuth === undefined ? skyRgb(theme, elevation) : glowSkyRgb(theme, elevation, azimuth), hexToRgb(S.colors[theme].city) as Rgb, S.skyline.strength);

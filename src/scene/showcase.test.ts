@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { recognize } from '../sim/tricks';
 import { ART } from './artDirection';
 import { RECOVER } from '../sim/settle';
-import { cycleSeconds, newShowcaseClock, SHOWCASE_FLIGHTS, SHOWCASE_STILL, showcaseAfter, showcaseFlight, showcaseLeadIn, showcaseMoved, showcaseProgress, showcaseReady, stepShowcase } from './showcase';
+import { checkPose, cycleSeconds, newShowcaseClock, SHOWCASE_FLIGHTS, SHOWCASE_STILL, showcaseAfter, showcaseFlight, showcaseLeadIn, showcaseMoved, showcaseProgress, showcaseReady, stepShowcase } from './showcase';
 
 const S = ART.showcase;
 
@@ -17,6 +17,16 @@ describe('welcome screen preview (ADR-45)', () => {
     // The still pose is mid-flight, so it shows a trick, not a board on the pad.
     expect(SHOWCASE_STILL.progress).toBeGreaterThan(0.2);
     expect(SHOWCASE_STILL.progress).toBeLessThan(0.8);
+  });
+
+  it('takes a product shot pose only with debug, a known trick and a progress from 0 to 1', () => {
+    expect(checkPose('?debug&pose=360-flip@0.5')).toEqual({ id: '360-flip', progress: 0.5 });
+    expect(checkPose('?debug&pose=kickflip@0')).toEqual({ id: 'kickflip', progress: 0 });
+    expect(checkPose('?pose=360-flip@0.5')).toBeNull();
+    expect(checkPose('?debug&pose=hardflip@0.5')).toBeNull();
+    expect(checkPose('?debug&pose=360-flip@1.5')).toBeNull();
+    expect(checkPose('?debug&pose=360-flip')).toBeNull();
+    expect(checkPose('?debug')).toBeNull();
   });
 
   it('holds on the pad, plays the flight slowed, holds at the landing, then moves on', () => {

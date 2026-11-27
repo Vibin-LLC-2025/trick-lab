@@ -5,7 +5,7 @@ import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { hexToRgb } from '../asset/textures';
 import { ART, SCENE_BG } from './artDirection';
 import { fitDistance, framingPoints } from './cameraFit';
-import { cityRgb, skylineBlocks, skyRgb } from './sky';
+import { cityRgb, glowAmount, glowSkyRgb, skylineBlocks, skyRgb, sunAzimuth } from './sky';
 import { skyDomeGeometry } from './skyDome';
 
 const S = ART.sky;
@@ -56,6 +56,31 @@ describe('the sky (ADR-52)', () => {
       expect(city[c]!).toBeCloseTo(sky[c]! + (tint[c]! - sky[c]!) * S.skyline.strength, 9);
     }
     expect(S.skyline.strength).toBeLessThan(0.5);
+  });
+});
+
+describe("the sun's glow (2026-11-22)", () => {
+  it('sits under the key light, seen from its target', () => {
+    const L = ART.lights.directional;
+    const a = (sunAzimuth() * Math.PI) / 180;
+    const x = L.position[0] - L.target[0];
+    const z = L.position[2] - L.target[2];
+    expect(Math.sin(a) * Math.hypot(x, z)).toBeCloseTo(x, 9);
+    expect(Math.cos(a) * Math.hypot(x, z)).toBeCloseTo(z, 9);
+  });
+
+  it.each(THEMES)('is strongest low under the sun and gone on the far side of the sky, on %s', (theme) => {
+    const sun = sunAzimuth();
+    const peak = 1 - (1 - S.glow.strength[theme]) * (1 - S.glow.core.strength[theme]);
+    expect(glowAmount(theme, S.glow.elevation, sun)).toBeCloseTo(peak, 9);
+    expect(glowAmount(theme, 0, sun)).toBeGreaterThan(glowAmount(theme, 30, sun));
+    expect(glowAmount(theme, 2, sun)).toBeGreaterThan(glowAmount(theme, 2, sun + 30));
+    // Behind the viewer the sky is the plain gradient: the fog and the clear colour still meet it at the horizon.
+    expect(glowAmount(theme, 0, sun + 180)).toBeLessThan(1e-6);
+    const plain = skyRgb(theme, 0);
+    const far = glowSkyRgb(theme, 0, sun + 180);
+    for (let c = 0; c < 3; c++) expect(far[c]!).toBeCloseTo(plain[c]!, 3);
+    expect(peak).toBeLessThanOrEqual(1);
   });
 });
 

@@ -117,15 +117,15 @@ export const uniforms = {
   boardOpacity: new THREE.Vector2(0, 0),
 };
 
-/** Instances in the ground shadow mesh (ADR-38): board soft, board contact, front foot, back foot. */
-export const SHADOW_INSTANCES = 4;
+/** Instances in the ground shadow mesh (ADR-38): board soft, board contact, front foot, back foot, optional torso. */
+export const SHADOW_INSTANCES = 5;
 
 /**
  * Medium and Low ground shadows (ADR-38, DESIGN.md 2): one unit soft disc in
  * the pad plane, scaled per instance into each footprint (FlightDriver writes
  * the instance matrices). A centre vertex and two rings: `aAlpha` 1 out to
  * `core` of the radius, 0 at the rim, so the edge is soft. `aOpacity` is
- * per instance, written by FlightDriver every frame (four numbers, no
+ * per instance, written by FlightDriver every frame (no
  * allocation); the material carries the colour.
  */
 function shadowFootprint() {
@@ -156,7 +156,7 @@ function shadowFootprint() {
   opacity.setUsage(THREE.DynamicDrawUsage);
   g.setAttribute('aOpacity', opacity);
   // Which instances are feet (2 and 3): their fragments draw only what they add over the board.
-  g.setAttribute('aFoot', new THREE.InstancedBufferAttribute(new Float32Array([0, 0, 1, 1]), 1));
+  g.setAttribute('aFoot', new THREE.InstancedBufferAttribute(new Float32Array([0, 0, 1, 1, 1]), 1));
   g.setIndex(index);
   return g;
 }

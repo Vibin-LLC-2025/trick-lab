@@ -208,3 +208,43 @@ test('the landing zones show round the thumb: taller than it and at least 20 px 
     expect(Math.abs(z.mid - z.track)).toBeLessThan(1);
   }
 });
+
+for (const [tier, width, height] of [['high', 1440, 900], ['medium', 390, 844], ['low', 320, 640]] as const) {
+  test(`First person on ${tier} plays a go and looks from the rider's head (ADR-111)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    const errors = await open(page, tier, 'skate', { 'game-view': 'firstPerson', 'pop-mode': 'exact', 'skate-taught': 'yes', 'skate-auto': 'off' });
+    await page.evaluate((tier) => {
+      const store = (window as unknown as DebugWindow).__trickLabStore;
+      for (let i = 0; i < 40; i++) {
+        store.getState().startSkate();
+        if (store.getState().skate.phase === 'you-set') break;
+        store.getState().quitSkate();
+      }
+      const s = store.getState();
+      s.continueSkate();
+      s.callSkateTrick(tier === 'medium' ? '360-flip' : 'kickflip');
+      s.setInput('pop', 0.35);
+      s.setInput('flick', tier === 'low' ? 0 : 1.9);
+      s.setInput('scoop', tier === 'medium' ? 1.8 : 0);
+    }, tier);
+    await page.getByRole('button', { name: /^Pop/ }).click();
+    if (tier === 'low') await page.getByRole('button', { name: 'Watch replay' }).click();
+    await page.waitForFunction(() => (window as unknown as DebugWindow).__trickLabStore.getState().replay === 'plays');
+    await page.waitForFunction(() => (window as unknown as DebugWindow).__trickLabStore.getState().replay === 'none');
+    await page.waitForFunction(() => {
+      const w = window as unknown as DebugWindow;
+      const { camera } = w.__trickLab.get() as unknown as { camera: { position: { y: number; z: number } } };
+      // In the head, over the board (not out in front of the toes), at a standing eye height.
+      return camera.position.y > 1 && camera.position.y < 1.8 && camera.position.z > -0.3 && camera.position.z < 0.15;
+    });
+    const frame = await measure(page);
+    expect(inside(frame.boxes.board!, frame.clear)).toBe(true);
+    expect(inside(frame.boxes.shoes!, frame.clear)).toBe(true);
+    await page.evaluate(() => {
+      const st = (window as unknown as DebugWindow).__trickLabStore.getState();
+      if (st.skateNotice) st.continueSkate();
+    });
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('first-person.png') });
+    expect(errors).toEqual([]);
+  });
+}

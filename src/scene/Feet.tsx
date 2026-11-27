@@ -26,8 +26,8 @@ export function ShoePrimitive() {
   }, [low, computer, invalidate]);
   return (
     <group>
-      <mesh geometry={geo.shoeSole} material={low ? mat.toonSole : mat.shoeSole} />
-      <mesh geometry={geo.shoeUpper} material={low ? mat.toonUpper : mat.shoeUpper} />
+      <mesh name="Shoe_Sole_Primitive" geometry={geo.shoeSole} material={low ? mat.toonSole : mat.shoeSole} />
+      <mesh name="Shoe_Upper_Primitive" geometry={geo.shoeUpper} material={low ? mat.toonUpper : mat.shoeUpper} />
     </group>
   );
 }

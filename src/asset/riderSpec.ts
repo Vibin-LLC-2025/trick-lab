@@ -20,7 +20,7 @@ export const RIDER_HIGH_ATLAS = 'rider-atlas.png';
  * `doubleSided` (2026-11-13, ADR-106): both faces of the cloth are drawn, so where the tee stands off the waist the eye
  * meets the tee's own shaded inside, not the wall behind the rider through the gap (the grey band under the hem).
  */
-export const RIDER_HIGH_MATERIAL = { roughness: 0.8, alphaCutoff: 0.5, doubleSided: true } as const;
+export const RIDER_HIGH_MATERIAL = { roughness: 1, alphaCutoff: 0.5, doubleSided: true } as const;
 
 /**
  * What each vertex is, for its colour (ART.rider, per rider): stored as the

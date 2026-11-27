@@ -18,8 +18,8 @@ export function BoardPrimitive() {
   const material = low ? mat.toonBoard : mat.boardPrimitive;
   return (
     <group>
-      <mesh geometry={geo.boardDeck} material={material} />
-      <mesh geometry={geo.boardHardware} material={material} />
+      <mesh name="Deck_Primitive" geometry={geo.boardDeck} material={material} />
+      <mesh name="Truck_Primitive" geometry={geo.boardHardware} material={material} />
     </group>
   );
 }

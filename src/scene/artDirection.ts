@@ -106,6 +106,21 @@ export const ART = {
     } as Record<Theme, { horizon: string; band: string; zenith: string; city: string }>,
     bandAt: 0.13,
     exponent: 1.0,
+    /**
+     * The sun's glow (2026-11-22): the haze warms and brightens low on the
+     * horizon under the key light (its azimuth, sky.ts sunAzimuth), centred
+     * `elevation` degrees up and falling off over about `width` degrees, so
+     * the sky shows where the light comes from. In the dome's vertex colours:
+     * no draw call, no texture. Not in the environment map or the fog.
+     */
+    glow: {
+      elevation: 2,
+      width: 26,
+      strength: { light: 0.55, dark: 0.75 } as Record<Theme, number>,
+      /** The brighter centre, a few degrees wide: the sun just under the horizon. */
+      core: { width: 7, strength: { light: 0.7, dark: 0.9 } as Record<Theme, number> },
+      color: { light: '#fff6e6', dark: '#ffe0b0' } as Record<Theme, string>,
+    },
     skyline: {
       seed: 17,
       width: [1.2, 5.5] as readonly [number, number],
@@ -453,7 +468,7 @@ export const ART = {
      */
     rider: {
       head: { reach: 0.16, top: REST_Y + 2.08 + 0.14, front: -0.42, back: 0.12 },
-      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.8, back: 0.2 },
+      arms: { reach: 0.95, top: REST_Y + 1.74, front: -0.8, back: 0.24 },
     },
     filmsRider: ['free', 'film', 'showcase'] as readonly string[],
     /**
@@ -529,6 +544,29 @@ export const ART = {
        * highest target heights it tries (metres).
        */
       look: { fov: 28, low: 0.3, high: 1.5 },
+    },
+    /**
+     * First person (ADR-111, reworked 2026-11-27): the eye rides in the rider's
+     * head (body.ts's head bone, `eye` up and forward of the skull's base) and
+     * moves with the wind-up, the jump and the landing. It sits `back` metres
+     * toward the heels from the real eyes, which hang over the toes, so the
+     * board under the feet stays in frame without looking straight down. The
+     * view is level (no roll), turned `yaw` degrees from the toes toward the
+     * nose, the way a skater looks over the front shoulder, and pitched
+     * `pitch.ride` degrees below the horizon while riding tall, `pitch.ready`
+     * in the crouch and the flight. The lens covers at least `fov.v` degrees
+     * of the clear part of the stage's height and `fov.h` of its width, never
+     * more than `fov.max` over the whole canvas. Reduced motion, or no feet
+     * to stand the rider on, holds the eye still at `calm` (goofy frame; x
+     * flips with the stance), above the head's highest point in a jump.
+     */
+    firstPerson: {
+      eye: { up: 0.08, forward: 0.09 },
+      back: 0.05,
+      yaw: 35,
+      pitch: { ride: 70, ready: 78 },
+      fov: { v: 74, h: 70, max: 110 },
+      calm: v(-0.05, REST_Y + 1.62, -0.08),
     },
     /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
@@ -849,8 +887,8 @@ export const ART = {
    * shadow map uses (groundShadow.ts: a point (x, y, z) lands on the pad at
    * (x - y dx/dy, 0, z - y dz/dy) for the light-to-scene direction d). One
    * instanced mesh, one draw call, one unit soft disc (alpha 1 inside `core`
-   * of the radius, 0 at the rim), four instances: the board's soft shadow,
-   * its contact shadow, and one footprint per shoe (the last two only while
+   * of the radius, 0 at the rim), up to five instances: the board's soft shadow,
+   * its contact shadow, the whole rider's torso and one footprint per shoe (only while
    * the feet are shown). Each instance carries its own opacity.
    * - board: an ellipse the board's size that turns with its yaw, shortens
    *   as the nose comes up and narrows on edge (as before), and with height
@@ -885,6 +923,7 @@ export const ART = {
     /** Metres added to both half extents at `topHeight`, linear in height. */
     spread: 0.07,
     contact: { opacity: 0.2, scale: 0.88, height: 0.05 },
+    torso: { endRadius: 0.2, halfWidth: 0.21, opacity: 0.2, fadePerMetre: 0.3 },
     foot: {
       scale: 1.05,
       opacity: { ground: 0.3, top: 0.14 },

@@ -273,9 +273,9 @@ describe("the game's camera (ADR-72, ADR-100)", () => {
     expect(makeStore().getState().gameView).toBe('film');
   });
 
-  it('has exactly three views, in order: Free, Free fisheye, Filmer', () => {
-    expect(GAME_VIEWS).toEqual(['free', 'freeFisheye', 'film']);
-    expect(GAME_VIEWS.map((v) => GAME_VIEW_LABEL[v])).toEqual(['Free', 'Free fisheye', 'Filmer']);
+  it('lists the game cameras in display order', () => {
+    expect(GAME_VIEWS).toEqual(['free', 'freeFisheye', 'film', 'firstPerson']);
+    expect(GAME_VIEWS.map((v) => GAME_VIEW_LABEL[v])).toEqual(['Free', 'Free fisheye', 'Filmer', 'First person']);
   });
 
   // ADR-100: the removed cameras are read as the nearest survivor; storage is not rewritten on read.
@@ -286,6 +286,7 @@ describe("the game's camera (ADR-72, ADR-100)", () => {
     ['free', 'free'],
     ['freeFisheye', 'freeFisheye'],
     ['film', 'film'],
+    ['firstPerson', 'firstPerson'],
     ['', 'free'],
     ['nonsense', 'free'],
     ['Free', 'free'],

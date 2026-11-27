@@ -95,8 +95,8 @@ export const FILE_BUDGETS: Record<string, number> = {
   _artDirection: 202 * KB,
   _shoeSpec: 2 * KB,
   // 85 KB since ADR-103 (2026-11-13): the lost-context watcher took it 27 bytes past 84.
-  // 86 KB since ADR-109 (2026-11-15): the adaptive resolution's controller took it about 300 bytes past 85.
-  'src/scene/TrickScene.tsx': 86 * KB,
+  // 87 KB since ADR-111: 86.2 KB with the first-person camera.
+  'src/scene/TrickScene.tsx': 87 * KB,
   'src/scene/nodeRenderer.ts': 185 * KB,
   'src/scene/BoardModel.tsx': 1 * KB,
   _gltf: 29 * KB,
@@ -109,10 +109,10 @@ export const FILE_BUDGETS: Record<string, number> = {
   'models/board.glb': 140 * KB,
   'models/ground.glb': 148 * KB,
   'models/shoes.glb': 176 * KB,
-  'models/rider.glb': 51 * KB,
+  'models/rider.glb': 55 * KB,
   // The detailed rider (ADR-94), High only: MakeHuman's body and its atlas (KTX2). ADR-101 (2026-11-13) gave the
   // jeans twice the pixels across in the same 2048 atlas: 573.4 KB compressed, from 430.3.
-  'models/rider-high.glb': 574 * KB,
+  'models/rider-high.glb': 579 * KB,
   'stills/welcome-dark.webp': 27 * KB,
   'stills/welcome-light.webp': 28 * KB,
 };

@@ -459,12 +459,12 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     });
   }
 
-  it('is free by default, with Reset view; three cameras in order (ADR-100), Filmer a keypress away, saved and announced', async () => {
+  it('is free by default, with Reset view; four cameras in order, Filmer a keypress away, saved and announced', async () => {
     const user = await setup();
     await start(user);
     const camera = within(openSettings()).getByRole('group', { name: 'Camera' });
-    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'freeFisheye', 'film']);
-    expect(within(camera).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['Free', 'Free fisheye', 'Filmer']);
+    expect(within(camera).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['free', 'freeFisheye', 'film', 'firstPerson']);
+    expect(within(camera).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual(['Free', 'Free fisheye', 'Filmer', 'First person']);
     const free = within(camera).getByRole('radio', { name: 'Free' });
     expect(free).toBeChecked();
     // Free says how to turn it, and Reset view brings it home (ADR-81).
@@ -479,6 +479,9 @@ describe("the game's camera and the instant replay (step 17, ADR-72)", () => {
     expect(useTrickStore.getState().gameView).toBe('film');
     expect(localStorage.getItem('trick-lab.game-view')).toBe('film');
     expect(announcer()).toHaveTextContent('Camera: the filmer, low and to the side of the nose.');
+    await user.keyboard('{ArrowRight}');
+    expect(within(camera).getByRole('radio', { name: 'First person' })).toBeChecked();
+    expect(localStorage.getItem('trick-lab.game-view')).toBe('firstPerson');
     // A fixed angle has nothing to drag or reset.
     expect(within(camera).queryByRole('button', { name: 'Reset view' })).toBeNull();
     expect(types()).not.toContain('camera.changed');

@@ -379,10 +379,10 @@ BEANIE_SMOOTH = 4
 # narrows to BUZZ_SIDE over the ears and to nothing at the brow, where only the skin under the knit is tinted.
 BUZZ_BACK = 0.024
 BUZZ_SIDE = 0.01
-BUZZ_FADE = 0.012
+BUZZ_FADE = 0.032
 # The buzz cut's colour in the atlas (sRGB), how much of the skin it covers at full, and its stubble's grain.
 BUZZ_COLOUR = (0.2, 0.14, 0.1)
-BUZZ_COVER = 0.9
+BUZZ_COVER = 0.8
 BUZZ_GRAIN = 0.25
 BUZZ_BLEED = 3
 
@@ -400,6 +400,7 @@ def paint_buzz(atlas, body, amount):
     inner = side - 2 * PAD
     uvs = body.data.uv_layers.active.data
     grain = np.random.default_rng(7).random((side, side)).astype(np.float32)
+    coverage = np.zeros((side, side), dtype=np.float32)
     colour = np.array(BUZZ_COLOUR, dtype=np.float32)
     for poly in body.data.polygons:
         a = [amount[body.data.loops[k].vertex_index] for k in poly.loop_indices]
@@ -431,11 +432,12 @@ def paint_buzz(atlas, body, amount):
             if not inside.any():
                 continue
             h = np.clip(w0 * ta[0] + w1 * ta[1] + w2 * ta[2], 0, 1) * BUZZ_COVER
-            block = atlas[ly:hy + 1, lx:hx + 1, :3]
-            g = grain[ly - y0:hy + 1 - y0, lx - x0:hx + 1 - x0, None]
-            hair = colour * (1 - BUZZ_GRAIN / 2 + BUZZ_GRAIN * g)
-            mixed = block * (1 - h[..., None]) + hair * h[..., None]
-            block[inside] = mixed[inside]
+            mask = coverage[ly-y0:hy-y0+1, lx-x0:hx-x0+1]
+            np.maximum(mask, h, out=mask, where=inside)
+    # Shared edges receive one coat, including at UV island padding.
+    skin = atlas[y0:y0+side, x0:x0+side, :3]
+    hair = colour * (1 - BUZZ_GRAIN / 2 + BUZZ_GRAIN * grain[..., None])
+    skin += coverage[..., None] * (hair - skin)
 
 
 def make_beanie(body):
@@ -591,6 +593,19 @@ def main():
         if o.data.shape_keys:
             with bpy.context.temp_override(object=o, active_object=o, selected_objects=[o]):
                 bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+
+    # Fit each eye inside the lids. The low-poly asset has a broad outer
+    # corner which peeks past the socket when viewed from behind the shoulder.
+    eye_world = eyes.matrix_world
+    eye_inverse = eye_world.inverted()
+    eye_coords = [eye_world @ v.co for v in eyes.data.vertices]
+    extent = max(abs(co.x) for co in eye_coords)
+    for v, co in zip(eyes.data.vertices, eye_coords):
+        t = min(1.0, max(0.0, (abs(co.x) / extent - 0.60) / 0.40))
+        corner = t * t * (3 - 2 * t)
+        co.x -= math.copysign(0.001 + 0.0035 * corner, co.x)
+        co.y += 0.002 + 0.002 * corner
+        v.co = eye_inverse @ co
 
     apply_masks(body)
     # No feet: the game draws its own shoes over the ankles. A stub of each ankle stays, down to ANKLE_STUB above

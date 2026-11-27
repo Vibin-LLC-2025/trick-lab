@@ -39,7 +39,8 @@ file or in the game, only what it made.
    `scripts/lib/riderHem.test.ts` checks (ADR-101). `RIDER_DEBUG_BLEND=<path>`
    also saves the scene before export, to look at. Checked on 2026-11-13: the
    unchanged script reproduced the committed source byte for byte.
-4. `npm run assets -- riderHigh`, then `npm run assets:check`.
+4. Bake the 256 px roughness map from the exported UVs and material-region codes with `blender -b --python assets/source/models/rider/bake_roughness.py`.
+5. `npm run assets -- riderHigh`, then `npm run assets:check`.
 
 Look A was chosen by the owner on 2026-11-13: a young man, short hair under
 (a buzz cut since ADR-99, painted into the skin's picture) a knit beanie with a folded cuff, a plain tee and jeans. The game's own shoes

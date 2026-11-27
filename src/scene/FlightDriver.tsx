@@ -3,16 +3,16 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Matrix4, MathUtils, Vector3, type Bone, type BufferAttribute, type Group, type InstancedBufferAttribute, type InstancedMesh, type Mesh } from 'three';
 import { newFeetPose, writeFeetPose, type FeetPose, type FootPose } from '../sim/feet';
 import { writePose, type Pose } from '../sim/flight';
-import { newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
+import { BONE, newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { landingSeconds, newSettle, recoveredBy, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
+import { firstPersonShown, landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
 import { setBoardRotation } from './boardPose';
 import { Feet } from './Feet';
-import { newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
+import { groundX, groundZ, newGroundShadows, writeGroundShadows, type Footprint } from './groundShadow';
 import { frameStep, newFlightClock, noteStoreChange, tickFlightClock } from './flightClock';
 import { FootPaths } from './FootPaths';
 import { Legs, type LegRig } from './Legs';
@@ -20,6 +20,7 @@ import { MotionCues } from './MotionCues';
 import { Rider } from './Rider';
 import type { RiderRig } from './RiderModel';
 import { applyBody } from './riderPose';
+import { eye, writeEye } from './firstPersonEye';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { dustShown } from './sceneTier';
@@ -44,6 +45,8 @@ const dustPosition = geo.dust.getAttribute('position') as BufferAttribute;
 const dustColor = geo.dust.getAttribute('color') as BufferAttribute;
 
 /** Reused for every ground shadow instance (no allocation). */
+const shadowHip = new Vector3();
+const shadowNeck = new Vector3();
 const footprintMatrix = new Matrix4();
 const footprintScale = new Vector3();
 
@@ -145,6 +148,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const legsVisible = useTrickStore((s) => s.legsVisible);
   // The whole rider on the game and welcome screens (ADR-85); the lab keeps the fading legs.
   const wholeRider = useTrickStore(riderShown);
+  const firstPersonView = useTrickStore(firstPersonShown);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
   // The shadow footprints' material for the renderer in use (ADR-50).
@@ -324,7 +328,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // Stepped once a frame, here, before the camera reads it (this useFrame runs first).
     // A replay's lead-in has a wind-up of its own (ADR-96).
     // The welcome preview has its own (2026-11-13), from its clock.
-    const windUp = replaying ? replayReady(replayAt) : feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
+    // First person (ADR-111) needs the head every frame, with or without the rider's mesh (Low has none).
+    const firstPerson = firstPersonShown(s);
+    const windUp = replaying ? replayReady(replayAt) : (firstPerson || (feetShown && rider.current && s.screen === 'skate')) ? stepWindUp(s, delta) : noWindUp();
     const ready = s.screen === 'home' ? Math.min(windUp, homeReady) : windUp;
     // The rider standing back up after a landing: the game's camera lifts with it (2026-11-13).
     wind.stood = shown && progress >= 1 && after > 0 ? recoveredBy(shown, after) : 0;
@@ -339,7 +345,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       // The whole rider (ADR-85) stands on the same legs, posed from the pelvis up.
       const rig = legs.current;
       const whole = rider.current;
-      if (rig || whole) {
+      if (rig || whole || firstPerson) {
         // The riding clock: a replay's own, from the go's at its pop (it ran in real seconds while the board rolled).
         const riding = replaying ? replayClock.windT + replayAt / playRate(s) : wind.t;
         const l = writeLegsPose(legsPose.current, f, shown, progress, inputs, s.stance, ready, riding, after);
@@ -349,9 +355,17 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
           applySegment(rig.backThigh, l.back.thigh);
           applySegment(rig.backShank, l.back.shank);
         }
-        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, shown, progress, inputs, s.stance, ready, riding, after));
+        if (whole || firstPerson) writeBodyPose(bodyPose.current, l, f, shown, progress, inputs, s.stance, ready, riding, after);
+        if (whole) applyBody(whole.bones, bodyPose.current);
+        // The eye rides in the posed head, carried by the landing's move (placed above, this frame).
+        const ri = riderInner.current;
+        if (firstPerson && ri) {
+          ri.updateWorldMatrix(true, false);
+          writeEye(bodyPose.current.bones[BONE.head]!, s.stance, ready, ri.matrixWorld);
+        }
       }
     }
+    if (!feetShown || !firstPerson) eye.posed = false;
     // Before a pop the paths are a plan: nothing travelled yet.
     pathProgress.value = shown ? progress : 0;
     // Motion cues (ADR-26) are the plan: full before the pop, gone early in
@@ -363,11 +377,29 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     mat.motionCues.visible = mat.motionCues.opacity > 0;
     // Medium and Low (ADR-38): the board's soft and contact shadows and,
     // with the feet shown, one footprint per shoe, projected along the key
-    // light. Four instances of one mesh, one draw call; written on every
+    // light, plus the mounted torso. One instanced draw, written on every
     // rendered frame, so a scrub moves them too.
     const sh = shadow.current;
     if (sh && g) {
       const gs = writeGroundShadows(ground.current, p, g.rotation.y, feetShown ? feet.current : null);
+      const whole = feetShown && rider.current;
+      if (whole) {
+        const hip = whole.bones[BONE.pelvis]!;
+        const neck = whole.bones[BONE.neck]!;
+        hip.getWorldPosition(shadowHip);
+        neck.getWorldPosition(shadowNeck);
+        const x = groundX(shadowHip.x, shadowHip.y);
+        const z = groundZ(shadowHip.z, shadowHip.y);
+        const dx = groundX(shadowNeck.x, shadowNeck.y) - x;
+        const dz = groundZ(shadowNeck.z, shadowNeck.y) - z;
+        gs.torso.x = x + dx / 2;
+        gs.torso.z = z + dz / 2;
+        gs.torso.yaw = -Math.atan2(dz, dx);
+        gs.torso.halfLength = S.torso.endRadius + Math.hypot(dx, dz) / 2;
+        gs.torso.halfWidth = S.torso.halfWidth;
+        gs.torso.opacity = S.torso.opacity / (1 + S.torso.fadePerMetre * shadowHip.y);
+        applyFootprint(sh, 4, gs.torso);
+      }
       // The landing's move carries the footprints with what casts them (ADR-68).
       if (landed) {
         const bi = boardInner.current;
@@ -389,7 +421,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       applyFootprint(sh, 2, gs.front);
       applyFootprint(sh, 3, gs.back);
       applyBoardUniforms(gs.board, gs.contact);
-      sh.count = feetShown ? SHADOW_INSTANCES : 2;
+      sh.count = whole ? SHADOW_INSTANCES : feetShown ? 4 : 2;
       sh.instanceMatrix.needsUpdate = true;
       shadowOpacity.needsUpdate = true;
     }
@@ -417,7 +449,10 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={riderOuter}>
         <group ref={riderInner}>
           {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
-          {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
+          {/* First person (ADR-111) hides the legs: from the eyes, a crouch's thighs and the waist would fill the frame. They stay mounted and posed for the replay. */}
+          <group visible={!firstPersonView}>
+            {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
+          </group>
           {footPathsVisible && !home && <FootPaths />}
         </group>
       </group>

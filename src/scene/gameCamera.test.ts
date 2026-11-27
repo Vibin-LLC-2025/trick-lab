@@ -199,6 +199,10 @@ describe("the game's camera (step 17, ADR-72)", () => {
       gameView: 'film' as const,
       replay: 'none' as const,
     };
+    const first = { ...base, gameView: 'firstPerson' as const };
+    expect(viewFor(first)).toBe('firstPerson');
+    expect(viewFor({ ...first, replay: 'plays' })).toBe('replay');
+    expect(viewFor({ ...first, replay: 'due' })).toBe('firstPerson');
     expect(viewFor(base)).toBe('film');
     expect(viewFor({ ...base, replay: 'plays' })).toBe('replay');
     expect(viewFor({ ...base, replay: 'due' })).toBe('film');

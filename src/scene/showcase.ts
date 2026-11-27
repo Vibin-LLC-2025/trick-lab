@@ -4,7 +4,7 @@
 // preview never touches the store's flight, so it logs and scores nothing.
 
 import { computeFlight, type Flight } from '../sim/flight';
-import { presetById } from '../sim/tricks';
+import { presetById, PRESETS, type PresetId } from '../sim/tricks';
 import { ART } from './artDirection';
 
 const S = ART.showcase;
@@ -12,8 +12,33 @@ const S = ART.showcase;
 /** The preview's flights, computed once at load (never in a frame). Every one lands (tricks.test.ts checks the presets). */
 export const SHOWCASE_FLIGHTS: readonly Flight[] = S.tricks.map((id) => computeFlight(presetById(id).inputs));
 
-/** The still pose for reduced motion, the Low tier and a failed view. */
-export const SHOWCASE_STILL = { flight: SHOWCASE_FLIGHTS[S.still.trick]!, progress: S.still.progress };
+/**
+ * The product shots' pose (scripts/shot, 2026-11-22): with `?debug&pose=360-flip@0.5`
+ * in the address the still pose is that preset at that progress, so a shot can
+ * hold any trick at any moment. Without `debug`, an unknown trick or a progress
+ * outside 0 to 1 it is null: every real visit keeps the art-directed still.
+ */
+export function checkPose(search: string): { id: PresetId; progress: number } | null {
+  const q = new URLSearchParams(search);
+  if (!q.has('debug')) return null;
+  const m = /^([a-z0-9-]+)@([0-9.]+)$/.exec(q.get('pose') ?? '');
+  if (!m) return null;
+  const preset = PRESETS.find((p) => p.id === m[1]);
+  const progress = Number(m[2]);
+  if (!preset || !Number.isFinite(progress) || progress < 0 || progress > 1) return null;
+  return { id: preset.id, progress };
+}
+
+const SEARCH = typeof location === 'undefined' ? '' : location.search;
+const POSE = checkPose(SEARCH);
+
+/** A product shot with the skate spot behind the rider on the welcome screen too: `&spot` beside a valid `pose` (scripts/shot, 2026-11-22). */
+export const SHOT_SPOT = POSE !== null && new URLSearchParams(SEARCH).has('spot');
+
+/** The still pose for reduced motion, the Low tier and a failed view (or a product shot's pose, `checkPose`). */
+export const SHOWCASE_STILL = POSE
+  ? { flight: computeFlight(presetById(POSE.id).inputs), progress: POSE.progress }
+  : { flight: SHOWCASE_FLIGHTS[S.still.trick]!, progress: S.still.progress };
 
 /** The preview's own clock: which trick, and how far into its cycle. One per mounted driver, mutated in place. */
 export interface ShowcaseClock {

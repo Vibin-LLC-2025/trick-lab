@@ -40,7 +40,7 @@ export const SPOT = {
     color: '#7d352b',
     wax: { depth: 0.035, color: '#552420' },
     chip: { color: '#4f4842' },
-    chips: [[-4.4, -4.34], [-3.05, -3.01], [-2.16, -2.08], [-0.96, -0.92], [0.24, 0.31]],
+    chips: [[-4.99, -4.88], [-4.4, -4.34], [-3.05, -3.01], [-2.16, -2.08], [-0.96, -0.92], [0.24, 0.31], [0.89, 0.97]],
   },
   /**
    * A flat rail on two square posts with base plates, bare steel since ADR-102

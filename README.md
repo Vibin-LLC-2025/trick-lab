@@ -1,5 +1,7 @@
 # Trick Lab: land the trick
 
+![Trick Lab, a skateboard physics lab: the rider mid kickflip over a kerb and a ledge in golden-hour light, the deck graphic facing the camera. Pop, flick and scoop a skateboard, then take on the computer at SKATE. Two buttons: Play a game of SKATE, and Practice in the lab.](docs/screenshots/card.png)
+
 [![Verify](https://github.com/Vibin-LLC-2025/trick-lab/actions/workflows/verify.yml/badge.svg)](https://github.com/Vibin-LLC-2025/trick-lab/actions/workflows/verify.yml)
 [![Deploy](https://github.com/Vibin-LLC-2025/trick-lab/actions/workflows/deploy.yml/badge.svg)](https://github.com/Vibin-LLC-2025/trick-lab/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

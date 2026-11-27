@@ -18,6 +18,7 @@ import {
 import { ART, type Vec3 } from './artDirection';
 import { balancedLook, boxCorners, cameraRise, clearLens, fitDistance, fogDistance, framingPoints, orbitMaxDistance, riderFramingPoints } from './cameraFit';
 import { leavesFreeForReplay, newResetTracker, placeCamera, returnsFromReplay, setLens, takeReset } from './cameraPlacement';
+import FirstPersonCamera from './FirstPersonCamera';
 import { wind } from './windUp';
 
 const C = ART.camera;
@@ -40,7 +41,7 @@ const REST_LOOK = Object.fromEntries(
 ) as Partial<Record<ViewKey, number>>;
 
 /** A camera preset: the lab's two (ADR-38), the welcome screen's preview (ADR-45), the game's three views (ADR-100: Free's home, ADR-81; Free fisheye's, ADR-93; Filmer, ADR-72) and its replay (ADR-72). */
-export type ViewKey = CameraView | 'showcase' | GameView | 'replay';
+export type ViewKey = CameraView | 'showcase' | Exclude<GameView, 'firstPerson'> | 'replay';
 
 /**
  * What a view keeps in frame (ADR-86):
@@ -116,7 +117,7 @@ const FRAMINGS: readonly Framing[] = ['board', 'flight', 'rest'];
 const PRESETS = Object.fromEntries(FRAMINGS.map((f) => [f, Object.fromEntries(KEYS.map((k) => [k, preset(k, f)]))])) as Record<Framing, Record<ViewKey, Preset>>;
 
 /** The view on screen: the preview's at home, the replay's while it plays, the game's chosen angle, the lab's chosen preset. */
-export function viewFor(s: Pick<TrickState, 'screen' | 'cameraView' | 'gameView' | 'replay'>): ViewKey {
+export function viewFor(s: Pick<TrickState, 'screen' | 'cameraView' | 'gameView' | 'replay'>): ViewKey | 'firstPerson' {
   if (s.screen === 'home') return 'showcase';
   if (s.screen === 'skate') return replayMoves(s) ? 'replay' : s.gameView;
   return s.cameraView;
@@ -155,9 +156,8 @@ function FitAndReset({ distance, view, framing, clear, appliedRef }: { distance:
   const controls = useThree((s) => s.controls) as { target: Vector3; update: () => void } | null;
   const invalidate = useThree((s) => s.invalidate);
   const resetNonce = useTrickStore((s) => s.viewResetNonce);
-  // One tracker per mount, starting at the nonce already handled before it
-  // and at the rider's view, where the Canvas puts its camera.
-  const [resets] = useState(() => newResetTracker(resetNonce));
+  // The previous camera may have been first person. Place the external preset once on mount.
+  const [resets] = useState(() => newResetTracker(resetNonce, 'unplaced'));
   // The free camera's orbit, kept while the instant replay has the camera (ADR-81).
   const kept = useRef<Vector3 | null>(null);
 
@@ -229,6 +229,11 @@ function Rise({ active, lift, base, appliedRef }: { active: boolean; lift: boole
   return null;
 }
 
+export function SceneCamera() {
+  const view = useTrickStore(viewFor);
+  return view === 'firstPerson' ? <FirstPersonCamera /> : <ExternalCamera view={view} />;
+}
+
 /**
  * Orbit around the board. Damping stays off: it needs a continuous loop, and
  * with it off nobody gets camera easing. drei's OrbitControls invalidates on
@@ -243,11 +248,10 @@ function Rise({ active, lift, base, appliedRef }: { active: boolean; lift: boole
  * Filmer, its one fixed angle (ADR-72, ADR-100), and the replay keep the orbit off. The lab keeps its free camera. On the game
  * screen every view frames inside the clear part of the stage (ADR-86).
  */
-export function SceneCamera() {
+function ExternalCamera({ view }: { view: ViewKey }) {
   const home = useTrickStore((s) => s.screen === 'home');
   const lab = useTrickStore((s) => s.screen === 'lab');
   const game = useTrickStore((s) => s.screen === 'skate');
-  const view = useTrickStore(viewFor);
   const gameView = useTrickStore((s) => s.gameView);
   const rider = useTrickStore(riderShown);
   const calm = useTrickStore((s) => s.reducedMotion);
@@ -286,7 +290,7 @@ export function SceneCamera() {
         maxAzimuthAngle={free ? C.free.azimuth : Infinity}
       />
       <FitAndReset distance={distance} view={view} framing={framing} clear={clear} appliedRef={appliedRef} />
-      <Rise active={rises(view, framing, calm)} lift={view === 'replay' && rises(gameView, framingFor(gameView, rider, calm), calm)} base={P.target} appliedRef={appliedRef} />
+      <Rise active={rises(view, framing, calm)} lift={view === 'replay' && gameView !== 'firstPerson' && rises(gameView, framingFor(gameView, rider, calm), calm)} base={P.target} appliedRef={appliedRef} />
     </>
   );
 }

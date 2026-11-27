@@ -23,8 +23,9 @@ import { concreteColor, concreteNormal, concreteRoughness, concreteTint } from '
 import { buildRider } from '../../src/asset/rider';
 import { fitRider, RIDER_HIGH_LEAF } from '../../src/asset/riderFit';
 import { RIDER_HIGH_ATLAS, RIDER_HIGH_MATERIAL, RIDER_MATERIAL, RIDER_PARTS, RIDER_ROOT, RIDER_UV } from '../../src/asset/riderSpec';
-import { newBodyPose, RIDER_BONES, writeBindPose } from '../../src/sim/body';
-import { readRiderSource } from './riderSource';
+import { BONE, newBodyPose, RIDER_BONES, writeBindPose } from '../../src/sim/body';
+import { finishRiderClothing } from './riderClothing';
+import { decodePng, readRiderSource } from './riderSource';
 import { buildShoe } from '../../src/asset/shoe';
 import { SHOE_MATERIALS, SHOE_PARTS, SHOE_TEXTURES, UPPER_SHEEN } from '../../src/asset/shoeSpec';
 import { DECKS, type FileDeck } from '../../src/asset/deckSpec';
@@ -537,8 +538,21 @@ export const buildSpotGlb = () => buildGlb(spotSpec());
 /**
  * The rider (ADR-85): one skinned mesh round the bind pose of src/sim/body.ts
  * (src/asset/rider.ts), its joints flat under the root. Its material has no
- * texture: the scene gives it the twill normal map and the colours by region.
+ * baked lighting. This repeating color tile complements the runtime twill normal map.
  */
+function riderClothColor() {
+  const side = 64;
+  const tone = new Uint8Array(side * side);
+  for (let y = 0; y < side; y++) {
+    for (let x = 0; x < side; x++) {
+      const thread = Math.cos((x + y) * Math.PI / 4);
+      const yarn = Math.sin(y * Math.PI / 8) * Math.cos(x * Math.PI / 16);
+      tone[y * side + x] = Math.round(245 + 6 * thread + 4 * yarn);
+    }
+  }
+  return grey(side, side, tone);
+}
+
 function riderSpec(): AssetSpec {
   const r = buildRider();
   const ibm = new Float32Array(RIDER_BONES.length * 16);
@@ -567,8 +581,8 @@ function riderSpec(): AssetSpec {
   return {
     rootName: RIDER_ROOT,
     extras: { units: 'metres', bones: RIDER_BONES.length, uvSpan: RIDER_UV.span, source: 'procedural, scripts/build-board.ts', design: 'src/asset/riderSpec.ts' },
-    textures: [],
-    materials: [{ key: RIDER_PARTS[0].material, name: RIDER_MATERIAL.name, baseColor: [1, 1, 1, 1], roughness: RIDER_MATERIAL.roughness, metalness: RIDER_MATERIAL.metalness }],
+    textures: [{ key: 'cloth', file: 'rider-cloth.png', pixels: riderClothColor(), wrap: 'repeat', repeat: [RIDER_UV.span, RIDER_UV.span] }],
+    materials: [{ map: 'cloth', key: RIDER_PARTS[0].material, name: RIDER_MATERIAL.name, baseColor: [1, 1, 1, 1], roughness: RIDER_MATERIAL.roughness, metalness: RIDER_MATERIAL.metalness }],
     parts: RIDER_PARTS.map((p) => ({ node: p.node, material: p.material, geometry: r.geometry })),
     droppedTriangles: 0,
     skin: { joints, inverseBind: ibm },
@@ -582,25 +596,36 @@ export const buildRiderGlb = () => buildGlb(riderSpec());
 /**
  * The detailed rider (ADR-94), High only: MakeHuman's body from
  * assets/source/models/rider fitted onto the same 19 bones and bind pose
- * (src/asset/riderFit.ts), with the source's atlas as its one texture, cut
+ * (src/asset/riderFit.ts), with the source color atlas and baked roughness, cut
  * out where the hair and the lashes thin. Its joints and inverse bind
  * matrices are the procedural rider's, so the same pose drives either.
  */
 async function riderHighSpec(): Promise<AssetSpec> {
   const base = riderSpec();
   const file = await readRiderSource();
-  const { geometry } = fitRider(file.source, writeBindPose(newBodyPose()), RIDER_HIGH_LEAF);
+  const bind = writeBindPose(newBodyPose());
+  const { geometry } = fitRider(file.source, bind, RIDER_HIGH_LEAF);
+  finishRiderClothing(geometry, bind.bones[BONE.thighL]!.o.y);
   const { width, height, rgba } = file.atlas;
+  // The tee tile contains baked occlusion. Lift its deepest folds before the scene adds real shadows.
+  for (let y = 0; y < height / 4; y++) for (let x = width / 2; x < width; x++) {
+    const offset = (y * width + x) * 4;
+    for (let c = 0; c < 3; c++) rgba[offset + c] = Math.round(160 + rgba[offset + c]! * (95 / 255));
+  }
+  const surface = decodePng(readFileSync(resolve(ROOT, 'assets/source/models/rider/roughness.png')), 256, 256, 'roughness');
+  const roughness = surface.rgba.filter((_, index) => index % 4 === 0);
   return {
     ...base,
     extras: { units: 'metres', bones: RIDER_BONES.length, source: 'MakeHuman (CC0) via assets/source/models/rider, fitted by src/asset/riderFit.ts', design: 'src/asset/riderSpec.ts' },
-    textures: [{ key: 'atlas', file: RIDER_HIGH_ATLAS, pixels: { width, height, channels: 4, data: rgba }, wrap: 'clamp' }],
+    textures: [{ key: 'atlas', file: RIDER_HIGH_ATLAS, pixels: { width, height, channels: 4, data: rgba }, wrap: 'clamp' },
+      { key: 'surface', file: 'rider-roughness.png', pixels: grey(surface.width, surface.height, roughness), wrap: 'clamp' }],
     materials: [
       {
         key: RIDER_PARTS[0].material,
         name: RIDER_MATERIAL.name,
         baseColor: [1, 1, 1, 1],
         roughness: RIDER_HIGH_MATERIAL.roughness,
+        roughnessMap: 'surface',
         metalness: 0,
         map: 'atlas',
         alphaCutoff: RIDER_HIGH_MATERIAL.alphaCutoff,

@@ -5,6 +5,7 @@ import { AssetBoundary } from './Board';
 import { geo, mat } from './resources';
 import { rollScenery } from './roll';
 import { groundTextured } from './sceneTier';
+import { SHOT_SPOT } from './showcase';
 
 /** The spot's model, its own lazy chunk (not part of any first visit). */
 const SpotModel = lazy(() => import('./SpotModel').then((m) => ({ default: m.SpotModel })));
@@ -18,7 +19,8 @@ const SpotModel = lazy(() => import('./SpotModel').then((m) => ({ default: m.Spo
  * nothing is announced.
  */
 export function Spot({ receiveShadow }: { receiveShadow: boolean }) {
-  const shown = useTrickStore((s) => s.screen === 'skate' && groundTextured(s));
+  // A product shot may ask for it on the welcome screen too (SHOT_SPOT, debug only).
+  const shown = useTrickStore((s) => (s.screen === 'skate' || SHOT_SPOT) && groundTextured(s));
   const register = useCallback((g: Group | null) => {
     rollScenery.spot = g;
   }, []);

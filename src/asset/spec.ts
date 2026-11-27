@@ -549,22 +549,18 @@ export const BUDGETS = {
   /**
    * The rider (ADR-85, 2026-11-11): the whole body as one skinned mesh over
    * 19 bones (17 until ADR-98 added the feet), loaded on Medium and High for the game and the welcome screen.
-   * No texture of its own: the cloth's twill normal map is made in code by
-   * scene/resources.ts (ADR-70's, shared with nothing to download) and the
-   * colours are painted per region from ART.rider. The brief's aim was 350 KB,
-   * one draw call, 20,000 triangles and 2 textures at 1024 px; built, it is
-   * 98.5 KB and 18,500 triangles, so the file limit is set to 150 KB (room to
-   * refine the mesh, not to hide waste) and the texture limit to none.
+   * A small repeating cloth color map multiplies the outfit's vertex colors;
+   * scene/resources.ts supplies the matching twill normal map.
    */
-  rider: { drawCalls: 1, triangles: 20000, fileBytes: 150 * 1024, textures: 0, textureMaxSide: 1024 },
+  rider: { drawCalls: 1, triangles: 20000, fileBytes: 150 * 1024, textures: 1, textureMaxSide: 1024 },
   /**
    * The detailed rider (ADR-94, 2026-11-13), High only: MakeHuman's body
    * (CC0) fitted onto the same 19 bones (src/asset/riderFit.ts), one skinned
-   * mesh with one texture atlas (skin, shirt and jeans, hair, eyes, brows,
+   * mesh with a baked roughness map and a color atlas (skin, shirt and jeans, hair, eyes, brows,
    * the beanie's knit), cut-out where the hair and the lashes thin. The
    * owner's aim: lifelike, on the machines the game is designed for.
    */
-  riderHigh: { drawCalls: 1, triangles: 32000, fileBytes: 1100 * 1024, textures: 1, textureMaxSide: 2048 },
+  riderHigh: { drawCalls: 1, triangles: 32000, fileBytes: 1100 * 1024, textures: 2, textureMaxSide: 2048 },
 } as const satisfies Record<string, AssetBudget>;
 
 export type AssetKey = keyof typeof BUDGETS;

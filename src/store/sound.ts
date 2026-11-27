@@ -2,7 +2,7 @@
 // sound, from the store's roll, and the catch, from the flight's own timing.
 // Pure functions of the state; useSound subscribes and hands the answers to
 // the player whenever they change, never per frame.
-import { CATCH } from '../sim/flight';
+import { catchFor } from '../sim/flight';
 import { liveProgress, type Playhead } from './playhead';
 import { rollMoves } from './roll';
 import { playRate } from './speed';
@@ -21,14 +21,15 @@ export function rollSound(s: TrickState): RollSound {
 }
 
 /**
- * Seconds from now until the front foot catches the board (CATCH in
+ * Seconds from now until the first foot catches the board (CATCH in
  * sim/flight.ts), at the speed in use (the game's pace too, ADR-78): while a flight plays, it lands (a bail
  * has no catch: the feet step off), and the catch is still ahead. Otherwise
  * null.
  */
 export function catchIn(s: TrickState, head: Playhead): number | null {
   if (s.status !== 'playing' || !s.flight || !s.flight.landed) return null;
-  const left = CATCH.front - liveProgress(head, s);
+  const contact = catchFor(s.flight.inputs);
+  const left = Math.min(contact.front, contact.back) - liveProgress(head, s);
   if (left <= 0) return null;
   return (left * s.flight.airtime) / playRate(s);
 }

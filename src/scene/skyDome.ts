@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import type { Theme } from '../store';
 import { ART } from './artDirection';
-import { cityRgb, skylineBlocks, skyRgb, type Rgb } from './sky';
+import { cityRgb, glowSkyRgb, skylineBlocks, type Rgb } from './sky';
 
 const D = ART.sky.dome;
 const deg = THREE.MathUtils.DEG2RAD;
@@ -35,7 +35,7 @@ export function skyDomeGeometry(theme: Theme): THREE.BufferGeometry {
   for (const elevation of D.rings) {
     for (let i = 0; i <= n; i++) {
       onDome(position, elevation, (i / n) * 360, D.radius);
-      pushRgb(colors, skyRgb(theme, elevation));
+      pushRgb(colors, glowSkyRgb(theme, elevation, (i / n) * 360));
     }
   }
   const row = n + 1;
@@ -56,10 +56,10 @@ export function skyDomeGeometry(theme: Theme): THREE.BufferGeometry {
     onDome(position, 0, to, inner);
     onDome(position, roof, from, inner);
     onDome(position, roof, to, inner);
-    pushRgb(colors, cityRgb(theme, 0));
-    pushRgb(colors, cityRgb(theme, 0));
-    pushRgb(colors, cityRgb(theme, roof));
-    pushRgb(colors, cityRgb(theme, roof));
+    pushRgb(colors, cityRgb(theme, 0, from));
+    pushRgb(colors, cityRgb(theme, 0, to));
+    pushRgb(colors, cityRgb(theme, roof, from));
+    pushRgb(colors, cityRgb(theme, roof, to));
     index.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   };
   for (const b of skylineBlocks()) {
