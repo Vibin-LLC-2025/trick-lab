@@ -4,13 +4,7 @@ import { GAME_VIEW_LABEL, GAME_VIEWS, orbitsFree, useTrickStore, type Screen } f
 import { Toggle } from './Toggle';
 import { ShortcutsButton, SoundToggle, ThemeToggle } from './Utilities';
 
-/**
- * The game's camera as a radio group (arrow keys move and choose), three
- * views (ADR-100): Free, the default (ADR-81), and Free fisheye (ADR-93),
- * turned by dragging the stage and zoomed by scrolling or pinching, with
- * Reset view to bring them home; or Filmer, the one fixed angle (step 17,
- * ADR-72), which needs no pointer at all.
- */
+/** The game's saved camera. Only the two Free views take orbit input. */
 function CameraChoice() {
   const view = useTrickStore((s) => s.gameView);
   const setGameView = useTrickStore((s) => s.setGameView);

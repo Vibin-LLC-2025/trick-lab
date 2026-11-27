@@ -713,8 +713,7 @@ a {
   align-self: stretch;
 }
 
-/* The camera's three choices (ADR-100) in one row of three under their
-   legend, so "Free fisheye" fits in the 320 px panel (it wraps to two lines). */
+/* Two camera choices per row keep the labels readable on narrow panels. */
 .settings__group > .segmented .segmented__legend {
   float: none;
   width: auto;
@@ -724,7 +723,7 @@ a {
 
 .settings__group > .segmented .segmented__options {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* The sliders' heading as a button where they fold (ADR-89): the title's

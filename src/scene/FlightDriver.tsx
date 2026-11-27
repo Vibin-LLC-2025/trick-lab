@@ -6,7 +6,7 @@ import { writePose, type Pose } from '../sim/flight';
 import { BONE, newBodyPose, writeBodyPose, type BodyPose } from '../sim/body';
 import { newLegsPose, writeLegsPose, type LegsPose, type Segment } from '../sim/legs';
 import { landingSeconds, newSettle, recoveredBy, writeBailFeet, writeSettle, type Settle } from '../sim/settle';
-import { landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
+import { firstPersonShown, landingMoves, playRate, previewAnimates, previewCanPlay, replayMoves, riderShown, rollMoves, useTrickStore } from '../store';
 import { ART } from './artDirection';
 import { Board } from './Board';
 import { dust, spawnDust, stepDust, writeDust } from './dust';
@@ -20,6 +20,7 @@ import { MotionCues } from './MotionCues';
 import { Rider } from './Rider';
 import type { RiderRig } from './RiderModel';
 import { applyBody } from './riderPose';
+import { eye, writeEye } from './firstPersonEye';
 import { geo, mat, SHADOW_INSTANCES, shaderMat, uniforms } from './resources';
 import { isNodeRenderer } from './rendererKind';
 import { dustShown } from './sceneTier';
@@ -147,6 +148,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
   const legsVisible = useTrickStore((s) => s.legsVisible);
   // The whole rider on the game and welcome screens (ADR-85); the lab keeps the fading legs.
   const wholeRider = useTrickStore(riderShown);
+  const firstPersonView = useTrickStore(firstPersonShown);
   const footPathsVisible = useTrickStore((s) => s.footPathsVisible);
   const motionCuesVisible = useTrickStore((s) => s.motionCuesVisible);
   // The shadow footprints' material for the renderer in use (ADR-50).
@@ -326,7 +328,9 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
     // Stepped once a frame, here, before the camera reads it (this useFrame runs first).
     // A replay's lead-in has a wind-up of its own (ADR-96).
     // The welcome preview has its own (2026-11-13), from its clock.
-    const windUp = replaying ? replayReady(replayAt) : feetShown && rider.current && s.screen === 'skate' ? stepWindUp(s, delta) : noWindUp();
+    // First person (ADR-111) needs the head every frame, with or without the rider's mesh (Low has none).
+    const firstPerson = firstPersonShown(s);
+    const windUp = replaying ? replayReady(replayAt) : (firstPerson || (feetShown && rider.current && s.screen === 'skate')) ? stepWindUp(s, delta) : noWindUp();
     const ready = s.screen === 'home' ? Math.min(windUp, homeReady) : windUp;
     // The rider standing back up after a landing: the game's camera lifts with it (2026-11-13).
     wind.stood = shown && progress >= 1 && after > 0 ? recoveredBy(shown, after) : 0;
@@ -341,7 +345,7 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       // The whole rider (ADR-85) stands on the same legs, posed from the pelvis up.
       const rig = legs.current;
       const whole = rider.current;
-      if (rig || whole) {
+      if (rig || whole || firstPerson) {
         // The riding clock: a replay's own, from the go's at its pop (it ran in real seconds while the board rolled).
         const riding = replaying ? replayClock.windT + replayAt / playRate(s) : wind.t;
         const l = writeLegsPose(legsPose.current, f, shown, progress, inputs, s.stance, ready, riding, after);
@@ -351,9 +355,17 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
           applySegment(rig.backThigh, l.back.thigh);
           applySegment(rig.backShank, l.back.shank);
         }
-        if (whole) applyBody(whole.bones, writeBodyPose(bodyPose.current, l, f, shown, progress, inputs, s.stance, ready, riding, after));
+        if (whole || firstPerson) writeBodyPose(bodyPose.current, l, f, shown, progress, inputs, s.stance, ready, riding, after);
+        if (whole) applyBody(whole.bones, bodyPose.current);
+        // The eye rides in the posed head, carried by the landing's move (placed above, this frame).
+        const ri = riderInner.current;
+        if (firstPerson && ri) {
+          ri.updateWorldMatrix(true, false);
+          writeEye(bodyPose.current.bones[BONE.head]!, s.stance, ready, ri.matrixWorld);
+        }
       }
     }
+    if (!feetShown || !firstPerson) eye.posed = false;
     // Before a pop the paths are a plan: nothing travelled yet.
     pathProgress.value = shown ? progress : 0;
     // Motion cues (ADR-26) are the plan: full before the pop, gone early in
@@ -437,7 +449,10 @@ export function FlightDriver({ shadows }: { shadows: boolean }) {
       <group ref={riderOuter}>
         <group ref={riderInner}>
           {feetVisible && <Feet front={front} back={back} shadows={shadows} />}
-          {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
+          {/* First person (ADR-111) hides the legs: from the eyes, a crouch's thighs and the waist would fill the frame. They stay mounted and posed for the replay. */}
+          <group visible={!firstPersonView}>
+            {feetVisible && legsVisible && (wholeRider ? <Rider rig={rider} legs={legs} shadows={shadows} /> : <Legs rig={legs} shadows={shadows} />)}
+          </group>
           {footPathsVisible && !home && <FootPaths />}
         </group>
       </group>

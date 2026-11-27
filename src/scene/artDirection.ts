@@ -546,6 +546,29 @@ export const ART = {
       look: { fov: 28, low: 0.3, high: 1.5 },
     },
     /**
+     * First person (ADR-111, reworked 2026-11-27): the eye rides in the rider's
+     * head (body.ts's head bone, `eye` up and forward of the skull's base) and
+     * moves with the wind-up, the jump and the landing. It sits `back` metres
+     * toward the heels from the real eyes, which hang over the toes, so the
+     * board under the feet stays in frame without looking straight down. The
+     * view is level (no roll), turned `yaw` degrees from the toes toward the
+     * nose, the way a skater looks over the front shoulder, and pitched
+     * `pitch.ride` degrees below the horizon while riding tall, `pitch.ready`
+     * in the crouch and the flight. The lens covers at least `fov.v` degrees
+     * of the clear part of the stage's height and `fov.h` of its width, never
+     * more than `fov.max` over the whole canvas. Reduced motion, or no feet
+     * to stand the rider on, holds the eye still at `calm` (goofy frame; x
+     * flips with the stance), above the head's highest point in a jump.
+     */
+    firstPerson: {
+      eye: { up: 0.08, forward: 0.09 },
+      back: 0.05,
+      yaw: 35,
+      pitch: { ride: 70, ready: 78 },
+      fov: { v: 74, h: 70, max: 110 },
+      calm: v(-0.05, REST_Y + 1.62, -0.08),
+    },
+    /**
      * Fixed camera presets (ADR-38, 2026-11-05), chosen in the View panel and
      * persisted (`cameraView` in the ui slice). Only each `position`'s
      * direction from its `target` matters: the ADR-18 fit sets the distance,
